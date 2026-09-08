@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  fast:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        julia-version: ['1.10', '1']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.julia-version }}
+      - uses: julia-actions/cache@v2
+      - name: Instantiate
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - name: Fast tests (default)
+        env:
+          WANNIERNLQG_TEST_MPI: '0'
+          WANNIERNLQG_TEST_OUTPUT_ROOT: ${{ runner.temp }}/wanniernlqg-tests
+        run: julia --project=. -e 'using Pkg; Pkg.test()'
+
+  full:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/publication-environment
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.10'
+      - uses: julia-actions/cache@v2
+      - name: Instantiate
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - name: Full tests
+        env:
+          WANNIERNLQG_TEST_LEVEL: full
+          WANNIERNLQG_TEST_MPI: '0'
+          WANNIERNLQG_TEST_OUTPUT_ROOT: ${{ runner.temp }}/wanniernlqg-tests
+        run: julia --project=. -e 'using Pkg; Pkg.test()'
+
+  full-mpi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/publication-environment
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.10'
+      - uses: julia-actions/cache@v2
+      - name: Instantiate and install MPI launcher
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.instantiate(); using MPI; MPI.install_mpiexecjl()'
+      - name: Full tests with MPI
+        env:
+          WANNIERNLQG_TEST_LEVEL: full
+          WANNIERNLQG_TEST_MPI: '1'
+          WANNIERNLQG_TEST_OUTPUT_ROOT: ${{ runner.temp }}/wanniernlqg-tests
+        run: julia --project=. -e 'using Pkg; Pkg.test()'

@@ -1,0 +1,16 @@
+[Run]
+system_name = Synthetic
+calculation = kslice
+quantity = shift_vector
+method = conventional
+
+[Numerics]
+k_mesh = (2, 2)
+kslice_origin = (0.0, 0.0, 0.0)
+kslice_vector_1 = (1.0, 0.0, 0.0)
+kslice_vector_2 = (0.0, 1.0, 0.0)
+
+[Outputs]
+outputs.count = 2
+output.1 = kslice_real.dat
+output.2 = kslice_imag.dat

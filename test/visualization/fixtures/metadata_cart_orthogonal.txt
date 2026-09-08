@@ -1,0 +1,22 @@
+[Run]
+system_name = Synthetic
+calculation = kslice
+quantity = shift_vector
+method = conventional
+
+[Input]
+case_root = .
+model_file = orthogonal_tb.dat
+model_sha256 = 3a8ff6e7a42eb2a59e0685f68ae10f7b18c4baefdf4424593edbddc9430b3bc3
+model_input_mode = legacy
+
+[Numerics]
+k_mesh = (2, 2)
+kslice_origin = (0.0, 0.0, 0.0)
+kslice_vector_1 = (1.0, 0.0, 0.0)
+kslice_vector_2 = (0.0, 1.0, 0.0)
+
+[Outputs]
+outputs.count = 2
+output.1 = kslice_real.dat
+output.2 = kslice_imag.dat

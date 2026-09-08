@@ -1,0 +1,27 @@
+{
+  "mode": "compare",
+  "reference": {
+    "type": "qe_xml",
+    "id": "qe",
+    "label": "QE",
+    "data": "qe_data_file_schema.xml",
+    "path": "visualization_band_path.json",
+    "energy_unit": "ev",
+    "energy_convention": "absolute",
+    "kpoint_coordinate_convention": "fractional_crystal"
+  },
+  "models": [
+    {
+      "type": "vasprun_xml",
+      "id": "vasp",
+      "label": "VASP",
+      "data": "vasprun.xml",
+      "path": "visualization_band_path.json",
+      "energy_unit": "ev",
+      "energy_convention": "absolute",
+      "kpoint_coordinate_convention": "fractional_crystal",
+      "spin_channel": 1
+    }
+  ],
+  "output": {"stem": "xml_compare", "formats": ["pdf", "png"]}
+}

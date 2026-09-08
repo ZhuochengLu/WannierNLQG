@@ -1,0 +1,26 @@
+{
+  "mode": "compare",
+  "reference": {
+    "type": "table",
+    "id": "table_reference",
+    "label": "Reference",
+    "data": "standard_bands.dat",
+    "path": "visualization_band_path.json",
+    "x_column": 0,
+    "energy_columns": {"start": 1, "stop": 3},
+    "energy_unit": "ev",
+    "energy_convention": "absolute"
+  },
+  "models": [{
+    "type": "table",
+    "id": "table_model",
+    "label": "Model",
+    "data": "standard_bands.dat",
+    "path": "visualization_band_path.json",
+    "x_column": 0,
+    "energy_columns": {"start": 1, "stop": 3},
+    "energy_unit": "ev",
+    "energy_convention": "absolute"
+  }],
+  "output": {"stem": "standard_compare", "formats": ["pdf", "png"]}
+}

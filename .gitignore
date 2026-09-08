@@ -1,0 +1,10 @@
+outputs/**
+logs/**
+log.txt
+time.txt
+/metadata.txt
+/progress.jsonl
+/WannierNLQG.out
+/*.dat
+/test/Manifest.toml
+/examples/symmetrization/outputs/

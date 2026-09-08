@@ -1,0 +1,9 @@
+Synthetic Gamma-X-X-M path
+2
+Line-mode
+Reciprocal
+0.0 0.0 0.0 ! Gamma
+0.5 0.0 0.0 ! X
+
+0.5 0.0 0.0 ! X
+0.5 0.5 0.0 ! M

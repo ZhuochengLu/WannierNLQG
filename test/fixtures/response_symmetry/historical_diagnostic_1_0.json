@@ -1,0 +1,28 @@
+{
+  "schema": "wanniernlqg.response-symmetry/1.0",
+  "provenance": {
+    "model": {"sha256": "d30372289009cc8236511f3cd414c103ea737cac925bcbc0e39634894c81e34b"},
+    "structure": {"sha256": "0000000000000000000000000000000000000000000000000000000000000000"}
+  },
+  "symmetry": {
+    "point_group_operations": [{
+      "rotation_fractional": [[1,0,0],[0,1,0],[0,0,1]],
+      "translation_fractional": [0,0,0],
+      "rotation_cartesian": [[1,0,0],[0,1,0],[0,0,1]],
+      "antiunitary": false
+    }],
+    "checks": {
+      "identity": true,
+      "inverse": true,
+      "closure": true,
+      "atom_mapping": {"pass": true}
+    }
+  },
+  "qualification": {
+    "integrand_covariance": {
+      "status": "PASS",
+      "maximum_relative_residual": 0.0,
+      "tolerance": 1.0e-12
+    }
+  }
+}

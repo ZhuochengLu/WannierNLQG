@@ -1,0 +1,15 @@
+{
+  "mode": "compare",
+  "reference": {
+    "type": "vasp_eigenval_kpoints", "id": "vasp", "label": "VASP",
+    "eigenval": "EIGENVAL", "kpoints": "KPOINTS", "poscar": "POSCAR",
+    "energy_reference_ev": 5.0, "energy_unit": "ev", "energy_convention": "absolute",
+    "kpoint_coordinate_convention": "fractional_crystal", "spin_channel": 1
+  },
+  "models": [{
+    "type": "table", "id": "tb", "label": "TB", "data": "vasp_tb.dat", "path": "vasp_path.json",
+    "x_column": 0, "energy_columns": {"start": 1, "stop": 3},
+    "energy_unit": "ev", "energy_convention": "absolute"
+  }],
+  "output": {"stem": "vasp_native_compare", "formats": ["pdf", "png"]}
+}

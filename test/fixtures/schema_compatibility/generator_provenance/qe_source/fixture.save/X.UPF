@@ -1,0 +1,16 @@
+<UPF version="2.0.1">
+  <PP_HEADER element="X" is_paw="true" is_ultrasoft="false" pseudo_type="PAW" has_so="true" relativistic="full"/>
+  <PP_MESH>
+    <PP_R>0.0 0.5 1.0</PP_R>
+    <PP_RAB>0.5 0.5 0.5</PP_RAB>
+  </PP_MESH>
+  <PP_NONLOCAL>
+    <PP_BETA.1 angular_momentum="0" tot_ang_mom="0.5">0.0 0.0 0.0</PP_BETA.1>
+    <PP_DIJ>0.0</PP_DIJ>
+    <PP_AUGMENTATION q_with_l="true" nqlc="1" nqf="0" cutoff_r_index="3" cutoff_r="1.0">
+  <PP_Q>0.0</PP_Q>
+  <PP_QIJL.1.1.0>0.0 0.0 0.0</PP_QIJL.1.1.0>
+</PP_AUGMENTATION>
+
+  </PP_NONLOCAL>
+</UPF>

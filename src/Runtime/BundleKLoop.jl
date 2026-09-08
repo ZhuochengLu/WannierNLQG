@@ -1,0 +1,15 @@
+# Runtime bundle orchestration is split by responsibility. Keep this file as the
+# ordered composition root so individual bundle layers remain easy to audit.
+include("Setup/ExecutionState.jl")
+include("Planning/BundlePlans.jl")
+include("Execution/TransitionScreening.jl")
+include("Setup/FourierExecutionPlan.jl")
+include("Setup/BundleAssembly.jl")
+include("Execution/IntegralFamilies.jl")
+include("Execution/KSliceFamilies.jl")
+include("Reduction/DeterministicReduction.jl")
+include("Output/ResponseOutput.jl")
+include("Execution/TaskSamplingScheduler.jl")
+include("Execution/IntegralDriver.jl")
+include("Execution/KSliceDriver.jl")
+include("Execution/BundleDispatch.jl")

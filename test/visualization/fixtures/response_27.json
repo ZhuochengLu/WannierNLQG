@@ -1,0 +1,6 @@
+{
+  "mode": "single", "input": "response_27.dat", "components": "all", "part": "real",
+  "panel_columns": 3, "panels_per_page": 27, "panel_size_inches": [2.4, 1.8],
+  "maximum_page_pixels": 32000000,
+  "output": {"stem": "response_27", "formats": ["pdf", "png"]}
+}

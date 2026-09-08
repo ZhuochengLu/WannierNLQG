@@ -1,0 +1,83 @@
+module MatrixElements
+
+using LinearAlgebra
+using FFTW
+using Mmap
+using Printf
+using SHA
+using ..Core
+using ..IO
+
+include("Interpolated/MatrixElementPlan.jl")
+include("Interfaces.jl")
+include("Interpolated/MatrixElementWorkspace.jl")
+include("Interpolated/WannierCenterConventionTransforms.jl")
+include("Interpolated/MixedFourierMatrixElements.jl")
+include("Interpolated/SharedInterpolationCache.jl")
+include("Interpolated/HamiltonianMatrixElements.jl")
+include("Interpolated/PositionMatrixElements.jl")
+include("Interpolated/SpinMatrixElements.jl")
+include("Interpolated/SpinVelocityMatrixElements.jl")
+include("RealSpaceReplicaPolicies.jl")
+include("Interpolated/WannierPairWignerSeitzTransforms.jl")
+include("Interpolated/WannierDerivativeOperators.jl")
+include("ModelTransforms.jl")
+include("ProjectorMatrixElements.jl")
+include("GeometricLoopMatrixElements.jl")
+include("ConventionCovariantTransport.jl")
+include("MatrixElementsIntegrationContracts.jl")
+
+export MatrixElementKind, MatrixElementRequest, MatrixElementPlan, MatrixElementSources
+export MatrixElementWorkspace, KPointBatchWorkspace, KPointMatrixData, KPointOffset
+export MatrixElementEvaluationCounts, matrix_data!
+export SPECTRUM, ENERGY_DIFFERENCES, HAMILTONIAN_DERIVATIVES
+export HAMILTONIAN_SECOND_DERIVATIVES, WANNIER_POSITION, INTERNAL_CONNECTION
+export INTERNAL_CONNECTION_DERIVATIVES, GAUGE_CORRECTION, BERRY_CONNECTION, VELOCITY_VERTICES
+export WANNIER_CURVATURE
+export SPIN, SPIN_TIMES_HAMILTONIAN, SPIN_TIMES_POSITION
+export SPIN_TIMES_HAMILTONIAN_POSITION, SPIN_VELOCITY
+export compile_matrix_plan, has_capability, is_requested, resolve_kpoint_offset!
+export prepare_real_space!, compute_spectrum!, compute_remaining!, compute_kpoint!, matrix
+export compute_checked_spectrum!
+export transform_to_hamiltonian_gauge!, canonicalize_eigenvectors!
+export MixedFourierGrid, MixedFourierLayout, MixedFourierBlockStore
+export mixed_fourier_grid, mixed_fourier_local_k_indices, resolve_mixed_fourier_factors
+export mixed_fourier_memory_limit
+export mixed_fourier_buffer_estimate
+export enable_mixed_fourier!, begin_mixed_kpoint!, disable_mixed_fourier!
+export mixed_fourier_stats, mixed_fourier_kslice_grid
+export enable_fourier_timing!, disable_fourier_timing!, fourier_timing_stats
+
+export HamiltonianMatrixData, PositionMatrixData, SpinMatrixData, SpinVelocityMatrixData
+export SpinRealSpaceData, SpinGaugeDiagnostics, SpinTransformDiagnostics
+export SpinVelocityRealSpaceData, SpinVelocityRealSpaceDiagnostics
+export DerivativeOverlapRealSpaceData
+export SpinVelocityTransformDiagnostics, FiniteDifferenceStencil
+export spn_to_wannier_gauge_q, spn_to_wannier_gauge_q_diagnostics
+export spin_q_to_r, spin_q_to_r_diagnostics, spin_r_to_wannier_gauge!
+export spin_velocity_q_to_r, spin_velocity_q_to_r_diagnostics
+export build_finite_difference_stencil, match_finite_difference_stencil_to_mmn
+export RealSpaceReplicaPolicyResult, real_space_mp_residue
+export nearest_wigner_seitz_images, apply_real_space_replica_policy
+export real_space_link_length_summary
+export WannierPairWignerSeitzTransformPlan, PairWignerSeitzSpinQToRTransform
+export WannierDerivativeOperatorSet, WANNIER_DERIVATIVE_OPERATOR_KINDS
+export construct_wannier_derivative_operators
+export compute_spin_velocity_real_space
+export compute_spin_velocity_real_space_streaming
+
+export ProjectorMatrixData, ProjectorMatrixWorkspace
+export bind_kpoint_offset!
+export compute_projector_spectrum!, compute_wilson_shifted!
+export projector_reference_projectors!,
+    projector_projectors!, projector_fill_projectors_from_groups!
+export projector_diff_projectors!,
+    projector_pure_diff_projectors!, projector_second_diff_projectors!
+export prepare_projector_covariant_geometry!, transport_projector_matrix_to_reference!
+export GeometricLoopMatrixData, GeometricLoopMatrixWorkspace
+export mark_degenerate_groups!, degenerate_group_summary, extract_wannier_centers
+export ConventionFrameConnector,
+    IdentityConventionFrameConnector, WannierCenterConventionFrameConnector
+export make_convention_frame_connector, compute_convention_covariant_overlap!
+
+end

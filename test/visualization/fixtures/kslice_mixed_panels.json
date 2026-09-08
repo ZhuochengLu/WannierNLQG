@@ -1,0 +1,10 @@
+{
+  "schema": "wanniernlqg.kslice-panels",
+  "schema_version": "1.0",
+  "panels": [
+    {"id": "signed", "real": "kslice_real.dat", "part": "real", "norm": "diverging", "cmap": "RdBu_r", "math_title": "$\\mathrm{Re}$", "order": 1, "colorbar_label": "signed"},
+    {"id": "magnitude", "real": "kslice_real.dat", "imag": "kslice_imag.dat", "part": "abs", "norm": "positive-log", "vmin": 0.5, "vmax": 5.0, "cmap": "viridis", "math_title": "$|R|$", "order": 2, "colorbar_label": "magnitude"},
+    {"id": "signed_log", "real": "kslice_real.dat", "part": "real", "norm": "signed-log", "linthresh": 0.25, "vmin": -4.0, "vmax": 4.0, "cmap": "coolwarm", "title": "signed log", "order": 3, "colorbar_label": "signed log"},
+    {"id": "phase", "real": "kslice_real.dat", "imag": "kslice_imag.dat", "part": "phase", "norm": "phase", "cmap": "twilight", "math_title": "$\\arg R$", "order": 4, "colorbar_label": "$\\arg R$ (rad)"}
+  ]
+}

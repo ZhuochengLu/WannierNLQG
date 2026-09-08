@@ -1,0 +1,148 @@
+module Responses
+
+using LinearAlgebra
+using ..Core
+using ..MatrixElements
+
+include("Shared/ResponseFrequencyContraction.jl")
+include("Shared/ResponseWorkspaces.jl")
+include("Shared/ResponseKernelHelpers.jl")
+include("Shared/ResponseSymmetry.jl")
+include("Shared/GeometricLoopCovariantKernels.jl")
+
+include("ShiftCurrent/ConventionalShiftCurrent.jl")
+include("ShiftCurrent/ProjectorShiftCurrent.jl")
+include("ShiftCurrent/GeometricLoopShiftCurrent.jl")
+include("Shared/LoopCurrentSharedKernels.jl")
+include("PhotonDragShiftCurrent/GeometricLoopPhotonDragShiftCurrent.jl")
+include("Shared/WilsonLoopResponseKernels.jl")
+include("ShiftCurrent/WilsonLoopShiftCurrent.jl")
+
+include("ShiftSpinCurrent/ConventionalShiftSpinCurrent.jl")
+include("InjectionCurrent/ConventionalInjectionCurrent.jl")
+include("InjectionSpinCurrent/ConventionalInjectionSpinCurrent.jl")
+include("PhotonDragInjectionCurrent/ConventionalPhotonDragInjectionCurrent.jl")
+
+include("QuantumGeometry/ConventionalQuantumGeometry.jl")
+include("QuantumGeometry/QuantumGeometryDerivatives.jl")
+include("QuantumGeometry/ProjectorQuantumGeometry.jl")
+include("QuantumGeometry/GeometricLoopQuantumGeometry.jl")
+include("QuantumGeometry/WilsonLoopQuantumGeometry.jl")
+include("QuantumGeometry/GeometricLoopShiftVector.jl")
+include("QuantumGeometry/WilsonLoopShiftVector.jl")
+
+export ConventionalQuantumGeometryWorkspace,
+    GeometricLoopResponseWorkspace,
+    PhotonDragInjectionCurrentConventionalWorkspace,
+    ProjectorResponseWorkspace,
+    SHIFT_VECTOR_LOOP_ABS_TOL,
+    ShiftCurrentConventionalWorkspace,
+    ShiftSpinCurrentConventionalWorkspace,
+    WilsonLoopResponseWorkspace,
+    accumulate_conventional_geometry_qhc_response!,
+    accumulate_conventional_response!,
+    accumulate_geometric_loop_shift_current_response!,
+    accumulate_injection_current_response!,
+    accumulate_injection_spin_current_response!,
+    accumulate_photon_drag_injection_current_response!,
+    accumulate_projector_response_shift_current_response!,
+    accumulate_shift_spin_current_response!,
+    berry_curvature_block_element,
+    berry_curvature_component,
+    berry_curvature_dipole_component!,
+    berry_curvature_group_sum_component,
+    berry_curvature_occupied_sum_component,
+    berry_curvature_quadrupole_component!,
+    compute_conventional_shift_current_kernel!,
+    compute_geometric_loop_central_overlap!,
+    compute_geometric_loop_block_covariant_insertion_derivative!,
+    compute_geometric_loop_quantum_hermitian_connection_kernel!,
+    compute_geometric_loop_second_insertions!,
+    compute_geometric_loop_shift_current_kernel!,
+    compute_geometric_loop_shift_vector_kernel!,
+    compute_geometric_loop_shifted_overlaps!,
+    compute_geometric_loop_third_insertions!,
+    compute_injection_current_kernel!,
+    compute_injection_spin_current_kernel!,
+    compute_photon_drag_injection_current_kernel!,
+    compute_projector_quantum_hermitian_connection_from_cache!,
+    compute_projector_quantum_hermitian_connection_kernel!,
+    compute_projector_response_shift_current_kernel!,
+    compute_shift_spin_current_kernel!,
+    compute_shift_spin_current_vertices!,
+    compute_wilson_loop_quantum_hermitian_connection_from_cache!,
+    compute_wilson_loop_shift_current_from_cache!,
+    compute_wilson_loop_shift_vector_from_cache!,
+    conventional_component_response,
+    conventional_generalized_position_derivative_element,
+    conventional_quantum_hermitian_connection_component,
+    expand_band_window_for_groups,
+    finite_loop_log_derivative,
+    geometric_loop_overlap_block_contraction,
+    geometric_loop_overlap_block_contraction_precomputed,
+    geometric_loop_sck_component,
+    hermitian_curvature_tensor_component,
+    injection_current_component,
+    injection_spin_current_component,
+    interband_berry_curvature_component,
+    interband_quantum_geometry_component,
+    interband_quantum_metric_component,
+    interband_quantum_metric_group_sum_component,
+    make_conventional_quantum_geometry_workspace,
+    make_geometric_loop_response_workspace,
+    make_photon_drag_injection_current_conventional_workspace,
+    make_projector_response_workspace,
+    make_shift_current_conventional_workspace,
+    make_shift_spin_current_conventional_workspace,
+    make_wilson_loop_response_workspace,
+    photon_drag_band_windows,
+    photon_drag_compute_overlaps!,
+    photon_drag_has_active_transition,
+    photon_drag_injection_current_component,
+    prepare_projector_response_cache!,
+    prepare_geometric_loop_covariant_axis!,
+    prepare_geometric_loop_covariant_derivative_block!,
+    prepare_geometric_loop_covariant_center!,
+    prepare_geometric_loop_external_connections!,
+    prepare_geometric_loop_frame_axis!,
+    prepare_wilson_loop_response_cache!,
+    prepare_wilson_transported_derivative_block!,
+    projector_qhc_trace_c_cvabc!,
+    projector_response_axis_pairs,
+    projector_response_sck_component,
+    projector_shift_current_trace_terms!,
+    projector_shift_current_trace_terms_low_rank!,
+    projector_trace_four!,
+    projector_trace_four_low_rank!,
+    projector_trace_three!,
+    projector_trace_three_low_rank!,
+    projector_trace_two,
+    project_response_symmetry!,
+    quantum_christoffel_symbol_component!,
+    quantum_hermitian_connection_component,
+    quantum_metric_band_sum_component,
+    quantum_metric_component,
+    quantum_metric_dipole_component!,
+    quantum_metric_group_sum_component,
+    quantum_metric_quadrupole_component!,
+    shift_spin_current_component,
+    shift_spin_current_energy_weight,
+    shift_vector_component,
+    response_component_labels,
+    response_component_tuples,
+    response_symmetry_action_matrix,
+    response_symmetry_basis,
+    response_symmetry_projector,
+    response_symmetry_relations,
+    response_symmetry_sign,
+    triple_phase_product_component,
+    wilson_loop_derivative_product,
+    wilson_loop_derivative_product_from_cache,
+    wilson_loop_overlap!,
+    wilson_loop_shift_vector_loop,
+    wilson_loop_transported_connection,
+    zeeman_interband_berry_curvature_component,
+    zeeman_interband_quantum_geometry_components,
+    zeeman_interband_quantum_metric_component
+
+end

@@ -1,0 +1,46 @@
+schema = "WannierNLQG.projection_representation_compatibility_oracle"
+schema_version = "1.0"
+upstream_package = "WannierBerri"
+upstream_version = "1.7.0"
+upstream_commit = "50265d5d1cef184f8377f87ed691c8d9a2f6cdbf"
+upstream_source_sha256 = "8552e056b568860c4c7dbd868e997fe4e9e6fb4a0349b182665aee2c8330d5c2"
+character_tolerance = 1.0e-3
+character_relative_tolerance = 1.0e-5
+character_round_digits = 3
+little_group_tolerance = 1.0e-5
+
+[[case]]
+id = "c1_exact_dimension"
+candidate_dimensions = [1, 2]
+candidate_signatures = [[1], [2]]
+lower_signature = [2]
+upper_signature = [2]
+target_dimension = 2
+coefficient_sets = [[0, 1], [2, 0]]
+
+[[case]]
+id = "ci_even_odd"
+candidate_dimensions = [1, 1]
+candidate_signatures = [[1, 0], [0, 1]]
+lower_signature = [1, 1]
+upper_signature = [1, 1]
+target_dimension = 2
+coefficient_sets = [[1, 1]]
+
+[[case]]
+id = "c2v_two_channels"
+candidate_dimensions = [1, 1, 1, 1]
+candidate_signatures = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+lower_signature = [1, 0, 1, 0]
+upper_signature = [1, 0, 1, 0]
+target_dimension = 2
+coefficient_sets = [[1, 0, 1, 0]]
+
+[[case]]
+id = "screw_boundary_channels"
+candidate_dimensions = [1, 1]
+candidate_signatures = [[1, 0], [0, 1]]
+lower_signature = [1, 1]
+upper_signature = [1, 1]
+target_dimension = 2
+coefficient_sets = [[1, 1]]

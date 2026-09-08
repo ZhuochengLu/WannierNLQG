@@ -1,0 +1,6 @@
+{
+  "mode": "single-map", "metadata": "metadata_cart_orthogonal.txt",
+  "data": ["kslice_real.dat"], "coordinate": "cartesian", "projection": "kx-ky",
+  "part": "real", "norm": "diverging",
+  "output": {"stem": "kslice_cart_orthogonal", "formats": ["pdf", "png"]}
+}

@@ -1,0 +1,16 @@
+{
+  "schema": "wanniernlqg.visualization-band-path",
+  "schema_version": "1.0",
+  "distance_unit": "A^-1",
+  "energy_unit": "eV",
+  "energy_reference_ev": 5.0,
+  "kpoint_coordinate_convention": "fractional_crystal",
+  "fractional_kpoints": [[0.0,0.0,0.0],[0.5,0.0,0.0],[0.5,0.0,0.0],[0.5,0.5,0.0]],
+  "distances_A_inverse": [0.0,1.5707963267948966,1.5707963267948966,3.141592653589793],
+  "nodes": [
+    {"index_zero_based": 0, "label": "Gamma"},
+    {"index_zero_based": 1, "label": "X"},
+    {"index_zero_based": 2, "label": "X"},
+    {"index_zero_based": 3, "label": "M"}
+  ]
+}

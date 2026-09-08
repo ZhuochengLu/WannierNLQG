@@ -1,0 +1,6 @@
+{
+  "mode": "single-map", "metadata": "metadata_cart_skew.txt",
+  "data": ["kslice_real.dat"], "coordinate": "cartesian", "projection": "intrinsic-plane",
+  "part": "real", "norm": "diverging",
+  "output": {"stem": "kslice_cart_skew", "formats": ["pdf", "png"]}
+}

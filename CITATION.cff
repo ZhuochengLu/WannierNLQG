@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use WannierNLQG in your research, please cite this software release and the method references documented for the calculation you perform."
+title: "WannierNLQG"
+type: software
+version: 1.0.0
+date-released: 2026-09-05
+authors:
+  - name: "WannierNLQG contributors"
+license: GPL-2.0-only
+abstract: >-
+  A Julia package for Wannier-based nonlinear optical response, quantum
+  geometry, symmetry-aware real-space models, and symmetry-adapted
+  Wannierization.
+keywords:
+  - nonlinear optical response
+  - quantum geometry
+  - Wannier functions
+  - Julia

@@ -1,0 +1,26 @@
+name: Bug report
+description: Report a reproducible software or scientific-contract problem.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: Do not attach credentials, proprietary inputs, pseudopotentials, or private data.
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem
+      description: Describe expected and observed behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include version, Julia/MPI environment, input provenance, and a minimal command.
+    validations:
+      required: true
+  - type: textarea
+    id: numerics
+    attributes:
+      label: Numerical evidence
+      description: If relevant, provide max-abs, max-rel, relative-L2, and NaN/Inf counts.

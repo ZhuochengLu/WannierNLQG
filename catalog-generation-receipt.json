@@ -1,0 +1,85 @@
+{
+    "schema": "wanniernlqg.catalog-generation-receipt/1.0",
+    "status": "PASS",
+    "generation_contract": "wanniernlqg.spglib-magnetic-point-group-catalog/1.0",
+    "operation_digest_contract": "wanniernlqg.magnetic-point-group-operations/1.0",
+    "symbol_convention": "wanniernlqg.spglib-canonical/1.0",
+    "command": "julia --project=. scripts/generate_response_symmetry_catalog.jl",
+    "network_required": false,
+    "forbidden_inputs": [
+        "PythMPG source, dictionaries, ordering, or generated results",
+        "ISO-MAG data files or generated results",
+        "historical catalog or catalog receipt"
+    ],
+    "inputs": {
+        "spglib_api": [
+            "get_magnetic_symmetry_from_database",
+            "spg_get_pointgroup"
+        ],
+        "generator_sha256": "cef3c65a05307f0a63bc9c91e364ab6721885fac9a884eb4a14ce4ae871efc6f",
+        "canonicalization_sha256": "4570b2df131e7983d6c44a78e825edafd26d4298d1ac42b150cf5fd839d1a336",
+        "specification_sha256": "01bd5b3882d0cf965c8000563208206c238a723288bc1591d9874af9eead62a4"
+    },
+    "locked_spglib": {
+        "spglib_jl": {
+            "version": "1.2.0",
+            "commit": "d7666d94b95da444eb0e0d1d980cf6b45381893a",
+            "git_tree_sha1": "8f1b4a9e4d3d4ce9670c09355ce402ec5418b8e6",
+            "license": "MIT",
+            "license_sha256": "d495fa3541792178d81ed5532e083a3e4e6ec1bb45ec4a3e1d14974c5c00c6db"
+        },
+        "spglib_jll": {
+            "version": "2.7.0+0",
+            "commit": "41936ad9b44ba55aa1800b27660e8effdafc6996",
+            "git_tree_sha1": "2a960ec298d1932df7c9fe8fad2923d548e973d1",
+            "license": "MIT",
+            "license_sha256": "70359aa3bc81c2c882a4a6b473a2110e3638bbb2c05b285dc4c8c1a7d57ed90c"
+        },
+        "spglib_c": {
+            "version": "2.7.0",
+            "commit": "12355c77fb7c505a55f52cae36341d73b781a065",
+            "verified_generation_artifacts": [
+                {
+                    "platform": "aarch64-apple-darwin",
+                    "artifact_tree": "1366d8dabbf6499f8c606426215fbd46ac2cb18a",
+                    "archive_sha256": "17114aff9114b8d2e32ff213772caade1b7d7b7936b77e7996ecd05c6b0cd73b",
+                    "library_sha256": "2a332bace4e3ac377d15a505348451bbbbf363e7fe7bfedf6f840172ecf6c0f7"
+                },
+                {
+                    "platform": "x86_64-linux-gnu",
+                    "artifact_tree": "ceefa619e483d9651436478e4956ba71abc49fc8",
+                    "archive_sha256": "ba908668d97c410a6d53cf20c129a0fdcff7814dfc0177e129fefc8eec869aae",
+                    "library_sha256": "f92c825ed7042fe947dde71187bcd24f6cebd185baa454e345bd1361f244cfa0"
+                }
+            ],
+            "license": "BSD-3-Clause",
+            "license_sha256": "9c4e602ce15bf48206dad105b666ddaeedba747eeda6465807106bc11f4f587f"
+        },
+        "database_sources": {
+            "msg_database_c_sha256": "b313ad5c89f0cf16da3d6c9418f6024b75e2df59d0b2c8c9fda69f1253b6683e",
+            "msg_database_h_sha256": "9e75aa82e2f33ebe5f7e8a1d13ddb2af4b534741b9f9953d00e4ab3bf277fffa",
+            "magnetic_hall_symbols_yaml_sha256": "6e3d7e2de1540c20a3ef13ad3554fac3e68e399c10c435e2feb86c933229d088",
+            "msg_numbers_csv_sha256": "7f1c92556be68f20999971a6c18631ba460c367f3b2d0e2f892643e811d0f539",
+            "make_mhall_db_py_sha256": "50f659a884b70d8068674fd6a93dc824684ba212670e90fdb747c741bd70037f",
+            "make_msgtype_db_py_sha256": "8c6a467c8671dad68a2328b3e61743f232efd0c9ac1bf4be50ee2c45db030551"
+        }
+    },
+    "validation": {
+        "uni_coverage": 1651,
+        "magnetic_point_group_classes": 122,
+        "digest_conflicts": 0,
+        "closure_products_checked": 676317,
+        "coordinate_basis_cases_checked": 599,
+        "type_counts": {
+            "4": 517,
+            "1": 230,
+            "2": 230,
+            "3": 674
+        }
+    },
+    "outputs": {
+        "generated_source": "src/SymmetryFoundation/GeneratedMagneticPointGroupCatalog.jl",
+        "generated_source_sha256": "2d9283c54e7a84196c396f35f5b44d48bd90c38795842648199ac528558b39cb",
+        "display_catalog_sha256": "4ac72113a12da0557105b3d0689d30e623c3ce6b0bcba52dc2c1cb355946290e"
+    }
+}

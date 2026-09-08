@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<espresso>
+  <output>
+    <band_structure>
+      <ks_energies><k_point>0.0 0.0 0.0</k_point><eigenvalues>4.0 6.0</eigenvalues></ks_energies>
+      <ks_energies><k_point>0.25 0.0 0.0</k_point><eigenvalues>4.5 6.5</eigenvalues></ks_energies>
+      <ks_energies><k_point>0.5 0.0 0.0</k_point><eigenvalues>4.75 7.0</eigenvalues></ks_energies>
+    </band_structure>
+  </output>
+</espresso>

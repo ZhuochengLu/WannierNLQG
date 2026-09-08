@@ -1,0 +1,19 @@
+num_wann = 1
+num_bands = 1
+spinors = false
+mp_grid = 1 1 1
+
+begin unit_cell_cart
+ang
+1.0 0.0 0.0
+0.0 1.0 0.0
+0.0 0.0 1.0
+end unit_cell_cart
+
+begin atoms_frac
+X 0.0 0.0 0.0
+end atoms_frac
+
+begin projections
+X:s
+end projections

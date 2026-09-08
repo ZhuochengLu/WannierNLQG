@@ -1,0 +1,22 @@
+[Run]
+system_name = Synthetic
+calculation = kslice
+quantity = shift_vector
+method = conventional
+
+[Input]
+case_root = .
+model_file = skew_tb.dat
+model_sha256 = 1979e4f0d761b3117fd9038791694b909cbc54aa2f4e23d9b35c0c6aa6499243
+model_input_mode = legacy
+
+[Numerics]
+k_mesh = (2, 2)
+kslice_origin = (0.1, 0.2, 0.0)
+kslice_vector_1 = (1.0, 0.0, 0.0)
+kslice_vector_2 = (0.0, 1.0, 0.0)
+
+[Outputs]
+outputs.count = 2
+output.1 = kslice_real.dat
+output.2 = kslice_imag.dat

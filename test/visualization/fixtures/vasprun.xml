@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<modeling>
+  <kpoints>
+    <varray name="kpointlist">
+      <v>0.0 0.0 0.0</v>
+      <v>0.25 0.0 0.0</v>
+      <v>0.5 0.0 0.0</v>
+    </varray>
+  </kpoints>
+  <calculation>
+    <eigenvalues>
+      <array name="eigenvalues">
+        <set>
+          <set comment="spin 1">
+            <set comment="kpoint 1"><r>4.0 1.0</r><r>6.0 0.0</r></set>
+            <set comment="kpoint 2"><r>4.5 1.0</r><r>6.5 0.0</r></set>
+            <set comment="kpoint 3"><r>4.75 1.0</r><r>7.0 0.0</r></set>
+          </set>
+        </set>
+      </array>
+    </eigenvalues>
+  </calculation>
+</modeling>

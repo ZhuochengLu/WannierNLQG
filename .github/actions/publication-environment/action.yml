@@ -1,0 +1,28 @@
+name: Publication environment
+description: Install and verify the exact Python, font and TeX publication dependencies.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: pip
+        cache-dependency-path: scripts/visualization/requirements.txt
+    - name: Install publication font and TeX
+      shell: bash
+      run: |
+        sudo add-apt-repository --yes multiverse
+        sudo apt-get update
+        sudo debconf-set-selections <<'DEBCONF'
+        ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true
+        DEBCONF
+        sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes ttf-mscorefonts-installer texlive-latex-extra texlive-fonts-extra texlive-fonts-recommended texlive-lang-greek texlive-science cm-super dvipng ghostscript poppler-utils
+        fc-cache -f
+    - name: Install pinned Python packages
+      shell: bash
+      run: python -m pip install --requirement scripts/visualization/requirements.txt
+    - name: Render publication environment probe
+      shell: bash
+      env:
+        PYTHONDONTWRITEBYTECODE: '1'
+      run: python scripts/visualization/check_environment.py --output "$RUNNER_TEMP/wanniernlqg-publication-preflight"

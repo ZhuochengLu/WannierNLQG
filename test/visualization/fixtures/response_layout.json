@@ -1,0 +1,22 @@
+{
+  "mode": "compare",
+  "input": "response_a.dat",
+  "compare": "response_b.dat",
+  "label": "Reference",
+  "compare_label": "Model",
+  "components": "yyy",
+  "part": "real",
+  "unit": "pm/V",
+  "scale": 2.0,
+  "x_window": [0.0, 4.0],
+  "legend_bbox_to_anchor": [0.985, 0.02],
+  "legend_columns": 2,
+  "legend_frame": false,
+  "style": {
+    "minor_ticks": false,
+    "legend": {
+      "location": "lower right"
+    }
+  },
+  "output": {"stem": "response_layout", "formats": ["pdf", "png"]}
+}

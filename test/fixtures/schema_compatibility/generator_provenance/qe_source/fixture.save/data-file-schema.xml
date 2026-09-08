@@ -1,0 +1,27 @@
+<espresso>
+  <input>
+    <atomic_species>
+      <species name="X"><pseudo_file>X.UPF</pseudo_file></species>
+    </atomic_species>
+    <atomic_structure>
+      <cell>
+        <a1>2.0 0.0 0.0</a1>
+        <a2>0.0 2.0 0.0</a2>
+        <a3>0.0 0.0 2.0</a3>
+      </cell>
+      <atomic_positions><atom name="X">0.0 0.0 0.0</atom></atomic_positions>
+    </atomic_structure>
+    <basis><ecutwfc>20.0</ecutwfc></basis>
+  </input>
+  <output>
+    <band_structure>
+      <noncolin>true</noncolin>
+      <spinorbit>true</spinorbit>
+      <lsda>false</lsda>
+      <nbnd>1</nbnd>
+      <ks_energies><k_point>0.0 0.0 0.0</k_point><eigenvalues>-0.25</eigenvalues></ks_energies>
+<ks_energies><k_point>0.3333333333333333 0.0 0.0</k_point><eigenvalues>-0.25</eigenvalues></ks_energies>
+<ks_energies><k_point>0.6666666666666666 0.0 0.0</k_point><eigenvalues>-0.25</eigenvalues></ks_energies>
+    </band_structure>
+  </output>
+</espresso>

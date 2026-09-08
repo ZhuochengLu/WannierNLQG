@@ -1,0 +1,28 @@
+{
+  "mode": "compare",
+  "reference": {
+    "type": "wanniernlqg",
+    "id": "reference",
+    "label": "Reference",
+    "bands": "bands.dat",
+    "path": "band_path.json",
+    "qualification_label": "DIAGNOSTIC_INPUT"
+  },
+  "models": [
+    {
+      "type": "wanniernlqg",
+      "id": "model",
+      "label": "Model",
+      "bands": "bands.dat",
+      "path": "band_path.json",
+      "qualification_label": "DIAGNOSTIC_INPUT"
+    }
+  ],
+  "curves": {
+    "reference": {"marker": "o", "markevery": 2, "zorder": 3},
+    "model": {"color": "#104E8B", "linestyle": "--", "zorder": 4}
+  },
+  "energy_window": [-2.0, 2.5],
+  "diagnostic_banner": "DIAGNOSTIC ONLY",
+  "output": {"stem": "band_compare", "formats": ["pdf", "png"]}
+}

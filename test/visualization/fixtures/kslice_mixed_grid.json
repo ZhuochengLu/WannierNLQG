@@ -1,0 +1,5 @@
+{
+  "mode": "grid", "metadata": "metadata.txt", "panel_manifest": "kslice_mixed_panels.json",
+  "coordinate": "fractional", "panel_columns": 2,
+  "output": {"stem": "kslice_mixed_grid", "formats": ["pdf", "png"]}
+}
