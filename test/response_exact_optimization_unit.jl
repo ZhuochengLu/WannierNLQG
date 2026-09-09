@@ -1,5 +1,9 @@
 using Random
 
+if !isdefined(@__MODULE__, :RESPONSE_TEST_SUPPORT_LOADED)
+    include(joinpath(@__DIR__, "ResponseTestSupport.jl"))
+end
+
 const EXACT_RESPONSES = WannierNLQG.Responses
 exact_bitwise_equal(left, right) = reinterpret(UInt8, vec(left)) == reinterpret(UInt8, vec(right))
 
