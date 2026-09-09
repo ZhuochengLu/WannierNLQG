@@ -47,13 +47,12 @@ quantum-geometric quantities from Wannier tight-binding models.
 ## Supported calculations
 
 - **Nonlinear optical responses (Integral and K-slice)**
-  - Shift Current — Conventional, Projector, Wilson Loop, and Geometric Loop;
-    Integral and K-slice.
-  - Injection Current — Conventional; Integral and K-slice.
-  - Injection Spin Current — Conventional; Integral and K-slice.
-  - Shift Spin Current — Conventional; Integral and K-slice.
-  - Photon Drag Shift Current — Geometric Loop; Integral and K-slice.
-  - Photon Drag Injection Current — Conventional; Integral and K-slice.
+  - Shift Current — Conventional, Projector, Wilson Loop, and Geometric Loop.
+  - Injection Current — Conventional.
+  - Injection Spin Current — Conventional.
+  - Shift Spin Current — Conventional.
+  - Photon Drag Shift Current — Geometric Loop.
+  - Photon Drag Injection Current — Conventional.
 
 - **Quantum-geometric quantities (K-slice)**
   - Quantum Hermitian Connection — Conventional, Projector, Wilson Loop, and
