@@ -62,8 +62,9 @@ quantum-geometric quantities from Wannier tight-binding models.
   - Quantum Metric and its dipole and quadrupole.
   - Interband Berry Curvature and Interband Quantum Metric.
   - Zeeman Interband Berry Curvature and Zeeman Interband Quantum Metric.
-  - Quantum Christoffel Symbol, Triple Phase Product, and Shift Vector.
-  - Shift Vector supports Geometric Loop and Wilson Loop.
+  - Quantum Christoffel Symbol.
+  - Triple Phase Product.
+  - Shift Vector - Shift Vector supports Wilson Loop and Geometric Loop.
 
 - **Band structures (KPath)**
   - Band interpolation.
