@@ -1,5 +1,9 @@
 # WannierNLQG
 
+<p align="center">
+  <img src="docs/assets/wanniernlqg-logo-transparent.png" alt="WannierNLQG logo" width="640">
+</p>
+
 WannierNLQG is a Julia package for nonlinear optical responses and
 quantum-geometric quantities from Wannier tight-binding models.
 
