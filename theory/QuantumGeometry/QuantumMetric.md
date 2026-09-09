@@ -31,11 +31,11 @@ $$
 
 For a subspace $S$, the local quantity in the release is
 
-$$
+```math
 g_S^{ab}
 =\sum_{\substack{I\in S\\J\notin S}}
-\mathrm{Re}\left(r_{IJ}^{a}r_{JI}^{b}\right).
-$$
+\mathrm{Re}\left(r^{a}_{IJ}\,r^{b}_{JI}\right).
+```
 
 Intra-subspace transitions are excluded, so the expression measures only the variation between $S$ and its complement and is invariant under unitary rotations within $S$. The release provides the internal contribution within a finite window. If the finite basis itself varies with $\mathbf k$, a symmetric external term requiring additional matrix-element information may also exist; that term is not reconstructed here.
 
