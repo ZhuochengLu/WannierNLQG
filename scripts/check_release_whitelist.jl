@@ -47,6 +47,7 @@ const ALLOWED_SCRIPT_FILES = Set([
     "check_structure_boundaries.jl",
     "check_symmetrization_documentation.jl",
     "check_symmetrization_examples.jl",
+    "check_tag_ci_reuse.py",
     "check_user_guide_examples.jl",
     "check_version_consistency.jl",
     "check_wannierization_documentation.jl",

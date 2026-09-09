@@ -37,18 +37,24 @@ The default test level is Fast and uses only repository-owned synthetic data:
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-Full adds thread and MPI paths, fresh-process persistence, historical readers,
-all registered response families, and abnormal input/error lifecycles:
+Full-only shards add thread paths, fresh-process persistence, historical readers,
+all registered response families, and abnormal input/error lifecycles. Run all
+five static shards, then run the independent MPI-only suite:
 
 ```bash
-WANNIERNLQG_TEST_LEVEL=full WANNIERNLQG_TEST_MPI=1 \
-  julia --project=. -e 'using Pkg; Pkg.test()'
+for shard in interfaces-and-symmetry wannier-core scientific-contracts \
+  thread-determinism star-gauge-thread; do
+  WANNIERNLQG_TEST_MODE=full-shard WANNIERNLQG_TEST_SHARD="$shard" \
+    julia --project=. -e 'using Pkg; Pkg.test()'
+done
+WANNIERNLQG_TEST_MODE=mpi-only julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-`WANNIERNLQG_TEST_MPI=1` requires a working MPI launcher. An unavailable or
-invalid environment is `NOT_RUN` or `INVALID_ENVIRONMENT`, never PASS. Material
-input unavailability is reported separately and does not change package-test
-status.
+`WANNIERNLQG_TEST_MODE=mpi-only` requires a working MPI launcher. Test modes and
+shards are validated fail-closed by `test/CITestPlan.jl`; retired or conflicting
+environment variables are errors. An unavailable or invalid environment is
+`NOT_RUN` or `INVALID_ENVIRONMENT`, never PASS. Material input unavailability is
+reported separately and does not change package-test status.
 
 Full plotting tests require Python 3.11 with the exact packages listed in
 `scripts/visualization/requirements.txt`, Times New Roman, a complete LaTeX

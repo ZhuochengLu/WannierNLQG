@@ -13,22 +13,15 @@ const TEST_MODEL_FILE =
 
 include(joinpath(SCRIPT_DIR, "ValidationPolicy.jl"))
 include(joinpath(SCRIPT_DIR, "FormatterPaths.jl"))
+include(joinpath(@__DIR__, "CITestPlan.jl"))
 using .ValidationPolicy
+import .CITestPlan
 
-function test_environment_choice(name::AbstractString, default::AbstractString, allowed)
-    value = strip(get(ENV, name, default))
-    value in allowed ||
-        error("Invalid $(name)=$(repr(value)); expected one of $(join(repr.(allowed), ", ")).")
-    return value
-end
-
-const TEST_LEVEL = test_environment_choice("WANNIERNLQG_TEST_LEVEL", "fast", ("fast", "full"))
-const TEST_MPI = test_environment_choice("WANNIERNLQG_TEST_MPI", "0", ("0", "1"))
-const RUN_FULL_TESTS = TEST_LEVEL == "full"
-const RUN_MPI_TESTS = TEST_MPI == "1"
-RUN_MPI_TESTS &&
-    !RUN_FULL_TESTS &&
-    error("WANNIERNLQG_TEST_MPI=1 is valid only with WANNIERNLQG_TEST_LEVEL=full.")
+CITestPlan.validate_ci_test_plan()
+const TEST_SELECTION = CITestPlan.resolve_test_selection()
+const RUN_FAST_TESTS = TEST_SELECTION.mode == "fast"
+const RUN_FULL_SHARD = TEST_SELECTION.mode == "full-shard"
+const RUN_MPI_TESTS = TEST_SELECTION.mode == "mpi-only"
 const MPI_EXECUTABLE = if RUN_MPI_TESTS
     @eval import MPI
     MPI.mpiexec()
@@ -37,8 +30,14 @@ else
 end
 
 println(
-    "[test-suite] level=$(TEST_LEVEL) mpi=$(TEST_MPI) " *
+    "[test-suite] mode=$(TEST_SELECTION.mode) " *
+    "shard=$(something(TEST_SELECTION.shard, "none")) " *
     "fixture=examples/fixtures/synthetic_runtime",
+)
+println(
+    "[test-suite:inventory] fast=$(RUN_FAST_TESTS ? length(CITestPlan.FAST_TEST_FILES) : 0) " *
+    "full=$(RUN_FULL_SHARD ? length(CITestPlan.full_shard_files(something(TEST_SELECTION.shard))) : 0) " *
+    "mpi=$(RUN_MPI_TESTS ? length(CITestPlan.MPI_GATE_NAMES) + length(CITestPlan.MPI_TEST_FILES) : 0)",
 )
 
 function script_cmd(script::AbstractString)
@@ -96,7 +95,7 @@ end
 # Shared in-memory writers used by several Fast and Full units.
 include_test_file("OperatorBundleTestSupport.jl")
 
-const FAST_TEST_FILES = (
+const PRE_SHARD_FAST_TEST_FILES = (
     "task_configuration_unit.jl",
     "release_smoke_unit.jl",
     "mpi_runtime_environment_unit.jl",
@@ -159,7 +158,7 @@ const FAST_TEST_FILES = (
     "source_documentation_audit_unit.jl",
 )
 
-const FULL_ONLY_TEST_FILES = (
+const PRE_SHARD_FULL_ONLY_TEST_FILES = (
     "per_task_symmetry_unit.jl",
     "per_task_parallel_unit.jl",
     "documented_examples_full_unit.jl",
@@ -200,40 +199,52 @@ const FULL_ONLY_TEST_FILES = (
     "star_covariant_paw_gauge_thread_determinism_unit.jl",
 )
 
-foreach(include_test_file, FAST_TEST_FILES)
+PRE_SHARD_FAST_TEST_FILES == CITestPlan.FAST_TEST_FILES ||
+    error("Fast test plan no longer matches the frozen pre-sharding inventory.")
+PRE_SHARD_FULL_ONLY_TEST_FILES == CITestPlan.FULL_ONLY_TEST_FILES ||
+    error("Full-only test plan no longer matches the frozen pre-sharding inventory.")
 
-@testset "fast readiness gates" begin
-    @test format_succeeds()
-    serial_env = [
-        "OMP_NUM_THREADS" => "1",
-        "MKL_NUM_THREADS" => "1",
-        "OPENBLAS_NUM_THREADS" => "1",
-        "VECLIB_MAXIMUM_THREADS" => "1",
-    ]
-    for script in FAST_READINESS_SCRIPTS
-        @testset "$(script)" begin
-            @test script_succeeds(script; env = serial_env)
-        end
-    end
-end
+if RUN_FAST_TESTS
+    foreach(include_test_file, CITestPlan.FAST_TEST_FILES)
+    foreach(include_test_file, CITestPlan.CI_CONTRACT_TEST_FILES)
 
-if RUN_FULL_TESTS
-    foreach(include_test_file, FULL_ONLY_TEST_FILES)
-    if isdir(joinpath(@__DIR__, "visualization"))
-        include(joinpath(@__DIR__, "visualization", "runtests.jl"))
-    end
-    @testset "full numerical scripts" begin
+    @testset "fast readiness gates" begin
+        @test format_succeeds()
         serial_env = [
             "OMP_NUM_THREADS" => "1",
             "MKL_NUM_THREADS" => "1",
             "OPENBLAS_NUM_THREADS" => "1",
             "VECLIB_MAXIMUM_THREADS" => "1",
         ]
-        for script in FULL_READINESS_SCRIPTS
-            @test script_succeeds(script; env = serial_env)
+        for script in FAST_READINESS_SCRIPTS
+            @testset "$(script)" begin
+                @test script_succeeds(script; env = serial_env)
+            end
         end
-        for script in FULL_NUMERICAL_SCRIPTS
-            @test script_succeeds(script)
+    end
+end
+
+if RUN_FULL_SHARD
+    shard = something(TEST_SELECTION.shard)
+    foreach(include_test_file, CITestPlan.full_shard_files(shard))
+    foreach(include_test_file, CITestPlan.full_shard_auxiliary_files(shard))
+    if shard == CITestPlan.FULL_VISUALIZATION_SHARD && isdir(joinpath(@__DIR__, "visualization"))
+        include(joinpath(@__DIR__, "visualization", "runtests.jl"))
+    end
+    if shard == CITestPlan.FULL_NUMERICAL_SCRIPTS_SHARD
+        @testset "full numerical scripts" begin
+            serial_env = [
+                "OMP_NUM_THREADS" => "1",
+                "MKL_NUM_THREADS" => "1",
+                "OPENBLAS_NUM_THREADS" => "1",
+                "VECLIB_MAXIMUM_THREADS" => "1",
+            ]
+            for script in FULL_READINESS_SCRIPTS
+                @test script_succeeds(script; env = serial_env)
+            end
+            for script in FULL_NUMERICAL_SCRIPTS
+                @test script_succeeds(script)
+            end
         end
     end
 end
@@ -270,13 +281,5 @@ if RUN_MPI_TESTS
         )
     end
 
-    foreach(
-        include_test_file,
-        (
-            "mdrs_runtime_mpi_unit.jl",
-            "wannierization_raw_z_mpi_unit.jl",
-            "wannierization_u_localization_mpi_unit.jl",
-            "wannierization_workflow_mpi_unit.jl",
-        ),
-    )
+    foreach(include_test_file, CITestPlan.MPI_TEST_FILES)
 end

@@ -33,18 +33,17 @@ end
 
 @testset "Independent task parameters: 1/2 threads and MPI ranks" begin
     mktempdir() do directory
-        cases = NamedTuple[
-            (label = "threads1", threads = 1, ranks = nothing),
-            (label = "threads2", threads = 2, ranks = nothing),
-        ]
-        if isdefined(@__MODULE__, :RUN_MPI_TESTS) && RUN_MPI_TESTS
-            append!(
-                cases,
-                [
-                    (label = "mpi1", threads = 1, ranks = 1),
-                    (label = "mpi2", threads = 1, ranks = 2),
-                ],
-            )
+        cases = if isdefined(@__MODULE__, :RUN_MPI_TESTS) && RUN_MPI_TESTS
+            NamedTuple[
+                (label = "threads1", threads = 1, ranks = nothing),
+                (label = "mpi1", threads = 1, ranks = 1),
+                (label = "mpi2", threads = 1, ranks = 2),
+            ]
+        else
+            NamedTuple[
+                (label = "threads1", threads = 1, ranks = nothing),
+                (label = "threads2", threads = 2, ranks = nothing),
+            ]
         end
         records = Dict{String, Any}()
         for case in cases

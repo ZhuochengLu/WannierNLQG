@@ -39,7 +39,7 @@ The labels $a,b$ are Cartesian directions, and $\Omega_{A,B}^{ab}=-\Omega_{A,B}^
 
 | Formula in this document | Original source and location | Convention conversion |
 | --- | --- | --- |
-| Interband decomposition of the QGT | Projector expansions of the Provost–Vallée (1980) metric and Berry (1984) curvature | Take the parameter space to be $\mathbf k$ and use $r=i\langle u|\partial u\rangle$ |
+| Interband decomposition of the QGT | Projector expansions of the Provost–Vallée (1980) metric and Berry (1984) curvature | Take the parameter space to be $\mathbf k$ and use $r=i\langle u\vert\partial u\rangle$ |
 | Two-subspace block contraction | Wilczek–Zee (1984), non-Abelian subspace geometry | Retain only the $A\leftrightarrow B$ channels and divide by $N_AN_B$ |
 | Antisymmetric imaginary part | Standard QGT decomposition | Use the sign convention $\Omega=-\mathrm{Im}(Q^{ab}-Q^{ba})$ adopted here |
 

@@ -58,12 +58,10 @@ The index $b$ denotes the transition polarization, and $a$ denotes the displacem
 
 | Formula in this document | Original source and location | Convention conversion |
 | --- | --- | --- |
-| Shift-vector definition | Sipe–Shkrebtii (2000), shift-current/shift-vector equations | Standardize the Berry connection as $i\langle u|\partial u\rangle$; the electron charge does not enter $R$ |
+| Shift-vector definition | Sipe–Shkrebtii (2000), shift-current/shift-vector equations | Standardize the Berry connection as $i\langle u\vert\partial u\rangle$; the electron charge does not enter $R$ |
 | Generalized Wilson loop | Wang et al. (2022), Eqs. (1)–(4) | Orient the loop as $n\to m$ and specify the continuous branch through $p\to0$ |
-| Finite-$q$/geometric loop | Shi et al. (2021), geometric-loop construction | Retain only the $q=0$ K-slice limit here; see the PDSC document for finite $q$ |
 
 ## 7. References
 
 1. J. E. Sipe and A. I. Shkrebtii, “Second-order optical response in semiconductors,” *Phys. Rev. B* **61**, 5337–5352 (2000). [DOI](https://doi.org/10.1103/PhysRevB.61.5337)
 2. H. Wang, X. Tang, H. Xu, J. Li, and X. Qian, “Generalized Wilson loop method for nonlinear light-matter interaction,” *npj Quantum Materials* **7**, 61 (2022). [DOI](https://doi.org/10.1038/s41535-022-00472-4)
-3. L.-k. Shi, D. Zhang, K. Chang, and J. C. W. Song, “Geometric Photon-Drag Effect and Nonlinear Shift Current in Centrosymmetric Crystals,” *Phys. Rev. Lett.* **126**, 197402 (2021). [DOI](https://doi.org/10.1103/PhysRevLett.126.197402)

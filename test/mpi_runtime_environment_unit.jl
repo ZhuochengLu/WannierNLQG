@@ -79,13 +79,4 @@ println("MPI_ENVIRONMENT_PROBE_PASS function_entry")
         output = read(addenv(command, environment), String)
         @test occursin("MPI_ENVIRONMENT_PROBE_PASS " * mode, output)
     end
-    if isdefined(@__MODULE__, :RUN_FULL_TESTS) && RUN_FULL_TESTS
-        environment["WANNIERNLQG_USE_MPI"] = "1"
-        command =
-            `$(Base.julia_cmd()) --startup-file=no --compiled-modules=no --project=$(ROOT) -e $(MPI_ENVIRONMENT_PROBE) enabled`
-        @test occursin(
-            "MPI_ENVIRONMENT_PROBE_PASS enabled",
-            read(addenv(command, environment), String),
-        )
-    end
 end

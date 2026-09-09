@@ -33,7 +33,7 @@ For a subspace $S$, the local quantity in the release is
 
 $$
 g_S^{ab}
-=\sum_{I\in S,J\notin S}
+=\sum_{\substack{I\in S\\J\notin S}}
 \mathrm{Re}\left(r_{IJ}^{a}r_{JI}^{b}\right).
 $$
 
@@ -54,7 +54,7 @@ The metric satisfies $g^{ab}=g^{ba}$ and $x_ag^{ab}x_b\ge0$ for every real vecto
 | Formula in this document | Original source and location | Convention conversion |
 | --- | --- | --- |
 | Riemannian metric on quantum-state space | Provost–Vallée (1980), definition of the metric tensor on rays | Take the parameters to be $\mathbf k$ and project the normalized state derivative perpendicular to the state itself |
-| Bloch-band QGT decomposition | Standard band-projector expansion | Write the result as an interband sum using $r=i\langle u|\partial u\rangle$ |
+| Bloch-band QGT decomposition | Standard band-projector expansion | Write the result as an interband sum using $r=i\langle u\vert\partial u\rangle$ |
 | Multiband/finite-window boundary | Wilczek–Zee subspace geometry | Exclude transitions within $S$ and retain only the internal contribution determined by the current finite window |
 
 ## 7. References

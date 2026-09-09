@@ -56,7 +56,7 @@ The labels $a,b$ denote the curvature-plane directions, and $\Omega^{ab}=-\Omega
 
 | Formula in this document | Original source and location | Convention conversion |
 | --- | --- | --- |
-| U(1) Berry curvature and phase | Berry (1984), equations defining the geometrical phase and curvature | Take the parameter space to be crystal momentum and use the connection $+i\langle u|\partial u\rangle$ |
+| U(1) Berry curvature and phase | Berry (1984), equations defining the geometrical phase and curvature | Take the parameter space to be crystal momentum and use the connection $+i\langle u\vert\partial u\rangle$ |
 | Non-Abelian curvature | Wilczek–Zee (1984), non-Abelian connection construction | Trace over the selected band group to obtain a gauge-invariant scalar |
 | Interband-matrix-element form | Standard first-order perturbative expansion; Wang et al. (2006), AHC formulas | Standardize to $-2\mathrm{Im}r^ar^b$ and exclude transitions within the target group |
 

@@ -2,34 +2,56 @@ name: CI
 
 on:
   push:
+    branches:
+      - '**'
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
 jobs:
   fast:
+    name: fast (${{ matrix.os }}, Julia ${{ matrix.julia.label }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        julia-version: ['1.10', '1']
+        julia:
+          - version: '1.10'
+            label: '1.10'
+          - version: '1'
+            label: current
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
         with:
-          version: ${{ matrix.julia-version }}
+          version: ${{ matrix.julia.version }}
       - uses: julia-actions/cache@v2
       - name: Instantiate
         run: julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
-      - name: Fast tests (default)
+      - name: Fast tests
         env:
-          WANNIERNLQG_TEST_MPI: '0'
+          WANNIERNLQG_TEST_MODE: fast
           WANNIERNLQG_TEST_OUTPUT_ROOT: ${{ runner.temp }}/wanniernlqg-tests
         run: julia --project=. -e 'using Pkg; Pkg.test()'
 
-  full:
+  full-shard:
+    name: full-shard (${{ matrix.shard }})
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - interfaces-and-symmetry
+          - wannier-core
+          - scientific-contracts
+          - thread-determinism
+          - star-gauge-thread
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,14 +62,15 @@ jobs:
       - uses: julia-actions/cache@v2
       - name: Instantiate
         run: julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
-      - name: Full tests
+      - name: Full-only shard
         env:
-          WANNIERNLQG_TEST_LEVEL: full
-          WANNIERNLQG_TEST_MPI: '0'
+          WANNIERNLQG_TEST_MODE: full-shard
+          WANNIERNLQG_TEST_SHARD: ${{ matrix.shard }}
           WANNIERNLQG_TEST_OUTPUT_ROOT: ${{ runner.temp }}/wanniernlqg-tests
         run: julia --project=. -e 'using Pkg; Pkg.test()'
 
-  full-mpi:
+  mpi-only:
+    name: mpi-only
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,9 +82,24 @@ jobs:
       - name: Instantiate and install MPI launcher
         run: |
           julia --project=. -e 'using Pkg; Pkg.instantiate(); using MPI; MPI.install_mpiexecjl()'
-      - name: Full tests with MPI
+      - name: MPI-only tests
         env:
-          WANNIERNLQG_TEST_LEVEL: full
-          WANNIERNLQG_TEST_MPI: '1'
+          WANNIERNLQG_TEST_MODE: mpi-only
           WANNIERNLQG_TEST_OUTPUT_ROOT: ${{ runner.temp }}/wanniernlqg-tests
         run: julia --project=. -e 'using Pkg; Pkg.test()'
+
+  ci-required:
+    name: ci-required
+    if: ${{ always() }}
+    needs: [fast, full-shard, mpi-only]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every compute job to succeed
+        env:
+          FAST_RESULT: ${{ needs.fast.result }}
+          FULL_SHARD_RESULT: ${{ needs.full-shard.result }}
+          MPI_ONLY_RESULT: ${{ needs.mpi-only.result }}
+        run: |
+          test "$FAST_RESULT" = success
+          test "$FULL_SHARD_RESULT" = success
+          test "$MPI_ONLY_RESULT" = success

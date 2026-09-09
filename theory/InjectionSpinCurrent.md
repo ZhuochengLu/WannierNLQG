@@ -64,7 +64,7 @@ where $s=x,y,z$; in particular, $s=z$ remains meaningful even for a system with 
 | --- | --- | --- |
 | Classification of second-order spin photocurrents and ISC | Lihm–Park (2022), response decomposition and Eqs. (7), (11) | Replace the general spin operator by dimensionless $\sigma^s$ and exchange band labels to obtain $f_{nm}\delta(\omega_{mn}-\omega)$ |
 | Pauli-current vertex | Qiao et al. (2018), Eqs. (22)–(51) | Rewrite the physical-spin/spin-Hall units of the original work as $J_\sigma=\{v,\sigma\}/2$ |
-| Identity channel | Follows directly from the operator definition above | The kernels coincide before global prefactors; the release prefactors preserve equality after multiplication by $-|e|$ |
+| Identity channel | Follows directly from the operator definition above | The kernels coincide before global prefactors; the release prefactors preserve equality after multiplication by $-\lvert e\rvert$ |
 
 ## 7. References
 

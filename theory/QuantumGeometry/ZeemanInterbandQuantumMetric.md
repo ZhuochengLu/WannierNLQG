@@ -52,7 +52,7 @@ The index $\alpha$ denotes a spatial direction, while $\beta$ denotes one of the
 
 | Formula in this document | Original source and location | Convention conversion |
 | --- | --- | --- |
-| Zeeman QGT | Xiang et al. (2025), Eq. (4) | Standardize the position-matrix-element convention to $r=i\langle u|\partial u\rangle$ |
+| Zeeman QGT | Xiang et al. (2025), Eq. (4) | Standardize the position-matrix-element convention to $r=i\langle u\vert\partial u\rangle$ |
 | Zeeman quantum metric | Xiang et al. (2025), Eq. (5) | Use the dimensionless Pauli matrix, take the real part, and average over $A\times B$ |
 | Decomposition relative to ZBC | Xiang et al. (2025), Eqs. (5)–(6) | Preserve the same band and index order |
 

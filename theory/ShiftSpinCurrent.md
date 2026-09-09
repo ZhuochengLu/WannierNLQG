@@ -325,9 +325,9 @@ so strict equality is asserted only in the stated formal limit. For a multiband 
 | Formula in this document | Original source and location | Convention conversion |
 | --- | --- | --- |
 | $d^{s,b;a}$ and the two-photon vertex | Lihm–Park (2022), Eqs. (5)–(7) | Apply $S^s\to\sigma^s$ while preserving the ordered matrix products in the intermediate-band terms |
-| SSC response | Lihm–Park (2022), Eq. (11) and Appendix B, Eqs. (B10), (B12), (B14), and (B44) | Apply the simultaneous band-pair and optical-slot conversion derived in Sec. 4, divide the paper's charge-weighted tensor by $q=-|e|$, and keep the release's outer ordered-field factor $2$ outside the response kernel |
+| SSC response | Lihm–Park (2022), Eq. (11) and Appendix B, Eqs. (B10), (B12), (B14), and (B44) | Apply the simultaneous band-pair and optical-slot conversion derived in Sec. 4, divide the paper's charge-weighted tensor by $q=-\lvert e\rvert$, and keep the release's outer ordered-field factor $2$ outside the response kernel |
 | One-photon Pauli-current vertex | Qiao et al. (2018), Eqs. (22)–(51) | Use $J_\sigma=\{v,\sigma\}/2$ without an additional factor $\hbar/2$ |
-| Identity channel | Comparison of Lihm–Park Eq. (11) with the charge shift-current expression | Multiply by the output charge $-|e|$; the same $(a,b,c)$ component equals SC in the nondegenerate resonant $\eta\to0$ limit, with no output-level index exchange |
+| Identity channel | Comparison of Lihm–Park Eq. (11) with the charge shift-current expression | Multiply by the output charge $-\lvert e\rvert$; the same $(a,b,c)$ component equals SC in the nondegenerate resonant $\eta\to0$ limit, with no output-level index exchange |
 
 ## 8. References
 

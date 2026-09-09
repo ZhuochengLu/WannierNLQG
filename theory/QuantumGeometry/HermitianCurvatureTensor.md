@@ -58,7 +58,7 @@ The index order is fixed as $(b,a,d,c)$: $a,b$ denote the two optical legs, and 
 | Formula in this document | Original source and location | Convention conversion |
 | --- | --- | --- |
 | Hermitian-curvature definition | Ahn et al. (2022), main-text Eq. (9) and geometric identities in Methods | Label the band groups by $M,N$ and fix the index order as $(b,a,d,c)$ |
-| Ricci-identity formulation | Ahn et al. (2022), Riemannian-geometry construction | Use the Berry-connection convention $r=i\langle u|\partial u\rangle$, which fixes the covariant derivative and the sign $-i$ shown above |
+| Ricci-identity formulation | Ahn et al. (2022), Riemannian-geometry construction | Use the Berry-connection convention $r=i\langle u\vert\partial u\rangle$, which fixes the covariant derivative and the sign $-i$ shown above |
 | Release subspace contract | Block trace of the same multiband formula | Retain the ordinary trace without averaging over subspace dimensions |
 
 ## 7. References

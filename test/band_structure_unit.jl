@@ -9,6 +9,15 @@ const BAND_ME = WannierNLQG.MatrixElements
 const BAND_RUNTIME = WannierNLQG.Runtime
 const BAND_SYNTHETIC_TB =
     joinpath(ROOT, "examples", "symmetrization", "fixture", "inputs", "synthetic_tb.dat")
+const BAND_STRUCTURE_TEST_MODE = TEST_SELECTION.mode
+
+macro band_testset_if(condition, name, body)
+    return esc(:(
+        if $condition
+            @testset $name $body
+        end
+    ))
+end
 
 # Construct the mandatory Packed-HDF5 geometry contract for a Band fixture.
 function band_test_bundle_geometry(
@@ -124,7 +133,7 @@ function read_band_test_table(path)
     return reduce(vcat, permutedims.(rows))
 end
 
-@testset "Band task validation, path, direct spectrum, and fail-closed output" begin
+@band_testset_if (BAND_STRUCTURE_TEST_MODE == "fast") "Band task validation, path, direct spectrum, and fail-closed output" begin
     valid = band_test_config(mktempdir(), BAND_SYNTHETIC_TB)
     specs = BAND_RUNTIME.validate_config(valid)
     @test only(specs).quantity == :band_structure
@@ -264,7 +273,7 @@ end
     end
 end
 
-@testset "Band text/HDF5 parity and replica policy provenance" begin
+@band_testset_if (BAND_STRUCTURE_TEST_MODE == "fast") "Band text/HDF5 parity and replica policy provenance" begin
     mktempdir() do directory
         bundle_directory = joinpath(directory, "bundle")
         mkpath(bundle_directory)
@@ -356,7 +365,7 @@ end
     end
 end
 
-if RUN_FULL_TESTS
+if BAND_STRUCTURE_TEST_MODE in ("full-shard", "mpi-only")
     # Launch the public KPath/Band API with deterministic native-library threading.
     function kpath_band_parallel_command(directory; threads, ranks = nothing)
         probe = joinpath(@__DIR__, "support", "kpath_band_parallel_runner.jl")
@@ -375,17 +384,18 @@ if RUN_FULL_TESTS
 
     @testset "KPath/Band 1/2-thread and MPI byte determinism" begin
         mktempdir() do directory
-            cases = NamedTuple[
-                (label = "threads1", threads = 1, ranks = nothing),
-                (label = "threads2", threads = 2, ranks = nothing),
-            ]
-            RUN_MPI_TESTS && append!(
-                cases,
-                [
+            cases = if BAND_STRUCTURE_TEST_MODE == "mpi-only"
+                NamedTuple[
+                    (label = "threads1", threads = 1, ranks = nothing),
                     (label = "mpi1", threads = 1, ranks = 1),
                     (label = "mpi2", threads = 1, ranks = 2),
-                ],
-            )
+                ]
+            else
+                NamedTuple[
+                    (label = "threads1", threads = 1, ranks = nothing),
+                    (label = "threads2", threads = 2, ranks = nothing),
+                ]
+            end
             records = Dict{String, Any}()
             for case in cases
                 output = joinpath(directory, case.label)
@@ -404,7 +414,7 @@ if RUN_FULL_TESTS
         end
     end
 
-    @testset "official Band plot postprocessor validates calculation artifacts" begin
+    @band_testset_if (BAND_STRUCTURE_TEST_MODE == "full-shard") "official Band plot postprocessor validates calculation artifacts" begin
         isdefined(Main, :BandStructurePlot) ||
             include(joinpath(ROOT, "scripts", "plot_band_structure.jl"))
         mktempdir() do directory

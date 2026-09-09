@@ -143,12 +143,18 @@ Run the default Fast suite:
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-Run the opt-in Full suite with MPI coverage:
+Run one Full-only shard or the MPI-only suite explicitly:
 
 ```bash
-WANNIERNLQG_TEST_LEVEL=full WANNIERNLQG_TEST_MPI=1 \
+WANNIERNLQG_TEST_MODE=full-shard \
+WANNIERNLQG_TEST_SHARD=wannier-core \
+  julia --project=. -e 'using Pkg; Pkg.test()'
+WANNIERNLQG_TEST_MODE=mpi-only \
   julia --project=. -e 'using Pkg; Pkg.test()'
 ```
+
+The complete static shard inventory and all valid mode names are defined in
+`test/CITestPlan.jl`. The GitHub Actions manual dispatch runs every shard.
 
 Package tests use repository-owned synthetic fixtures and establish software
 regression coverage. They do not establish convergence, physical validity, or

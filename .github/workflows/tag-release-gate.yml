@@ -1,0 +1,39 @@
+name: Tag release gate
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: tag-release-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  reuse-exact-main-ci:
+    name: reuse exact main CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve annotated or lightweight tag target
+        id: target
+        shell: bash
+        run: |
+          target_sha="$(git rev-list -n 1 "$GITHUB_REF")"
+          test "$(git cat-file -t "$target_sha")" = commit
+          echo "sha=$target_sha" >> "$GITHUB_OUTPUT"
+      - name: Require exact successful main CI for target
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/check_tag_ci_reuse.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "${{ steps.target.outputs.sha }}" \
+            --workflow ci.yml \
+            --current-run-id "$GITHUB_RUN_ID"

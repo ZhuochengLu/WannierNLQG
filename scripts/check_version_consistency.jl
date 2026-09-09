@@ -105,6 +105,7 @@ for relative_path in (
     "SOURCE_MANIFEST.tsv",
     "SHA256SUMS",
     ".github/workflows/ci.yml",
+    ".github/workflows/tag-release-gate.yml",
 )
     path = joinpath(ROOT, relative_path)
     isfile(path) && filesize(path) > 0 ||

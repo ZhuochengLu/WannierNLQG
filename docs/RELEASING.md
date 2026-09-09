@@ -38,8 +38,12 @@ julia --project=. scripts/check_structure_boundaries.jl
 julia --project=. scripts/check_documentation.jl
 julia --project=. scripts/check_release_whitelist.jl
 julia --project=. -e 'using Pkg; Pkg.test()'
-WANNIERNLQG_TEST_LEVEL=full WANNIERNLQG_TEST_MPI=1 \
-  julia --project=. -e 'using Pkg; Pkg.test()'
+for shard in interfaces-and-symmetry wannier-core scientific-contracts \
+  thread-determinism star-gauge-thread; do
+  WANNIERNLQG_TEST_MODE=full-shard WANNIERNLQG_TEST_SHARD="$shard" \
+    julia --project=. -e 'using Pkg; Pkg.test()'
+done
+WANNIERNLQG_TEST_MODE=mpi-only julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
 ## Qualification reporting
