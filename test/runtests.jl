@@ -94,6 +94,7 @@ end
 
 # Shared in-memory writers used by several Fast and Full units.
 include_test_file("OperatorBundleTestSupport.jl")
+include_test_file("WannierizationFixtureSupport.jl")
 
 const PRE_SHARD_FAST_TEST_FILES = (
     "task_configuration_unit.jl",
