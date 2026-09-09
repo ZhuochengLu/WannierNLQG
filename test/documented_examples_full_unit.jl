@@ -1,5 +1,9 @@
 const FULL_EXAMPLE_ROOT = joinpath(ROOT, "examples", "tasks")
 
+if !isdefined(@__MODULE__, :DOCUMENTED_EXAMPLE_TEST_SUPPORT_LOADED)
+    include(joinpath(@__DIR__, "DocumentedExampleTestSupport.jl"))
+end
+
 @testset "all documented task examples execute" begin
     files = String[]
     for (root, _, names) in walkdir(FULL_EXAMPLE_ROOT)

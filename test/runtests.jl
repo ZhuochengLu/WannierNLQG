@@ -96,6 +96,7 @@ end
 include_test_file("OperatorBundleTestSupport.jl")
 include_test_file("WannierizationFixtureSupport.jl")
 include_test_file("ResponseTestSupport.jl")
+include_test_file("DocumentedExampleTestSupport.jl")
 
 const PRE_SHARD_FAST_TEST_FILES = (
     "task_configuration_unit.jl",
