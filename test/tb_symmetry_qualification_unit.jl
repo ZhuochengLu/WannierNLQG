@@ -676,7 +676,7 @@ end
         log_text = String(take!(log_buffer))
         @test occursin("[SOLVER PROJECTOR COVARIANCE]", log_text)
         @test occursin("[REPRESENTATION AND GROUP-LAW DIAGNOSTICS]", log_text)
-        @test occursin("FINAL DIAGNOSTIC TB SYMMETRY", log_text)
+        @test occursin("FINAL TB SYMMETRY QUALIFICATION (diagnostic model)", log_text)
         @test occursin(qualification.payload_sha256, log_text)
     end
 end

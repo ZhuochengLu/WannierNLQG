@@ -738,7 +738,11 @@ function _run_kslice_bundle_owned!(
         end
     end
     initial_fourier_summary = fourier_execution_summary(cfg, fourier_plan, shared_matrix_workspaces)
-    progress_fourier_backend!(initial_fourier_summary)
+    progress_fourier_backend!(
+        initial_fourier_summary;
+        grid = cfg.k_mesh,
+        local_kpoints = length(local_k_indices),
+    )
     bundle_debug_log(debug_lock, "[fourier] initialized summary=$(repr(initial_fourier_summary))")
 
     local_total_k = length(local_k_indices)

@@ -1,4 +1,6 @@
 using Test
+
+const TEST_SUITE_STARTED_NS = time_ns()
 using JuliaFormatter
 using WannierNLQG
 
@@ -14,6 +16,8 @@ const TEST_MODEL_FILE =
 include(joinpath(SCRIPT_DIR, "ValidationPolicy.jl"))
 include(joinpath(SCRIPT_DIR, "FormatterPaths.jl"))
 include(joinpath(@__DIR__, "CITestPlan.jl"))
+include(joinpath(@__DIR__, "ReadinessGateRunner.jl"))
+const READINESS_JOBS = ReadinessGateRunner.readiness_jobs()
 using .ValidationPolicy
 import .CITestPlan
 
@@ -72,6 +76,8 @@ script_succeeds(script::AbstractString; env = Pair{String, String}[]) =
 
 function format_succeeds()
     started_ns = time_ns()
+    println("[gate:start] name=JuliaFormatter")
+    flush(stdout)
     ok = all(
         path -> JuliaFormatter.format(path; overwrite = false, verbose = false),
         formatter_paths(),
@@ -89,7 +95,21 @@ end
 function include_test_file(name::AbstractString)
     path = joinpath(@__DIR__, name)
     isfile(path) || error("registered test file is missing: $(path)")
-    return include(path)
+    started_ns = time_ns()
+    println("[test-file:start] name=$(name)")
+    flush(stdout)
+    try
+        result = include(path)
+        elapsed_s = (time_ns() - started_ns) / 1.0e9
+        println("[test-file:complete] name=$(name) elapsed_s=$(round(elapsed_s; digits = 3))")
+        flush(stdout)
+        return result
+    catch
+        elapsed_s = (time_ns() - started_ns) / 1.0e9
+        println(stderr, "[test-file:fail] name=$(name) elapsed_s=$(round(elapsed_s; digits = 3))")
+        flush(stderr)
+        rethrow()
+    end
 end
 
 # Shared in-memory writers used by several Fast and Full units.
@@ -213,15 +233,14 @@ if RUN_FAST_TESTS
 
     @testset "fast readiness gates" begin
         @test format_succeeds()
-        serial_env = [
-            "OMP_NUM_THREADS" => "1",
-            "MKL_NUM_THREADS" => "1",
-            "OPENBLAS_NUM_THREADS" => "1",
-            "VECLIB_MAXIMUM_THREADS" => "1",
-        ]
-        for script in FAST_READINESS_SCRIPTS
-            @testset "$(script)" begin
-                @test script_succeeds(script; env = serial_env)
+        entries = [(script, script_cmd(script)) for script in FAST_READINESS_SCRIPTS]
+        output_root = get(ENV, "WANNIERNLQG_TEST_OUTPUT_ROOT", "")
+        isempty(output_root) && (output_root = mktempdir())
+        records =
+            ReadinessGateRunner.run_readiness_gates(entries; jobs = READINESS_JOBS, output_root)
+        for record in records
+            @testset "$(record.name)" begin
+                @test record.exit_code == 0
             end
         end
     end
@@ -232,7 +251,7 @@ if RUN_FULL_SHARD
     foreach(include_test_file, CITestPlan.full_shard_files(shard))
     foreach(include_test_file, CITestPlan.full_shard_auxiliary_files(shard))
     if shard == CITestPlan.FULL_VISUALIZATION_SHARD && isdir(joinpath(@__DIR__, "visualization"))
-        include(joinpath(@__DIR__, "visualization", "runtests.jl"))
+        include_test_file(joinpath("visualization", "runtests.jl"))
     end
     if shard == CITestPlan.FULL_NUMERICAL_SCRIPTS_SHARD
         @testset "full numerical scripts" begin
@@ -286,3 +305,10 @@ if RUN_MPI_TESTS
 
     foreach(include_test_file, CITestPlan.MPI_TEST_FILES)
 end
+
+println(
+    "[test-suite:complete] mode=$(TEST_SELECTION.mode) " *
+    "shard=$(something(TEST_SELECTION.shard, "none")) " *
+    "elapsed_s=$(round((time_ns() - TEST_SUITE_STARTED_NS) / 1.0e9; digits = 3))",
+)
+flush(stdout)

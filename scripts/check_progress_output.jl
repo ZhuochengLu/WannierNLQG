@@ -1,4 +1,5 @@
 using WannierNLQG
+using JSON3
 import WannierNLQG: run
 
 const ROOT = normpath(joinpath(@__DIR__, ".."))
@@ -108,6 +109,7 @@ function assert_progress_files(result, stdout_text::AbstractString)
     occursin("\"family_counts\"", jsonl) ||
         error("missing family_counts field in $(result.progress_jsonl_path)")
     for (lineno, line) in enumerate(readlines(result.progress_jsonl_path))
+        JSON3.read(line)
         startswith(line, "{") && endswith(line, "}") ||
             error("invalid JSONL-looking line $(lineno) in $(result.progress_jsonl_path): $(line)")
         occursin("\"event\":", line) ||
@@ -276,6 +278,24 @@ function check_verbosity_cases(root::AbstractString)
         cfg = base_config(joinpath(root, "verbosity_$(verbosity)"); progress_verbosity = verbosity)
         result, stdout_text = run_capture_stdout(cfg)
         assert_progress_files(result, stdout_text)
+        out = read(result.progress_out_path, String)
+        occursin(FIXTURE_ROOT, out) && error("Absolute fixture path leaked in human report")
+        events = JSON3.read.(readlines(result.progress_jsonl_path))
+        fourier = filter(event -> event.event == "fourier_backend", events)
+        isempty(fourier) && error("Fourier audit records missing")
+        all(
+            event -> haskey(event, :union_capabilities) && haskey(event, :cache_entries),
+            fourier,
+        ) || error("Fourier audit fields lost")
+        if verbosity != "diagnostic"
+            occursin("initialized summary=", out) && error("Internal Fourier repr leaked")
+            occursin("estimated_memory=0", out) && error("Direct memory zero leaked")
+            count(line -> occursin("FOURIER", line), split(out, '\n')) == length(fourier) ||
+                error("Duplicate Fourier plan text")
+            occursin("nothing", out) && error("Nothing sentinel leaked")
+        else
+            occursin("initialized summary=", out) || error("Diagnostic Fourier details missing")
+        end
         println("[progress-check] verbosity=$(verbosity) ok")
     end
     return nothing
@@ -298,8 +318,32 @@ function check_failure_case(root::AbstractString)
     return nothing
 end
 
+function check_report_formatters()
+    runtime = WannierNLQG.Runtime
+    summary = Dict(
+        "backend" => "direct",
+        "task_signatures" => ["shift_current/conventional/integral"],
+        "factor_source" => "auto_fallback_memory",
+        "estimated_memory_bytes" => 0,
+    )
+    line = runtime.progress_fourier_line(
+        summary;
+        grid = (200, 200, 1),
+        local_kpoints = 40000,
+        lanes = 64,
+    )
+    occursin("fallback=memory", line) || error("Fallback reason hidden")
+    occursin("grid=200x200x1", line) || error("Grid missing")
+    occursin("estimated", line) && error("Direct memory estimate should be omitted")
+    value = repeat("long_unicode_\u8def\u5f84_", 12)
+    join(runtime.progress_text_chunks(value, 36)) == value || error("Wrapped field loses text")
+    all(chunk -> length(chunk) <= 36, runtime.progress_text_chunks(value, 36)) ||
+        error("Wrapped field too long")
+end
+
 function main()
     root = mktempdir("/tmp"; prefix = "wanniernlqg-progress-check-", cleanup = false)
+    check_report_formatters()
     check_percent_milestones()
     check_task_output_prefixing()
     check_ordered_symmetry_aggregation()

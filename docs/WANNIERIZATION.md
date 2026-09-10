@@ -1072,6 +1072,25 @@ SPREADING`, optional `FINAL DIAGNOSTIC TB SYMMETRY`, and `FINAL STATUS`
 sections. Ordinary mode may force the symmetry section on, but the writer only
 prints the real qualification payload; unavailable work remains `NOT_RUN` or
 `NOT_APPLICABLE`.
+
+The neutral report name is `<seed>.wannierization.out` for both ordinary and
+symmetry-adapted construction. Human-readable paths are relative to the output
+directory; an outside file appears as `<external>/filename`. Completed artifact
+entries include SHA-256 and byte size, while missing files are marked explicitly.
+`FINAL STATUS` keeps the fields needed to interpret the result. Repeated INFO
+diagnostics are grouped by count and valid iteration range; warnings, errors,
+and failed gates remain visible in the diagnostic summary. Complete final
+diagnostic records are saved atomically to
+`<seed>.wannierization-diagnostics.jsonl` before the report references it.
+This sidecar does not replace checkpoint or symmetry audit data and does not
+change their public schema versions.
+
+The TB symmetry section presents qualification, compact category tables, and
+Definitions. Values use three significant digits and include units and
+value/limit ratios where applicable; gate decisions retain their original
+precision. A symmetry `PASS` does not imply solver convergence or production
+eligibility.
+
 The formal Hamiltonian-covariance gate always uses `representation_tolerance`;
 it never inherits the empirical finite-cutoff budget used by dynamic projector
 checks. The raw-sewing empirical floor and formal TB threshold are persisted as

@@ -37,6 +37,41 @@ The default test level is Fast and uses only repository-owned synthetic data:
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
+For resource-controlled local execution, use the Python 3 standard-library runner:
+
+```bash
+python3 scripts/run_tests.py fast --output-dir /tmp/wnlqg-fast
+python3 scripts/run_tests.py full --cpu-budget 17 --output-dir /tmp/wnlqg-full
+python3 scripts/run_tests.py full --jobs 1 --cpu-budget 17 --output-dir /tmp/wnlqg-serial
+```
+
+The local `full` command runs Fast, every Full-only shard, and MPI-only exactly
+once. Each task uses an independent `Pkg.test()` process; existing low-level
+modes below remain supported. The default limits are two jobs and eight CPU
+slots, capped by available CPUs. Task reservations include nested thread probes;
+MPI runs alone. The unchanged MPI suite includes 16 ranks and requires
+17 slots including its driver; complete Full therefore needs the explicit
+`--cpu-budget 17` shown above and at least 17 available logical CPUs. `--cpu-budget` controls the total reservation and `--jobs` caps
+concurrent jobs. A budget too small for an unchanged scientific probe is rejected,
+not implemented by dropping thread cases. BLAS/OpenMP threads and Julia precompile concurrency are fixed to one.
+Reservations count the active test driver and its largest probe; the idle
+`Pkg.test()` supervisor is not counted as a computing slot.
+Use a new output directory for each run and `--dry-run` to inspect the plan.
+
+The runner records separate task logs, temporary/output directories, wall time,
+CPU usage, memory observations, exit codes, completion markers, and log hashes.
+Nonzero exits, missing completion markers, and interrupted tasks cannot pass.
+Memory observations describe the measurement method in the summary; CPU slots
+are an execution limit, not a memory limit. Reduce `--jobs` on memory-limited hosts.
+Thread/MPI probes remain serial within their parent. Fast readiness gates
+use at most two independent child processes under the local runner, with those
+slots included in the Fast reservation. Each gate has a separate log; all gates
+finish before their results are asserted in inventory order. The two longest
+measured gates are submitted first to reduce the remaining tail.
+`--jobs 1` also serializes readiness gates. Direct `Pkg.test()` defaults to serial
+readiness; `WANNIERNLQG_READINESS_JOBS` accepts only `1` or `2` for explicit use. Scientific assertions, thread-count cases, and fresh-process
+boundaries are unchanged. Full publication prerequisites below still apply.
+
 Full-only shards add thread paths, fresh-process persistence, historical readers,
 all registered response families, and abnormal input/error lifecycles. Run all
 five static shards, then run the independent MPI-only suite:

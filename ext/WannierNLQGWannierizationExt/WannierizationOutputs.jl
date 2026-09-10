@@ -192,6 +192,205 @@ const _WANNIERIZATION_REPORT_RULE = repeat("=", 96)
 # Render absent report values explicitly instead of silently printing `nothing`.
 _report_value(value) = value === nothing ? "NOT_AVAILABLE" : string(value)
 
+# Display paths only; never change the paths used by readers or checkpoint writers.
+function _report_path(path, root)
+    path === nothing && return "NOT_WRITTEN"
+    isempty(string(path)) && return "NOT_WRITTEN"
+    relative = relpath(abspath(path), abspath(root))
+    return relative == ".." || startswith(relative, "../") ? "<external>/$(basename(path))" :
+           replace(relative, '\\' => '/')
+end
+
+# Publish every original diagnostic atomically as one JSON record per line.
+function _write_diagnostic_records(path, diagnostics)
+    temporary, stream = mktemp(dirname(path); cleanup = false)
+    try
+        for (index, diagnostic) in enumerate(diagnostics)
+            JSON3.write(
+                stream,
+                (
+                    record = index,
+                    severity = String(diagnostic.severity),
+                    code = String(diagnostic.code),
+                    message = diagnostic.message,
+                    context = diagnostic.context,
+                ),
+            )
+            println(stream)
+        end
+        close(stream)
+        mv(temporary, path; force = true)
+    finally
+        isopen(stream) && close(stream)
+        isfile(temporary) && rm(temporary; force = true)
+    end
+    return path
+end
+
+# Group presentation records by severity and code without modifying their audit payloads.
+function _diagnostic_groups(diagnostics)
+    groups = Dict{Tuple{Symbol, Symbol}, Vector{WannierizationDiagnostic}}()
+    for diagnostic in diagnostics
+        push!(
+            get!(groups, (diagnostic.severity, diagnostic.code), WannierizationDiagnostic[]),
+            diagnostic,
+        )
+    end
+    return sort!(
+        collect(groups);
+        by = entry ->
+            (findfirst(==(first(entry)[1]), (:error, :warning, :info)), String(first(entry)[2])),
+    )
+end
+
+# Summarize repeated INFO records while retaining warning messages and failed gates.
+function _write_diagnostic_summary(io, groups)
+    for ((severity, code), records) in groups
+        iterations = sort!(
+            unique([
+                n for d in records for
+                n in (tryparse(Int, get(d.context, "iteration", "")),) if n !== nothing
+            ]),
+        )
+        span = isempty(iterations) ? "" : ", iterations=$(first(iterations))-$(last(iterations))"
+        println(io, uppercase(String(severity)), "  ", code, "  count=", length(records), span)
+        important =
+            severity != :info ||
+            any(d -> get(d.context, "gate_result", get(d.context, "result", "")) == "FAIL", records)
+        selected = important ? records : records[1:1]
+        for message in unique([d.message for d in selected])
+            println(io, "  ", message)
+        end
+        for d in records
+            get(d.context, "gate_result", get(d.context, "result", "")) == "FAIL" || continue
+            println(
+                io,
+                "  gate_result=FAIL",
+                haskey(d.context, "iteration") ? " iteration=$(d.context["iteration"])" : "",
+            )
+        end
+    end
+end
+
+const _TB_REPORT_LABELS = Dict(
+    "hamiltonian_covariance_relative_max" => ("Hamiltonian", "Covariance", "1"),
+    "hamiltonian_hermiticity_max_ev" => ("Hamiltonian", "Hermiticity", "eV"),
+    "hamiltonian_projection_idempotence_max_ev" =>
+        ("Hamiltonian", "Projection idempotence", "eV"),
+    "centerless_position_covariance_relative_max" => ("Position", "Centerless covariance", "1"),
+    "position_hermiticity_max_angstrom" => ("Position", "Hermiticity", "Å"),
+    "centerless_position_projection_idempotence_max_angstrom" =>
+        ("Position", "Projection idempotence", "Å"),
+    "kstar_spectral_residual_ev" => ("Spectral", "k-star residual", "eV"),
+    "wcc_symmetry_orbit_residual_angstrom" => ("Centers", "WCC orbit residual", "Å"),
+)
+# Limit human-readable values to three significant digits; preserve absent measurements.
+_report_number(value) = value === nothing ? "N/A" : @sprintf("%.2e", value)
+# Compute display ratios only when a finite positive limit is available.
+_metric_ratio(metric) =
+    metric.value === nothing || metric.threshold === nothing || metric.threshold == 0 ? nothing :
+    metric.value / metric.threshold
+# Report recorded qualification boundaries without inferring full-space eligibility.
+function _write_tb_scope(io, summary)
+    for key in (
+        "qualification_scope",
+        "target_anchor",
+        "target_scope_production_eligible",
+        "scoped_production_eligible",
+        "global_production_eligible",
+    )
+        println(io, key, " = ", get(summary, key, "NOT_RECORDED"))
+    end
+end
+
+# Render typed TB qualification metrics without changing their scientific status or precision.
+function _write_tb_report(io, qualification)
+    metrics = sort!(
+        collect(qualification.metrics);
+        by = m -> begin
+            category, label, _ = get(_TB_REPORT_LABELS, m.name, ("Other", m.name, "?"))
+            (
+                something(
+                    findfirst(
+                        ==(category),
+                        ("Hamiltonian", "Position", "Spectral", "Centers", "Other"),
+                    ),
+                    5,
+                ),
+                label,
+            )
+        end,
+    )
+    println(
+        io,
+        "Result: $(qualification.overall) ($(count(m -> m.status == "PASS", metrics))/$(length(metrics)) checks PASS)",
+    )
+    ratios = [(something(_metric_ratio(m)), m) for m in metrics if _metric_ratio(m) !== nothing]
+    if !isempty(ratios)
+        ratio, metric = last(sort!(ratios; by = first))
+        println(
+            io,
+            "Largest value/limit: ",
+            @sprintf("%.3g", ratio),
+            " [",
+            get(_TB_REPORT_LABELS, metric.name, ("Other", metric.name, "?"))[2],
+            "]",
+        )
+    end
+    println(
+        io,
+        "Note: symmetry PASS does not imply Wannierization convergence or production eligibility.",
+    )
+    @printf(
+        io,
+        "%-12s %-24s %-9s %-9s %-4s %-7s %s\n",
+        "Category",
+        "Check",
+        "Value",
+        "Limit",
+        "Unit",
+        "Ratio",
+        "Status"
+    )
+    for metric in metrics
+        category, label, unit = get(_TB_REPORT_LABELS, metric.name, ("Other", metric.name, "?"))
+        ratio = _metric_ratio(metric)
+        ratio_text =
+            ratio === nothing ? "N/A" : 0 < ratio < 0.001 ? "<0.001" : @sprintf("%.3f", ratio)
+        @printf(
+            io,
+            "%-12s %-24s %-9s %-9s %-4s %-7s %s\n",
+            category,
+            label,
+            _report_number(metric.value),
+            _report_number(metric.threshold),
+            unit,
+            ratio_text,
+            metric.status
+        )
+        metric.status == "PASS" ||
+            isempty(metric.reason) ||
+            println(io, "  reason: ", metric.reason)
+    end
+    println(io, "\nDefinitions:")
+    for (index, metric) in enumerate(metrics)
+        println(
+            io,
+            "[$index] ",
+            get(_TB_REPORT_LABELS, metric.name, ("Other", metric.name, "?"))[2],
+        )
+        line = "  "
+        for word in split(metric.convention)
+            if length(line) + length(word) > 92
+                println(io, line)
+                line = "  "
+            end
+            line *= word * " "
+        end
+        println(io, rstrip(line))
+    end
+end
+
 # Align one human-readable report field without changing its stored value.
 function _write_report_field(io, name, value)
     @printf(io, "%-31s = %s\n", String(name), _report_value(value))
@@ -300,7 +499,13 @@ function _open_wannierization_log(
     _write_report_field(io, "restart_config_sha256", restart_config_sha256(config, representation))
     println(io, "\nInput files and integrity records:")
     for key in sort!(collect(keys(representation.input_sha256)))
-        println(io, "  ", key, " sha256=", representation.input_sha256[key])
+        println(
+            io,
+            "  ",
+            isabspath(key) ? _report_path(key, dirname(path)) : key,
+            " sha256=",
+            representation.input_sha256[key],
+        )
     end
     println(io, "\n[SOLVER CONFIGURATION]\n")
     _write_report_field(io, "optimization_schedule", config.solver.acceleration.schedule)
@@ -390,7 +595,8 @@ function _write_wannierization_progress(
         "localization_backtracking_steps = $(snapshot_value(:localization_backtracking_steps, 0))",
     )
     println(io, "elapsed_seconds = $(snapshot.elapsed_seconds)")
-    checkpoint_path === nothing || println(io, "checkpoint = $(checkpoint_path)")
+    checkpoint_path === nothing ||
+        println(io, "checkpoint = $(_report_path(checkpoint_path, dirname(checkpoint_path)))")
     println(io)
     _write_spreading_table(io, snapshot.spreads)
     _write_report_field(io, "sum_of_state_spreadings", "$(sum(snapshot.spreads)) angstrom^2")
@@ -1284,7 +1490,7 @@ function _export_wannierization_tb(
         "last_persisted_iteration" =>
             parse(Int, get(result.input_summary, "last_persisted_iteration", "-1")),
         "convergence_metric" =>
-            isempty(result.history) ? Inf : last(result.history).spread_standard_deviation,
+            isempty(result.history) ? "NOT_RUN" : last(result.history).spread_standard_deviation,
         "convergence_tolerance" => config.solver.convergence_tolerance,
         "checkpoint_sha256" => wannierization_checkpoint_sha256_v2_5(final_checkpoint_result),
         "input_sha256" => get(result.input_summary, "input_sha256", ""),
@@ -1506,6 +1712,7 @@ function _write_wannierization_final(
     wall_time,
     allocated_bytes,
     gc_time,
+    peak_rss_bytes = Sys.maxrss(),
 )
     converged = result.status in (COMPLETED, COMPLETED_WITH_WARNINGS)
     production_eligible = wannierization_production_eligible(result)
@@ -1536,17 +1743,9 @@ function _write_wannierization_final(
         println(io, "$(key) = $(get(result.input_summary, key, "NOT_RECORDED"))")
     end
     println(io, "source = band_representation_preflight")
-    counts = Dict{Tuple{Symbol, Symbol}, Int}()
-    for diagnostic in result.diagnostics
-        key = (diagnostic.severity, diagnostic.code)
-        counts[key] = get(counts, key, 0) + 1
-    end
-    println(io, "\nGrouped diagnostic records\n")
-    @printf(io, " %-9s %-41s %5s\n", "Severity", "Code", "Count")
-    println(io, " ", repeat("-", 70))
-    for ((severity, code), count) in sort!(collect(counts); by = first)
-        @printf(io, " %-9s %-41s %5d\n", uppercase(String(severity)), String(code), count)
-    end
+    diagnostic_groups = _diagnostic_groups(result.diagnostics)
+    println(io, "\nIMPORTANT DIAGNOSTICS\n")
+    _write_diagnostic_summary(io, diagnostic_groups)
 
     _write_report_section(io, "FINAL SPREADING")
     final_total =
@@ -1596,7 +1795,11 @@ function _write_wannierization_final(
         effective_wannierization_mode(config) == :symmetry_adapted,
     )
     if show_tb_symmetry
-        _write_report_section(io, "FINAL DIAGNOSTIC TB SYMMETRY")
+        _write_report_section(
+            io,
+            production_eligible ? "FINAL TB SYMMETRY QUALIFICATION (production eligible model)" :
+            "FINAL TB SYMMETRY QUALIFICATION (diagnostic model)",
+        )
         _write_report_field(io, "overall", qualification.overall)
         _write_report_field(io, "reason", qualification.reason)
         _write_report_field(io, "payload_sha256", qualification.payload_sha256)
@@ -1607,30 +1810,24 @@ function _write_wannierization_final(
             artifacts.packed_hdf5 === nothing ? "qualification_payload_without_exported_tb" :
             "final_exported_and_read_back_tb"
         _write_report_field(io, "source", qualification_source)
-        println(
-            io,
-            "\n Metric                                    Value          Threshold      Status",
-        )
-        println(io, repeat("-", 96))
-        for metric in qualification.metrics
-            @printf(
-                io,
-                " %-41s %-14s %-14s %s\n",
-                metric.name,
-                _report_value(metric.value),
-                metric.threshold === nothing ? "NOT_DECLARED" : string(metric.threshold),
-                metric.status,
-            )
-            isempty(metric.reason) || println(io, "   reason: ", metric.reason)
-            isempty(metric.convention) || println(io, "   convention: ", metric.convention)
-        end
+        _write_tb_scope(io, result.input_summary)
+        _write_tb_report(io, qualification)
     end
 
     _write_report_section(io, "FINAL STATUS")
     println(io, "status = $(result.status)")
-    println(io, "requested_wannierization_mode = $(config.input.wannierization_mode)")
-    println(io, "effective_wannierization_mode = $(effective_wannierization_mode(config))")
-    println(io, "representation_source = $(representation_source(config))")
+    println(
+        io,
+        "requested_wannierization_mode = $(get(result.input_summary, "requested_wannierization_mode", string(config.input.wannierization_mode)))",
+    )
+    println(
+        io,
+        "effective_wannierization_mode = $(get(() -> string(effective_wannierization_mode(config)), result.input_summary, "effective_wannierization_mode"))",
+    )
+    println(
+        io,
+        "representation_source = $(get(() -> string(representation_source(config)), result.input_summary, "representation_source"))",
+    )
     println(
         io,
         "symmetry_constraints_applied = $(get(result.input_summary, "symmetry_constraints_applied", "NOT_RECORDED"))",
@@ -1639,33 +1836,58 @@ function _write_wannierization_final(
     println(io, "converged = $(converged)")
     println(io, "production_eligible = $(production_eligible)")
     println(io, "diagnostic_only = $(!production_eligible)")
+    println(io, "tb_symmetry = $(qualification.overall)")
     println(
         io,
-        "iterations_completed = $(isempty(result.history) ? 0 : last(result.history).iteration)",
+        "accepted_iteration = $(isempty(result.history) ? 0 : last(result.history).iteration)",
     )
     println(
         io,
-        "convergence_metric = $(isempty(result.history) ? Inf : last(result.history).spread_standard_deviation)",
+        "convergence_metric = $(isempty(result.history) ? "NOT_RUN" : last(result.history).spread_standard_deviation)",
     )
     println(io, "convergence_tolerance = $(config.solver.convergence_tolerance)")
     println(io, "wall_time_seconds = $(wall_time)")
     println(io, "allocated_bytes = $(allocated_bytes)")
     println(io, "gc_time_seconds = $(gc_time)")
-    println(io, "peak_rss_bytes = $(Sys.maxrss())")
-    println(io, "checkpoint_hdf5 = $(artifacts.checkpoint_hdf5)")
-    println(io, "validated_checkpoint_hdf5 = $(artifacts.validated_checkpoint_hdf5)")
-    println(io, "wannierization_log = $(artifacts.wannierization_log)")
-    println(io, "packed_hdf5 = $(artifacts.packed_hdf5)")
-    println(io, "wannier90_tb = $(artifacts.wannier90_tb)")
-    println(io, "tb_symmetry_json = $(artifacts.tb_symmetry_json)")
+    println(io, "peak_rss_bytes = $(peak_rss_bytes)")
+    root =
+        artifacts.wannierization_log === nothing ? pwd() :
+        dirname(abspath(artifacts.wannierization_log))
+    println(io, "artifacts_root = .")
+    for name in (
+        :checkpoint_hdf5,
+        :validated_checkpoint_hdf5,
+        :wannierization_log,
+        :packed_hdf5,
+        :wannier90_tb,
+        :tb_symmetry_json,
+    )
+        path = getproperty(artifacts, name)
+        println(io, name, " = ", _report_path(path, root))
+        if path !== nothing && isfile(path) && name != :wannierization_log
+            println(io, "  sha256 = ", sha256_file(path), "  size_bytes = ", filesize(path))
+        end
+    end
     println(io, "construction_policy = $(config.input.construction_policy)")
+    metadata = get(result.input_summary, "wannier90_diagnostic_metadata", "")
     println(
         io,
-        "wannier90_diagnostic_metadata = $(get(result.input_summary, "wannier90_diagnostic_metadata", ""))",
+        "wannier90_diagnostic_metadata = ",
+        _report_path(isempty(metadata) ? nothing : metadata, root),
     )
-    for diagnostic in result.diagnostics
-        println(io, "diagnostic.$(diagnostic.severity).$(diagnostic.code) = $(diagnostic.message)")
-        println(io, "diagnostic.$(diagnostic.code).context = $(JSON3.write(diagnostic.context))")
+    if artifacts.wannierization_log !== nothing
+        stem =
+            endswith(artifacts.wannierization_log, ".out") ?
+            artifacts.wannierization_log[1:(end - 4)] : artifacts.wannierization_log
+        diagnostic_path = _write_diagnostic_records(stem * "-diagnostics.jsonl", result.diagnostics)
+        println(io, "Full diagnostic records: ", _report_path(diagnostic_path, root))
+        println(
+            io,
+            "sha256 = ",
+            sha256_file(diagnostic_path),
+            "  size_bytes = ",
+            filesize(diagnostic_path),
+        )
     end
     flush(io)
     return nothing

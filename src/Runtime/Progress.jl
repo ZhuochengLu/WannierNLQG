@@ -111,9 +111,8 @@ function progress_display_path(ctx::ProgressContext, path::AbstractString)
     catch
         String(path)
     end
-    if startswith(rel, "..") && length(rel) > 72
-        parent = basename(dirname(abs_path))
-        return joinpath(parent, basename(abs_path)) * " (external)"
+    if isabspath(rel) || rel == ".." || startswith(rel, "../")
+        return "<external>/" * basename(abs_path)
     end
     return isempty(rel) ? "." : rel
 end
@@ -130,6 +129,16 @@ end
 """
 Truncate a string to the requested display width, adding an ellipsis when at least four characters fit.
 """
+function progress_text_chunks(value::AbstractString, width::Int)
+    chars = collect(value)
+    isempty(chars) && return [""]
+    return [
+        String(chars[index:min(index + width - 1, length(chars))]) for
+        index in 1:width:length(chars)
+    ]
+end
+
+"""Truncate a human-readable value to a bounded display length."""
 function progress_short_text(value::AbstractString, width::Int)
     text = String(value)
     length(text) <= width && return text
@@ -360,8 +369,12 @@ function progress_numerics_lines(ctx::ProgressContext)
             progress_kv_line("E_ref", "$(cfg.fermi_energy) eV"),
             progress_kv_line("Hermiticity tol", cfg.band_hermiticity_tolerance),
             progress_kv_line("replica policy", cfg.real_space_replica_policy),
-            progress_kv_line("wsvec file", cfg.wsvec_file),
-            progress_kv_line("mp_grid", cfg.mp_grid),
+            progress_kv_line(
+                "wsvec file",
+                isnothing(cfg.wsvec_file) ? "not provided" :
+                progress_display_path(ctx, cfg.wsvec_file),
+            ),
+            progress_kv_line("mp_grid", isnothing(cfg.mp_grid) ? "not provided" : cfg.mp_grid),
             "",
         ]
     end
@@ -375,8 +388,11 @@ function progress_numerics_lines(ctx::ProgressContext)
         progress_kv_line("total k-points", progress_total_k(ctx.k_mesh)),
         progress_kv_line("dimension", cfg.spatial_dimension),
         progress_kv_line("replica policy", cfg.real_space_replica_policy),
-        progress_kv_line("wsvec file", cfg.wsvec_file),
-        progress_kv_line("mp_grid", cfg.mp_grid),
+        progress_kv_line(
+            "wsvec file",
+            isnothing(cfg.wsvec_file) ? "not provided" : progress_display_path(ctx, cfg.wsvec_file),
+        ),
+        progress_kv_line("mp_grid", isnothing(cfg.mp_grid) ? "not provided" : cfg.mp_grid),
         "",
         "  Energy grid",
         progress_kv_line("photon_energies range", photon_energy_range),
@@ -394,9 +410,15 @@ function progress_numerics_lines(ctx::ProgressContext)
         progress_kv_line("transition_window_factor", cfg.transition_window_factor),
         "",
         "  Bands / tensor",
-        progress_kv_line("band_window_size", cfg.band_window_size),
+        progress_kv_line(
+            "band_window_size",
+            cfg.band_window_size == -1 ? "all bands" : cfg.band_window_size,
+        ),
         progress_kv_line("tensor_indices", cfg.tensor_indices),
-        progress_kv_line("band_selection", cfg.band_selection),
+        progress_kv_line(
+            "band_selection",
+            cfg.band_selection == -1 ? "all bands" : cfg.band_selection,
+        ),
         "",
         "  Momentum / finite difference",
         progress_kv_line("photon_momentum", "$(cfg.photon_momentum) Ang^-1"),
@@ -591,18 +613,30 @@ function progress_task_table_lines(ctx::ProgressContext)
         repeat("-", field_width + 2) *
         "+" *
         join((repeat("-", width + 2) * "+" for width in column_widths))
-    function table_row(label::AbstractString, values)
-        cells = [
-            rpad(progress_short_text(string(value), width), width) for
+    function table_rows(label::AbstractString, values)
+        chunks = [
+            progress_text_chunks(string(value), width) for
             (value, width) in zip(values, column_widths)
         ]
-        return "  | " * rpad(label, field_width) * " | " * join(cells, " | ") * " |"
+        return [
+            "  | " *
+            rpad(index == 1 ? label : "", field_width) *
+            " | " *
+            join(
+                [
+                    rpad(index <= length(parts) ? parts[index] : "", width) for
+                    (parts, width) in zip(chunks, column_widths)
+                ],
+                " | ",
+            ) *
+            " |" for index in 1:maximum(length, chunks)
+        ]
     end
     lines = String["TASK BUNDLE", border]
-    push!(lines, table_row("field", [record.id for record in records]))
+    append!(lines, table_rows("field", [record.id for record in records]))
     push!(lines, border)
     for (row, label) in pairs(row_labels)
-        push!(lines, table_row(label, [values[row] for values in row_values]))
+        append!(lines, table_rows(label, [values[row] for values in row_values]))
     end
     push!(lines, border)
     push!(lines, "")
@@ -787,23 +821,47 @@ end
 """
 Record the chosen Fourier backend, explicit factors and memory/decomposition summary under the progress lock.
 """
-function progress_fourier_backend!(summary::NamedTuple)
+function progress_fourier_line(summary; grid = nothing, local_kpoints = nothing, lanes = nothing)
+    getfieldvalue(key, default) =
+        summary isa AbstractDict ? get(summary, string(key), default) :
+        hasproperty(summary, key) ? getproperty(summary, key) : default
+    backend = string(getfieldvalue(:backend, "unknown"))
+    tasks = getfieldvalue(:task_signatures, String[])
+    parts = String["FOURIER   " * backend]
+    isempty(tasks) || push!(parts, "task=" * join(tasks, ","))
+    isnothing(grid) || push!(parts, "grid=" * join(grid, "x"))
+    isnothing(local_kpoints) || push!(parts, "local_kpoints=$(local_kpoints)")
+    isnothing(lanes) || push!(parts, "lanes=$(lanes)")
+    source = string(getfieldvalue(:factor_source, "not_applicable"))
+    if startswith(source, "auto_fallback_")
+        push!(parts, "fallback=" * replace(source, "auto_fallback_" => ""))
+    elseif backend != "direct"
+        push!(parts, "FFT workspace bytes=$(getfieldvalue(:estimated_memory_bytes, 0))")
+    end
+    return join(parts, " | ")
+end
+
+"""Emit one human plan line and preserve its complete structured Fourier audit event."""
+function progress_fourier_backend!(
+    summary::NamedTuple;
+    grid = nothing,
+    local_kpoints = nothing,
+    lanes = nothing,
+)
     ctx = ACTIVE_PROGRESS[]
     ctx === nothing && return nothing
     Base.lock(ctx.lock)
     try
         line =
-            "[$(progress_hms(progress_elapsed(ctx)))] FOURIER   backend=$(summary.backend) " *
-            "NKdiv=$(summary.NKdiv) NKFFT=$(summary.NKFFT) " *
-            "factor_source=$(summary.factor_source) " *
-            "estimated_memory_bytes=$(summary.estimated_memory_bytes) " *
-            "memory_limit_bytes=$(summary.memory_limit_bytes)"
+            "[$(progress_hms(progress_elapsed(ctx)))] " *
+            progress_fourier_line(summary; grid, local_kpoints, lanes)
         progress_emit_text!(ctx, line)
-        progress_write_jsonl_event!(
-            ctx,
-            "fourier_backend";
-            extra = [string(key) => getproperty(summary, key) for key in keys(summary)],
+        extra = Pair{String, Any}[string(key) => getproperty(summary, key) for key in keys(summary)]
+        append!(
+            extra,
+            ["display_grid" => grid, "local_kpoints" => local_kpoints, "reduction_lanes" => lanes],
         )
+        progress_write_jsonl_event!(ctx, "fourier_backend"; extra)
     finally
         Base.unlock(ctx.lock)
     end
@@ -1080,7 +1138,7 @@ function progress_kloop_text(ctx::ProgressContext, message::AbstractString)
             elapsed_value / completed * max(total_local - completed, 0) : NaN
         rate = (isfinite(elapsed_value) && elapsed_value > 0) ? completed / elapsed_value : NaN
         percent = total_local > 0 ? 100.0 * completed / total_local : 100.0
-        rate_text = isfinite(rate) ? @sprintf("%.2f k/s", rate) : "n/a"
+        rate_text = isfinite(rate) ? @sprintf("%.2f points/s", rate) : "n/a"
         line = @sprintf(
             "  %-11s %-12s %-26s %6.1f%%  %10s  %8s  %8s  %8s  %8s",
             global_scope ? local_finished_text : "$(completed)/$(total_local)",
@@ -1102,7 +1160,7 @@ function progress_kloop_text(ctx::ProgressContext, message::AbstractString)
     estimated_time_remaining =
         (isfinite(elapsed_value) && estimated_global > 0) ?
         elapsed_value / estimated_global * max(total_work_items - estimated_global, 0) : NaN
-    rate_text = isfinite(rate) ? @sprintf("%.2f k/s", rate) : "n/a"
+    rate_text = isfinite(rate) ? @sprintf("%.2f points/s", rate) : "n/a"
     if ctx.mpi_size > 1
         line = @sprintf(
             "  %-10s %-10s %-26s %6.1f%%  %9s  %8s  %8s  %7s  %7s",
@@ -1269,7 +1327,8 @@ Store a parsed duration under its stage name; ignore an absent duration.
 """
 function progress_store_stage_seconds!(ctx::ProgressContext, stage::AbstractString, seconds)
     isnothing(seconds) && return nothing
-    ctx.stage_seconds[String(stage)] = seconds
+    ctx.stage_seconds[String(stage)] =
+        stage in ("read", "reduce") ? get(ctx.stage_seconds, String(stage), 0.0) + seconds : seconds
     return nothing
 end
 
@@ -1400,6 +1459,7 @@ function progress_should_record_text(ctx::ProgressContext, message::AbstractStri
                event == "kloop_progress" ||
                startswith(message, "[kloop] end")
     end
+    startswith(message, "[fourier]") && return false
     startswith(message, "[degeneracy]") && return false
     startswith(message, "[kloop] slow") && return false
     startswith(message, "[setup]") && return false
@@ -1440,7 +1500,7 @@ function progress_timing_lines(ctx::ProgressContext)
         "kloop" => "k-loop",
         "reduce" => "deterministic reduce",
         "write" => "write outputs",
-        "done" => "bundle total",
+        "done" => "last task bundle",
     )
     lines = String[
         "TIMING",
@@ -1693,42 +1753,19 @@ function progress_run_done!(
         progress_emit_text!(ctx, "  +---------------+--------------------------------------+")
         progress_emit_text!(ctx, "  | kind          | path                                 |")
         progress_emit_text!(ctx, "  +---------------+--------------------------------------+")
-        for (idx, output) in enumerate(outputs)
-            progress_emit_text!(
-                ctx,
-                @sprintf(
-                    "  | result %-6d | %-36s |",
-                    idx,
-                    progress_short_text(progress_display_path(ctx, output), 36),
-                ),
-            )
-        end
-        if !isempty(metadata_path)
-            progress_emit_text!(
-                ctx,
-                @sprintf(
-                    "  | %-13s | %-36s |",
-                    "metadata",
-                    progress_short_text(progress_display_path(ctx, metadata_path), 36)
+        rows =
+            Pair{String, String}["result $(idx)" => output for (idx, output) in enumerate(outputs)]
+        isempty(metadata_path) || push!(rows, "metadata" => metadata_path)
+        append!(rows, ["progress log" => ctx.out_path, "progress json" => ctx.jsonl_path])
+        for (label, path) in rows
+            for (index, chunk) in
+                enumerate(progress_text_chunks(progress_display_path(ctx, path), 36))
+                progress_emit_text!(
+                    ctx,
+                    "  | " * rpad(index == 1 ? label : "", 13) * " | " * rpad(chunk, 36) * " |",
                 )
-            )
+            end
         end
-        progress_emit_text!(
-            ctx,
-            @sprintf(
-                "  | %-13s | %-36s |",
-                "progress log",
-                progress_short_text(progress_display_path(ctx, ctx.out_path), 36)
-            )
-        )
-        progress_emit_text!(
-            ctx,
-            @sprintf(
-                "  | %-13s | %-36s |",
-                "progress json",
-                progress_short_text(progress_display_path(ctx, ctx.jsonl_path), 36)
-            )
-        )
         progress_emit_text!(ctx, "  +---------------+--------------------------------------+")
         progress_emit_text!(ctx, "")
         progress_emit_lines!(ctx, progress_timing_lines(ctx))
@@ -1749,7 +1786,7 @@ function progress_run_done!(
             progress_emit_text!(ctx, "  mapping sha256=$(replica_summary.mapping_sha256)")
             progress_emit_text!(
                 ctx,
-                "  mapping scheme=$(replica_summary.mapping_digest_scheme), wsvec=$(replica_summary.wsvec_file), wsvec sha256=$(replica_summary.wsvec_sha256)",
+                "  mapping scheme=$(replica_summary.mapping_digest_scheme), wsvec=$(isnothing(replica_summary.wsvec_file) ? "not provided" : progress_display_path(ctx, replica_summary.wsvec_file)), wsvec sha256=$(replica_summary.wsvec_sha256)",
             )
             progress_emit_text!(
                 ctx,

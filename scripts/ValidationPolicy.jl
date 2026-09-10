@@ -41,6 +41,7 @@ const TEST_CONTRACT_SUPPORT_SCRIPTS = (
     "SourceDocumentationAudit.jl",
     "check_format.jl",
     "check_tag_ci_reuse.py",
+    "run_tests.py",
     "ResponseSymmetryValidationCase.jl",
     "check_response_symmetry_mpi.jl",
 )

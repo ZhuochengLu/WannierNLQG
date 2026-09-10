@@ -9,37 +9,63 @@ quantum-geometric quantities from Wannier tight-binding models.
 
 ## Highlights
 
-- **Four shift-current formulations.** Conventional sum-over-states,
+- **Gauge-covariant shift-current framework**
+
+  Conventional sum-over-states,
   projector-trace, generalized Wilson-loop, and geometric-loop formulations,
   including gauge-covariant treatment of degenerate and closely spaced band
   subspaces.
-- **Systematic quantum geometry.** Berry curvature, quantum metric, multipoles,
+
+- **Systematic quantum geometry**
+
+  Berry curvature, quantum metric, multipoles,
   higher-order geometric tensors, and mixed momentum-spin quantities in one
   framework.
-- **Finite-photon-momentum responses.** Brillouin-zone-integrated and k-slice
+
+- **Finite-photon-momentum responses**
+
+  Brillouin-zone-integrated and k-slice
   photon-drag shift and injection currents beyond the spatially uniform
   $q=0$ regime.
-- **Three symmetry-aware routes.** Experimental support for
+
+- **Symmetry-aware routes**
+
+  Experimental support for
   representation-constrained symmetry-adapted Wannier construction, post-hoc
   symmetrization of real-space Hamiltonians and operators, and irreducible-k-orbit
   integration with invariant-tensor reconstruction for supported $q=0$ Integral
   responses.
-- **Interpretable response-symmetry reports.** For supported responses, human-readable
+
+- **Response-symmetry reports**
+
+  For supported responses, human-readable
   `.out` and JSON outputs identify structural and magnetic space/point groups,
   the active constraint group and its generators, and real/imaginary tensor
   components that are forbidden, symmetry-related, or independent.
-- **Expert DFT-to-Wannier workflows.** Generate supported Wannier matrix elements
+
+- **Expert DFT-to-Wannier workflows**
+
+  Generate supported Wannier matrix elements
   from VASP or Quantum ESPRESSO wavefunctions and construct ordinary or
   symmetry-adapted Wannier functions with disentanglement, localization,
   versioned checkpoints, and operator export.
-- **Independent multi-task workflows.** Run repeated or heterogeneous tasks with
+
+- **Independent multi-task workflows**
+
+  Run repeated or heterogeneous tasks with
   task-local physics, numerics, observables, and outputs while reusing only
   dependency-compatible interpolation data.
-- **Publication-oriented visualization.** Produce band-structure,
+
+- **Publication-oriented visualization**
+
+  Produce band-structure,
   integrated-response, and k-slice figures as PDF and 600-dpi PNG with shared
   configurable styling, strict input validation, and provenance-rich plot
   sidecars.
-- **Efficient dense-mesh execution.** Mixed-FFT interpolation, symmetry
+
+- **Efficient dense-mesh execution**
+
+  Mixed-FFT interpolation, symmetry
   reduction, compatible multi-task interpolation reuse, thread/MPI parallelism
   where supported, and selective memory-mapped operator-bundle reads reduce
   redundant computation and memory traffic.
@@ -53,6 +79,8 @@ quantum-geometric quantities from Wannier tight-binding models.
   - Shift Spin Current — Conventional.
   - Photon Drag Shift Current — Geometric Loop.
   - Photon Drag Injection Current — Conventional.
+  - Additional nonlinear optical response calculations are under active
+    development.
 
 - **Quantum-geometric quantities (K-slice)**
   - Quantum Hermitian Connection — Conventional, Projector, Wilson Loop, and
@@ -65,6 +93,8 @@ quantum-geometric quantities from Wannier tight-binding models.
   - Quantum Christoffel Symbol.
   - Triple Phase Product.
   - Shift Vector — Wilson Loop and Geometric Loop.
+  - Additional quantum-geometric quantity calculations are under active
+    development.
 
 - **Band structures (KPath)**
   - Band interpolation.
@@ -168,6 +198,11 @@ production qualification for a material-specific calculation.
 
 If you use WannierNLQG in research, cite the software release and the method
 references relevant to the calculation you performed:
+
+> Zhuocheng Lu, Zhichao Guo, Yuanyuan Xu, Jiacheng Yao, and Hua Wang.
+> “[*WannierNLQG: A Julia package for nonlinear optical responses and quantum
+> geometry from Wannier tight-binding models*](https://arxiv.org/abs/2609.10411).”
+> arXiv:2609.10411 (2026).
 
 - [Citation metadata](CITATION.cff)
 - [Contributing guide](CONTRIBUTING.md)

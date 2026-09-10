@@ -447,7 +447,12 @@ function _run_integral_bundle_owned!(
         end
     end
     initial_fourier_summary = fourier_execution_summary(cfg, fourier_plan, shared_matrix_workspaces)
-    progress_fourier_backend!(initial_fourier_summary)
+    progress_fourier_backend!(
+        initial_fourier_summary;
+        grid = cfg.k_mesh,
+        local_kpoints = local_total_k,
+        lanes = num_reduction_lanes,
+    )
     bundle_debug_log(debug_lock, "[fourier] initialized summary=$(repr(initial_fourier_summary))")
 
     finished_count = Threads.Atomic{Int}(0)

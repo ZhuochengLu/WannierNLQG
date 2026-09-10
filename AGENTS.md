@@ -28,8 +28,9 @@ development and release workflow.
 - During implementation, run formatter/static checks and focused tests for the
   reachable Symmetrization, Wannierization, Response, Runtime, or tooling path. Do
   not rerun fast/full after every edit. Freeze the final evidence hashes first and
-  run at most one final `full` package test when runtime source or the test contract
-  changed; `full` already includes every fast unit and readiness gate.
+  run one final complete validation when runtime source or the test contract
+  changed: Fast, every Full-only shard, and MPI-only. Individual Full-only
+  shards do not include Fast. The local runner combines these without duplication.
 - Reuse a sealed prior full PASS only when the dependency-aware runtime and test
   contract hashes are unchanged and the exact file diff is campaign-only. Rerun the
   affected campaign preflight, formatter, determinism, and manifest/SHA checks as

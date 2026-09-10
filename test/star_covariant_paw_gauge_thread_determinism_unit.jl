@@ -20,6 +20,13 @@ using .QEPAWMatrixElementsTestSupport
                 output = joinpath(directory, "$(policy)-threads-$(threads)")
                 command =
                     `$(Base.julia_cmd()) --startup-file=no --threads=$(threads) --project=$(dirname(@__DIR__)) $(probe) $(fixture.save_directory) $(fixture.nnkp_file) $(output) $(policy)`
+                command = addenv(
+                    command,
+                    "OMP_NUM_THREADS" => "1",
+                    "MKL_NUM_THREADS" => "1",
+                    "OPENBLAS_NUM_THREADS" => "1",
+                    "VECLIB_MAXIMUM_THREADS" => "1",
+                )
                 text = read(command, String)
                 matched = match(r"STAR_GAUGE_THREAD_DIGEST=([0-9a-f]{64})", text)
                 @test matched !== nothing

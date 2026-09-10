@@ -22,7 +22,10 @@ software version.
    formatter, architecture contracts, documentation audit, version
    consistency, and exact release whitelist.
 3. Run the default self-contained Fast suite.
-4. Run the self-contained Full suite, then Full with MPI enabled.
+4. Run every self-contained Full-only shard and the independent MPI-only suite.
+   The local `python3 scripts/run_tests.py full --cpu-budget 17 --output-dir /tmp/wnlqg-release`
+   combines Fast, all Full-only shards, and MPI-only exactly once; use this in
+   place of steps 3 and 4 when running the aggregate entry point.
 5. Record performance observations independently. Performance measurements are
    evidence, not a hard promotion gate for this release line.
 6. Freeze the unchanged candidate and regenerate `SOURCE_MANIFEST.tsv` and

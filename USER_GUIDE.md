@@ -45,6 +45,15 @@ componentwise product must equal `k_mesh`. Auto uses Direct without factors and
 tries the requested factorization with factors, subject to capability and memory
 checks; it never searches for new factors. Band permits only Direct.
 
+`WannierNLQG.out` shows one Fourier summary per Integral or K-slice execution
+plan: task, backend, grid, local kpoints, and reduction lanes. Actual fallback
+reasons remain visible; Direct does not report an unused FFT workspace as zero.
+Use the existing `OutputOptions(progress_verbosity="diagnostic")` setting for
+expanded progress details. The existing `progress.jsonl` retains the complete
+Fourier fields, with additive display context and no schema-version change.
+Stage timings distinguish individual tasks from the complete task bundle;
+throughput is reported in `points/s`.
+
 For multiple public tasks, the per-rank Mixed provider budget is divided across
 the task instances. Auto first applies the existing single-task backend-selection
 rule. If that selected Mixed plan cannot fit its additional multi-task provider

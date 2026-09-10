@@ -4670,10 +4670,12 @@ end
         @test occursin("Per-Wannier-state spreading", log_text)
         @test occursin("CONSTRUCTION GATE AND DIAGNOSTIC SUMMARY", log_text)
         @test occursin("FINAL SPREADING", log_text)
-        @test occursin("FINAL DIAGNOSTIC TB SYMMETRY", log_text)
+        @test occursin("FINAL TB SYMMETRY QUALIFICATION (diagnostic model)", log_text)
         @test occursin("FINAL STATUS", log_text)
         @test occursin(r"wannierization_log\s+=\s+", log_text)
-        @test occursin(log_file, log_text)
+        @test !occursin(log_file, log_text)
+        @test occursin(basename(log_file), log_text)
+        @test isfile(replace(log_file, r"\.out$" => "-diagnostics.jsonl"))
 
         ordinary_auto = WANNIERIZATION._replace_wannierization_config(
             output_config;
@@ -4693,7 +4695,10 @@ end
             gc_time = 0.0,
         )
         close(ordinary_io)
-        @test !occursin("FINAL DIAGNOSTIC TB SYMMETRY", read(ordinary_log, String))
+        @test !occursin(
+            "FINAL TB SYMMETRY QUALIFICATION (diagnostic model)",
+            read(ordinary_log, String),
+        )
         ordinary_forced = WANNIERIZATION._replace_wannierization_config(
             ordinary_auto;
             output = (final_tb_symmetry_report_enabled = true,),
@@ -4712,7 +4717,7 @@ end
         )
         close(forced_io)
         forced_text = read(forced_log, String)
-        @test occursin("FINAL DIAGNOSTIC TB SYMMETRY", forced_text)
+        @test occursin("FINAL TB SYMMETRY QUALIFICATION (diagnostic model)", forced_text)
         @test occursin(r"overall\s+=\s+NOT_RUN", forced_text)
         @test occursin(r"source\s+=\s+qualification_not_run", forced_text)
         @test !occursin("final_exported_and_read_back_tb", forced_text)
@@ -4772,7 +4777,10 @@ end
             gc_time = 0.0,
         )
         close(symmetry_disabled_io)
-        @test !occursin("FINAL DIAGNOSTIC TB SYMMETRY", read(symmetry_disabled_log, String))
+        @test !occursin(
+            "FINAL TB SYMMETRY QUALIFICATION (diagnostic model)",
+            read(symmetry_disabled_log, String),
+        )
 
         disabled_config = modified_wannierization_config(
             output_config;
@@ -5300,4 +5308,92 @@ end
             ) == [1.0]
         end
     end
+end
+
+@testset "Human report aggregation preserves complete diagnostic audit" begin
+    output = WANNIERIZATION_IMPLEMENTATION.OperatorExport
+    records = [
+        WANNIERIZATION.WannierizationDiagnostic(
+            :DIRECTIONAL_SPREAD_UNAVAILABLE,
+            :info,
+            "Directional spread unavailable";
+            context = Dict("iteration" => string(i)),
+        ) for i in 1:419
+    ]
+    push!(
+        records,
+        WANNIERIZATION.WannierizationDiagnostic(
+            :LOCALIZATION_MAX_STEPS,
+            :warning,
+            "Localization limit",
+        ),
+    )
+    push!(
+        records,
+        WANNIERIZATION.WannierizationDiagnostic(
+            :MAX_ITERATIONS_REACHED,
+            :warning,
+            "Iteration limit",
+        ),
+    )
+    push!(
+        records,
+        WANNIERIZATION.WannierizationDiagnostic(
+            :STRUCTURAL_GATE,
+            :info,
+            "Structural failure";
+            context = Dict("gate_result" => "FAIL"),
+        ),
+    )
+    stream = IOBuffer()
+    output._write_diagnostic_summary(stream, output._diagnostic_groups(records))
+    report = String(take!(stream))
+    @test occursin("count=419, iterations=1-419", report)
+    @test occursin("LOCALIZATION_MAX_STEPS", report)
+    @test occursin("MAX_ITERATIONS_REACHED", report)
+    @test occursin("gate_result=FAIL", report)
+    @test !occursin(".context", report)
+    @test count("Directional spread unavailable", report) == 1
+    mktempdir() do root
+        path = output._write_diagnostic_records(
+            joinpath(root, "test.wannierization-diagnostics.jsonl"),
+            records,
+        )
+        restored = JSON3.read.(readlines(path))
+        @test length(restored) == length(records)
+        @test String(restored[419].context.iteration) == "419"
+        @test String(restored[end].context.gate_result) == "FAIL"
+        @test output._report_path(joinpath(root, "nested", "artifact.h5"), root) ==
+              "nested/artifact.h5"
+        @test output._report_path(joinpath(dirname(root), "other.h5"), root) ==
+              "<external>/other.h5"
+        @test output._report_path(nothing, root) == "NOT_WRITTEN"
+    end
+    metric = WANNIERIZATION.TBSymmetryMetric(
+        "hamiltonian_covariance_relative_max",
+        1.0,
+        0.0,
+        "FAIL",
+        "APPLICABLE",
+        "ABOVE_THRESHOLD",
+        "relative",
+    )
+    @test output._metric_ratio(metric) === nothing
+    @test output._report_number(1.23456789e-9) == "1.23e-09"
+    stream = IOBuffer()
+    output._write_tb_report(stream, (metrics = [metric], overall = "FAIL"))
+    table = String(take!(stream))
+    @test occursin("ABOVE_THRESHOLD", table)
+    @test occursin("N/A", table)
+    @test occursin("does not imply Wannierization convergence", table)
+    @test !occursin("hamiltonian_covariance_relative_max", table)
+    stream = IOBuffer()
+    output._write_tb_scope(
+        stream,
+        Dict("qualification_scope" => "target_subspace", "global_production_eligible" => "false"),
+    )
+    scope = String(take!(stream))
+    @test occursin("qualification_scope = target_subspace", scope)
+    @test occursin("global_production_eligible = false", scope)
+    @test occursin("scoped_production_eligible = NOT_RECORDED", scope)
 end
