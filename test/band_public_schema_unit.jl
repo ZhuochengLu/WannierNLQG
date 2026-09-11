@@ -226,12 +226,17 @@ end
         current = HDF5.h5open(band_public_inventory, output, "r")
         @test keys(former) == keys(current)
         differences = sort!([key for key in keys(former) if !isequal(former[key], current[key])])
-        # The frozen fixture records its original interpreter; only this runtime
-        # identity may vary across the supported Julia verification matrix.
+        # The frozen fixture records its original software and interpreter;
+        # these provenance identities may vary across release verification.
         @test current["/environment@julia_version"] == string(VERSION)
         @test setdiff(
             differences,
-            ["@schema_version", "/environment@generated_at_utc", "/environment@julia_version"],
+            [
+                "@schema_version",
+                "/environment@generated_at_utc",
+                "/environment@julia_version",
+                "/environment@wanniernlqg_version",
+            ],
         ) == String[]
         @test current["/compatibility@representation_sha256"] ==
               former["/compatibility@representation_sha256"]
