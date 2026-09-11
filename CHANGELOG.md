@@ -4,6 +4,36 @@ This changelog records user-visible differences between public WannierNLQG
 releases. Version 1.0.0 establishes the public baseline; each later entry will
 describe changes relative to the preceding public tag.
 
+## 1.0.1 — Maintenance release
+
+WannierNLQG 1.0.1 synchronizes the versioned release with the maintained v1
+source while preserving the public API and storage-schema baseline established
+by version 1.0.0.
+
+### Changed
+
+- Improved Integral and K-slice progress output with clearer Fourier-plan,
+  timing, throughput, table, and external-path presentation while retaining the
+  complete structured progress record.
+- Improved ordinary and symmetry-adapted Wannierization reports with neutral
+  filenames, compact qualification summaries, artifact hashes, and an atomic
+  diagnostic JSONL sidecar.
+- Reorganized local and GitHub test orchestration into explicit Fast,
+  Full-only-shard, and MPI-only modes with resource-aware scheduling and
+  auditable interruption handling.
+- Added a tag gate that requires an exact successful `main` CI run before a
+  version tag can qualify for release.
+- Updated public documentation, theory descriptions, citation guidance, and
+  project logo assets.
+
+### Compatibility and qualification
+
+- The package software version is 1.0.1; public storage schemas remain at 1.0.
+- Operator bundles record the 1.0.1 writer version and retain the documented
+  historical reader compatibility.
+- Package regression tests do not establish material-specific numerical,
+  physics, or production qualification.
+
 ## 1.0.0 — Initial public release
 
 WannierNLQG 1.0.0 is the first public release.

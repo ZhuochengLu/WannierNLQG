@@ -1,7 +1,7 @@
 # Documentation
 
 This directory contains the public, English-language documentation for
-WannierNLQG 1.0.0.
+WannierNLQG 1.0.1. The version 1.0.0 documents remain the public API baseline.
 
 ## Start here
 

@@ -5,7 +5,7 @@ using TOML
 using WannierNLQG
 
 const ROOT = normpath(joinpath(@__DIR__, ".."))
-const EXPECTED_VERSION = v"1.0.0"
+const EXPECTED_VERSION = v"1.0.1"
 const GPL2_ONLY_SPDX_IDENTIFIER = "GPL-2.0-only"
 const GPL2_ONLY_LICENSE_SHA256 = "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
 const GPL2_ONLY_METADATA_MARKERS = (
@@ -81,17 +81,13 @@ VersionNumber(project["version"]) == EXPECTED_VERSION ||
 Base.pkgversion(WannierNLQG) == EXPECTED_VERSION ||
     error("loaded package version is not $(EXPECTED_VERSION)")
 
-for relative_path in (
-    "README.md",
-    "USER_GUIDE.md",
-    "CHANGELOG.md",
-    "docs/RELEASE_NOTES.md",
-    "docs/MIGRATION_1.0.0.md",
-    "docs/RELEASING.md",
-)
-    occursin("1.0.0", read(joinpath(ROOT, relative_path), String)) ||
+for relative_path in
+    ("README.md", "USER_GUIDE.md", "CHANGELOG.md", "docs/RELEASE_NOTES.md", "docs/RELEASING.md")
+    occursin(string(EXPECTED_VERSION), read(joinpath(ROOT, relative_path), String)) ||
         error("current release identity is missing from $(relative_path)")
 end
+occursin("1.0.0", read(joinpath(ROOT, "docs", "MIGRATION_1.0.0.md"), String)) ||
+    error("the version 1.0.0 public API baseline is missing from docs/MIGRATION_1.0.0.md")
 
 for relative_path in (
     "LICENSE",
@@ -288,7 +284,7 @@ bundle_extension = read(
 )
 occursin("string(Base.pkgversion(WannierNLQG))", bundle_extension) ||
     error("Packed writer software provenance is not bound to package version")
-for identity in ("1.0.0", "2.4.0", "2.3.0", "2.1.0", "2.0.0")
+for identity in ("1.0.1", "1.0.0", "2.4.0", "2.3.0", "2.1.0", "2.0.0")
     occursin(identity, bundle_extension) ||
         error("Packed reader compatibility identity is missing: $(identity)")
 end
@@ -306,6 +302,6 @@ for (directory, directories, files) in walkdir(ROOT)
 end
 
 println(
-    "version consistency passed: software=1.0.0 independent_storage=1.0 internal_contracts=preserved " *
+    "version consistency passed: software=$(EXPECTED_VERSION) independent_storage=1.0 internal_contracts=preserved " *
     "internal_predecessor=2.4.0",
 )

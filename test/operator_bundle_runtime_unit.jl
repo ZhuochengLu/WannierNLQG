@@ -130,6 +130,7 @@ end
         bundle_file = write_hamiltonian_position_bundle(directory, model_file)
         manifest = OperatorBundleIO.read_real_space_operator_bundle_manifest(bundle_file)
         @test manifest.schema_version == "1.0"
+        @test Base.pkgversion(WannierNLQG) == v"1.0.1"
         HDF5.h5open(bundle_file, "r") do handle
             @test String(read(HDF5.attributes(handle)["wanniernlqg_version"])) ==
                   string(Base.pkgversion(WannierNLQG))

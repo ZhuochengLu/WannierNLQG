@@ -1,7 +1,7 @@
 # Release procedure
 
 This document defines the reusable public release procedure used for the
-WannierNLQG 1.0.0 release line. It is not a
+WannierNLQG 1.0.x release line. The current maintenance release is 1.0.1. It is not a
 historical checklist and does not assert that an unfinished candidate has
 passed any gate.
 

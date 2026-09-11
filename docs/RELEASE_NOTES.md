@@ -1,95 +1,76 @@
-# WannierNLQG 1.0.0 release notes
+# WannierNLQG 1.0.1 release notes
 
-## Initial public release
+## Maintenance release
 
-WannierNLQG 1.0.0 is the first public release and establishes the public API,
-file-format, documentation, and qualification baseline. Future release notes
-will describe changes relative to the preceding public tag.
+WannierNLQG 1.0.1 incorporates the public updates accumulated after version
+1.0.0 and aligns the versioned release with the maintained v1 source tree.
+The version 1.0.0 API and migration documents remain the public baseline.
 
-## Calculation and runtime scope
+## Runtime progress and output reports
 
-- The grouped response interface separates shared `ModelInput`, sampling,
-  execution, and output options from independently parameterized `TaskSpec`
-  instances.
-- Registered calculations cover nonlinear optical and spin responses,
-  finite-photon-momentum responses, band interpolation, and quantum-geometric
-  quantities. The complete registry and required inputs are listed in the
-  [user guide](../USER_GUIDE.md).
-- Integral and K-slice calculations support the registered Direct or Mixed
-  Fourier routes. K-path sampling is currently registered for band structure.
-- Compatible tasks can reuse interpolation data while retaining independent
-  occupations, numerical controls, observables, outputs, and effective metadata.
-- Optional thread and MPI execution preserve root-owned publication and explicit
-  runtime ownership of MPI initialization and finalization.
+- Integral and K-slice execution now present one concise Fourier-plan summary
+  with task, backend, grid, local-point, decomposition, and fallback context.
+  The complete structured values remain available in `progress.jsonl` without
+  a schema-version change.
+- Human-readable progress tables wrap long values, identify external files
+  without exposing absolute local paths, distinguish task and bundle timings,
+  and report throughput in `points/s`.
+- Ordinary and symmetry-adapted Wannierization use the neutral
+  `<seed>.wannierization.out` report name. Artifact rows include SHA-256 and byte
+  size when available, and missing outputs remain explicit.
+- Complete final Wannierization diagnostics are written atomically to
+  `<seed>.wannierization-diagnostics.jsonl`. Compact report grouping does not
+  discard warnings, errors, failed gates, or original diagnostic records.
 
-## Wannier construction and operator provenance
+## Test and release orchestration
 
-- Ordinary and symmetry-adapted construction use immutable `input`, `solver`,
-  `checkpoint`, `runtime`, and `output` configuration groups. See the
-  [current configuration reference](WANNIERIZATION_CONFIG_MIGRATION.md).
-- `construction_policy=:diagnostic` permits a finite, dimensionally valid state
-  to proceed while preserving quality failures for manual review. Structural,
-  rank, metric, identity, and integrity failures remain blocking. Diagnostic
-  results are not production-qualified by optimizer convergence.
-- Full-profile operator generation binds raw operator-oracle and solver MMN files
-  as distinct roles in one target contract. uIu, uHu, sIu, sHu, and SPN inputs
-  are checked before wavefunction, overlap, or solver work begins.
-- Checkpoints and final exports retain the target-contract digest and repeat the
-  validation. Role swaps, stale provenance, and post-preflight replacement fail
-  closed without publishing partial scientific output.
-- Native VASP PAW AMN generation supports complete `d` projection shells with
-  projection-identity and positive-definite metric checks.
+- Test selection is explicit and fail-closed: Fast, five registered Full-only
+  shards, and MPI-only are independent modes with a frozen inventory.
+- The standard-library Python runner schedules the same registered tests under
+  a declared CPU budget, runs MPI exclusively, records task-level logs and
+  resource observations, and marks interrupted work as interrupted rather than
+  passed.
+- GitHub CI executes the Fast operating-system/Julia matrix, every Full-only
+  shard, MPI-only, and an aggregate required-job gate.
+- Version tags use a separate gate that accepts only an exact successful
+  `main`-push CI run for the tag target.
 
-## Response-symmetry reporting
+## Documentation and presentation
 
-- Human-readable and JSON reports identify structural and magnetic space and
-  point groups, the active constraint group, deterministic generators, and
-  forbidden, related, or independent tensor components.
-- The full detected magnetic group is distinct from the active unitary subgroup
-  when time reversal is excluded from response constraints.
-- Magnetic point-group machine identity is the normalized complete set of
-  colored point operations under
-  `wanniernlqg.magnetic-point-group-operations/1.0`. Equality and aggregation use
-  the magnetic point-group class number and `operation_digest`.
-- Hermann--Mauguin text is display-only under
-  `wanniernlqg.spglib-canonical/1.0`. Consumers should use UNI, class number, or
-  `operation_digest` for stable matching.
-- The deterministic catalogue covers 1651 UNI identifiers and 122 magnetic
-  point-group classes. It is generated from the pinned Spglib magnetic database
-  by the published project-owned algorithm. Exact dependency and output hashes
-  are recorded in the [generation receipt](../catalog-generation-receipt.json),
-  and the algorithm is specified in the
-  [magnetic point-group convention](MAGNETIC_POINT_GROUP_CONVENTION.md).
-- The response-symmetry summary writer uses
-  `wanniernlqg.response-symmetry-summary/1.0`.
+- The README and user/developer documentation describe the maintained task
+  inventory, progress output, and test entry points more precisely.
+- Theory descriptions and calculation labels were corrected without changing
+  response kernels or the public physical qualification boundary.
+- Project logo assets and citation guidance were added to the public source.
 
-## Reproducible source and testing
+## Compatibility and identities
 
-- Fast is the default self-contained test level. Full adds thread, MPI,
-  fresh-process persistence, supported compatibility paths, registered response
-  families, and abnormal-input coverage.
-- Examples and package tests use repository-owned synthetic inputs and temporary
-  output roots. Material data, performance campaigns, private diagnostics, and
-  release evidence are not distributed in the source package.
-- `SOURCE_MANIFEST.tsv` and `SHA256SUMS` define the frozen public source
-  inventory. The catalogue generator supports deterministic offline replay
-  against the locked dependency environment.
+- The Julia package software version is 1.0.1.
+- Public storage schemas remain at version 1.0; software versioning does not
+  mechanically change wire-format, evidence, or qualification identifiers.
+- Operator bundles record the 1.0.1 writer version. Readers retain the listed
+  historical writer-version compatibility and continue to reject unknown
+  versions.
+- The original `v1.0.0` tag and GitHub Release remain unchanged.
 
-## License and third-party sources
+## Reproducible source
 
-WannierNLQG 1.0.0 is distributed under `GPL-2.0-only`. The magnetic catalogue
-generation environment pins Spglib.jl 1.2.0, `spglib_jll` 2.7.0+0, and Spglib C
-2.7.0. Third-party components retain their own licenses and notices; see
-[THIRD_PARTY_NOTICE.md](../THIRD_PARTY_NOTICE.md).
+`SOURCE_MANIFEST.tsv` and `SHA256SUMS` define the public source inventory. After
+extracting a release archive, verify its payload with:
+
+```bash
+shasum -a 256 -c SHA256SUMS
+```
+
+Public tests and examples use repository-owned synthetic fixtures. Private
+material inputs, local release evidence, and generated research outputs are not
+part of the source release.
 
 ## Qualification limits
 
-- Smoke meshes and synthetic fixtures verify interfaces and regression
-  contracts; they are not material-convergence recommendations.
-- Package Engineering checks do not establish material-specific Numerical,
-  Physics, or Production qualification.
+- Software and package regression checks do not establish material convergence
+  or material-specific numerical qualification.
+- No physical model or material result is newly qualified by this maintenance
+  release.
 - Diagnostic Wannier construction and manual-review artifacts do not become
-  production eligible solely because a numerical solver terminates.
-- Hermann--Mauguin strings are descriptive output, not machine identity.
-- A local source release does not itself create a remote tag, push, or hosted
-  release artifact.
+  production eligible solely because a software gate succeeds.

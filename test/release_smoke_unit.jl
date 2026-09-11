@@ -10,7 +10,7 @@ const RELEASE_OPERATOR_BUNDLE_FILE =
     joinpath(RELEASE_RUNTIME_FIXTURE_ROOT, "synthetic_operators.h5")
 
 @testset "self-contained public release" begin
-    @test Base.pkgversion(WannierNLQG) == v"1.0.0"
+    @test Base.pkgversion(WannierNLQG) == v"1.0.1"
     @test all(isfile, (RELEASE_TB_FILE, RELEASE_WSVEC_FILE, RELEASE_OPERATOR_BUNDLE_FILE))
 
     for line in eachline(joinpath(RELEASE_RUNTIME_FIXTURE_ROOT, "SHA256SUMS"))
@@ -103,7 +103,7 @@ const RELEASE_OPERATOR_BUNDLE_FILE =
         @test all(summary -> all(isfinite, summary), values(result.validation))
         report = JSON3.read(read(result.report_json, String))
         @test String(report.status) == "PASS"
-        @test String(report.wanniernlqg_version) == "1.0.0"
+        @test String(report.wanniernlqg_version) == "1.0.1"
         manifest = WannierNLQG.IO.read_real_space_operator_bundle_manifest(
             result.real_space_operator_bundle,
         )

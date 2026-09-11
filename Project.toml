@@ -1,7 +1,7 @@
 name = "WannierNLQG"
 uuid = "89ebeb90-0f9c-4af9-9f6b-5e6907d2c4e5"
 authors = ["WannierNLQG contributors"]
-version = "1.0.0"
+version = "1.0.1"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"

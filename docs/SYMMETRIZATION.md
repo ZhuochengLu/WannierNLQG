@@ -1,6 +1,6 @@
 # Wannier operator symmetrization
 
-WannierNLQG 1.0.0 writes one variable-capability model package. Packed HDF5 1.0
+WannierNLQG 1.0.x writes one variable-capability model package. Packed HDF5 1.0
 stores the complete raw-to-final Wannier-center lifecycle and the single final
 real-space replica materialization. Its exact operator inventory is inferred
 from explicitly configured input paths. Hamiltonian and position are mandatory.

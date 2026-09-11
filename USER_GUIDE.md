@@ -1,4 +1,4 @@
-# WannierNLQG v1.0.0 User Guide
+# WannierNLQG v1.0.1 User Guide
 
 [Task examples](examples/tasks/) | [Bundle examples](examples/bundles/) | [Architecture](docs/ARCHITECTURE.md) | [Documentation index](docs/README.md)
 

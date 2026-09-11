@@ -1,4 +1,4 @@
-# wannierNLQG v1.0.0 Theory Reference
+# wannierNLQG v1.0.1 Theory Reference
 
 This directory documents the theoretical definitions, physical pictures, and formula provenance of the public physical quantities in the release. It does not discuss Wannier interpolation, program variables, numerical algorithms, unit conversions, or performance. Formula conventions follow the public physical contract of v1.0.0. When an original paper uses different band indices, optical-field ordering, or transition summation domains, the difference is stated explicitly in the “Formula provenance” table of the corresponding document.
 

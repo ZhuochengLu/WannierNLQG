@@ -165,9 +165,9 @@ parameter definitions.
 - [Release notes](docs/RELEASE_NOTES.md)
 - [Changelog](CHANGELOG.md)
 
-Version 1.0.0 is the initial public release. Its documented API is the public
-baseline; future changelog entries describe differences from the preceding
-public tag.
+Version 1.0.1 is the current maintenance release. The API documented for
+version 1.0.0 remains the public baseline; changelog entries describe
+differences from the preceding public tag.
 
 ## Testing
 
