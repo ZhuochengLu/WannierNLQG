@@ -530,8 +530,11 @@ function render_generation_receipt(
             digest_conflicts = 0,
             closure_products_checked = catalog.closure_products,
             coordinate_basis_cases_checked = catalog.coordinate_basis_cases_checked,
-            type_counts = Dict(
-                string(type) => count(row -> row.msg_type == type, catalog.rows) for type in 1:4
+            type_counts = (;
+                (
+                    Symbol(string(type)) => count(row -> row.msg_type == type, catalog.rows) for
+                    type in 1:4
+                )...
             ),
         ),
         outputs = (

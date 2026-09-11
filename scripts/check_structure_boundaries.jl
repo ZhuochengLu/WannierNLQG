@@ -8,8 +8,23 @@ using .ArchitectureContracts
 const ROOT = normpath(joinpath(@__DIR__, ".."))
 const SRC = joinpath(ROOT, "src")
 const EXT = joinpath(ROOT, "ext")
+const HAN_CODEPOINT_RANGES = (
+    (0x3400, 0x4dbf),
+    (0x4e00, 0x9fff),
+    (0xf900, 0xfaff),
+    (0x20000, 0x2ee5f),
+    (0x2f800, 0x2fa1f),
+    (0x30000, 0x323af),
+)
 
 fail(message::AbstractString) = error("structure check failed: " * message)
+
+function contains_han_text(text::AbstractString)
+    return any(text) do character
+        codepoint = Int(character)
+        any(lower <= codepoint <= upper for (lower, upper) in HAN_CODEPOINT_RANGES)
+    end
+end
 
 function source_files(directory::AbstractString)
     files = String[]
@@ -1362,7 +1377,7 @@ for active_root in active_roots
 end
 
 for path in vcat(source_files(SRC), source_files(EXT))
-    occursin(r"\p{Han}", read(path, String)) &&
+    contains_han_text(read(path, String)) &&
         fail("$(relpath(path, ROOT)) contains non-English source text")
 end
 

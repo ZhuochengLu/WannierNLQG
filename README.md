@@ -210,6 +210,16 @@ references relevant to the calculation you performed:
 - [Code of conduct](CODE_OF_CONDUCT.md)
 - [Third-party notices](THIRD_PARTY_NOTICE.md)
 
+## Code contributors
+
+WannierNLQG has received code contributions from:
+
+- Zhuocheng Lu
+- Zhichao Guo
+- Yuanyuan Xu
+- Jiacheng Yao
+- Hua Wang
+
 ## License
 
 This source release is distributed under the

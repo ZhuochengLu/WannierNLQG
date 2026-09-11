@@ -8,12 +8,12 @@ import WannierNLQG.SymmetryFoundation:
 
 const ROOT = normpath(joinpath(@__DIR__, ".."))
 const EXPECTED_RESPONSE_SYMMETRY_CATALOG = (
-    generated_source_sha256 = "2d9283c54e7a84196c396f35f5b44d48bd90c38795842648199ac528558b39cb",
+    generated_source_sha256 = "2d2f30a33e3b85b42840c2c14e6509577ebba99c94dd438b935d7331c32ad7d6",
     display_catalog_sha256 = "4ac72113a12da0557105b3d0689d30e623c3ce6b0bcba52dc2c1cb355946290e",
     operation_digest_contract = "wanniernlqg.magnetic-point-group-operations/1.0",
     symbol_convention = "wanniernlqg.spglib-canonical/1.0",
     generation_contract = "wanniernlqg.spglib-magnetic-point-group-catalog/1.0",
-    generator_sha256 = "cef3c65a05307f0a63bc9c91e364ab6721885fac9a884eb4a14ce4ae871efc6f",
+    generator_sha256 = "4fb2133cbbbf9bab2cc5e961abe5b68a149bcf28a50f9184c23f9e1a14ac6821",
     canonicalization_sha256 = "4570b2df131e7983d6c44a78e825edafd26d4298d1ac42b150cf5fd839d1a336",
     specification_sha256 = "01bd5b3882d0cf965c8000563208206c238a723288bc1591d9874af9eead62a4",
     spglib_jl_tree = "8f1b4a9e4d3d4ce9670c09355ce402ec5418b8e6",

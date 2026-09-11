@@ -1,5 +1,21 @@
 using Test
 
+const HAN_CODEPOINT_RANGES = (
+    (0x3400, 0x4dbf),
+    (0x4e00, 0x9fff),
+    (0xf900, 0xfaff),
+    (0x20000, 0x2ee5f),
+    (0x2f800, 0x2fa1f),
+    (0x30000, 0x323af),
+)
+
+function contains_han_text(text::AbstractString)
+    return any(text) do character
+        codepoint = Int(character)
+        any(lower <= codepoint <= upper for (lower, upper) in HAN_CODEPOINT_RANGES)
+    end
+end
+
 const ROOT = normpath(joinpath(@__DIR__, ".."))
 const PUBLIC_TEXT_EXTENSIONS =
     Set([".cff", ".jl", ".json", ".md", ".py", ".toml", ".txt", ".yml", ".yaml"])
@@ -176,7 +192,7 @@ end
 
 function validate_public_text(path::AbstractString; check_markers::Bool = true)
     text = read(path, String)
-    occursin(r"[\p{Han}]", text) && error("Han text is not allowed in public source files")
+    contains_han_text(text) && error("Han text is not allowed in public source files")
     if check_markers
         for marker in FORBIDDEN_PUBLIC_MARKERS
             occursin(marker, text) &&
@@ -217,6 +233,8 @@ end
 
         han = joinpath(fixture_root, "han.md")
         write(han, "Chinese text: " * String(Char.([0x6587, 0x6863])) * "\n")
+        @test contains_han_text(read(han, String))
+        @test !contains_han_text("q·R")
         @test_throws ErrorException validate_public_text(han)
 
         internal = joinpath(fixture_root, "internal.md")
