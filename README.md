@@ -149,6 +149,14 @@ The grouped response interface separates:
 See the user guide and runnable examples for the complete task registry and
 parameter definitions.
 
+## Tutorials
+
+For a practical path from the Quick start example to real-material studies,
+see the [WannierNLQG tutorials](https://github.com/ZhuochengLu/WannierNLQG-tutorials).
+The tutorials provide reproducible examples of material inputs, runnable
+configurations, reference results, and visualization workflows for supported
+calculations.
+
 ## Documentation
 
 - [User guide](USER_GUIDE.md)
