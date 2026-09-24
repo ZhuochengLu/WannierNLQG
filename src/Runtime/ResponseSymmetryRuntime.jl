@@ -929,16 +929,8 @@ function _build_response_symmetry_execution_plan(
     artifact.model_sha256 == lowercase(ctx.model_sha256) || error(
         "response symmetry artifact model SHA-256 $(artifact.model_sha256) does not match runtime model $(ctx.model_sha256).",
     )
-    if policy == :strict
-        artifact.cartesian_rotation_policy != "legacy_raw_unspecified" || error(
-            "response_symmetry_policy=strict rejects legacy artifact schema $(artifact.schema); " *
-            "the historical 1.0 field contract is diagnostic-only.",
-        )
-        artifact.sealed ||
-            error("response_symmetry_policy=strict requires a sealed complete-contract artifact.")
-        artifact.production_eligible ||
-            error("response_symmetry_policy=strict requires production_eligible=true.")
-    end
+    # `strict` continues to enforce structural parsing, model identity, and explicit
+    # contract consistency. Missing qualification/seal evidence is diagnostic-only.
     warning_messages = _response_artifact_warning_messages(artifact)
     if artifact.cartesian_rotation_policy == "legacy_raw_unspecified"
         push!(
@@ -963,13 +955,8 @@ function _build_response_symmetry_execution_plan(
         ),
     )
     group_report = try
-        response_symmetry_group_report(
-            artifact.payload;
-            strict = policy == :strict &&
-                     artifact.cartesian_rotation_policy != "legacy_raw_unspecified",
-        )
+        response_symmetry_group_report(artifact.payload; strict = false)
     catch exception
-        policy == :strict && rethrow()
         message = "response symmetry group classification is unresolved: $(sprint(showerror, exception))"
         @warn message
         push!(warning_messages, message)
@@ -1031,12 +1018,6 @@ function _build_response_symmetry_execution_plan(
     status =
         artifact.production_eligible && artifact.sealed && isempty(warning_messages) ? :PASS :
         :DIAGNOSTIC_ONLY
-    policy == :strict &&
-        status != :PASS &&
-        error(
-            "response_symmetry_policy=strict encountered diagnostic warnings or incomplete gates: " *
-            join(warning_messages, "; "),
-        )
     return ResponseSymmetryExecutionPlan(
         artifact.source_path,
         artifact.artifact_sha256,

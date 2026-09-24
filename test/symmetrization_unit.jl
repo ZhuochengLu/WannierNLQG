@@ -29,6 +29,8 @@ const EXPECTED_MATRIX_ELEMENTS_INTEGRATION_API = Set((
     :materialize_replica_component,
     :minimum_distance_real_space_replica_map,
     :mp_residue_grid,
+    :projector_block_velocity,
+    :projector_block_curvature,
     :real_space_replica_map_from_wsvec,
     :require_matrix_element_axes,
     :require_matrix_element_pairs,
@@ -341,7 +343,7 @@ end
         displacements,
         ones(Int, 2, 1),
         zeros(Int, 3, 2, 1),
-        zeros(Int, 2, 1),
+        reshape([1, 2], 2, 1),
     )
     direct = Dict{Tuple{Int, Int}, Matrix{ComplexF64}}(
         (1, 1) => ComplexF64[1.0 0.3-0.1im; 0.3+0.1im 0.7],
@@ -944,8 +946,6 @@ end
             geometry = test_operator_bundle_geometry(Matrix{Float64}(I, 3, 3), [1, 1], operators),
         )
         roundtrip = WannierNLQG.IO.read_real_space_operator_bundle(path)
-        bundle_extension = Base.get_extension(WannierNLQG, :WannierNLQGOperatorBundleExt)
-        @test bundle_extension !== nothing
         @test roundtrip.manifest.profile == :hamiltonian_position
         @test roundtrip.operators[SymmetryModule.REAL_SPACE_HAMILTONIAN].data == hamiltonian
         @test roundtrip.operators[SymmetryModule.REAL_SPACE_POSITION].data == position
@@ -1030,42 +1030,25 @@ end
             )
         end
 
-        v5_manifest = roundtrip.manifest
-        component_hashes = getfield.(v5_manifest.entries, :component_sha256)
         for legacy_version in ("3.0", "4.0")
-            legacy_compatible_path = joinpath(directory, "operators-v$(legacy_version).h5")
-            cp(path, legacy_compatible_path)
-            legacy_digest = bundle_extension._scientific_content_digest(
-                v5_manifest.profile,
-                v5_manifest.inventory,
-                v5_manifest.lattice,
-                v5_manifest.r_vectors,
-                v5_manifest.degeneracies,
-                component_hashes,
-                v5_manifest.paired_tb_sha256,
-                legacy_version,
-                nothing,
-            )
-            HDF5.h5open(legacy_compatible_path, "r+") do handle
+            legacy_path = joinpath(directory, "operators-v$(legacy_version).h5")
+            cp(path, legacy_path)
+            HDF5.h5open(legacy_path, "r+") do handle
                 root_attributes = HDF5.attributes(handle)
-                for name in ("schema_version", "wanniernlqg_version", "scientific_content_sha256")
-                    HDF5.delete_attribute(handle, name)
-                end
+                HDF5.delete_attribute(handle, "schema_version")
                 root_attributes["schema_version"] = legacy_version
-                root_attributes["wanniernlqg_version"] = "2.0.0"
-                root_attributes["scientific_content_sha256"] = legacy_digest
             end
-            legacy_manifest =
-                WannierNLQG.IO.read_real_space_operator_bundle_manifest(legacy_compatible_path)
-            @test legacy_manifest.schema_version == legacy_version
-            @test legacy_manifest.wannier_center_policy == :legacy
-            @test legacy_manifest.real_space_replica_policy == :legacy
-            @test legacy_manifest.geometry_content_sha256 === nothing
-            if legacy_version == "3.0"
-                @test legacy_manifest.wannier_centers_cartesian === nothing
-            else
-                @test legacy_manifest.wannier_centers_cartesian !== nothing
+            migration_error = try
+                WannierNLQG.IO.read_real_space_operator_bundle_manifest(legacy_path)
+                nothing
+            catch err
+                err
             end
+            @test migration_error isa ArgumentError
+            migration_message = sprint(showerror, migration_error)
+            @test occursin("operator-bundle migration required", migration_message)
+            @test occursin("schema $(legacy_version)", migration_message)
+            @test occursin("schema 1.1", migration_message)
         end
         @test_throws ArgumentError WannierNLQG.IO.write_real_space_operator_bundle(
             path,
@@ -1134,4 +1117,27 @@ end
             @test !occursin(pattern, audited_source)
         end
     end
+end
+
+@testset "Spin-velocity stencil accepts complete Gamma and shifted MP meshes" begin
+    matrix_elements = WannierNLQG.MatrixElements
+    function two_point_chk(offset)
+        WannierNLQG.IO.WannierCHK(
+            1,
+            1,
+            2,
+            (2, 1, 1),
+            [offset 0.0 0.0; offset + 0.5 0.0 0.0],
+            Matrix{Float64}(I, 3, 3),
+            2.0pi .* Matrix{Float64}(I, 3, 3),
+            zeros(1, 3),
+            ones(ComplexF64, 1, 1, 2),
+        )
+    end
+    gamma = matrix_elements.build_finite_difference_stencil(two_point_chk(0.0))
+    shifted = matrix_elements.build_finite_difference_stencil(two_point_chk(0.25))
+    @test gamma.displacement_grid == shifted.displacement_grid
+    @test gamma.neighbors == shifted.neighbors
+    @test gamma.reciprocal_shifts == shifted.reciprocal_shifts
+    @test length(gamma.weights) == 8
 end

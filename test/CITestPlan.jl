@@ -38,6 +38,10 @@ const CI_REQUIRED_JOB_NAMES = (
 )
 
 const FAST_TEST_FILES = (
+    "preparation_storage_unit.jl",
+    "second_harmonic_unit.jl",
+    "linear_orbital_response_unit.jl",
+    "linear_orbital_runtime_unit.jl",
     "task_configuration_unit.jl",
     "release_smoke_unit.jl",
     "mpi_runtime_environment_unit.jl",
@@ -104,6 +108,8 @@ const FAST_TEST_FILES = (
 # inventory; shards below may redistribute these entries but may not add, omit,
 # or duplicate one.
 const FULL_ONLY_TEST_FILES = (
+    "fermi_vector_contract_unit.jl",
+    "linear_orbital_parallel_unit.jl",
     "per_task_symmetry_unit.jl",
     "per_task_parallel_unit.jl",
     "documented_examples_full_unit.jl",
@@ -124,12 +130,15 @@ const FULL_ONLY_TEST_FILES = (
     "star_covariant_paw_gauge_unit.jl",
     "diagnostic_symmetry_construction_unit.jl",
     "star_fixed_schema_unification_unit.jl",
+    "disk_bounded_gauge_unit.jl",
     "generator_schema_migration_unit.jl",
     "vasp_paw_spn_unit.jl",
     "wannierization_frozen_initializer_unit.jl",
-    "wannierization_diagnostic_export_unit.jl",
+    "wannierization_standard_export_unit.jl",
     "wannier_operator_profiles_unit.jl",
+    "operator_task_selection_unit.jl",
     "tb_symmetry_qualification_unit.jl",
+    "ordinary_posthoc_tb_qualification_unit.jl",
     "photon_drag_blas_unit.jl",
     "frequency_contraction_prototype_unit.jl",
     "response_exact_optimization_unit.jl",
@@ -148,6 +157,7 @@ const FULL_TEST_SHARDS = (
     (
         "interfaces-and-symmetry",
         (
+            "linear_orbital_parallel_unit.jl",
             "per_task_symmetry_unit.jl",
             "per_task_parallel_unit.jl",
             "documented_examples_full_unit.jl",
@@ -167,6 +177,7 @@ const FULL_TEST_SHARDS = (
     (
         "scientific-contracts",
         (
+            "fermi_vector_contract_unit.jl",
             "solver_stage_lifecycle_unit.jl",
             "storage_schema_fresh_process_unit.jl",
             "paw_scdm_initialization_unit.jl",
@@ -178,12 +189,15 @@ const FULL_TEST_SHARDS = (
             "star_covariant_paw_gauge_unit.jl",
             "diagnostic_symmetry_construction_unit.jl",
             "star_fixed_schema_unification_unit.jl",
+            "disk_bounded_gauge_unit.jl",
             "generator_schema_migration_unit.jl",
             "vasp_paw_spn_unit.jl",
             "wannierization_frozen_initializer_unit.jl",
-            "wannierization_diagnostic_export_unit.jl",
+            "wannierization_standard_export_unit.jl",
             "wannier_operator_profiles_unit.jl",
+            "operator_task_selection_unit.jl",
             "tb_symmetry_qualification_unit.jl",
+            "ordinary_posthoc_tb_qualification_unit.jl",
             "photon_drag_blas_unit.jl",
             "frequency_contraction_prototype_unit.jl",
             "response_exact_optimization_unit.jl",
@@ -224,6 +238,7 @@ const MPI_GATE_NAMES =
     ("two-rank MPI smoke", "response symmetry MPI size 1", "response symmetry MPI size 2")
 
 const MPI_TEST_FILES = (
+    "linear_orbital_parallel_unit.jl",
     "mdrs_runtime_mpi_unit.jl",
     "wannierization_raw_z_mpi_unit.jl",
     "wannierization_u_localization_mpi_unit.jl",
@@ -234,6 +249,7 @@ const MPI_TEST_FILES = (
 
 const MPI_BASELINE_ENTRIES = (
     MPI_GATE_NAMES...,
+    "linear_orbital_parallel_unit.jl",
     "mdrs_runtime_mpi_unit.jl",
     "wannierization_raw_z_mpi_unit.jl",
     "wannierization_u_localization_mpi_unit.jl",
@@ -242,9 +258,10 @@ const MPI_BASELINE_ENTRIES = (
     "band_structure_unit.jl#mpi-only",
 )
 
-const FAST_LIST_SHA256 = "f8256aca1487c61473430efecbe1e572022d0a9179cb78e81f0d08777bfd41e5"
-const FULL_LIST_SHA256 = "4565dd47d952c8ce4cb385d77447cb788d7798172d60a1e704b7b14d1ae98aa1"
-const MPI_LIST_SHA256 = "4cfe73e43406ac956b5f77cd055bc9d0420c8df042db2986fb13a8a4b48801f1"
+# Candidate adds bounded preparation and ordinary post-hoc regression coverage.
+const FAST_LIST_SHA256 = "1e889e455888a3ee7ec9442066025fbe566fc58555bb1883098b10e1b764b288"
+const FULL_LIST_SHA256 = "aa9491ed108cdcd8fe20d021357a184ff4d3766aef52b7bbbccefb962dd1154a"
+const MPI_LIST_SHA256 = "2908a528817879ee971f6b502ec9f0f810be2d091ee23bd5f828b59914648752"
 const FULL_MODE_SCOPED_SHA256 = "233ed635f1334414a9c39ce6f8c45379550f3ca81037ea5cd7ed48eb4e2ee62c"
 
 struct TestSelection
@@ -315,9 +332,10 @@ function validate_ci_test_plan()
         error("Full shard union differs from the frozen Full-only inventory.")
 
     _list_digest(FAST_TEST_FILES) == FAST_LIST_SHA256 ||
-        error("Fast test inventory differs from the pre-sharding baseline.")
-    _list_digest(FULL_ONLY_TEST_FILES) == FULL_LIST_SHA256 ||
-        error("Full-only inventory differs from the pre-sharding baseline.")
+        error("Fast test inventory differs from the preparation-extended candidate baseline.")
+    _list_digest(FULL_ONLY_TEST_FILES) == FULL_LIST_SHA256 || error(
+        "Full-only inventory differs from the ordinary-diagnostic and disk-bounded candidate baseline.",
+    )
     _list_digest(MPI_BASELINE_ENTRIES) == MPI_LIST_SHA256 ||
         error("MPI-only inventory differs from the pre-optimization baseline.")
     _list_digest(FULL_MODE_SCOPED_BASELINE) == FULL_MODE_SCOPED_SHA256 ||

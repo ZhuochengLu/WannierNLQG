@@ -47,7 +47,7 @@ function symmetrized_periodic_representation(fixture, policy::Symbol, gauge_sha2
             "discrete_hamiltonian_correction" => "far_band_covariance_correction",
         ),
     )
-    policy == :diagnostic &&
+    policy == :standard &&
         (fixture.basis.blocks[1].positions_fractional[1, 1] = 1.0e-7)
     representation = WannierNLQG.SymmetryFoundation.BandRepresentation(
         r.schema_version,
@@ -105,7 +105,7 @@ function symmetrized_periodic_config(
         disentanglement_max_steps = 20,
         localization_max_steps = 20,
         disentanglement_limit_policy =
-            policy == :diagnostic ? :diagnostic_continue : :strict_hold,
+            policy == :standard ? :standard_continue : :strict_hold,
     )
     checkpoint = joinpath(
         directory,
@@ -147,7 +147,7 @@ end
         include(setup_file)
 
         periodic_hashes = Dict{Symbol, String}()
-        for policy in (:strict, :diagnostic)
+        for policy in (:strict, :standard)
             periodic = joinpath(directory, "periodic-$(policy).h5")
             capture = function (snapshot, args...)
                 snapshot.iteration == 10 && cp(
@@ -178,10 +178,10 @@ end
             @test prior.input_summary["qualification_scope"] == "target_subspace"
             @test prior.input_summary["parent_audit_policy"] == "audit_only"
             @test prior.input_summary["auxiliary_parent_qualification"] == "audit_only"
-            @test prior.input_summary["production_eligible"] == "false"
+            @test prior.input_summary["wannierization_eligibility_production_eligible"] == "false"
             @test prior.input_summary["global_production_eligible"] == "false"
-            @test prior.input_summary["manual_review_required"] == string(policy == :diagnostic)
-            if policy == :diagnostic
+            @test prior.input_summary["quality_review_recommended"] == "true"
+            if policy == :standard
                 @test prior.input_summary["construction_quality_failed"] == "true"
                 @test any(
                     diagnostic ->
@@ -200,7 +200,7 @@ using Test
 include(ARGS[1])
 W = WannierNLQG.Wannierization
 @testset "Fresh symmetrized interval-10 periodic readback and resume" begin
-    for policy in (:strict, :diagnostic)
+    for policy in (:strict, :standard)
         prior_path = joinpath(ARGS[2], "periodic-$(policy).h5")
         prior = W.read_wannierization_checkpoint_hdf5(prior_path)
         full = W.read_wannierization_checkpoint_hdf5(
@@ -233,9 +233,9 @@ println("FRESH_SYMMETRIZED_INTERVAL10_PERIODIC_RESTART_PASS")
                   digest
         end
 
-        diagnostic_periodic = joinpath(directory, "periodic-diagnostic.h5")
+        standard_periodic = joinpath(directory, "periodic-standard.h5")
         missing_summary = joinpath(directory, "periodic-diagnostic-missing-summary.h5")
-        cp(diagnostic_periodic, missing_summary)
+        cp(standard_periodic, missing_summary)
         HDF5.h5open(missing_summary, "r+") do handle
             HDF5.delete_attribute(handle["input_summary"], "auxiliary_parent_qualification")
         end
@@ -251,7 +251,7 @@ println("FRESH_SYMMETRIZED_INTERVAL10_PERIODIC_RESTART_PASS")
         )
 
         tampered_root = joinpath(directory, "periodic-diagnostic-tampered-root.h5")
-        cp(diagnostic_periodic, tampered_root)
+        cp(standard_periodic, tampered_root)
         HDF5.h5open(tampered_root, "r+") do handle
             HDF5.delete_attribute(handle, "auxiliary_parent_qualification")
             HDF5.attributes(handle)["auxiliary_parent_qualification"] = "legacy_hard_gate"

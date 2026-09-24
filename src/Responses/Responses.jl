@@ -4,6 +4,20 @@ using LinearAlgebra
 using ..Core
 using ..MatrixElements
 
+include("Shared/ResponseOccupations.jl")
+include("LinearTransport/LinearTransport.jl")
+using .LinearTransport: linear_transport_response
+include("LinearOpticalResponse/LinearOpticalResponse.jl")
+using .LinearOpticalResponse: linear_optical_response, model_dielectric_response
+include("OrbitalMagnetization/OrbitalMagnetization.jl")
+using .OrbitalMagnetization: orbital_magnetization_response
+export linear_transport_response,
+    linear_optical_response,
+    model_dielectric_response,
+    orbital_magnetization_response,
+    OrbitalCompletion,
+    finite_model_orbital_completion
+
 include("Shared/ResponseFrequencyContraction.jl")
 include("Shared/ResponseWorkspaces.jl")
 include("Shared/ResponseKernelHelpers.jl")
@@ -11,6 +25,7 @@ include("Shared/ResponseSymmetry.jl")
 include("Shared/GeometricLoopCovariantKernels.jl")
 
 include("ShiftCurrent/ConventionalShiftCurrent.jl")
+include("SecondHarmonicGeneration/SecondHarmonicKernels.jl")
 include("ShiftCurrent/ProjectorShiftCurrent.jl")
 include("ShiftCurrent/GeometricLoopShiftCurrent.jl")
 include("Shared/LoopCurrentSharedKernels.jl")
@@ -31,7 +46,10 @@ include("QuantumGeometry/WilsonLoopQuantumGeometry.jl")
 include("QuantumGeometry/GeometricLoopShiftVector.jl")
 include("QuantumGeometry/WilsonLoopShiftVector.jl")
 
-export ConventionalQuantumGeometryWorkspace,
+export SECOND_HARMONIC_TERMS,
+    SECOND_HARMONIC_COMPONENTS,
+    second_harmonic_response!,
+    ConventionalQuantumGeometryWorkspace,
     GeometricLoopResponseWorkspace,
     PhotonDragInjectionCurrentConventionalWorkspace,
     ProjectorResponseWorkspace,

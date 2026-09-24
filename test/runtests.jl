@@ -205,7 +205,7 @@ const PRE_SHARD_FULL_ONLY_TEST_FILES = (
     "generator_schema_migration_unit.jl",
     "vasp_paw_spn_unit.jl",
     "wannierization_frozen_initializer_unit.jl",
-    "wannierization_diagnostic_export_unit.jl",
+    "wannierization_standard_export_unit.jl",
     "wannier_operator_profiles_unit.jl",
     "tb_symmetry_qualification_unit.jl",
     "photon_drag_blas_unit.jl",
@@ -222,10 +222,33 @@ const PRE_SHARD_FULL_ONLY_TEST_FILES = (
     "star_covariant_paw_gauge_thread_determinism_unit.jl",
 )
 
-PRE_SHARD_FAST_TEST_FILES == CITestPlan.FAST_TEST_FILES ||
-    error("Fast test plan no longer matches the frozen pre-sharding inventory.")
-PRE_SHARD_FULL_ONLY_TEST_FILES == CITestPlan.FULL_ONLY_TEST_FILES ||
-    error("Full-only test plan no longer matches the frozen pre-sharding inventory.")
+(
+    "preparation_storage_unit.jl",
+    "second_harmonic_unit.jl",
+    "linear_orbital_response_unit.jl",
+    "linear_orbital_runtime_unit.jl",
+    PRE_SHARD_FAST_TEST_FILES...,
+) == CITestPlan.FAST_TEST_FILES || error(
+    "Fast test plan must retain the frozen inventory and add SHG and bounded preparation contracts.",
+)
+(
+    "ordinary_posthoc_tb_qualification_unit.jl" in CITestPlan.FULL_ONLY_TEST_FILES &&
+    "disk_bounded_gauge_unit.jl" in CITestPlan.FULL_ONLY_TEST_FILES &&
+    filter(
+        name -> !(
+            name in (
+                "ordinary_posthoc_tb_qualification_unit.jl",
+                "disk_bounded_gauge_unit.jl",
+                "fermi_vector_contract_unit.jl",
+                "linear_orbital_parallel_unit.jl",
+                "operator_task_selection_unit.jl",
+            )
+        ),
+        CITestPlan.FULL_ONLY_TEST_FILES,
+    ) == PRE_SHARD_FULL_ONLY_TEST_FILES
+) || error(
+    "Full-only test plan must preserve the frozen inventory and add vector response, parallel response, operator-task, ordinary post-hoc, and disk-bounded gauge contracts.",
+)
 
 if RUN_FAST_TESTS
     foreach(include_test_file, CITestPlan.FAST_TEST_FILES)

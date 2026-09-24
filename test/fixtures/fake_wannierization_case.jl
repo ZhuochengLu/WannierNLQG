@@ -36,7 +36,7 @@ open(joinpath(run_root, "status.json"), "w") do io
         Dict(
             "case" => case_name,
             "solver_status" => "FAKE_COMPLETE",
-            "diagnostic_classification" => "CONVERGED",
+            "model_availability" => "CONVERGED",
             "completed" => true,
             "tb_available" => false,
             "production_eligible" => false,

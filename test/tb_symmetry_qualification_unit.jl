@@ -247,8 +247,8 @@ function tbq_result(status, qualification, bundle)
         "physics_qualification" => "QUALIFIED",
         "band_validation_pass" => "true",
         "z_seal_class" => "CONVERGED",
-        "qualified_z_seal" => "true",
-        "standard_tb_export_eligible" => "true",
+        "wannierization_eligibility_strictly_converged_z_seal" => "true",
+        "wannierization_eligibility_export_eligible" => "true",
         "convergence_tolerance" => "1.0e-9",
         "tb_symmetry_qualification" => qualification.overall,
         "authoritative_hamiltonian" => "native_dft",
@@ -347,10 +347,7 @@ end
         catch exception
             sprint(showerror, exception)
         end
-        @test occursin(
-            "UNSUPPORTED_LEGACY_TARGET_LEAKAGE_SEMANTICS",
-            something(legacy_bundle_error, ""),
-        )
+        @test occursin("operator-bundle migration required", something(legacy_bundle_error, ""))
         tampered_target_bundle =
             joinpath(directory, "tampered-target-threshold.wannierization-tb.h5")
         cp(target.bundle, tampered_target_bundle)
@@ -621,7 +618,7 @@ end
         exact_manifest = TBQ_IO.read_real_space_operator_bundle_manifest(exact.bundle)
         @test exact_manifest.checkpoint_sha256 == checkpoint_digest
         HDF5.h5open(checkpoint, "r") do handle
-            @test String(read(HDF5.attributes(handle)["schema_version"])) == "1.0"
+            @test String(read(HDF5.attributes(handle)["schema_version"])) == "1.2"
             @test String(read(HDF5.attributes(handle)["checkpoint_sha256"])) == checkpoint_digest
             @test String(
                 read(HDF5.attributes(handle["tb_symmetry_qualification"])["payload_sha256"]),
@@ -635,18 +632,18 @@ end
 
         legacy = joinpath(directory, "legacy-2.4.wannierization.h5")
         cp(checkpoint, legacy)
-        persisted_converged = Base.invokelatest(solver._checkpoint_persisted_result, converged)
-        legacy_digest =
-            Base.invokelatest(solver._wannierization_checkpoint_sha256_v2_4, persisted_converged)
         HDF5.h5open(legacy, "r+") do handle
             HDF5.delete_attribute(handle, "schema_version")
             HDF5.attributes(handle)["schema_version"] = "2.4"
-            HDF5.delete_attribute(handle, "checkpoint_sha256")
-            HDF5.attributes(handle)["checkpoint_sha256"] = legacy_digest
         end
-        legacy_restored = TBQ_W.read_wannierization_checkpoint_hdf5(legacy)
-        @test legacy_restored.tb_symmetry_qualification.overall == "NOT_RUN"
-        @test legacy_restored.tb_symmetry_qualification.reason == "LEGACY_SCHEMA_FIELD_ABSENT"
+        legacy_error = try
+            TBQ_W.read_wannierization_checkpoint_hdf5(legacy)
+            nothing
+        catch caught
+            caught
+        end
+        @test legacy_error isa ArgumentError
+        @test occursin("CHECKPOINT_MIGRATION_REQUIRED", sprint(showerror, legacy_error))
 
         log_buffer = IOBuffer()
         config = TBQ_W.SymmetryAdaptedWannierizationConfig(
@@ -676,7 +673,7 @@ end
         log_text = String(take!(log_buffer))
         @test occursin("[SOLVER PROJECTOR COVARIANCE]", log_text)
         @test occursin("[REPRESENTATION AND GROUP-LAW DIAGNOSTICS]", log_text)
-        @test occursin("FINAL TB SYMMETRY QUALIFICATION (diagnostic model)", log_text)
+        @test occursin("FINAL TB SYMMETRY QUALIFICATION (standard model)", log_text)
         @test occursin(qualification.payload_sha256, log_text)
     end
 end

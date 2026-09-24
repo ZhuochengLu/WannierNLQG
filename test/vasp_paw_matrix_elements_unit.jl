@@ -1,5 +1,7 @@
+using HDF5
 using LinearAlgebra
 using SHA
+using Serialization
 using Test
 
 const PAW_WANNIERIZATION = WannierNLQG.Wannierization
@@ -60,31 +62,8 @@ if !isdefined(Main, :modified_vasp_wannierization_config)
     end
 end
 
-function synthetic_potcar_block(element::AbstractString; q0::Float64 = 0.01)
-    reciprocal = join(fill("0.1", 100), " ")
-    return """
-PAW_PBE $(element) 01Jan2000
-2.0 tail
-Non local Part
-0 0 0
-Reciprocal Space Part
-$(reciprocal)
-Real Space Part
-0.1 0.1 0.1
-PAW radial sets
-augmentation charges (non sperical)
-$(q0)
-uccopancies in atom
-grid
-0.1 0.2 0.4
-aepotential
-pseudo wavefunction
-0.10 0.20 0.30
-ae wavefunction
-0.12 0.22 0.32
-End of Dataset
-"""
-end
+isdefined(@__MODULE__, :synthetic_potcar_block) ||
+    include(joinpath(@__DIR__, "VASPNativeTestSupport.jl"))
 
 @testset "VASP PAW typed sources and fail-stop contracts" begin
     extension = first(PAW_WANNIERIZATION._load_wannierization_extension!()).PAWMatrixElements
@@ -1023,6 +1002,262 @@ end
         end
         @test normalization_error isa ArgumentError
         @test occursin("VASP_PAW_RAW_COEFFICIENTS_REQUIRED", sprint(showerror, normalization_error))
+        points = [
+            WannierNLQG.SymmetryFoundation.PlaneWaveKPoint(
+                [0.5*(k-1), 0.0, 0.0],
+                [0 0 0; 1 0 0],
+                reshape(ComplexF64[1.0 0.1im; 0.2 1.5+k/10], 2, 2, 1),
+                [-1.0, 1.0];
+                normalize_coefficients = false,
+            ) for k in 1:2
+        ]
+        visits = zeros(Int, 2)
+        provider =
+            PAW_IO.preparation_source_vector(WannierNLQG.SymmetryFoundation.PlaneWaveKPoint, 2) do k
+                visits[k] += 1
+                points[k]
+            end
+        norm_native = WannierNLQG.SymmetryFoundation.NativeWavefunctionData(
+            :vasp,
+            normalized_native.structure,
+            normalized_native.reciprocal_lattice,
+            (2, 1, 1),
+            false,
+            provider,
+            normalized_native.input_sha256,
+            Dict("coefficient_normalization" => "vasp_raw"),
+        )
+        projectors = [reshape(ComplexF64[0.3, 0.7im], 2, 1, 1) for _ in 1:2]
+        mask = BitMatrix([true true; false false])
+        parent_result = Base.invokelatest(
+            extension._paw_generalized_norm_residuals,
+            norm_native,
+            one_atom_paw,
+            projectors,
+        )
+        target_result = Base.invokelatest(
+            extension._paw_generalized_norm_residuals,
+            norm_native,
+            one_atom_paw,
+            projectors,
+            mask,
+        )
+        visits .= 0
+        combined = Base.invokelatest(
+            extension._paw_generalized_norm_scopes,
+            norm_native,
+            one_atom_paw,
+            projectors,
+            (nothing, mask),
+        )
+        @test combined == (parent_result, target_result)
+        @test parent_result[1] > target_result[1]
+        @test visits == [1, 1]
+        S = WannierNLQG.SymmetryFoundation
+        implicit_source =
+            S.VASPWavefunctionSource("POSCAR", "WAVECAR"; potcar_file = one_element_potcar)
+        explicit_source = S.VASPWavefunctionSource(
+            "POSCAR",
+            "WAVECAR";
+            potcar_file = one_element_potcar,
+            band_range = 1:2,
+            spinor = false,
+        )
+        shifted_source = S.VASPWavefunctionSource(
+            "POSCAR",
+            "WAVECAR";
+            potcar_file = one_element_potcar,
+            band_range = 2:3,
+            spinor = false,
+        )
+        implicit_key = Base.invokelatest(
+            extension._vasp_raw_context_identity,
+            implicit_source,
+            norm_native,
+            norm_native.input_sha256,
+        )
+        @test implicit_key == Base.invokelatest(
+            extension._vasp_raw_context_identity,
+            explicit_source,
+            norm_native,
+            norm_native.input_sha256,
+        )
+        @test implicit_key != Base.invokelatest(
+            extension._vasp_raw_context_identity,
+            shifted_source,
+            norm_native,
+            norm_native.input_sha256,
+        )
+        @test implicit_key != Base.invokelatest(
+            extension._vasp_raw_context_identity,
+            explicit_source,
+            norm_native,
+            Dict("fixture" => repeat("1", 64)),
+        )
+        scope_poscar = joinpath(directory, "scope.POSCAR")
+        scope_wavecar = joinpath(directory, "scope.WAVECAR")
+        write(scope_poscar, "identity-only scope fixture")
+        write(scope_wavecar, "identity-only coefficient fixture")
+        scope_source =
+            S.VASPWavefunctionSource(scope_poscar, scope_wavecar; potcar_file = one_element_potcar)
+        scope_builds = Ref(0)
+        scope_run = () -> PAW_IO.cached_preparation_artifact("scope-probe", () -> "payload") do
+            scope_builds[] += 1
+            [1.0, 2.0]
+        end
+        @test Base.invokelatest(
+            extension._with_vasp_operator_artifacts,
+            scope_run,
+            scope_source,
+            directory,
+        ) == [1.0, 2.0]
+        @test Base.invokelatest(
+            extension._with_vasp_operator_artifacts,
+            scope_run,
+            scope_source,
+            directory,
+        ) == [1.0, 2.0]
+        @test scope_builds[] == 1
+        @test isdir(joinpath(directory, ".wannier_preparation", "vasp"))
+        @test get(task_local_storage(), :wannier_preparation_artifact_cache, nothing) === nothing
+        dense_execution =
+            PAW_WANNIERIZATION.WavefunctionPreparationExecutionConfig(mode = :dense_reference)
+        @test Base.invokelatest(
+            extension._with_vasp_operator_artifacts,
+            () -> get(task_local_storage(), :wannier_preparation_artifact_cache, nothing),
+            scope_source,
+            directory;
+            execution = dense_execution,
+        ) === nothing
+        PAW_IO.with_preparation_artifact_cache(joinpath(directory, "outer-cache"), "outer") do
+            outer = get(task_local_storage(), :wannier_preparation_artifact_cache, nothing)
+            @test outer !== nothing
+            for settings in (
+                dense_execution,
+                PAW_WANNIERIZATION.WavefunctionPreparationExecutionConfig(resume = false),
+            )
+                @test Base.invokelatest(
+                    extension._with_vasp_operator_artifacts,
+                    () -> get(task_local_storage(), :wannier_preparation_artifact_cache, nothing),
+                    scope_source,
+                    directory;
+                    execution = settings,
+                ) === nothing
+                @test get(task_local_storage(), :wannier_preparation_artifact_cache, nothing) ===
+                      outer
+                @test_throws ErrorException Base.invokelatest(
+                    extension._with_vasp_operator_artifacts,
+                    () -> error("intentional baseline failure"),
+                    scope_source,
+                    directory;
+                    execution = settings,
+                )
+                @test get(task_local_storage(), :wannier_preparation_artifact_cache, nothing) ===
+                      outer
+            end
+            @test Base.invokelatest(
+                extension._with_vasp_operator_artifacts,
+                () -> get(task_local_storage(), :wannier_preparation_artifact_cache, nothing),
+                scope_source,
+                directory,
+            ) === outer
+        end
+        cache_directory = joinpath(directory, "shared-raw-paw")
+        builds = Ref(0)
+        cold = PAW_IO.with_preparation_artifact_cache(cache_directory, "vasp-context-test") do
+            Base.invokelatest(
+                extension._vasp_compact_paw_context,
+                () -> (builds[] += 1; one_atom_paw),
+                norm_native,
+                "same-native-input",
+            )
+        end
+        visits .= 0
+        warm = PAW_IO.with_preparation_artifact_cache(cache_directory, "vasp-context-test") do
+            Base.invokelatest(
+                extension._vasp_compact_paw_context,
+                () -> error("cached PAW parser reentered"),
+                norm_native,
+                "same-native-input",
+            )
+        end
+        @test builds[] == 1
+        @test visits == [0, 0]
+        @test cold.projectors == warm.projectors
+        @test cold.generalized_norm == warm.generalized_norm
+        @test cold.generalized_norm_worst == warm.generalized_norm_worst
+        @test cold.radial_q_maximum == warm.radial_q_maximum
+        @test cold.paw.q0_augmentation == warm.paw.q0_augmentation
+        fresh_input = joinpath(directory, "fresh-context-input.bin")
+        expected = (;
+            projectors = cold.projectors,
+            q0 = cold.paw.q0_augmentation,
+            norm = cold.generalized_norm,
+            norm_worst = cold.generalized_norm_worst,
+            radial = cold.radial_q_maximum,
+            radial_worst = cold.radial_q_worst,
+        )
+        open(fresh_input, "w") do stream
+            Serialization.serialize(
+                stream,
+                (;
+                    norm_native.structure,
+                    norm_native.reciprocal_lattice,
+                    norm_native.input_sha256,
+                    norm_native.source_metadata,
+                    coordinates = [point.k_fractional for point in points],
+                    energies = [point.energies_ev for point in points],
+                    expected,
+                ),
+            )
+        end
+        fresh_script = joinpath(directory, "fresh-context-read.jl")
+        write(
+            fresh_script,
+            raw"""
+using WannierNLQG, Serialization, SHA
+S = WannierNLQG.SymmetryFoundation
+storage = WannierNLQG.IO
+extension = first(WannierNLQG.Wannierization._load_wannierization_extension!()).PAWMatrixElements
+input = open(Serialization.deserialize, ARGS[1])
+provider = storage.preparation_source_vector(_ -> error("fresh recovery read coefficients"), S.PlaneWaveKPoint, 2)
+indexed = S.IndexedPlaneWavePoints(provider, input.coordinates, input.energies, 2, 1)
+native = S.NativeWavefunctionData(:vasp, input.structure, input.reciprocal_lattice,
+    (2, 1, 1), false, indexed, input.input_sha256, input.source_metadata)
+value = storage.with_preparation_artifact_cache(ARGS[2], "vasp-context-test") do
+    extension._vasp_compact_paw_context(() -> error("fresh recovery parsed PAW"), native, "same-native-input")
+end
+actual = (; projectors = value.projectors, q0 = value.paw.q0_augmentation,
+    norm = value.generalized_norm, norm_worst = value.generalized_norm_worst,
+    radial = value.radial_q_maximum, radial_worst = value.radial_q_worst)
+@assert actual == input.expected
+function scientific_digest(data)
+    stream = IOBuffer()
+    for matrix in data.projectors
+        write(stream, vec(matrix))
+    end
+    write(stream, vec(data.q0))
+    write(stream, [data.norm, data.radial])
+    write(stream, collect(data.norm_worst))
+    return bytes2hex(SHA.sha256(take!(stream)))
+end
+@assert scientific_digest(actual) == scientific_digest(input.expected)
+println("FRESH_VASP_CONTEXT_PASS ", scientific_digest(actual))
+""",
+        )
+        fresh_output = read(
+            `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(@__DIR__)) $(fresh_script) $(fresh_input) $(cache_directory)`,
+            String,
+        )
+        print(fresh_output)
+        @test occursin(r"FRESH_VASP_CONTEXT_PASS [0-9a-f]{64}", fresh_output)
+        @test_throws ArgumentError Base.invokelatest(
+            extension._paw_generalized_norm_scopes,
+            norm_native,
+            one_atom_paw,
+            projectors,
+            (falses(3, 2),),
+        )
     end
 end
 
@@ -1041,4 +1276,149 @@ end
     end
     @test failure isa ArgumentError
     @test occursin("VASP_PAW_AMN_REQUIRED", sprint(showerror, failure))
+end
+
+@testset "Native VASP main matrix resolver restores bound full acceptance" begin
+    isdefined(@__MODULE__, :write_bounded_vasp_fixture) ||
+        include(joinpath(@__DIR__, "VASPNativeTestSupport.jl"))
+    using JSON3
+    workflow = first(PAW_WANNIERIZATION._load_wannierization_extension!()).WorkflowOrchestration
+    mktempdir() do directory
+        poscar, wavecar, _ = write_bounded_vasp_fixture(directory, 2, ComplexF64)
+        potcar = joinpath(directory, "POTCAR")
+        write(
+            potcar,
+            replace(synthetic_potcar_block("X"; q0 = 0.0), "0.12 0.22 0.32" => "0.10 0.20 0.30"),
+        )
+        open(wavecar, "r+") do stream
+            for k in 1:2, band in 1:2
+                coefficients = zeros(ComplexF64, 2k)
+                coefficients[1 + (band - 1) * k] = 1
+                seek(stream, 512 * (2 + (k - 1) * 3 + band))
+                write(stream, coefficients)
+            end
+        end
+        incar = joinpath(directory, "INCAR")
+        write(incar, "LNONCOLLINEAR = .TRUE.\nSAXIS = 0 0 1\n")
+        outcar = joinpath(directory, "OUTCAR")
+        write(
+            outcar,
+            """
+ vasp.6.3.0 synthetic
+ NKPTS = 2 k-points in BZ NBANDS= 2
+ ENCUT = 5.000 eV
+ direct lattice vectors                 reciprocal lattice vectors
+ 5.0 0.0 0.0 0.2 0.0 0.0
+ 0.0 5.0 0.0 0.0 0.2 0.0
+ 0.0 0.0 5.0 0.0 0.0 0.2
+ LOCPROJ orbitals
+ 1 0 1 1.890 0 0 0 1 0 0 0 0 1 1 0 0 1
+ 1 0 1 1.890 0 0 0 1 0 0 0 0 1 2 0 0 1
+ Computing AMN
+""",
+        )
+        source = WannierNLQG.SymmetryFoundation.VASPWavefunctionSource(
+            poscar,
+            wavecar;
+            potcar_file = potcar,
+            incar_file = incar,
+            outcar_file = outcar,
+            band_range = 1:2,
+            spinor = true,
+            spin_basis_saxis = (0.0, 0.0, 1.0),
+            include_time_reversal = false,
+        )
+        topology = joinpath(directory, "topology.mmn")
+        PAW_IO.write_wannier_mmn(
+            topology,
+            PAW_IO.WannierMMN(
+                2,
+                2,
+                1,
+                zeros(ComplexF64, 2, 2, 1, 2),
+                reshape([1, 2], 1, 2),
+                zeros(Int, 3, 1, 2),
+            ),
+        )
+        win = joinpath(directory, "model.win")
+        write(
+            win,
+            "num_wann=2\nspinors=true\nmp_grid=2 1 1\nbegin unit_cell_cart\n5 0 0\n0 5 0\n0 0 5\nend unit_cell_cart\nbegin atoms_frac\nX 0 0 0\nend atoms_frac\nbegin kpoints\n0 0 0\n0.5 0 0\nend kpoints\nbegin projections\nX:s\nend projections\n",
+        )
+        eig = joinpath(directory, "model.eig")
+        write(eig, "1 1 -1\n2 1 1\n1 2 -1\n2 2 1\n")
+        basis = workflow.build_wannier_projection_basis(win)
+        config = modified_vasp_wannierization_config(
+            synthetic_vasp_wannierization_fixture().config;
+            source,
+            projection_basis = basis,
+            num_wannier = 2,
+            win_file = win,
+            eig_file = eig,
+            mmn_file = topology,
+            construction_policy = :standard,
+            initialization = :amn,
+            matrix_elements = PAW_WANNIERIZATION.NativeVASPPAWMatrices(
+                topology;
+                artifact_dir = joinpath(directory, "matrices"),
+                require_oracle = false,
+            ),
+        )
+        original = workflow._resolve_wannier_matrix_elements(config, basis)
+        @test original.paw_result isa PAW_WANNIERIZATION.VASPPAWMatrixElementResult
+        reference = original.accepted_matrix_reference
+        accepted =
+            (input_summary = Dict("native_matrix_acceptance_json" => JSON3.write(reference)),)
+        restored = workflow._resolve_wannier_matrix_elements(
+            config,
+            basis;
+            accepted_result = accepted,
+            generator = (_, _) -> error("VASP_MATRIX_REGENERATION_FORBIDDEN"),
+            implementation_catalog = () -> error("CONSUMER_SOURCE_SCAN_FORBIDDEN"),
+        )
+        @test restored.mmn.data == original.mmn.data
+        @test restored.amn == original.amn
+        @test restored.paw_result.solver_amn.data == original.paw_result.solver_amn.data
+        @test restored.paw_result.diagnostics == original.paw_result.diagnostics
+        @test restored.paw_result.passed == original.paw_result.passed
+        @test restored.paw_result.input_sha256 == original.paw_result.input_sha256
+        @test restored.accepted_matrix_reference == reference
+        payload = joinpath(directory, "context.bin")
+        open(io -> serialize(io, (config, basis, accepted)), payload, "w")
+        code = "using WannierNLQG,HDF5,EzXML,Spglib,Serialization,JSON3; W=WannierNLQG.Wannierization; E=first(W._load_wannierization_extension!()).WorkflowOrchestration; config,basis,accepted=open(deserialize,ARGS[1]); result=E._resolve_wannier_matrix_elements(config,basis;accepted_result=accepted,generator=(_,_) -> error(\"VASP_REBUILD_FORBIDDEN\"),implementation_catalog=() -> error(\"SOURCE_SCAN_FORBIDDEN\")); @assert result.paw_result isa W.VASPPAWMatrixElementResult; @assert result.mmn.data==WannierNLQG.IO.read_wannier_mmn(result.mmn_file).data; @assert result.amn==WannierNLQG.IO.read_wannier_amn(result.amn_file).data; println(\"FRESH_NATIVE_VASP_ACCEPTANCE_PASS\")"
+        command =
+            `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(@__DIR__)) -e $code $payload`
+        @test occursin("FRESH_NATIVE_VASP_ACCEPTANCE_PASS", read(command, String))
+        # This optional artifact is inactive for ordinary computation, but a declared
+        # dependency must still be content-bound by the shared native resolver.
+        gauge_dependency = joinpath(directory, "declared-gauge.h5")
+        HDF5.h5open(gauge_dependency, "w") do handle
+            handle["identity_fixture"] = [1]
+        end
+        bound_config =
+            modified_vasp_wannierization_config(config; wavefunction_gauge_hdf5 = gauge_dependency)
+        bound = workflow._resolve_wannier_matrix_elements(bound_config, basis)
+        bound_acceptance = (
+            input_summary = Dict(
+                "native_matrix_acceptance_json" => JSON3.write(bound.accepted_matrix_reference),
+            ),
+        )
+        HDF5.h5open(gauge_dependency, "r+") do handle
+            handle["identity_fixture"][:] = [2]
+        end
+        mismatch = try
+            workflow._resolve_wannier_matrix_elements(
+                bound_config,
+                basis;
+                accepted_result = bound_acceptance,
+                generator = (_, _) -> error("REGENERATION_FORBIDDEN"),
+                implementation_catalog = () -> error("SOURCE_SCAN_FORBIDDEN"),
+            )
+            nothing
+        catch exception
+            exception
+        end
+        @test mismatch isa ArgumentError
+        @test occursin("ACCEPTED_MATRIX_REFERENCE_INPUT_MISMATCH", sprint(showerror, mismatch))
+    end
 end

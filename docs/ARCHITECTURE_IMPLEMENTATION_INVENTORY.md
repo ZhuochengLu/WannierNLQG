@@ -69,6 +69,7 @@ ext/WannierNLQGWannierizationExt/WannierGaugeChainDiagnostics.jl
 ext/WannierNLQGWannierizationExt/WannierGaugeDiagnostics.jl
 ext/WannierNLQGWannierizationExt/WannierHamiltonianOperatorGeneration.jl
 ext/WannierNLQGWannierizationExt/WannierNLQGWannierizationExt.jl
+ext/WannierNLQGWannierizationExt/OperatorPublicationReuse.jl
 ext/WannierNLQGWannierizationExt/WannierUIUGeneration.jl
 ext/WannierNLQGWannierizationExt/WannierizationConfigValidation.jl
 ext/WannierNLQGWannierizationExt/WannierizationNoSymmetry.jl
@@ -146,4 +147,5 @@ src/Wannierization/models/ConfigurationsContracts.jl
 src/Wannierization/models/DiagnosticsQualification.jl
 src/Wannierization/models/OptimizerStates.jl
 src/Wannierization/models/ResultsArtifacts.jl
+src/Wannierization/models/WannierizationEligibility.jl
 ```

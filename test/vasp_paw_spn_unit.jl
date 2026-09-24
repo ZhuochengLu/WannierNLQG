@@ -1,7 +1,10 @@
 using HDF5
 using LinearAlgebra
 using SHA
+using Serialization
 using Test
+isdefined(@__MODULE__, :write_bounded_vasp_fixture) ||
+    include(joinpath(@__DIR__, "VASPNativeTestSupport.jl"))
 
 const SPN_IO = WannierNLQG.IO
 const SPN_W = WannierNLQG.Wannierization
@@ -133,6 +136,67 @@ end
     _, augmentation_nc =
         Base.invokelatest(extension._vasp_paw_spn_kpoint, point, projectors, zeros(1, 1))
     @test iszero(augmentation_nc)
+    mktempdir() do directory
+        oracle = [
+            Base.invokelatest(
+                extension._vasp_paw_spn_kpoint,
+                point,
+                projectors * k,
+                reshape([0.5], 1, 1),
+            ) for k in 1:7
+        ]
+        expected_pseudo = cat((pair[1] for pair in oracle)...; dims = 4)
+        expected_augmentation = cat((pair[2] for pair in oracle)...; dims = 4)
+        for workers in (1, 2, 4)
+            execution = SPN_W.WavefunctionPreparationExecutionConfig(
+                mode = :streaming_threads,
+                max_workers = workers,
+                checkpoint_directory = joinpath(directory, string(workers)),
+            )
+            left = zeros(ComplexF64, size(expected_pseudo))
+            right = similar(left)
+            loads = Ref(0)
+            loader = k -> (loads[] += 1; (point, projectors * k, reshape([0.5], 1, 1)))
+            Base.invokelatest(
+                extension._vasp_spn_blocks!,
+                left,
+                right,
+                loader,
+                "spin-fixture";
+                execution,
+            )
+            @test loads[] == 7
+            @test left == expected_pseudo
+            @test right == expected_augmentation
+            fill!(left, 0);
+            fill!(right, 0)
+            Base.invokelatest(
+                extension._vasp_spn_blocks!,
+                left,
+                right,
+                _ -> error("completed spin block reloaded coefficients"),
+                "spin-fixture";
+                execution,
+            )
+            @test left == expected_pseudo
+            @test right == expected_augmentation
+            damaged = joinpath(execution.checkpoint_directory, "vasp-spn", "block-3.bin")
+            open(damaged, "a") do stream
+                write(stream, UInt8(0))
+            end
+            loads[] = 0
+            Base.invokelatest(
+                extension._vasp_spn_blocks!,
+                left,
+                right,
+                loader,
+                "spin-fixture";
+                execution,
+            )
+            @test loads[] == 1
+            @test left == expected_pseudo && right == expected_augmentation
+        end
+    end
 
     scalar_point = Base.invokelatest(
         WannierNLQG.SymmetryFoundation.PlaneWaveKPoint,
@@ -191,4 +255,142 @@ end
         provenance_hdf5 = "x.h5",
         spin_channel = 2,
     )
+end
+
+@testset "VASP public SPN binary source and fresh block resume" begin
+    mktempdir() do directory
+        poscar, wavecar, _ = write_bounded_vasp_fixture(directory, 2, ComplexF64)
+        potcar = joinpath(directory, "POTCAR")
+        write(potcar, synthetic_potcar_block("X"; q0 = 0.02))
+        source = WannierNLQG.SymmetryFoundation.VASPWavefunctionSource(
+            poscar,
+            wavecar;
+            potcar_file = potcar,
+            band_range = 1:2,
+            spinor = true,
+            spin_basis_saxis = (0.0, 0.0, 1.0),
+            include_time_reversal = false,
+        )
+        execution = SPN_W.WavefunctionPreparationExecutionConfig(
+            mode = :streaming_threads,
+            max_workers = 4,
+            checkpoint_directory = joinpath(directory, "checkpoint"),
+        )
+        output = joinpath(directory, "native.spn")
+        provenance = joinpath(directory, "native.spn.h5")
+        SPN_W.generate_vasp_paw_spn(
+            source;
+            output_spn_file = output,
+            provenance_hdf5 = provenance,
+            spin_channel = 1,
+            execution,
+        )
+        original = SPN_IO.read_wannier_spn(output).data
+        digest = bytes2hex(open(SHA.sha256, output))
+        input = joinpath(directory, "resume.bin")
+        open(input, "w") do stream
+            Serialization.serialize(stream, (; source, execution, output, provenance, digest))
+        end
+        script = joinpath(directory, "resume.jl")
+        write(
+            script,
+            raw"""
+using WannierNLQG, Serialization, SHA
+WannierNLQG.Wannierization._load_wannierization_extension!()
+@eval WannierNLQG.SymmetryFoundation begin
+    function _read_vasp_coefficient_record(path, header, bands, record, spin_transform;
+        normalize_coefficients::Bool)
+        error("completed public SPN recovery decoded WAVECAR coefficients")
+    end
+end
+input = open(Serialization.deserialize, ARGS[1])
+WannierNLQG.Wannierization.generate_vasp_paw_spn(input.source;
+    output_spn_file = input.output, provenance_hdf5 = input.provenance,
+    spin_channel = 1, execution = input.execution)
+@assert bytes2hex(open(SHA.sha256, input.output)) == input.digest
+println("PUBLIC_VASP_SPN_RESUME_PASS ", input.digest)
+""",
+        )
+        resumed = read(
+            `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(@__DIR__)) $(script) $(input)`,
+            String,
+        )
+        print(resumed)
+        @test occursin("PUBLIC_VASP_SPN_RESUME_PASS", resumed)
+        @test SPN_IO.read_wannier_spn(output).data == original
+        @test bytes2hex(open(SHA.sha256, output)) == digest
+    end
+end
+
+@testset "SPN publication receipts preserve original full tensors through block references" begin
+    SPN_W._load_wannierization_extension!()
+    extension = Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).PAWMatrixElements
+    pseudo = reshape(ComplexF64.(collect(1:24) ./ 7, reverse(collect(1:24)) ./ 11), 2, 2, 3, 2)
+    augmentation = reverse(pseudo; dims = 1) ./ 13
+    total, hermiticity, diagonal, norms = extension._vasp_paw_spn_diagnostics(pseudo, augmentation)
+    for kind in (:qe, :vasp)
+        mktempdir() do directory
+            blocks = (
+                kind = kind,
+                directory = directory,
+                label = "spin",
+                contract = "exact-spin-blocks",
+                count = 2,
+            )
+            for k in 1:2
+                payload =
+                    kind == :qe ?
+                    (total[:, :, :, k], pseudo[:, :, :, k], augmentation[:, :, :, k]) :
+                    (pseudo[:, :, :, k], augmentation[:, :, :, k])
+                SPN_IO.write_preparation_checkpoint(
+                    joinpath(directory, "spin", "block-$k.bin"),
+                    "exact-spin-blocks:$k",
+                    payload,
+                )
+            end
+            spn = SPN_IO.WannierSPN(2, 2, total)
+            result =
+                kind == :qe ?
+                SPN_W.QEPAWSPNResult(
+                    spn,
+                    nothing,
+                    0.0,
+                    hermiticity,
+                    diagonal,
+                    false,
+                    "codec-fixture",
+                    Dict{String, String}(),
+                    Dict{String, String}(),
+                    ["codec-fixture"],
+                ) :
+                SPN_W.VASPPAWSPNResult(
+                    spn,
+                    nothing,
+                    0.0,
+                    0.0,
+                    hermiticity,
+                    diagonal,
+                    false,
+                    ["codec-fixture"],
+                    norms,
+                    Dict{String, String}(),
+                    Dict{String, String}(),
+                )
+            packed = extension._pack_spn_publication_result(result, (slot = Ref(blocks),))
+            @test !hasproperty(packed, :spn)
+            restored = extension._restore_spn_publication_result(packed)
+            @test maximum(abs.(restored.spn.data .- total)) == 0.0
+            @test extension._star_array_sha256(restored.spn.data) ==
+                  extension._star_array_sha256(total)
+            @test !restored.passed
+            @test restored.diagnostics == result.diagnostics
+            @test_throws ArgumentError extension._restore_spn_publication_result(
+                merge(packed, (array_sha256 = repeat("0", 64),)),
+            )
+            open(joinpath(directory, "spin", "block-1.bin"), "a") do stream
+                write(stream, "corrupted")
+            end
+            @test extension._restore_spn_publication_result(packed) === nothing
+        end
+    end
 end

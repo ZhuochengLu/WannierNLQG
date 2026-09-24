@@ -143,9 +143,9 @@ end
     parent_extension = first(TARGET_PERSISTENCE_WANNIERIZATION._load_wannierization_extension!())
     solver = parent_extension.SolverCheckpoint
     support = parent_extension.WannierizationInternalSupport
-    @test solver.WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION == "1.0"
+    @test solver.WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION == "1.2"
     @test WannierNLQG.SymmetryFoundation.band_representation_schema_version() == "1.0"
-    @test TARGET_PERSISTENCE_IO.OPERATOR_BUNDLE_SCHEMA_VERSION == "1.0"
+    @test TARGET_PERSISTENCE_IO.OPERATOR_BUNDLE_SCHEMA_VERSION == "1.1"
     @test TARGET_PERSISTENCE_WANNIERIZATION.TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION == "1.7"
 
     mktempdir() do directory
@@ -252,7 +252,7 @@ end
             solver_fixture.plan,
         )
         checkpoint_summary = Dict{String, String}(solver_result.input_summary)
-        checkpoint_summary["construction_policy"] = "diagnostic"
+        checkpoint_summary["construction_policy"] = "standard"
         push!(
             solver_result.diagnostics,
             TARGET_PERSISTENCE_WANNIERIZATION.WannierizationDiagnostic(
@@ -261,7 +261,7 @@ end
                 "Retained original quality failure";
                 context = Dict(
                     "gate_result" => "FAIL",
-                    "action" => "CONTINUE_DIAGNOSTIC",
+                    "action" => "CONTINUE_STANDARD",
                     "stage" => "preparation",
                     "value" => "6.81e-8",
                     "threshold" => "1.0e-10",
@@ -296,19 +296,19 @@ end
         )
         restored_checkpoint =
             TARGET_PERSISTENCE_WANNIERIZATION.read_wannierization_checkpoint_hdf5(checkpoint_file)
-        @test restored_checkpoint.input_summary["checkpoint_schema_version"] == "1.0"
-        @test restored_checkpoint.input_summary["construction_policy"] == "diagnostic"
+        @test restored_checkpoint.input_summary["checkpoint_schema_version"] == "1.2"
+        @test restored_checkpoint.input_summary["construction_policy"] == "standard"
         @test restored_checkpoint.input_summary["construction_policy_contract"] ==
-              "diagnostic_construction_v1"
-        @test restored_checkpoint.input_summary["manual_review_status"] == "REQUIRED"
+              "standard_construction_v1"
+        @test restored_checkpoint.input_summary["quality_review_status"] == "RECOMMENDED"
         @test last(restored_checkpoint.diagnostics).context["gate_result"] == "FAIL"
-        @test last(restored_checkpoint.diagnostics).context["action"] == "CONTINUE_DIAGNOSTIC"
+        @test last(restored_checkpoint.diagnostics).context["action"] == "CONTINUE_STANDARD"
         HDF5.h5open(checkpoint_file, "r") do handle
             @test !read(HDF5.attributes(handle)["production_eligible"])
         end
         for (label, key, value) in (
             ("policy", "construction_policy", "strict"),
-            ("review", "manual_review_status", "APPROVED"),
+            ("review", "quality_review_status", "APPROVED"),
         )
             tampered = joinpath(directory, "construction-$(label)-tampered.h5")
             cp(checkpoint_file, tampered)
@@ -326,7 +326,7 @@ end
         HDF5.h5open(stripped, "r+") do handle
             group = handle["input_summary"]
             for key in
-                ("construction_policy_contract", "construction_policy", "manual_review_status")
+                ("construction_policy_contract", "construction_policy", "quality_review_status")
                 HDF5.delete_attribute(group, key)
             end
         end
@@ -423,7 +423,7 @@ end
             sprint(showerror, exception)
         end
         @test occursin(
-            "UNSUPPORTED_LEGACY_TARGET_LEAKAGE_SEMANTICS",
+            "CHECKPOINT_MIGRATION_REQUIRED",
             something(legacy_weight_checkpoint_error, ""),
         )
 
@@ -530,7 +530,7 @@ end
             eligibility = target_eligibility,
         )
         manifest = TARGET_PERSISTENCE_IO.read_real_space_operator_bundle_manifest(bundle_file)
-        @test manifest.schema_version == "1.0"
+        @test manifest.schema_version == "1.1"
         @test manifest.parent_audit_policy == "audit_only"
         @test manifest.target_authority == "outer_window"
         @test manifest.outer_mask_sha256 == outer_digest

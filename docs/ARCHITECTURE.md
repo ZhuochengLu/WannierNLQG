@@ -72,6 +72,30 @@ backends until all performance-promotion gates pass.
 `TightBindingModel` contains Hamiltonian and position data only; optional physical
 operators are peer real-space objects in `MatrixElements`.
 
+### Shared operator task requirements
+
+`Core/OperatorTaskRequirements.jl` owns `OperatorTask`,
+`OperatorTaskRequirement`, `OPERATOR_TASK_REQUIREMENTS`, source closures and
+`resolve_operator_requirements`. Wannierization export and Runtime
+`operator_demand_plan()` consume this single registry; neither imports the other
+or maintains a parallel task-to-operator mapping. Core resolves pure deterministic
+inventories and digests without file IO. IO owns selection serialization and
+fresh-read validation; the Wannierization extension resolves actual source files,
+authority backend/digest/input hashes, and generation before writing the bundle.
+
+The resolver defaults to `orbital_input_semantics=:unspecified`, preserving the
+five-operator OAM export closure. Runtime can explicitly use
+`:defined_finite_model` to derive OAM from H/position; that specialization grants
+no five-operator export qualification.
+
+Normalized requested pairs retain `:all`; method expansion belongs to each task's
+dependency closure. Runtime MatrixElements derives internal connection, gauge
+correction and Berry connection from persisted Hamiltonian/position. Such
+capabilities must not be added to the real-space operator inventory. Source
+pruning happens before generation, while Runtime verifies operator/component
+coverage at consumption. See [the public dependency table](WANNIERIZATION.md#complete-supported-task-dependencies)
+and [the Packed contract](STORAGE_SCHEMAS.md#task-derived-packed-operator-selection).
+
 ### IO
 
 `IO` owns parsers and writers: the Wannier TB/SPN/CHK/EIG/MMN/uIu formats,
@@ -431,6 +455,7 @@ ext/WannierNLQGWannierizationExt/
 ├── WannierizationConfigValidation.jl
 ├── QuantumEspressoWavefunctions.jl
 ├── BandRepresentationBuilder.jl
+├── OperatorPublicationReuse.jl
 ├── WannierUIUGeneration.jl
 ├── WannierHamiltonianOperatorGeneration.jl
 ├── QEPAWSpinMatrixElements.jl
@@ -522,11 +547,10 @@ copy boundaries; extraction preserves numerical statement order. These files
 remain private to `SolverCheckpoint` and add no public API or component edge.
 
 `SolverCheckpoint.WannierizationRestartContract` is the immutable owner of the
-canonical trajectory representation, current digest, and every accepted legacy
-digest. Public checkpoint schema 1.0 retains the former 2.28 persisted HDF5
-fields, `input_summary` keys, scientific restart identity and legacy acceptance
-rules. Storage digest selection uses the file's recorded wire version; version-
-dependent storage digests are regenerated only when writing a new file.
+canonical trajectory representation, current digest, and historical migration
+digests. Public checkpoint schema 1.1 retains the former 2.28 persisted HDF5
+fields, `input_summary` keys, and scientific restart identity. The public reader
+rejects every other wire version before returning state.
 
 The extension is triggered only when all of `HDF5`, `JSON3`, and `EzXML` are
 present. Its loader imports those packages in that fixed order on the first
@@ -573,13 +597,13 @@ The SymmetryFoundation extension's `BandRepresentationPersistence.jl` is the
 unique band-representation wire-schema-1.0 production boundary. Non-1.0
 representations are rejected by its full, preparation, and validation-context
 readers; neither expert workflow re-exports it. A combined workflow referencing
-an old Band artifact fails explicitly even if its other formats remain readable. The default plane-wave adapters
+an old Band artifact fails explicitly even if its other formats have independent migration tools. The default plane-wave adapters
 normalize source data and delegate to the canonical coefficient-map builder;
 the expert strict adapter retains full-cutoff raw coefficients and delegates to
 `AugmentationAwareBandSewing.jl`.
-The split `hdf5/` implementation writes public checkpoint schema 1.0 with the
-complete legacy 2.28 contract; schemas 2.0--2.28 remain readable under their
-declared compatibility policy, while 2.0--2.3 are restart-semantics incompatible. Schema 2.5 binds
+The split `hdf5/` implementation writes public checkpoint schema 1.1 with the
+complete former 2.28 numerical contract; schemas 2.0--2.28 require external
+migration and are not readable by the public reader. Historical schema 2.5 bound
 the canonical final exported-TB symmetry qualification payload; schema 2.6 also
 persists Riemannian-CG history and typed Anderson/CG diagnostics. Schema 2.7
 binds the unwrapped-center MV localization-gradient contract. Schema 2.8 binds
@@ -605,7 +629,7 @@ buffer. `SymmetryCompletedQEPAWMatrixElements.jl` owns the completed-WFC direct
 MMN/AMN path and its independent rectangular-parent rotation oracle.
 `ConstraintOperationScopes.jl` derives closed subgroup
 k-stars without mutating the parent representation; non-full scopes are
-diagnostic-only and reset U/CG history. Their symmetry-expanded U frames are
+standard and reset U/CG history. Their symmetry-expanded U frames are
 conditioned-polar restored inside the sealed projector, preserving the fixed-Z
 ablation contract without touching the default full-Type-IV path.
 `WannierGaugeChainDiagnostics.jl`
@@ -626,16 +650,13 @@ the geometry contract remains strict.
 Terminal persistence distinguishes attempted, accepted, and persisted
 iterations. Every numerical termination retains only the last finite,
 invariant-valid accepted state; rejected trials remain diagnostics and never
-replace restart arrays. Packed-HDF5 schema 1.0 records the selected operator
+replace restart arrays. Packed-HDF5 schema 1.1 records the selected operator
 profile, solver convergence, Hamiltonian authority, formal source hashes,
 closure qualification, per-operator source/gauge/symmetry qualification,
 physics qualification, TB usability, and the same final-TB qualification
 payload independently. The physical-metric band-frame summary binds sealed
-PAW/USPP transforms and replay evidence. Schema-6.0 spin/full packages are
-`LEGACY_NOT_RECORDED` and diagnostic-only; schema-5.x non-spin packages likewise
-cannot be promoted to schema-1.0 formal status. Nonidentity-frame schema-6.1
-spin/full packages are `LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED`; schema-6.2
-full packages are `LEGACY_GALERKIN_RISK_CONTRACT_NOT_RECORDED`.
+PAW/USPP transforms and replay evidence. Older Packed HDF5 schemas are not read
+in process and require an external migration tool before use.
 `TightBindingConstruction.jl` remains a separate downstream
 boundary and reuses the center-aware Wigner-Seitz transform from the lower
 `MatrixElements` layer. The final SPN, spin-times-Hamiltonian, sIu, and sHu
@@ -665,8 +686,7 @@ The strict pre-polar audit keeps spectral S-reconstruction and maximum-state
 leakage distinct, splits absolute group closure from its fitted projective
 cocycle, and seals unitary eigenvalue or antiunitary-square little-group
 fingerprints per energy block. These records are bound into the current
-BandRepresentation wire schema 1.0 and public checkpoint schema 1.0 digests
-(with legacy checkpoint digest verification retained).
+BandRepresentation wire schema 1.0 and public checkpoint schema 1.1 digests.
 
 1. `VASPWavefunctions.jl` reads full-cutoff, unnormalized WAVECAR coefficients.
 2. `VASPPawData.jl` parses typed POTCAR radial channels, projectors, partial
@@ -676,7 +696,7 @@ BandRepresentation wire schema 1.0 and public checkpoint schema 1.0 digests
    three-dimensional all-electron wavefunction.
 4. `WannierMMNTopology` admits only neighbour indices and reciprocal shifts to
    native generation. Oracle values enter only post-generation qualification.
-5. A failed native parity result is diagnostic-only and fails before SAWF, TB
+5. A failed native parity result is standard and fails before SAWF, TB
    construction, or response evaluation.
 
 Native AMN additionally requires a same-run OUTCAR. A typed projection
@@ -877,15 +897,12 @@ configuration calls its general tolerance `symmetry_tolerance`. The response
 artifact writer additionally exposes `spglib_symprec_angstrom`; its compatibility
 alias `symmetry_tolerance` has the same Angstrom unit and conflicting dual values
 fail before backend dispatch. Operator HDF5 uses strict semantic writer
-schema `wanniernlqg.real-space-operators/1.0`: one packed payload with a stable
+schema `wanniernlqg.real-space-operators/1.1`: one packed payload with a stable
 component index, hashed raw-to-final geometry lifecycle, exact profile inventory,
 Hamiltonian authority, formal full-profile source/risk provenance, and
 digest-bound `/qualification/operators`, `/qualification/families/spin`, and
-`/qualification/families/finite_band_galerkin` records. Schema 5.x and
-spin-bearing schemas 6.0/6.1 remain diagnostic readback only
-when their required physical band-frame contract was not recorded;
-schema-6.2 full packages remain diagnostic when the Galerkin risk contract was
-not recorded;
+`/qualification/families/finite_band_galerkin` records. Schema 5.x and 6.x
+packages require external migration and are rejected by the public reader;
 Runtime never reapplies replica materialization.
 Wannier90 TB remains unchanged; historical response caches are not part of the
 v2 architecture.
@@ -899,8 +916,8 @@ v2 architecture.
 - `RealSpaceOperatorKind` and `RealSpaceOperator`: Core-owned stable identities,
   symmetry metadata, R support, and real-space-last array contract.
 - `OperatorBundleManifest`, `PackedCartesianOperator`, and selected component
-  views: IO-owned validated access to Packed HDF5 1.0, supported legacy 6.3 and diagnostic legacy 5.x/6.0/6.1/6.2
-  without reconstructing a
+  views: IO-owned validated access to Packed HDF5 1.1; historical 5.x/6.x files
+  require external migration and are not reconstructed as a
   durable cache.
 - `SpinRealSpaceData` and `SpinVelocityRealSpaceData`: parametric peer
   observables backed by legacy arrays or packed read-only views; neither is
@@ -944,3 +961,34 @@ quantity, conventions, mutation/return contract, normalization owner, and key
 invariants. Overload-specific comments describe only their difference. Orphaned
 top-level strings, declaration documentation separated by an assignment, and
 indented function-body docstrings are rejected by the structure gate.
+
+### Second-harmonic generation
+
+`OpticalPositionDerivatives` owns unregularized endpoint dipoles and finite-eta
+generalized derivatives. `SecondHarmonicKernels` owns the seven response terms.
+`SecondHarmonicWriters` owns numeric tables. `SecondHarmonicDriver` consumes the
+shared sampling scheduler, Fourier planner and deterministic MPI lanes.
+
+### Bounded preparation execution (candidate)
+
+`src/IO/PreparationStorage.jl` implements private, checksum-validated disk vectors and bounded source access. It uses Julia Serialization for process-version-bound workspaces; these files are not a public scientific storage format.
+
+`ext/WannierNLQGWannierizationExt/star_gauge/PreparationExecution.jl` selects dense-oracle or streaming execution, bounds the star launch frontier, owns restart contracts, and reduces diagnostics in canonical order.
+
+`ext/WannierNLQGWannierizationExt/star_gauge/StarPreparationKernel.jl` owns one star's unchanged numerical algebra. Workers return immutable scientific results and own mutable sewing caches; the coordinator writes scientific HDF5 artifacts.
+
+The default expert execution policy is streaming serial. Parallel execution remains opt-in until exact numerical parity and the measured resource/performance gates pass. The outer-window rank remains independent of the final Wannier rank.
+
+`ext/WannierNLQGWannierizationExt/OperatorPublicationReuse.jl` owns compact, input- and implementation-bound receipts for completed native operator publications. Generators validate their target and protected paths before entering this internal reuse layer. Scientific kernels and public result schemas remain owned by the generators.
+
+### First-order spectral response domains
+
+`Responses/LinearTransport/LinearTransport.jl`,
+`Responses/LinearOpticalResponse/LinearOpticalResponse.jl`, and
+`Responses/OrbitalMagnetization/OrbitalMagnetization.jl` are distinct Julia
+submodules. Their kernels share only occupation helpers and the first-order
+geometry in MatrixElements. Matrix policy requests reuse existing interpolation
+capabilities; the sixteen-capability container does not change. Optional orbital
+sources use the existing real-space operator inventory and a separate completion
+workspace. Runtime owns shared execution and static/frequency output coordination;
+IO owns serialization. See [response contracts](LINEAR_AND_ORBITAL_RESPONSES.md).

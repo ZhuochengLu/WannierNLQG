@@ -3,7 +3,7 @@ using LinearAlgebra
 using HDF5
 using WannierNLQG
 
-@testset "diagnostic projection centers preserve discrete symmetry" begin
+@testset "standard projection centers preserve discrete symmetry" begin
     projection = WannierNLQG.WannierProjection
     operation_type = WannierNLQG.SymmetryFoundation.SymmetryOperation
     identity_rotation = Matrix{Int}(I, 3, 3)
@@ -26,7 +26,7 @@ using WannierNLQG
         perturbed,
         operations,
         1.0e-8;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
         mapping_diagnostics = records,
     )
     @test indices == [1 2; 2 1]
@@ -36,26 +36,26 @@ using WannierNLQG
         reshape([0.25, 0.0, 0.0], 3, 1),
         operations,
         1.0e-8;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
     )
     singleton_records = NamedTuple[]
     projection._map_projection_centers(
         zeros(3, 1),
         operations,
         1.0e-8;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
         mapping_diagnostics = singleton_records,
     )
     @test all(record -> record.margin === nothing, singleton_records)
     @test count(record -> record.result == "FAIL", records) == 2
     @test all(record -> record.threshold == 1.0e-8, records)
     @test all(record -> record.margin > 0.0, records)
-    @test any(record -> record.action == "CONTINUE_DIAGNOSTIC", records)
+    @test any(record -> record.action == "CONTINUE_STANDARD", records)
     @test projection._map_projection_centers(
         exact,
         operations,
         1.0e-8;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
     ) == projection._map_projection_centers(
         exact,
         operations,
@@ -68,13 +68,13 @@ using WannierNLQG
         ambiguous,
         quarter,
         1.0e-8;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
     )
     @test_throws ArgumentError projection._map_projection_centers(
         fill(NaN, 3, 1),
         operations,
         1.0e-8;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
     )
     invalid_shifts = copy(shifts)
     invalid_shifts[1, 1, 2] += 1
@@ -90,7 +90,7 @@ isdefined(Main, :QEPAWMatrixElementsTestSupport) ||
     include(joinpath(@__DIR__, "QEPAWMatrixElementsTestSupport.jl"))
 using .QEPAWMatrixElementsTestSupport
 
-@testset "diagnostic PAW capsule readback retains quality and integrity" begin
+@testset "standard PAW capsule readback retains quality and integrity" begin
     W = WannierNLQG.Wannierization
     extension = first(W._load_wannierization_extension!()).PAWMatrixElements
     mktempdir() do directory
@@ -105,13 +105,13 @@ using .QEPAWMatrixElementsTestSupport
             wavefunction_gauge_backend = W.StarCovariantPAWGauge(
                 buffer_policy = W.ClosureDrivenBandBuffer(max_extra_bands = 0),
             ),
-            construction_policy = :diagnostic,
+            construction_policy = :standard,
             output_hdf5 = joinpath(directory, "diagnostic.h5"),
             target_band_count = 1,
         )
         result = W.prepare_symmetry_covariant_wavefunctions(config)
-        @test result.status == :DIAGNOSTIC_ONLY
-        path = joinpath(directory, "diagnostic.diagnostic-only.h5")
+        @test result.status == :STANDARD
+        path = joinpath(directory, "diagnostic.standard.h5")
         @test isfile(path)
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
@@ -121,14 +121,18 @@ using .QEPAWMatrixElementsTestSupport
         restored = Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             path;
-            construction_policy = :diagnostic,
+            construction_policy = :standard,
             source,
         )
-        @test restored.status == :DIAGNOSTIC_ONLY
-        @test restored.payload.source_metadata["construction_policy"] == "diagnostic"
+        @test restored.status == :STANDARD
+        @test restored.payload.source_metadata["construction_policy"] == "standard"
         @test something(restored.band_frame_contract).status == "PASS"
         HDF5.h5open(path, "r") do handle
-            @test !read(HDF5.attributes(handle)["production_eligible"])
+            attributes = HDF5.attributes(handle)
+            @test !read(attributes["production_eligible"])
+            @test String(read(attributes["status"])) == "DIAGNOSTIC_ONLY"
+            @test read(attributes["diagnostic_only"])
+            @test !haskey(attributes, "quality_review_recommended")
         end
         maxima, contexts = Dict{String, Float64}(), Dict{String, String}()
         @test !Base.invokelatest(
@@ -142,7 +146,7 @@ using .QEPAWMatrixElementsTestSupport
         )
         @test maxima["construction_synthetic_covariance_failed"] == 1.0
         @test maxima["construction_synthetic_covariance_threshold"] == 1.0e-7
-        @test contexts["construction_synthetic_covariance_failed"] == "CONTINUE_DIAGNOSTIC"
+        @test contexts["construction_synthetic_covariance_failed"] == "CONTINUE_STANDARD"
         @test Base.invokelatest(
             extension._star_construction_quality_gate!,
             config,
@@ -154,7 +158,7 @@ using .QEPAWMatrixElementsTestSupport
         )
         @test maxima["construction_synthetic_covariance_failed"] == 1.0
         @test maxima["construction_synthetic_covariance_value"] == 2.0e-7
-        @test contexts["construction_synthetic_covariance_failed"] == "CONTINUE_DIAGNOSTIC"
+        @test contexts["construction_synthetic_covariance_failed"] == "CONTINUE_STANDARD"
         @test_throws ArgumentError Base.invokelatest(
             extension._star_construction_quality_gate!,
             config,
@@ -173,7 +177,7 @@ using .QEPAWMatrixElementsTestSupport
             extension._write_star_covariant_paw_gauge_hdf5,
             quality_path,
             restored.payload;
-            status = :DIAGNOSTIC_ONLY,
+            status = :STANDARD,
             root_cause = :SYNTHETIC_QUALITY_FAILURE,
             diagnostics = String[],
         )
@@ -209,14 +213,14 @@ using .QEPAWMatrixElementsTestSupport
         )
         @test prepared.status in (:PASS, :PASS_WITH_WARNINGS)
         @test any(
-            diagnostic -> diagnostic.code == :GAUGE_QUALITY_DIAGNOSTIC_CONTINUE,
+            diagnostic -> diagnostic.code == :GAUGE_QUALITY_STANDARD_CONTINUE,
             prepared.diagnostics,
         )
         representation =
             WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(representation_path)
-        @test representation.conventions["construction_policy"] == "diagnostic"
+        @test representation.conventions["construction_policy"] == "standard"
         @test representation.conventions["production_eligible"] == "false"
-        @test representation.conventions["diagnostic_only"] == "true"
+        @test representation.conventions["quality_review_recommended"] == "true"
         @test occursin(
             "construction_synthetic_covariance_failed",
             representation.conventions["construction_gauge_metrics_json"],
@@ -232,7 +236,7 @@ using .QEPAWMatrixElementsTestSupport
         )
         WI.write_wannier_amn(amn_path, WI.WannierAMN(1, 1, 1, ones(ComplexF64, 1, 1, 1)))
         authority_input = W.WannierizationInputConfig(
-            construction_policy = :diagnostic,
+            construction_policy = :standard,
             source = source,
             sewing_backend = W.AugmentationAwareSewing(),
             wavefunction_gauge_backend = config.wavefunction_gauge_backend,
@@ -308,11 +312,11 @@ using .QEPAWMatrixElementsTestSupport
         )
         exported = W.construct_symmetry_adapted_wannier_functions(authority_config)
         @test exported.input_summary["has_accepted_state"] == "true"
-        @test exported.input_summary["production_eligible"] == "false"
+        @test exported.input_summary["wannierization_eligibility_production_eligible"] == "false"
         if exported.artifacts.packed_hdf5 === nothing
             @info "Native authority export diagnostics" status=exported.status gate=get(
                 exported.input_summary,
-                "diagnostic_export_gate_reason",
+                "accepted_state_export_gate_reason",
                 "ABSENT",
             ) diagnostics=join((string(d.code)*": "*d.message for d in exported.diagnostics), "\n")
         end
@@ -333,13 +337,13 @@ using .QEPAWMatrixElementsTestSupport
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             path;
-            construction_policy = :diagnostic,
+            construction_policy = :standard,
             source,
         )
     end
 end
 
-@testset "diagnostic preparation keeps finite buffer and formal actions" begin
+@testset "standard preparation keeps finite buffer and formal actions" begin
     W = WannierNLQG.Wannierization
     S = WannierNLQG.SymmetryFoundation
     extension = first(W._load_wannierization_extension!()).PAWMatrixElements
@@ -360,7 +364,7 @@ end
         1:1,
         buffer,
         1.0e-7;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
     )
     @test selected == 1:1
     @test leakage ≈ 1.0e-3
@@ -401,7 +405,7 @@ end
         operations,
         ones(Int, 2, 1);
         kwargs...,
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
     )
     @test formal.initial.maximum > kwargs.raw_group_tolerance
     @test formal.correction > kwargs.correction_tolerance
@@ -428,7 +432,7 @@ end
         formal_tolerance = 1.0e-30,
         correction_tolerance = 1.0e-8,
         max_iterations = 1,
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
     )
     actual = Base.invokelatest(
         extension._star_target_action_group_residual,
@@ -451,11 +455,11 @@ end
         operations,
         ones(Int, 2, 1);
         kwargs...,
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
     )
 end
 
-@testset "diagnostic orbital and plan quality retain finite full-rank maps" begin
+@testset "standard orbital and plan quality retain finite full-rank maps" begin
     P = WannierNLQG.WannierProjection
     S = WannierNLQG.SymmetryFoundation
     identity_rotation = Matrix{Float64}(I, 3, 3)
@@ -466,7 +470,7 @@ end
     orbital = P._base_orbital_rotation(
         "d",
         near_rotation;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
         mapping_diagnostics = records,
     )
     @test size(orbital) == (5, 5)
@@ -484,7 +488,7 @@ end
         near_rotation,
         identity_rotation,
         identity_rotation;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
         mapping_diagnostics = records,
     )
     @test size(hybrid) == (4, 4)
@@ -493,7 +497,7 @@ end
         records,
     )
     @test P._base_orbital_rotation("d", identity_rotation) ==
-          P._base_orbital_rotation("d", identity_rotation; construction_policy = :diagnostic)
+          P._base_orbital_rotation("d", identity_rotation; construction_policy = :standard)
 
     operations = [S.SymmetryOperation(Matrix{Int}(I, 3, 3), zeros(3), identity_rotation)]
     matrices = reshape(copy(hybrid), 4, 4, 1)
@@ -503,7 +507,7 @@ end
         operations,
         matrices,
         shifts;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
         diagnostics = records,
     )
     @test plan.representation_matrices == matrices
@@ -517,14 +521,14 @@ end
         operations,
         matrices,
         shifts;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
     )
     matrices[1, 1, 1] = NaN
     @test_throws ArgumentError S.WannierSymmetryPlan(
         operations,
         matrices,
         shifts;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
     )
 end
 @testset "native VASP full d-shell projection contract" begin
@@ -642,7 +646,7 @@ end
             workflow._require_native_vasp_paw_qualification,
             result,
             thresholds;
-            construction_policy = :diagnostic,
+            construction_policy = :standard,
         ) === nothing
         @test_throws ArgumentError Base.invokelatest(
             workflow._require_native_vasp_paw_qualification,

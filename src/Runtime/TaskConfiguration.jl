@@ -79,6 +79,70 @@ end
 """Physical parameters with quantity-specific applicability checked during compilation."""
 abstract type AbstractTaskParameters end
 
+"""Independent positive intraband and interband relaxation energies, in eV."""
+Base.@kwdef struct SeparateRelaxation
+    gamma_intra_ev::Float64
+    gamma_inter_ev::Float64
+end
+
+"""Explicit normalized zero-temperature delta approximation; Gaussian eta is sqrt(2) sigma."""
+Base.@kwdef struct FermiSurfaceBroadening
+    kind::Symbol
+    eta_fs_ev::Float64
+end
+
+"""Strict dc transport parameters; no photon energy axis."""
+struct LinearTransportParameters <: AbstractTaskParameters
+    fermi_energies::Vector{Float64}
+    temperature::Float64
+    relaxation::SeparateRelaxation
+    function LinearTransportParameters(
+        fermi_energies::Vector{Float64},
+        temperature::Float64,
+        relaxation::SeparateRelaxation,
+    )
+        new(validate_fermi_energies(fermi_energies), temperature, relaxation)
+    end
+end
+"""Construct strict vector-axis dc transport parameters from public keywords."""
+LinearTransportParameters(;
+    fermi_energies::Vector{Float64},
+    temperature::Real,
+    relaxation::SeparateRelaxation,
+) = LinearTransportParameters(fermi_energies, Float64(temperature), relaxation)
+
+"""Complex linear optical response on an explicit photon-energy axis in eV."""
+Base.@kwdef struct LinearOpticalResponseParameters <: AbstractTaskParameters
+    photon_energies::Vector{Float64}
+    fermi_energy::Float64
+    temperature::Float64
+    relaxation::SeparateRelaxation
+end
+
+"""Modern orbital magnetization with SRocc/CMocc decomposition, never wavepacket OAM.
+
+input_semantics explicitly distinguishes a defined finite model from material
+energy overlaps. Material input needs a qualified bundle and effective window.
+"""
+struct OrbitalMagnetizationParameters <: AbstractTaskParameters
+    fermi_energies::Vector{Float64}
+    temperature::Float64
+    input_semantics::Symbol
+    function OrbitalMagnetizationParameters(
+        fermi_energies::Vector{Float64},
+        temperature::Float64,
+        input_semantics::Symbol,
+    )
+        new(validate_fermi_energies(fermi_energies), temperature, input_semantics)
+    end
+end
+"""Construct strict vector-axis orbital-magnetization parameters from public keywords."""
+OrbitalMagnetizationParameters(;
+    fermi_energies::Vector{Float64},
+    temperature::Real,
+    input_semantics::Symbol,
+) = OrbitalMagnetizationParameters(fermi_energies, Float64(temperature), input_semantics)
+
 """Optical energy axis in eV, Fermi energy in eV, and temperature in K; all are explicit."""
 struct OpticalParameters <: AbstractTaskParameters
     photon_energies::Vector{Float64}
@@ -91,6 +155,25 @@ OpticalParameters(; photon_energies, fermi_energy::Real, temperature::Real) = Op
     Float64(fermi_energy),
     Float64(temperature),
 )
+
+"""SHG energies in eV and temperature in K, with explicit output selection."""
+struct SHGParameters <: AbstractTaskParameters
+    photon_energies::Vector{Float64}
+    fermi_energy::Float64
+    temperature::Float64
+    output::Symbol
+    response::Symbol
+end
+
+"""Select total, terms or both; response selects susceptibility, conductivity or both."""
+SHGParameters(; photon_energies, fermi_energy, temperature, output = :total, response = :both) =
+    SHGParameters(
+        Float64.(collect(photon_energies)),
+        Float64(fermi_energy),
+        Float64(temperature),
+        Symbol(output),
+        Symbol(response),
+    )
 
 """Optical parameters plus an explicit Cartesian finite-q momentum."""
 struct FiniteQOpticalParameters <: AbstractTaskParameters
@@ -128,6 +211,117 @@ BandParameters(; fermi_energy::Real) = BandParameters(Float64(fermi_energy))
 
 """Numerical options owned by one task rather than by the common run."""
 abstract type AbstractTaskNumerics end
+
+"""First-order response spectral resolution and explicitly selected FS quadrature."""
+Base.@kwdef struct LinearResponseNumerics <: AbstractTaskNumerics
+    fermi_surface::Union{Nothing, FermiSurfaceBroadening}=nothing
+    gap_tolerance::Float64=1e-10
+end
+
+"""Orbital analytic cross-block resolution; no physical linewidth is introduced."""
+Base.@kwdef struct OrbitalNumerics <: AbstractTaskNumerics
+    gap_tolerance::Float64=1e-10
+end
+
+# Keep new response quantities separate from the historical optical-current family.
+const SPECTRAL_RESPONSE_QUANTITIES=(
+    :linear_transport,
+    :linear_optical_response,
+    :orbital_magnetization,
+)
+
+# Validate explicit family inputs before file IO and preserve static versus optical axes.
+function _spectral_task_physics(task, quantity, calculation = :integral)
+    physics=task.physics
+    expected=quantity==:linear_transport ? LinearTransportParameters :
+             quantity==:linear_optical_response ? LinearOpticalResponseParameters :
+             OrbitalMagnetizationParameters
+    physics isa expected || throw(ArgumentError("$quantity requires $expected"))
+    if quantity in (:linear_transport, :orbital_magnetization)
+        axis = validate_fermi_energies(physics.fermi_energies)
+        _validate_occupation_values(first(axis), physics.temperature)
+        if calculation == :kslice && length(axis) != 1
+            code =
+                quantity == :linear_transport ?
+                "LINEAR_TRANSPORT_KSLICE_REQUIRES_SINGLE_FERMI_ENERGY" :
+                "ORBITAL_MAGNETIZATION_KSLICE_REQUIRES_SINGLE_FERMI_ENERGY"
+            throw(ArgumentError(code))
+        end
+    else
+        _validate_occupation_values(physics.fermi_energy, physics.temperature)
+    end
+    energy=quantity==:linear_optical_response ? physics.photon_energies : Float64[]
+    if quantity==:linear_optical_response
+        !isempty(energy) && all(x->isfinite(x)&&x>=0, energy) ||
+            throw(ArgumentError("Nonnegative finite photon_energies required"))
+    end
+    if quantity==:orbital_magnetization
+        physics.input_semantics in
+        (:defined_finite_model, :projected_energy_overlap, :direct_energy_overlap) ||
+            throw(ArgumentError("Unknown orbital input semantics"))
+        return (;
+            fermi_energies = copy(physics.fermi_energies),
+            fermi_energies_sha256 = fermi_energy_axis_sha256(physics.fermi_energies),
+            temperature = physics.temperature,
+            photon_energies = energy,
+            orbital_input_semantics = physics.input_semantics,
+        )
+    end
+    rates=physics.relaxation
+    all(x->isfinite(x)&&x>0, (rates.gamma_intra_ev, rates.gamma_inter_ev)) || throw(
+        ArgumentError(
+            "Positive finite relaxation energies required; singular clean spectra are unsupported",
+        ),
+    )
+    return (;
+        fermi_energies = quantity == :linear_transport ? copy(physics.fermi_energies) : Float64[],
+        fermi_energies_sha256 = quantity == :linear_transport ?
+                                fermi_energy_axis_sha256(physics.fermi_energies) : "NOT_APPLICABLE",
+        fermi_energy = quantity == :linear_optical_response ? physics.fermi_energy : 0.0,
+        temperature = physics.temperature,
+        photon_energies = copy(energy),
+        gamma_intra_ev = rates.gamma_intra_ev,
+        gamma_inter_ev = rates.gamma_inter_ev,
+    )
+end
+
+# Keep spectral-gap thresholds independent of physical relaxation and FS broadening.
+function _spectral_task_numerics(task, quantity)
+    expected=quantity==:orbital_magnetization ? OrbitalNumerics : LinearResponseNumerics
+    numerics=something(task.numerics, expected())
+    numerics isa expected || throw(ArgumentError("$quantity requires $expected"))
+    isfinite(numerics.gap_tolerance)&&numerics.gap_tolerance>=0 ||
+        throw(ArgumentError("Invalid spectral gap tolerance"))
+    result=(;
+        spectral_gap_tolerance = numerics.gap_tolerance,
+        denominator_regularization = 0.0,
+        degeneracy_threshold = 0.0,
+    )
+    if quantity!=:orbital_magnetization
+        fs=numerics.fermi_surface
+        if task.physics.temperature==0
+            fs!==nothing || throw(ArgumentError("T=0 requires explicit FermiSurfaceBroadening"))
+        elseif fs!==nothing
+            throw(ArgumentError("Finite T uses exact -f′; omit fermi_surface"))
+        end
+        if fs!==nothing
+            fs.kind in (:gaussian, :lorentzian) && isfinite(fs.eta_fs_ev)&&fs.eta_fs_ev>0 ||
+                throw(ArgumentError("Invalid FS line shape/width"))
+            result=merge(result, (; fs_kind = fs.kind, eta_fs_ev = fs.eta_fs_ev))
+        end
+    end
+    return result
+end
+
+"""Independent SHG resonance, low-frequency and intermediate-state regularizations in eV."""
+Base.@kwdef struct SHGNumerics <: AbstractTaskNumerics
+    broadening::Float64 = 0.025
+    broadening_type::String = "Gaussian"
+    low_frequency_broadening::Float64 = 0.025
+    intermediate_regularization::Float64 = 0.04
+    eta_correction::Bool = true
+    degeneracy_threshold::Float64 = 1.0e-4
+end
 
 """Optical broadening and matrix/finite-difference controls, with explicit-key provenance."""
 struct OpticalNumerics <: AbstractTaskNumerics
@@ -462,24 +656,32 @@ function _task_observation(task::TaskSpec, definition::TaskDefinition, calculati
     )
     bands = observation.bands
     policy = definition.band_policy
-    accepted = if definition.quantity == QUANTITY_HERMITIAN_CURVATURE_TENSOR
-        bands isa InterbandGroups
-    elseif policy == BAND_PAIR
-        bands isa Transition
-    elseif policy == BAND_RESOLVED
-        bands isa Union{BandTargets, Subspace, Subspaces, AllBands, OccupiedBands}
-    elseif policy == BAND_TARGET_GROUP
-        bands isa Union{BandTargets, Subspace, Subspaces}
-    elseif policy == BAND_INTERBAND_GROUPS
-        bands isa InterbandGroups
-    elseif policy == BAND_TRIPLE_GROUPS
-        bands isa TripleGroups
-    else
-        false
-    end
+    accepted =
+        if definition.quantity in (
+            QUANTITY_SECOND_HARMONIC_GENERATION,
+            QUANTITY_LINEAR_TRANSPORT,
+            QUANTITY_LINEAR_OPTICAL_RESPONSE,
+            QUANTITY_ORBITAL_MAGNETIZATION,
+        )
+            bands isa AllBands && !bands.include_occupied_sum
+        elseif definition.quantity == QUANTITY_HERMITIAN_CURVATURE_TENSOR
+            bands isa InterbandGroups
+        elseif policy == BAND_PAIR
+            bands isa Transition
+        elseif policy == BAND_RESOLVED
+            bands isa Union{BandTargets, Subspace, Subspaces, AllBands, OccupiedBands}
+        elseif policy == BAND_TARGET_GROUP
+            bands isa Union{BandTargets, Subspace, Subspaces}
+        elseif policy == BAND_INTERBAND_GROUPS
+            bands isa InterbandGroups
+        elseif policy == BAND_TRIPLE_GROUPS
+            bands isa TripleGroups
+        else
+            false
+        end
     accepted ||
         throw(ArgumentError("Band observation $(typeof(bands)) does not apply to task $(task.id)."))
-    policy == BAND_RESOLVED ||
+    policy in (BAND_RESOLVED, BAND_ALL) ||
         !_occupied_sum_requested(bands) ||
         throw(ArgumentError("Task $(task.id) does not support an occupied sum."))
     return (;
@@ -490,6 +692,7 @@ function _task_observation(task::TaskSpec, definition::TaskDefinition, calculati
 end
 
 const OPTICAL_TASK_QUANTITIES = (
+    :second_harmonic_generation,
     :shift_current,
     :injection_current,
     :injection_spin_current,
@@ -520,6 +723,8 @@ function _task_physics(
     definition::TaskDefinition,
     observation,
 )
+    quantity in SPECTRAL_RESPONSE_QUANTITIES &&
+        return _spectral_task_physics(task, quantity, calculation_symbol(definition.calculation))
     physics = task.physics
     calculation = calculation_symbol(definition.calculation)
     if _is_band_structure(definition)
@@ -529,7 +734,9 @@ function _task_physics(
         return (; fermi_energy = physics.fermi_energy, photon_energies = Float64[])
     elseif quantity in OPTICAL_TASK_QUANTITIES
         finite_q = quantity in (:photon_drag_shift_current, :photon_drag_injection_current)
-        expected = finite_q ? FiniteQOpticalParameters : OpticalParameters
+        expected =
+            quantity == :second_harmonic_generation ? SHGParameters :
+            finite_q ? FiniteQOpticalParameters : OpticalParameters
         physics isa expected || throw(ArgumentError("Task $(task.id) requires $(expected)."))
         _validate_occupation_values(physics.fermi_energy, physics.temperature)
         isempty(physics.photon_energies) &&
@@ -589,12 +796,46 @@ function _task_numerical_values(
     method::Symbol,
     definition::TaskDefinition,
 )
+    quantity in SPECTRAL_RESPONSE_QUANTITIES && return _spectral_task_numerics(task, quantity)
     calculation = calculation_symbol(definition.calculation)
     if _is_band_structure(definition)
         numerics = something(task.numerics, BandNumerics())
         numerics isa BandNumerics ||
             throw(ArgumentError("Band task $(task.id) requires BandNumerics."))
         return (; band_hermiticity_tolerance = numerics.hermiticity_tolerance)
+    end
+    if quantity == :second_harmonic_generation
+        numerics = something(task.numerics, SHGNumerics())
+        numerics isa SHGNumerics || throw(ArgumentError("SHG requires SHGNumerics"))
+        for value in (
+            numerics.broadening,
+            numerics.low_frequency_broadening,
+            numerics.intermediate_regularization,
+        )
+            isfinite(value) && value > 0 ||
+                throw(ArgumentError("SHG widths must be finite and positive"))
+        end
+        isfinite(numerics.degeneracy_threshold) && numerics.degeneracy_threshold >= 0 ||
+            throw(ArgumentError("Invalid SHG degeneracy threshold"))
+        numerics.broadening_type in ("Gaussian", "Lorentzian") ||
+            throw(ArgumentError("Invalid SHG broadening type"))
+        physics = task.physics::SHGParameters
+        physics.output in (:total, :terms, :both) ||
+            throw(ArgumentError("Invalid SHG output selection"))
+        physics.response in (:susceptibility, :conductivity, :both) ||
+            throw(ArgumentError("Invalid SHG response selection"))
+        all(>=(0), physics.photon_energies) ||
+            throw(ArgumentError("SHG energies must be nonnegative"))
+        return (;
+            broadening = numerics.broadening,
+            broadening_type = numerics.broadening_type,
+            denominator_regularization = numerics.intermediate_regularization,
+            degeneracy_threshold = numerics.degeneracy_threshold,
+            shg_low_frequency_broadening = numerics.low_frequency_broadening,
+            shg_eta_correction = numerics.eta_correction,
+            shg_output = physics.output,
+            shg_response = physics.response,
+        )
     end
     optical = quantity in OPTICAL_TASK_QUANTITIES
     expected = optical ? OpticalNumerics : GeometryNumerics
@@ -756,7 +997,9 @@ function task_parameter_summary(cfg::TaskConfig, task::TaskSpec)
     effective = compile_task_config(cfg, task)
     quantity, method, calculation, definition = _public_task_identity(task, cfg.sampling)
     optical = quantity in OPTICAL_TASK_QUANTITIES
-    physical = if _is_band_structure(definition)
+    physical = if quantity in SPECTRAL_RESPONSE_QUANTITIES
+        _spectral_task_physics(task, quantity, calculation)
+    elseif _is_band_structure(definition)
         (; fermi_energy = effective.fermi_energy)
     elseif optical
         base = (;
@@ -764,6 +1007,8 @@ function task_parameter_summary(cfg::TaskConfig, task::TaskSpec)
             fermi_energy = effective.fermi_energy,
             temperature = effective.temperature,
         )
+        task.physics isa SHGParameters ?
+        merge(base, (; output = effective.shg_output, response = effective.shg_response)) :
         task.physics isa FiniteQOpticalParameters ?
         merge(base, (; photon_momentum = effective.photon_momentum)) : base
     else
@@ -775,7 +1020,18 @@ function task_parameter_summary(cfg::TaskConfig, task::TaskSpec)
             quantity in (:shift_vector, :quantum_hermitian_connection) ?
         merge(base, (; photon_momentum = effective.photon_momentum)) : base
     end
-    numerical = if _is_band_structure(definition)
+    numerical = if quantity in SPECTRAL_RESPONSE_QUANTITIES
+        _spectral_task_numerics(task, quantity)
+    elseif quantity == :second_harmonic_generation
+        (;
+            broadening = effective.broadening,
+            broadening_type = effective.broadening_type,
+            low_frequency_broadening = effective.shg_low_frequency_broadening,
+            intermediate_regularization = effective.denominator_regularization,
+            eta_correction = effective.shg_eta_correction,
+            degeneracy_threshold = effective.degeneracy_threshold,
+        )
+    elseif _is_band_structure(definition)
         (; hermiticity_tolerance = effective.band_hermiticity_tolerance)
     else
         base = (; denominator_regularization = effective.denominator_regularization)

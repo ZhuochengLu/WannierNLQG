@@ -353,7 +353,7 @@ end
 """Pack deterministic tangent-history fields as `(n,n,nk,m)`."""
 function _pack_u_tangent_history(history::Vector{Vector{Matrix{ComplexF64}}})
     isempty(history) && return zeros(ComplexF64, 0, 0, 0, 0)
-    packed_fields = [cat(field...; dims = 3) for field in history]
+    packed_fields = [_pack_matrix_field(field) for field in history]
     return cat(packed_fields...; dims = 4)
 end
 

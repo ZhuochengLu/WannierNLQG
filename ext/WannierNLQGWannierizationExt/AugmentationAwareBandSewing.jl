@@ -16,8 +16,8 @@ abstract type _AbstractStrictSewingMetric end
 struct _QEStrictSewingMetric <: _AbstractStrictSewingMetric
     upf_data::Dict{String, QEUPFData}
     plan::QEProjectorPlan
-    projectors::Vector{Array{ComplexF64, 3}}
-    projector_bases::Vector{Matrix{ComplexF64}}
+    projectors::AbstractVector{Array{ComplexF64, 3}}
+    projector_bases::AbstractVector{Matrix{ComplexF64}}
     spinorbit::Bool
     finite_b_cache::Dict{Tuple{String, NTuple{3, Float64}, Int, Bool}, Array{ComplexF64, 4}}
     metric_kind::String
@@ -26,8 +26,8 @@ end
 # Cache the complete VASP q=0 PAW metric and projector basis at every k point.
 struct _VASPStrictSewingMetric <: _AbstractStrictSewingMetric
     paw::VASPPawSystem
-    projectors::Vector{Array{ComplexF64, 3}}
-    projector_bases::Vector{Matrix{ComplexF64}}
+    projectors::AbstractVector{Array{ComplexF64, 3}}
+    projector_bases::AbstractVector{Matrix{ComplexF64}}
 end
 
 # Read unnormalized, untruncated coefficients for one strict QE sewing build.
@@ -45,10 +45,33 @@ function _read_augmentation_aware_native_source(source::QuantumEspressoWavefunct
         normalize_coefficients = false,
         metadata,
         native_paw_construction = true,
+        point_storage = _qe_disk_bounded() ? :bounded_source :
+                        preparation_vector(PlaneWaveKPoint, "raw"),
     )
     get(native.source_metadata, "coefficient_normalization", "") == "qe_raw" || throw(
         ArgumentError("QE_PAW_RAW_COEFFICIENTS_REQUIRED: strict sewing received normalized data"),
     )
+    if _qe_disk_bounded()
+        guards =
+            [_qe_stat_guard(qe_wavefunction_file(source, k)) for k in eachindex(native.kpoints)]
+        shared =
+            [_qe_stat_guard(path) for path in (metadata.xml_file, values(metadata.upf_files)...)]
+        guard = k -> begin
+            foreach(f -> f(k), shared)
+            guards[k](k)
+        end
+        points = _qe_guarded(native.kpoints, guard)
+        return NativeWavefunctionData(
+            native.source_code,
+            native.structure,
+            native.reciprocal_lattice,
+            native.mp_grid,
+            native.spinor,
+            points,
+            native.input_sha256,
+            native.source_metadata,
+        )
+    end
     return native
 end
 
@@ -61,7 +84,11 @@ function _read_augmentation_aware_native_source(source::VASPWavefunctionSource)
     )
     source.potcar_file === nothing &&
         throw(ArgumentError("VASP_PAW_DATA_REQUIRED: strict sewing requires POTCAR"))
-    native = read_vasp_wavefunctions(source; normalize_coefficients = false)
+    native = read_vasp_wavefunctions(
+        source;
+        point_provider = native_vasp_point_provider,
+        normalize_coefficients = false,
+    )
     get(native.source_metadata, "coefficient_normalization", "") == "vasp_raw" || throw(
         ArgumentError("VASP_PAW_RAW_COEFFICIENTS_REQUIRED: strict sewing received normalized data"),
     )
@@ -1008,8 +1035,8 @@ function _paw_sewing_quality_gate!(
                 "threshold" => string(threshold),
                 "gate_result" => passed ? "PASS" : "FAIL",
                 "action" =>
-                    passed ? "CONTINUE" : enforce_thresholds ? "STOP" : "CONTINUE_DIAGNOSTIC",
-                "construction_policy" => enforce_thresholds ? "strict" : "diagnostic",
+                    passed ? "CONTINUE" : enforce_thresholds ? "STOP" : "CONTINUE_STANDARD",
+                "construction_policy" => enforce_thresholds ? "strict" : "standard",
                 "worst_context" => context,
             ),
         ),
@@ -1259,7 +1286,10 @@ function build_augmentation_aware_band_representation(
     size(energies_ev) == (nb, nk) || throw(
         ArgumentError("PAW_SEWING_SOURCE_IDENTITY_FAILED: EIG/native band dimensions disagree"),
     )
-    native_energies = reduce(hcat, (point.energies_ev for point in native.kpoints))
+    native_energies = reduce(
+        hcat,
+        (native_point_metadata(native, k).energies_ev for k in eachindex(native.kpoints)),
+    )
     maximum(abs, native_energies - energies_ev) <= 1.0e-5 || throw(
         ArgumentError(
             "PAW_SEWING_SOURCE_IDENTITY_FAILED: EIG differs from native eigenvalues by more than 1e-5 eV",
@@ -2128,7 +2158,7 @@ function build_augmentation_aware_band_representation(
     append!(raw_diagnostics, quality_records)
     conventions = Dict{String, String}(native.source_metadata)
     conventions["paw_sewing_gate_records_json"] = String(JSON3.write(quality_records))
-    conventions["paw_sewing_construction_policy"] = enforce_thresholds ? "strict" : "diagnostic"
+    conventions["paw_sewing_construction_policy"] = enforce_thresholds ? "strict" : "standard"
     conventions["paw_sewing_quality_failed"] =
         string(any(record -> record["context"]["gate_result"] == "FAIL", quality_records))
     merge!(

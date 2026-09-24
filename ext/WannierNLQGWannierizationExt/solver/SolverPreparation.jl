@@ -9,8 +9,8 @@ function _construction_quality_diagnostic(diagnostic::WannierizationDiagnostic, 
             Dict(
                 "stage" => stage,
                 "gate_result" => "FAIL",
-                "action" => "CONTINUE_DIAGNOSTIC",
-                "construction_policy" => "diagnostic",
+                "action" => "CONTINUE_STANDARD",
+                "construction_policy" => "standard",
             ),
         ),
     )
@@ -29,7 +29,7 @@ function _record_construction_symmetry_quality!(
     stage;
     residuals = nothing,
 )
-    config.input.construction_policy == :diagnostic || return nothing
+    config.input.construction_policy == :standard || return nothing
     residuals =
         residuals === nothing ?
         _candidate_invariant_residuals(frames, frozen_indices, representation) : residuals
@@ -55,7 +55,7 @@ function _record_construction_symmetry_quality!(
                 ),
             )
             summary["construction_quality_failed"] = "true"
-            summary["model_qualification"] = "DIAGNOSTIC_ONLY"
+            summary["model_qualification"] = "STANDARD"
         end
     end
     return nothing
@@ -155,7 +155,7 @@ function _prepare_solver_input_summary(state::NamedTuple)
         )
     )
     effective_compatibility_policy =
-        config.input.construction_policy == :diagnostic ? config.input.compatibility_policy :
+        config.input.construction_policy == :standard ? config.input.compatibility_policy :
         representation_magnetic || representation_antiunitary || representation_legacy_uncertain ?
         :strict : config.input.compatibility_policy
     u_localization_mpi_size = if config.solver.parallel == :mpi
@@ -223,10 +223,10 @@ function _prepare_solver_input_summary(state::NamedTuple)
         "target_multiplicity_applicability" => apply_symmetry ? "APPLICABLE" : "NOT_APPLICABLE",
         "covariance_applicability" =>
             apply_symmetry ? "APPLICABLE" :
-            config.input.wannierization_mode == :ordinary ? "DIAGNOSTIC_ONLY" : "NOT_APPLICABLE",
+            config.input.wannierization_mode == :ordinary ? "STANDARD" : "NOT_APPLICABLE",
         "covariance_qualification" =>
             apply_symmetry ? "HARD_GATE" :
-            config.input.wannierization_mode == :ordinary ? "DIAGNOSTIC_ONLY" : "NOT_APPLICABLE",
+            config.input.wannierization_mode == :ordinary ? "STANDARD" : "NOT_APPLICABLE",
         "source_code" => String(representation.source_code),
         "sewing_backend" =>
             get(representation.conventions, "sewing_backend", "coefficient_mapping"),
@@ -349,8 +349,8 @@ function _prepare_solver_input_summary(state::NamedTuple)
             "controlled_symmetrization_qualification_mode",
             "not_applicable",
         ),
-        "controlled_symmetrization_diagnostic_only" =>
-            get(representation.conventions, "diagnostic_only", "false"),
+        "controlled_symmetrization_quality_review_recommended" =>
+            get(representation.conventions, "quality_review_recommended", "false"),
         "controlled_symmetrization_production_eligible" =>
             get(representation.conventions, "production_eligible", "true"),
         "schema_version" => representation.schema_version,
@@ -436,7 +436,7 @@ function _prepare_solver_input_summary(state::NamedTuple)
         "maximum_transport_condition" =>
             string(config.solver.numerical_thresholds.maximum_transport_condition),
         "construction_policy" => String(config.input.construction_policy),
-        "manual_review_required" => "true",
+        "quality_review_recommended" => "true",
         "compatibility_policy_requested" => String(config.input.compatibility_policy),
         "compatibility_policy_effective" => String(effective_compatibility_policy),
         "symmetry_tolerance" => string(config.input.symmetry_tolerance),
@@ -457,14 +457,10 @@ function _prepare_solver_input_summary(state::NamedTuple)
         "z_seal_class" =>
             config.solver.acceleration.schedule == :fixed_subspace ? "NOT_APPLICABLE" :
             "IN_PROGRESS",
-        "qualified_z_seal" => "false",
-        "route_selection_eligible" => "false",
         "localization_convergence" => config.solver.localize ? "NOT_STARTED" : "NOT_APPLICABLE",
         "localization_qualification" =>
             config.solver.localize ? "NOT_STARTED" : "NOT_APPLICABLE",
         "model_qualification" => "NOT_AVAILABLE",
-        "diagnostic_tb_export_eligible" => "false",
-        "standard_tb_export_eligible" => "false",
         "random_seed" => string(config.solver.random_seed),
         "parallel" => String(config.solver.parallel),
         "u_localization_parallel_contract" =>
@@ -480,7 +476,7 @@ function _prepare_solver_input_summary(state::NamedTuple)
             WannierizationDiagnostic(
                 :DIAGNOSTIC_SYMMETRY_ABLATION,
                 :warning,
-                "constraint-operation subgroup ablation is diagnostic-only and cannot produce a standard or production-qualified TB";
+                "constraint-operation subgroup ablation is standard and cannot produce a standard or production-qualified TB";
                 context = Dict(
                     "constraint_operation_scope" =>
                         String(config.solver.acceleration.constraint_operation_scope),
@@ -714,9 +710,9 @@ function _qualify_solver_inputs(state::NamedTuple)
         apply_symmetry ? string(compatibility.passed) : "NOT_APPLICABLE"
     config_sha256 = _restart_config_sha256(config, representation)
     input_summary["restart_config_sha256"] = config_sha256
-    diagnostic_construction = config.input.construction_policy == :diagnostic
+    standard_construction = config.input.construction_policy == :standard
     compatibility_records =
-        diagnostic_construction ?
+        standard_construction ?
         [
             _construction_compatibility_quality_failure(diagnostic) ?
             _construction_quality_diagnostic(diagnostic, "representation_compatibility") :
@@ -735,7 +731,7 @@ function _qualify_solver_inputs(state::NamedTuple)
         compatibility.diagnostics,
     )
     if !compatibility.passed && (
-        diagnostic_construction ? structural_compatibility_failure :
+        standard_construction ? structural_compatibility_failure :
         effective_compatibility_policy == :strict
     )
         input_summary["failure_class"] = "REPRESENTATION_A"

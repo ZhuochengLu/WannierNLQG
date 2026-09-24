@@ -17,7 +17,7 @@ function _propose_solver_iteration(state::NamedTuple)
         config,
         config_sha256,
         convergence_values,
-        diagnostic_disentanglement_nonconverged,
+        retained_disentanglement_nonconverged,
         diagnostics,
         disentanglement_objective_history,
         effective_algorithms,
@@ -564,7 +564,7 @@ function _propose_solver_iteration(state::NamedTuple)
                 last_accepted_u_step_scale,
                 gradient_fallback_active,
                 gradient_steps,
-                cat(best_polar_frames...; dims = 3),
+                _pack_matrix_field(best_polar_frames),
                 best_polar_centers,
                 best_polar_spreads,
                 best_polar_objective,
@@ -580,9 +580,9 @@ function _propose_solver_iteration(state::NamedTuple)
                 localization_trial_sweeps,
                 localization_trial_accepted,
                 previous_u_gradient === nothing ? zeros(ComplexF64, 0, 0, 0) :
-                cat(something(previous_u_gradient)...; dims = 3),
+                _pack_matrix_field(something(previous_u_gradient)),
                 previous_u_direction === nothing ? zeros(ComplexF64, 0, 0, 0) :
-                cat(something(previous_u_direction)...; dims = 3),
+                _pack_matrix_field(something(previous_u_direction)),
                 u_cg_iteration,
                 u_cg_restart_count,
                 last_cg_beta,
@@ -600,7 +600,7 @@ function _propose_solver_iteration(state::NamedTuple)
                 wannier90_reference_overlaps === nothing ? zeros(ComplexF64, 0, 0, 0, 0) :
                 something(wannier90_reference_overlaps),
                 wannier90_reference_unitaries === nothing ? zeros(ComplexF64, 0, 0, 0) :
-                cat(something(wannier90_reference_unitaries)...; dims = 3),
+                _pack_matrix_field(something(wannier90_reference_unitaries)),
                 something(wannier90_reference_omega_i, NaN),
             )
             failure_restart = WannierizationRestartState(
@@ -817,7 +817,7 @@ function _propose_solver_iteration(state::NamedTuple)
         config,
         config_sha256,
         convergence_values,
-        diagnostic_disentanglement_nonconverged,
+        retained_disentanglement_nonconverged,
         diagnostics,
         disentanglement_objective_history,
         effective_algorithms,

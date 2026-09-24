@@ -199,9 +199,6 @@ function _reset_legacy_joint_update_history(result::WannierizationResult)
         summary["restart_continuation_semantics"] = "STATE_PRESERVED_JOINT_HISTORY_RESET_NOT_BITWISE"
         summary["disentanglement_convergence"] = "IN_PROGRESS"
         summary["z_seal_class"] = "IN_PROGRESS"
-        summary["qualified_z_seal"] = "false"
-        summary["route_selection_eligible"] = "false"
-        summary["standard_tb_export_eligible"] = "false"
         push!(
             diagnostics,
             WannierizationDiagnostic(
@@ -213,10 +210,7 @@ function _reset_legacy_joint_update_history(result::WannierizationResult)
         )
     else
         legacy_z_converged = get(summary, "disentanglement_convergence", "") == "CONVERGED"
-        summary["z_seal_class"] = legacy_z_converged ? "CONVERGED" : "DIAGNOSTIC_NONCONVERGED"
-        summary["qualified_z_seal"] = string(legacy_z_converged)
-        summary["route_selection_eligible"] = string(legacy_z_converged)
-        summary["standard_tb_export_eligible"] = "false"
+        summary["z_seal_class"] = legacy_z_converged ? "CONVERGED" : "NONCONVERGED_RETAINED"
         legacy_z_converged || push!(
             diagnostics,
             WannierizationDiagnostic(

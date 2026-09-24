@@ -1,13 +1,16 @@
 module Core
 
 using LinearAlgebra
+using SHA
 
 include("Constants.jl")
 include("WannierCenterConventions.jl")
 include("RealSpaceOperators.jl")
+include("OperatorTaskRequirements.jl")
 include("Models.jl")
 include("Coordinates.jl")
 include("CalculationUtils.jl")
+include("FermiEnergyAxes.jl")
 
 export ELEMENTARY_CHARGE_C
 export REDUCED_PLANCK_CONSTANT_J_S
@@ -27,10 +30,17 @@ export REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR, REAL_SPACE_AXIAL_DERIVATIVE_OVERLAP
 export REAL_SPACE_SYMMETRIC_DERIVATIVE_OVERLAP, REAL_SPACE_SPIN
 export REAL_SPACE_SPIN_TIMES_HAMILTONIAN, REAL_SPACE_SPIN_TIMES_POSITION
 export REAL_SPACE_SPIN_TIMES_HAMILTONIAN_POSITION
+export OperatorTask, OperatorSelectionError, OperatorTaskRequirement
+export OPERATOR_REQUIREMENT_REGISTRY_VERSION, OPERATOR_TASK_SOURCE_REGISTRY
+export OPERATOR_SOURCE_CLOSURES, OPERATOR_TASK_REQUIREMENTS
+export OPERATOR_TASK_DERIVED_CAPABILITIES, derived_operator_capabilities
+export operator_task_requirement, registered_operator_task_methods
+export registered_operator_task_quantities, resolve_operator_requirements
 export real_space_cartesian_to_fractional, reciprocal_cartesian_to_fractional
 export reciprocal_lattice, finite_difference_step_matrix
 export IntegralKGrid, KSliceGrid2D
 export fermi_dirac, fermi_dirac!, gaussian_broadening, lorentzian_broadening
+export FERMI_ENERGY_AXIS_DOMAIN, validate_fermi_energies, fermi_energy_axis_sha256
 export select_band_window, has_active_transition
 export validate_kslice_input, normalize_cartesian_indices
 export integral_kpoint!, kslice_indices, kslice_kpoint!, make_kslice_grid, make_kslice_points

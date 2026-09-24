@@ -93,6 +93,10 @@ end
         @test sum(stat.spectrum_hits for stat in together.sharing.worker_statistics) > 0
         @test isfile(together.metadata_path)
         @test all(isfile(result.metadata_path) for result in together.task_results)
+        @test together.qualification.qualification_status=="DIAGNOSTIC_ONLY"
+        @test !together.qualification.production_eligible
+        @test all(result.qualification.execution_eligible for result in together.task_results)
+        @test occursin("[Qualification]", read(together.metadata_path, String))
     end
     a = task_instance_sc("a")
     variants = [task_instance_sc("changed"; eta = 0.05), task_instance_sc("changed"; window = 2)]

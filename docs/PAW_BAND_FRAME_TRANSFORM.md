@@ -21,6 +21,17 @@ quantities.  They do not decide PAW/USPP production eligibility.  The implementa
 must not replace the sealed map with a polar factor: doing so changes the target
 frame and invalidates the artifact digest and every matrix element tied to it.
 
+## Native full-band source identity
+
+Native operator readers may require `band_range=nothing`, while a sealed gauge
+records an explicit band interval. For frame and Hamiltonian qualification only,
+the implicit full selection is resolved to the sealed interval when the target
+and parent intervals are identical and begin at band 1. Explicit selections
+remain unchanged; an implicit full source cannot select a target subset. The
+resolved descriptor shares the existing compact frame and Hamiltonian cache
+keys. Native coefficient selection, matrix kernels, replay checks, and science
+payloads are unchanged.
+
 ## Hard gates
 
 `BandFrameTransformContract` fails closed unless all of the following agree with
@@ -40,6 +51,23 @@ solver checkpoint is retained.
 
 Genuine SU(2), sewing, magnetic-transport, and Wannier-gauge matrices remain
 Euclidean-unitary objects and retain their existing unitarity gates.
+
+## Standard Packed-HDF5 export
+
+The source-frame construction contract above remains unchanged. When serializing
+and reading an accepted Standard diagnostic TB, finite physical-isometry and
+frame-replay excesses are numerical quality warnings. The Packed writer and
+reader preserve their measured values, the original tolerances (including exact
+zero tolerances for identity frames), and the source/frame seals. They do not
+repair, project, or reseal the source transform. Nonfinite evidence, invalid
+identities, topology, rank, and digest mismatches remain integrity failures.
+
+Finite spin-family pair-Wigner-Seitz roundtrip excess and an imaginary position
+home diagonal also produce `NUMERICAL_WARNING` and `EXPORTED_WITH_WARNING`.
+Production eligibility is forced false, without changing the supplied operator
+arrays. Per-operator covariance qualification remains separate from these export
+warnings. A record's existing digest is validated before binding derived pair-WS
+evidence; a stale seal cannot be silently replaced.
 
 ## Operator and Hamiltonian transformations
 
@@ -73,7 +101,7 @@ New formal artifacts use:
 - star-gauge wire schema 1.0 with the complete former 1.11 contract;
 - SPN/uIu and uHu/sIu/sHu provenance wire schema 1.0, preserving their former
   1.2 and 1.3 contracts, respectively;
-- packed operator HDF5 schema 1.0.
+- packed operator HDF5 schema 1.1.
 
 Provenance records `band_frame_transform_sha256` and the complete frame-contract
 digest.  `band_gauge_rotation_sha256` is retained only as a clearly labelled legacy
@@ -81,9 +109,6 @@ alias for diagnostic tooling.  Schema 1.0 records physical-metric type, isometry
 replay residuals and thresholds, source/artifact/contract digests, Euclidean audit
 residuals, and per-operator and spin-family production status.
 
-Gauge 1.10, operator provenance 1.1, and packed HDF5 6.1 remain readable for
-diagnosis.  A spin/full legacy file involving a nonidentity transform is labelled
-`LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED` and cannot silently acquire schema-1.0
-production eligibility. Schema-6.2 full files are also diagnostic
-`LEGACY_GALERKIN_RISK_CONTRACT_NOT_RECORDED` inputs. Regenerate either class from
-its original wavefunction and projector inputs.
+Historical packed HDF5 6.x files require external migration and are rejected by
+the public 1.1 reader. Regenerate them from their original wavefunction and
+projector inputs when possible.

@@ -72,18 +72,32 @@ quantum-geometric quantities from Wannier tight-binding models.
 
 ## Supported calculations
 
+- **Linear optical responses (Integral and K-slice)**
+  - Drude-like Response — Conventional, Projector.
+  - Frequency-dependent Quantum-Metric Contribution — Conventional, Projector.
+  - Frequency-dependent Berry-Curvature Contribution (anomalous-Hall mechanism) — Conventional, Projector.
+
 - **Nonlinear optical responses (Integral and K-slice)**
-  - Shift Current — Conventional, Projector, Wilson Loop, and Geometric Loop.
-  - Injection Current — Conventional.
-  - Injection Spin Current — Conventional.
-  - Shift Spin Current — Conventional.
+  - Shift Current — Conventional, Projector, Wilson Loop, Geometric Loop.
+  - Injection Current.
+  - Injection Spin Current.
+  - Shift Spin Current.
   - Photon Drag Shift Current — Geometric Loop.
-  - Photon Drag Injection Current — Conventional.
+  - Photon Drag Injection Current.
+  - Second-Harmonic Generation.
   - Additional nonlinear optical response calculations are under active
     development.
 
+- **Linear transport (Integral and K-slice)**
+  - Drude — Conventional, Projector.
+  - Quantum-Metric Contribution — Conventional, Projector.
+  - Berry-Curvature Contribution (anomalous Hall effect) — Conventional, Projector.
+
+- **Modern orbital magnetization (Integral and K-slice)**
+  - Orbital Magnetization — Conventional, Projector.
+
 - **Quantum-geometric quantities (K-slice)**
-  - Quantum Hermitian Connection — Conventional, Projector, Wilson Loop, and
+  - Quantum Hermitian Connection — Conventional, Projector, Wilson Loop,
     Geometric Loop.
   - Hermitian Curvature Tensor.
   - Berry Curvature and its dipole and quadrupole.
@@ -92,7 +106,7 @@ quantum-geometric quantities from Wannier tight-binding models.
   - Zeeman Interband Berry Curvature and Zeeman Interband Quantum Metric.
   - Quantum Christoffel Symbol.
   - Triple Phase Product.
-  - Shift Vector — Wilson Loop and Geometric Loop.
+  - Shift Vector — Wilson Loop, Geometric Loop.
   - Additional quantum-geometric quantity calculations are under active
     development.
 
@@ -173,7 +187,7 @@ calculations.
 - [Release notes](docs/RELEASE_NOTES.md)
 - [Changelog](CHANGELOG.md)
 
-Version 1.0.1 is the current maintenance release. The API documented for
+Version 1.1.0 adds second-harmonic generation. The API documented for
 version 1.0.0 remains the public baseline; changelog entries describe
 differences from the preceding public tag.
 
@@ -232,3 +246,11 @@ WannierNLQG has received code contributions from:
 
 This source release is distributed under the
 [GNU General Public License version 2 only (`GPL-2.0-only`)](LICENSE).
+
+## Second-harmonic generation
+
+Version 1.1.0 adds integral and K-slice SHG susceptibility and conductivity, with total or seven-term output. See [SHG configuration and qualification](docs/SECOND_HARMONIC_GENERATION.md).
+
+## Linear and orbital response tasks
+
+See [linear transport, optics, and modern orbital magnetization](docs/LINEAR_AND_ORBITAL_RESPONSES.md) for the independent modules, dual methods, contribution outputs, and input qualification requirements.

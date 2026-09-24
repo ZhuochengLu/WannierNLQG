@@ -1,0 +1,3416 @@
+{
+    "source_manifest_sha256": "a78ac0e7af01c5cb6728b06014420e7a193f777076ffe861587fceace12470c4",
+    "runtime_source_sha256": "c9d72e2b555b75e36760ac06a5256b317653989fa7e26847a2997944f64c27d3",
+    "rates_ev": {
+        "gamma_intra": 0.04,
+        "gamma_inter": 0.05
+    },
+    "mus_ev": [
+        -0.1,
+        0.01,
+        0.2
+    ],
+    "methods": [
+        "Conventional",
+        "Projector"
+    ],
+    "formal_release": "wannierNLQG-v1.1.0",
+    "five_operator": {
+        "qualification": "DIAGNOSTIC_ONLY",
+        "bundle_sha256": "5367f4e91f352c64169cfa8e69908848aa82dfaa2ca0fd414c8fc50597b36d54",
+        "outputs": {
+            "orbital_magnetization_conventional_T0_mu2/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "e691baf2cde763b3ebfce56406fc38ee2e32e3d57f9e606b7c892ab71ba64683",
+                "rows": [
+                    [
+                        -30553.901211505636,
+                        0.0,
+                        10966.763044739688,
+                        0.0,
+                        83307.60672865497,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu2/orbital_magnetization_srocc.dat": {
+                "sha256": "3cb2736837b577788cfc7cb10918a7bd3a5791fba00ec7d9b5d57cc7afb089a6",
+                "rows": [
+                    [
+                        0.006395096096119967,
+                        0.0,
+                        -0.002559336065163775,
+                        0.0,
+                        -0.0011665137675594818,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu2/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "b7a77fcc5965fc83cc24cd47c63e66c40df836c3a096fa0b25980882dfd0e551",
+                "rows": [
+                    [
+                        59308.185647113554,
+                        0.0,
+                        -23735.308462085515,
+                        0.0,
+                        -10818.260436822336,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu3/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "5aceed76563df47d6e3d23eed43f3b96c309ec49112213619476db1a2f050f9b",
+                "rows": [
+                    [
+                        -36301.664805749264,
+                        0.0,
+                        13029.817478898638,
+                        0.0,
+                        98979.33472711482,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu3/orbital_magnetization_cmocc.dat": {
+                "sha256": "86891fcfc182c8db6a73befd277b6d6ec34d284152dff460d3f8a3c7b8e83305",
+                "rows": [
+                    [
+                        -0.003914343902934775,
+                        0.0,
+                        0.0014049820270722747,
+                        0.0,
+                        0.010672765491026782,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu1/orbital_magnetization_cmocc.dat": {
+                "sha256": "71fd4e9f9198db41c0b18d8b7300e85dd75e9e377e0071189f110343c9f7ff7b",
+                "rows": [
+                    [
+                        -0.002935757927201083,
+                        0.0,
+                        0.001053736520304206,
+                        0.0,
+                        0.008004574118270089,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu3/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "09d8f622f50f10b2113839508d3b950dfed793b59525dcc84cb4af713f38daed",
+                "rows": [
+                    [
+                        23006.520841364298,
+                        0.0,
+                        -10705.49098318687,
+                        0.0,
+                        88161.07429029248,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu3/orbital_magnetization_srocc.dat": {
+                "sha256": "3cb2736837b577788cfc7cb10918a7bd3a5791fba00ec7d9b5d57cc7afb089a6",
+                "rows": [
+                    [
+                        0.006395096096119967,
+                        0.0,
+                        -0.002559336065163775,
+                        0.0,
+                        -0.0011665137675594818,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu2/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "b3b89aac638721fac05d929ddfff3207b89c28c1bbea6b75bc654a9a74b4f3d0",
+                "rows": [
+                    [
+                        28754.28443560792,
+                        0.0,
+                        -12768.545417345822,
+                        0.0,
+                        72489.34629183263,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu2/orbital_magnetization_total.dat": {
+                "sha256": "fe4ed582162046bf94c2345c937259db69b1dffdfd8f70f6ae58659f95de22e7",
+                "rows": [
+                    [
+                        0.0031005233111498637,
+                        0.0,
+                        -0.0013768095257112767,
+                        0.0,
+                        0.00781639718738806,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu3/orbital_magnetization_total.dat": {
+                "sha256": "331724259c3174abd782a424ab8851e52658b512f0f2aee85a3df8ed0c531ef9",
+                "rows": [
+                    [
+                        0.002480752193185192,
+                        0.0,
+                        -0.0011543540380914998,
+                        0.0,
+                        0.0095062517234673,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu2/orbital_magnetization_srocc.dat": {
+                "sha256": "3cb2736837b577788cfc7cb10918a7bd3a5791fba00ec7d9b5d57cc7afb089a6",
+                "rows": [
+                    [
+                        0.006395096096119967,
+                        0.0,
+                        -0.002559336065163775,
+                        0.0,
+                        -0.0011665137675594818,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu2/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "e691baf2cde763b3ebfce56406fc38ee2e32e3d57f9e606b7c892ab71ba64683",
+                "rows": [
+                    [
+                        -30553.901211505636,
+                        0.0,
+                        10966.763044739688,
+                        0.0,
+                        83307.60672865497,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu1/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "c4eacce31b715930fb5f1e08f2525cdbfcf1a6f305061bd75cae3953d73a12f9",
+                "rows": [
+                    [
+                        32081.937042801597,
+                        0.0,
+                        -13962.945352911529,
+                        0.0,
+                        63416.24060851379,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu2/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "b3b89aac638721fac05d929ddfff3207b89c28c1bbea6b75bc654a9a74b4f3d0",
+                "rows": [
+                    [
+                        28754.28443560792,
+                        0.0,
+                        -12768.545417345822,
+                        0.0,
+                        72489.34629183263,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu1/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "84b6717319979c06a398c6b9cb2472234edfa56c845724d5bac60608b4ff1c30",
+                "rows": [
+                    [
+                        -27226.24860431196,
+                        0.0,
+                        9772.363109173977,
+                        0.0,
+                        74234.50104533613,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu3/orbital_magnetization_total.dat": {
+                "sha256": "331724259c3174abd782a424ab8851e52658b512f0f2aee85a3df8ed0c531ef9",
+                "rows": [
+                    [
+                        0.002480752193185192,
+                        0.0,
+                        -0.0011543540380914998,
+                        0.0,
+                        0.0095062517234673,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu1/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "c4eacce31b715930fb5f1e08f2525cdbfcf1a6f305061bd75cae3953d73a12f9",
+                "rows": [
+                    [
+                        32081.937042801597,
+                        0.0,
+                        -13962.945352911529,
+                        0.0,
+                        63416.24060851379,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu1/orbital_magnetization_cmocc.dat": {
+                "sha256": "dbe0e9e1d9fc54c4c9d2222d6b90f30b1ca00aa17e05d6ba35e82d123e3d9d43",
+                "rows": [
+                    [
+                        -0.002935757927201083,
+                        0.0,
+                        0.001053736520304206,
+                        0.0,
+                        0.008004574118270087,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu3/orbital_magnetization_srocc.dat": {
+                "sha256": "3cb2736837b577788cfc7cb10918a7bd3a5791fba00ec7d9b5d57cc7afb089a6",
+                "rows": [
+                    [
+                        0.006395096096119967,
+                        0.0,
+                        -0.002559336065163775,
+                        0.0,
+                        -0.0011665137675594818,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu1/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "d72cf1f020534a79b302a39802e1b198a91e333319a38f4992d398b07bfa6451",
+                "rows": [
+                    [
+                        -27226.24860431196,
+                        0.0,
+                        9772.363109173977,
+                        0.0,
+                        74234.50104533612,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu3/orbital_magnetization_srocc.dat": {
+                "sha256": "3cb2736837b577788cfc7cb10918a7bd3a5791fba00ec7d9b5d57cc7afb089a6",
+                "rows": [
+                    [
+                        0.006395096096119967,
+                        0.0,
+                        -0.002559336065163775,
+                        0.0,
+                        -0.0011665137675594818,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu2/orbital_magnetization_cmocc.dat": {
+                "sha256": "7b9ee8155c57a8d5e2b123c2e17335157c9067650994bc2892743275c9f36f9d",
+                "rows": [
+                    [
+                        -0.0032945727849701036,
+                        0.0,
+                        0.001182526539452498,
+                        0.0,
+                        0.008982910954947541,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu2/orbital_magnetization_total.dat": {
+                "sha256": "fe4ed582162046bf94c2345c937259db69b1dffdfd8f70f6ae58659f95de22e7",
+                "rows": [
+                    [
+                        0.0031005233111498637,
+                        0.0,
+                        -0.0013768095257112767,
+                        0.0,
+                        0.00781639718738806,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu1/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "84b6717319979c06a398c6b9cb2472234edfa56c845724d5bac60608b4ff1c30",
+                "rows": [
+                    [
+                        -27226.24860431196,
+                        0.0,
+                        9772.363109173977,
+                        0.0,
+                        74234.50104533613,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu2/orbital_magnetization_srocc.dat": {
+                "sha256": "3cb2736837b577788cfc7cb10918a7bd3a5791fba00ec7d9b5d57cc7afb089a6",
+                "rows": [
+                    [
+                        0.006395096096119967,
+                        0.0,
+                        -0.002559336065163775,
+                        0.0,
+                        -0.0011665137675594818,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu3/orbital_magnetization_total.dat": {
+                "sha256": "331724259c3174abd782a424ab8851e52658b512f0f2aee85a3df8ed0c531ef9",
+                "rows": [
+                    [
+                        0.002480752193185192,
+                        0.0,
+                        -0.0011543540380914998,
+                        0.0,
+                        0.0095062517234673,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu2/orbital_magnetization_cmocc.dat": {
+                "sha256": "7b9ee8155c57a8d5e2b123c2e17335157c9067650994bc2892743275c9f36f9d",
+                "rows": [
+                    [
+                        -0.0032945727849701036,
+                        0.0,
+                        0.001182526539452498,
+                        0.0,
+                        0.008982910954947541,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu1/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "cfb06d8f1fb3ac7eeaee4b1661d24b084ddcdf83c3c51bf653880931063dec3c",
+                "rows": [
+                    [
+                        32081.937042801565,
+                        0.0,
+                        -13962.945352911524,
+                        0.0,
+                        63416.24060851377,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu3/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "09d8f622f50f10b2113839508d3b950dfed793b59525dcc84cb4af713f38daed",
+                "rows": [
+                    [
+                        23006.520841364298,
+                        0.0,
+                        -10705.49098318687,
+                        0.0,
+                        88161.07429029248,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu3/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "5aceed76563df47d6e3d23eed43f3b96c309ec49112213619476db1a2f050f9b",
+                "rows": [
+                    [
+                        -36301.664805749264,
+                        0.0,
+                        13029.817478898638,
+                        0.0,
+                        98979.33472711482,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu2/orbital_magnetization_cmocc.dat": {
+                "sha256": "7b9ee8155c57a8d5e2b123c2e17335157c9067650994bc2892743275c9f36f9d",
+                "rows": [
+                    [
+                        -0.0032945727849701036,
+                        0.0,
+                        0.001182526539452498,
+                        0.0,
+                        0.008982910954947541,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu2/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "b7a77fcc5965fc83cc24cd47c63e66c40df836c3a096fa0b25980882dfd0e551",
+                "rows": [
+                    [
+                        59308.185647113554,
+                        0.0,
+                        -23735.308462085515,
+                        0.0,
+                        -10818.260436822336,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu3/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "09d8f622f50f10b2113839508d3b950dfed793b59525dcc84cb4af713f38daed",
+                "rows": [
+                    [
+                        23006.520841364298,
+                        0.0,
+                        -10705.49098318687,
+                        0.0,
+                        88161.07429029248,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu2/orbital_magnetization_total.dat": {
+                "sha256": "fe4ed582162046bf94c2345c937259db69b1dffdfd8f70f6ae58659f95de22e7",
+                "rows": [
+                    [
+                        0.0031005233111498637,
+                        0.0,
+                        -0.0013768095257112767,
+                        0.0,
+                        0.00781639718738806,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu1/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "80756a26b23b4b80c08bdbf20a8d552ba398dc16f665fa6052dc0eeb1ecfca4f",
+                "rows": [
+                    [
+                        59308.185647113525,
+                        0.0,
+                        -23735.308462085497,
+                        0.0,
+                        -10818.260436822331,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu1/orbital_magnetization_cmocc.dat": {
+                "sha256": "71fd4e9f9198db41c0b18d8b7300e85dd75e9e377e0071189f110343c9f7ff7b",
+                "rows": [
+                    [
+                        -0.002935757927201083,
+                        0.0,
+                        0.001053736520304206,
+                        0.0,
+                        0.008004574118270089,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu3/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "b7a77fcc5965fc83cc24cd47c63e66c40df836c3a096fa0b25980882dfd0e551",
+                "rows": [
+                    [
+                        59308.185647113554,
+                        0.0,
+                        -23735.308462085515,
+                        0.0,
+                        -10818.260436822336,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu1/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "b7a77fcc5965fc83cc24cd47c63e66c40df836c3a096fa0b25980882dfd0e551",
+                "rows": [
+                    [
+                        59308.185647113554,
+                        0.0,
+                        -23735.308462085515,
+                        0.0,
+                        -10818.260436822336,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu3/orbital_magnetization_cmocc.dat": {
+                "sha256": "86891fcfc182c8db6a73befd277b6d6ec34d284152dff460d3f8a3c7b8e83305",
+                "rows": [
+                    [
+                        -0.003914343902934775,
+                        0.0,
+                        0.0014049820270722747,
+                        0.0,
+                        0.010672765491026782,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu2/orbital_magnetization_cmocc.dat": {
+                "sha256": "7b9ee8155c57a8d5e2b123c2e17335157c9067650994bc2892743275c9f36f9d",
+                "rows": [
+                    [
+                        -0.0032945727849701036,
+                        0.0,
+                        0.001182526539452498,
+                        0.0,
+                        0.008982910954947541,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu2/orbital_magnetization_total.dat": {
+                "sha256": "fe4ed582162046bf94c2345c937259db69b1dffdfd8f70f6ae58659f95de22e7",
+                "rows": [
+                    [
+                        0.0031005233111498637,
+                        0.0,
+                        -0.0013768095257112767,
+                        0.0,
+                        0.00781639718738806,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu1/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "d72cf1f020534a79b302a39802e1b198a91e333319a38f4992d398b07bfa6451",
+                "rows": [
+                    [
+                        -27226.24860431196,
+                        0.0,
+                        9772.363109173977,
+                        0.0,
+                        74234.50104533612,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu1/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "cfb06d8f1fb3ac7eeaee4b1661d24b084ddcdf83c3c51bf653880931063dec3c",
+                "rows": [
+                    [
+                        32081.937042801565,
+                        0.0,
+                        -13962.945352911524,
+                        0.0,
+                        63416.24060851377,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu2/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "b7a77fcc5965fc83cc24cd47c63e66c40df836c3a096fa0b25980882dfd0e551",
+                "rows": [
+                    [
+                        59308.185647113554,
+                        0.0,
+                        -23735.308462085515,
+                        0.0,
+                        -10818.260436822336,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu3/orbital_magnetization_srocc.dat": {
+                "sha256": "3cb2736837b577788cfc7cb10918a7bd3a5791fba00ec7d9b5d57cc7afb089a6",
+                "rows": [
+                    [
+                        0.006395096096119967,
+                        0.0,
+                        -0.002559336065163775,
+                        0.0,
+                        -0.0011665137675594818,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu1/orbital_magnetization_srocc.dat": {
+                "sha256": "3cb2736837b577788cfc7cb10918a7bd3a5791fba00ec7d9b5d57cc7afb089a6",
+                "rows": [
+                    [
+                        0.006395096096119967,
+                        0.0,
+                        -0.002559336065163775,
+                        0.0,
+                        -0.0011665137675594818,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu3/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "b7a77fcc5965fc83cc24cd47c63e66c40df836c3a096fa0b25980882dfd0e551",
+                "rows": [
+                    [
+                        59308.185647113554,
+                        0.0,
+                        -23735.308462085515,
+                        0.0,
+                        -10818.260436822336,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu1/orbital_magnetization_total.dat": {
+                "sha256": "b92781202bf890a06af06032f19b3cd5fc7ff68b79e07d32ea854d48ab2abcf7",
+                "rows": [
+                    [
+                        0.003459338168918881,
+                        0.0,
+                        -0.0015055995448595679,
+                        0.0,
+                        0.006838060350710604,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu3/orbital_magnetization_total.dat": {
+                "sha256": "331724259c3174abd782a424ab8851e52658b512f0f2aee85a3df8ed0c531ef9",
+                "rows": [
+                    [
+                        0.002480752193185192,
+                        0.0,
+                        -0.0011543540380914998,
+                        0.0,
+                        0.0095062517234673,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu3/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "b7a77fcc5965fc83cc24cd47c63e66c40df836c3a096fa0b25980882dfd0e551",
+                "rows": [
+                    [
+                        59308.185647113554,
+                        0.0,
+                        -23735.308462085515,
+                        0.0,
+                        -10818.260436822336,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu1/orbital_magnetization_srocc.dat": {
+                "sha256": "365562900ea9ca55d4d1c42155fd6e2d41ba54f2935fb878ef512e17cf0fc592",
+                "rows": [
+                    [
+                        0.006395096096119964,
+                        0.0,
+                        -0.0025593360651637734,
+                        0.0,
+                        -0.0011665137675594811,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu3/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "5aceed76563df47d6e3d23eed43f3b96c309ec49112213619476db1a2f050f9b",
+                "rows": [
+                    [
+                        -36301.664805749264,
+                        0.0,
+                        13029.817478898638,
+                        0.0,
+                        98979.33472711482,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu1/orbital_magnetization_total.dat": {
+                "sha256": "b92781202bf890a06af06032f19b3cd5fc7ff68b79e07d32ea854d48ab2abcf7",
+                "rows": [
+                    [
+                        0.003459338168918881,
+                        0.0,
+                        -0.0015055995448595679,
+                        0.0,
+                        0.006838060350710604,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu1/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "b7a77fcc5965fc83cc24cd47c63e66c40df836c3a096fa0b25980882dfd0e551",
+                "rows": [
+                    [
+                        59308.185647113554,
+                        0.0,
+                        -23735.308462085515,
+                        0.0,
+                        -10818.260436822336,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu3/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "5aceed76563df47d6e3d23eed43f3b96c309ec49112213619476db1a2f050f9b",
+                "rows": [
+                    [
+                        -36301.664805749264,
+                        0.0,
+                        13029.817478898638,
+                        0.0,
+                        98979.33472711482,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu1/orbital_magnetization_total.dat": {
+                "sha256": "a2b29e3425452efaf9d4112789803bc82f0ac3b51f9027cf7e61599ce7eb00a6",
+                "rows": [
+                    [
+                        0.0034593381689188843,
+                        0.0,
+                        -0.0015055995448595683,
+                        0.0,
+                        0.006838060350710606,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu2/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "b7a77fcc5965fc83cc24cd47c63e66c40df836c3a096fa0b25980882dfd0e551",
+                "rows": [
+                    [
+                        59308.185647113554,
+                        0.0,
+                        -23735.308462085515,
+                        0.0,
+                        -10818.260436822336,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu2/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "b3b89aac638721fac05d929ddfff3207b89c28c1bbea6b75bc654a9a74b4f3d0",
+                "rows": [
+                    [
+                        28754.28443560792,
+                        0.0,
+                        -12768.545417345822,
+                        0.0,
+                        72489.34629183263,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu2/orbital_magnetization_srocc.dat": {
+                "sha256": "3cb2736837b577788cfc7cb10918a7bd3a5791fba00ec7d9b5d57cc7afb089a6",
+                "rows": [
+                    [
+                        0.006395096096119967,
+                        0.0,
+                        -0.002559336065163775,
+                        0.0,
+                        -0.0011665137675594818,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu1/orbital_magnetization_total.dat": {
+                "sha256": "a2b29e3425452efaf9d4112789803bc82f0ac3b51f9027cf7e61599ce7eb00a6",
+                "rows": [
+                    [
+                        0.0034593381689188843,
+                        0.0,
+                        -0.0015055995448595683,
+                        0.0,
+                        0.006838060350710606,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu1/orbital_magnetization_srocc.dat": {
+                "sha256": "365562900ea9ca55d4d1c42155fd6e2d41ba54f2935fb878ef512e17cf0fc592",
+                "rows": [
+                    [
+                        0.006395096096119964,
+                        0.0,
+                        -0.0025593360651637734,
+                        0.0,
+                        -0.0011665137675594811,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu3/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "09d8f622f50f10b2113839508d3b950dfed793b59525dcc84cb4af713f38daed",
+                "rows": [
+                    [
+                        23006.520841364298,
+                        0.0,
+                        -10705.49098318687,
+                        0.0,
+                        88161.07429029248,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu2/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "e691baf2cde763b3ebfce56406fc38ee2e32e3d57f9e606b7c892ab71ba64683",
+                "rows": [
+                    [
+                        -30553.901211505636,
+                        0.0,
+                        10966.763044739688,
+                        0.0,
+                        83307.60672865497,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu2/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "b3b89aac638721fac05d929ddfff3207b89c28c1bbea6b75bc654a9a74b4f3d0",
+                "rows": [
+                    [
+                        28754.28443560792,
+                        0.0,
+                        -12768.545417345822,
+                        0.0,
+                        72489.34629183263,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu3/orbital_magnetization_cmocc.dat": {
+                "sha256": "86891fcfc182c8db6a73befd277b6d6ec34d284152dff460d3f8a3c7b8e83305",
+                "rows": [
+                    [
+                        -0.003914343902934775,
+                        0.0,
+                        0.0014049820270722747,
+                        0.0,
+                        0.010672765491026782,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu3/orbital_magnetization_cmocc.dat": {
+                "sha256": "86891fcfc182c8db6a73befd277b6d6ec34d284152dff460d3f8a3c7b8e83305",
+                "rows": [
+                    [
+                        -0.003914343902934775,
+                        0.0,
+                        0.0014049820270722747,
+                        0.0,
+                        0.010672765491026782,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu1/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "80756a26b23b4b80c08bdbf20a8d552ba398dc16f665fa6052dc0eeb1ecfca4f",
+                "rows": [
+                    [
+                        59308.185647113525,
+                        0.0,
+                        -23735.308462085497,
+                        0.0,
+                        -10818.260436822331,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu1/orbital_magnetization_srocc.dat": {
+                "sha256": "3cb2736837b577788cfc7cb10918a7bd3a5791fba00ec7d9b5d57cc7afb089a6",
+                "rows": [
+                    [
+                        0.006395096096119967,
+                        0.0,
+                        -0.002559336065163775,
+                        0.0,
+                        -0.0011665137675594818,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu3/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "b7a77fcc5965fc83cc24cd47c63e66c40df836c3a096fa0b25980882dfd0e551",
+                "rows": [
+                    [
+                        59308.185647113554,
+                        0.0,
+                        -23735.308462085515,
+                        0.0,
+                        -10818.260436822336,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu2/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "e691baf2cde763b3ebfce56406fc38ee2e32e3d57f9e606b7c892ab71ba64683",
+                "rows": [
+                    [
+                        -30553.901211505636,
+                        0.0,
+                        10966.763044739688,
+                        0.0,
+                        83307.60672865497,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu1/orbital_magnetization_cmocc.dat": {
+                "sha256": "dbe0e9e1d9fc54c4c9d2222d6b90f30b1ca00aa17e05d6ba35e82d123e3d9d43",
+                "rows": [
+                    [
+                        -0.002935757927201083,
+                        0.0,
+                        0.001053736520304206,
+                        0.0,
+                        0.008004574118270087,
+                        0.0
+                    ]
+                ]
+            }
+        },
+        "target_contract_sha256": "5152ec4fbb51e9bd31817afc4d4476bfed221ba423beab1b69a1ed61a073bebe",
+        "inventory": [
+            "REAL_SPACE_HAMILTONIAN",
+            "REAL_SPACE_POSITION",
+            "REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION",
+            "REAL_SPACE_HAMILTONIAN_WEIGHTED_AXIAL_DERIVATIVE_OVERLAP",
+            "REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR"
+        ]
+    },
+    "schema": "wanniernlqg.scalar-linear-oam-baseline/1.0",
+    "recorded_formal_tree_sha256": "a5464ca5c76da5ed3e4685becf5e839f365410bf378a69ba3a16628770b31037",
+    "finite_model": {
+        "qualification": "DIAGNOSTIC_ONLY",
+        "outputs": {
+            "orbital_magnetization_conventional_T0_mu2/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "4b1138f6f3f35191193492244668036354a75dcc9344bcb4fa2eea54c85a0469",
+                "rows": [
+                    [
+                        3.0213186466161664e-12,
+                        0.0,
+                        -2.683373219340528e-12,
+                        0.0,
+                        77752.70995273702,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T300_mu1/linear_transport_total.dat": {
+                "sha256": "79fe65aab1e878decbc1bbc7c0e355b86181b02ebe6e3731b75944b343305f3d",
+                "rows": [
+                    [
+                        7919.886478965364,
+                        0.0,
+                        -175619.73287827917,
+                        0.0,
+                        0.09905082741400757,
+                        0.0,
+                        177397.13689158065,
+                        0.0,
+                        10071.929903408474,
+                        0.0,
+                        0.04952541370487308,
+                        0.0,
+                        0.09905082742155807,
+                        0.0,
+                        0.04952541371337452,
+                        0.0,
+                        2.030541962067523,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu2/orbital_magnetization_srocc.dat": {
+                "sha256": "fc8dff7e32021b0e2a4c2952662a26f11de507fbd0688f72bd3069683b9a1c6b",
+                "rows": [
+                    [
+                        -1.3432199890669695e-17,
+                        0.0,
+                        1.1929759710654862e-17,
+                        0.0,
+                        -0.3426385818652216,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu2/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "579e98fa5805e2f3373e62126273ebbcbf0f846ccb23cbbeaa625cafd577e9f6",
+                "rows": [
+                    [
+                        -2.978726843756994e-12,
+                        0.0,
+                        2.645545463806123e-12,
+                        0.0,
+                        -75983.58763336421,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T300_mu1/linear_transport_contact.dat": {
+                "sha256": "d26d1eed58807483a19604e8e315f23e61c285035fbd9f3a81416544ac87a779",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T300_mu3/linear_transport_drude.dat": {
+                "sha256": "ebeaa8d55d18f32e4abd42d7a8d8d4ae25694c6e7b4d55e8ba50fc3e6f6b5213",
+                "rows": [
+                    [
+                        0.23111760671037915,
+                        0.0,
+                        0.11555880335519218,
+                        0.0,
+                        4.737910937562679,
+                        0.0,
+                        0.11555880335519218,
+                        0.0,
+                        0.0577794016775974,
+                        0.0,
+                        2.368955468781394,
+                        0.0,
+                        4.737910937562679,
+                        0.0,
+                        2.368955468781394,
+                        0.0,
+                        97.12717422003306,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu3/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "55bf5d6b41d6a702b51b2ac634eef0641a13f94e8372313d78fcce23235869c9",
+                "rows": [
+                    [
+                        3.830562649291146e-12,
+                        0.0,
+                        -3.402100350992804e-12,
+                        0.0,
+                        111366.021933336,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu3/orbital_magnetization_cmocc.dat": {
+                "sha256": "289cf4632999a5e56145160d9a5529ad744fefeb07011cb1783f8f11305dae77",
+                "rows": [
+                    [
+                        1.7273447908816647e-17,
+                        0.0,
+                        -1.5341350233317767e-17,
+                        0.0,
+                        0.5021912848843737,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu1/orbital_magnetization_cmocc.dat": {
+                "sha256": "081b219f6222d1cc32dd2fbb6056bce1ff98111c1a244c38c2b30f7fb51c596f",
+                "rows": [
+                    [
+                        1.1511575881596205e-17,
+                        0.0,
+                        -1.0223964449323401e-17,
+                        0.0,
+                        0.2628622303556448,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu3/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "987ae9b6106a8069a14f46d4f7b95ad3997298add550b867ace34a6449219583",
+                "rows": [
+                    [
+                        8.518357922894508e-13,
+                        0.0,
+                        -7.565548754234472e-13,
+                        0.0,
+                        35382.4336637883,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu3/orbital_magnetization_srocc.dat": {
+                "sha256": "51ba2ca451c12697a3c40b9567ef9070dd054bad2740c996e2d1d1a516b85e40",
+                "rows": [
+                    [
+                        -1.3432136318797483e-17,
+                        0.0,
+                        1.1929703249526678e-17,
+                        0.0,
+                        -0.34263552831386507,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T300_mu2/linear_transport_total.dat": {
+                "sha256": "cddc2d417d1f879d67872cab361e3aaac2fb4b2bdbe17c7c96fcb32937223199",
+                "rows": [
+                    [
+                        7919.883066247642,
+                        0.0,
+                        -175619.76202393117,
+                        0.0,
+                        0.004451275649167675,
+                        0.0,
+                        177397.1616923525,
+                        0.0,
+                        10071.93027823737,
+                        0.0,
+                        0.0022256378224542774,
+                        0.0,
+                        0.004451275656718195,
+                        0.0,
+                        0.0022256378309557143,
+                        0.0,
+                        0.09125115088826653,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T0_mu3/linear_transport_total.dat": {
+                "sha256": "f4d31e2f0517444308788b0058cdce397b679f2675073b0071647bdd586853bf",
+                "rows": [
+                    [
+                        7919.882905666039,
+                        0.0,
+                        -175619.76339534702,
+                        0.0,
+                        -3.9185295320127205e-12,
+                        0.0,
+                        177397.16285932492,
+                        0.0,
+                        10071.930295874521,
+                        0.0,
+                        -4.088842969046993e-12,
+                        0.0,
+                        3.6319912957107536e-12,
+                        0.0,
+                        4.412594402408602e-12,
+                        0.0,
+                        6.1115731953862564e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T300_mu1/linear_transport_hall_interband.dat": {
+                "sha256": "2eed53dd84a29bd3599298033b58d206a2a03945c6a16e814d6c4e2b0ef48dd7",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        -176508.43488492974,
+                        0,
+                        -3.775259891650734e-12,
+                        0,
+                        176508.43488492974,
+                        0,
+                        0,
+                        0,
+                        -4.2507180977492666e-12,
+                        0,
+                        3.775259891650734e-12,
+                        0,
+                        4.2507180977492666e-12,
+                        0,
+                        -4.974349897138411e-45,
+                        0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu2/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "581ca81620580e60952fd01c93ab0ca8fa66b7eb8078559b0fab7330d71335ba",
+                "rows": [
+                    [
+                        4.2591784479872424e-14,
+                        0.0,
+                        -3.782773921089554e-14,
+                        0.0,
+                        1769.1214365588726,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T0_mu3/linear_transport_metric.dat": {
+                "sha256": "459105546d62f25b598c14f5f5311dcec62e280a8fa7b9b1f0f43c2202d987a1",
+                "rows": [
+                    [
+                        7919.882905666033,
+                        0.0,
+                        888.6997319889276,
+                        0.0,
+                        -1.4326911815098315e-13,
+                        0.0,
+                        888.6997319889276,
+                        0.0,
+                        10071.930295874512,
+                        0.0,
+                        1.6187571668080446e-13,
+                        0.0,
+                        -1.432691181509831e-13,
+                        0.0,
+                        1.618757166808045e-13,
+                        0.0,
+                        6.111573195386253e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T0_mu1/linear_transport_contact.dat": {
+                "sha256": "d26d1eed58807483a19604e8e315f23e61c285035fbd9f3a81416544ac87a779",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu2/orbital_magnetization_total.dat": {
+                "sha256": "e77e222b39a28a7a4aa7ad7945747c5dcb6cf640d35f16207af18c8afd236a2f",
+                "rows": [
+                    [
+                        1.9206237775350782e-19,
+                        0.0,
+                        -1.7057950556914404e-19,
+                        0.0,
+                        0.007977634038807843,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu3/orbital_magnetization_total.dat": {
+                "sha256": "8466a444c8b3cd08086046aa1a04c18877afad03498fe05a96f8e5544add8522",
+                "rows": [
+                    [
+                        3.841248018146961e-18,
+                        0.0,
+                        -3.4115905226629053e-18,
+                        0.0,
+                        0.1595527030191524,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T300_mu1/linear_transport_drude.dat": {
+                "sha256": "84eb49f5aba3115ef7611d906f7b1ff51d3cdd2856809cc17d41394efa00ec93",
+                "rows": [
+                    [
+                        0.004831747678923132,
+                        0.0,
+                        0.002415873839461512,
+                        0.0,
+                        0.09905082741792609,
+                        0.0,
+                        0.002415873839461512,
+                        0.0,
+                        0.0012079369197307286,
+                        0.0,
+                        0.04952541370896193,
+                        0.0,
+                        0.09905082741792609,
+                        0.0,
+                        0.04952541370896193,
+                        0.0,
+                        2.030541962067523,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu2/orbital_magnetization_srocc.dat": {
+                "sha256": "21a600cd8d79902a73a5d0ecf31b56413e36660af142663f236a356ffb4707c3",
+                "rows": [
+                    [
+                        -1.3432199890669686e-17,
+                        0.0,
+                        1.1929759710654858e-17,
+                        0.0,
+                        -0.3426385818652212,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T0_mu2/linear_transport_contact.dat": {
+                "sha256": "d26d1eed58807483a19604e8e315f23e61c285035fbd9f3a81416544ac87a779",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu2/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "12965488ca1d1b50c6a18e7c41c15fb5141816432454a61dd0d4b057eca9b2cd",
+                "rows": [
+                    [
+                        3.0213186282368663e-12,
+                        0.0,
+                        -2.6833732030170184e-12,
+                        0.0,
+                        77752.70906992309,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T300_mu1/linear_transport_metric.dat": {
+                "sha256": "2071848ac04b04ab461880d33c2d1aba7f1a63aa9e0b1d1fe8b6ea7ed1ca3a28",
+                "rows": [
+                    [
+                        7919.881647217687,
+                        0.0,
+                        888.699590776902,
+                        0.0,
+                        -1.4326909456240747e-13,
+                        0.0,
+                        888.699590776902,
+                        0.0,
+                        10071.928695471555,
+                        0.0,
+                        1.6187569002874131e-13,
+                        0.0,
+                        -1.4326909456240747e-13,
+                        0.0,
+                        1.6187569002874131e-13,
+                        0.0,
+                        6.1115722114907426e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu1/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "7b2a19cc72fa51ab21197f9b3120176c8e31ea681cfc4d039bbc3f5f57e90f64",
+                "rows": [
+                    [
+                        -4.259178961447258e-13,
+                        0.0,
+                        3.782774377117243e-13,
+                        0.0,
+                        -17691.21683189419,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T0_mu1/linear_transport_metric.dat": {
+                "sha256": "459105546d62f25b598c14f5f5311dcec62e280a8fa7b9b1f0f43c2202d987a1",
+                "rows": [
+                    [
+                        7919.882905666033,
+                        0.0,
+                        888.6997319889276,
+                        0.0,
+                        -1.4326911815098315e-13,
+                        0.0,
+                        888.6997319889276,
+                        0.0,
+                        10071.930295874512,
+                        0.0,
+                        1.6187571668080446e-13,
+                        0.0,
+                        -1.432691181509831e-13,
+                        0.0,
+                        1.618757166808045e-13,
+                        0.0,
+                        6.111573195386253e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T300_mu3/linear_transport_contact.dat": {
+                "sha256": "d26d1eed58807483a19604e8e315f23e61c285035fbd9f3a81416544ac87a779",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T300_mu2/linear_transport_hall_interband.dat": {
+                "sha256": "2386c5a4ef72c6df81d147b4c151bd0196a647379088b833b2b048c9876bc520",
+                "rows": [
+                    [
+                        -8.071344170051788e-13,
+                        0.0,
+                        -176508.461858142,
+                        0.0,
+                        -3.775260390393941e-12,
+                        0.0,
+                        176508.461858142,
+                        0.0,
+                        4.4896768721186196e-42,
+                        0.0,
+                        -4.250718659304454e-12,
+                        0.0,
+                        3.775260390393941e-12,
+                        0.0,
+                        4.250718659304454e-12,
+                        0.0,
+                        -2.4871749485692927e-45,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu1/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "f53146be646cf2ceb8af982a035287318b0f59b3261dbf817f600eb14f5059b7",
+                "rows": [
+                    [
+                        2.5528089608569686e-12,
+                        0.0,
+                        -2.267268037857631e-12,
+                        0.0,
+                        58292.37143765343,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu3/orbital_magnetization_total.dat": {
+                "sha256": "74c7c0ef8e27ba7bba881a534a5ba624ff6d2b507cf242b42dc36d5582621c48",
+                "rows": [
+                    [
+                        3.841181159365359e-18,
+                        0.0,
+                        -3.411531142278044e-18,
+                        0.0,
+                        0.15954949158749004,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu1/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "1bb1f8bd2258445cc5fc0c49d39a759d49ae873240880d5f7cf1f2e933e6058d",
+                "rows": [
+                    [
+                        -4.2591789614472666e-13,
+                        0.0,
+                        3.7827743771172473e-13,
+                        0.0,
+                        -17691.216831894217,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu2/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "4a0ecf198e11cf3fae024cad5555a4c3a54fae726aa3d17c00a73fee4bd1642f",
+                "rows": [
+                    [
+                        4.259178961447155e-14,
+                        0.0,
+                        -3.782774377117159e-14,
+                        0.0,
+                        1769.121683189391,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T300_mu1/linear_transport_contact.dat": {
+                "sha256": "d26d1eed58807483a19604e8e315f23e61c285035fbd9f3a81416544ac87a779",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu1/orbital_magnetization_cmocc.dat": {
+                "sha256": "f1fb5a88af0a61690e2d7fecbb4a4a9da15255c26fdb729bf04fef713aeb92c8",
+                "rows": [
+                    [
+                        1.1511575949091837e-17,
+                        0.0,
+                        -1.0223964509269402e-17,
+                        0.0,
+                        0.2628622335976666,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T0_mu1/linear_transport_hall_interband.dat": {
+                "sha256": "3d8ca4cee542d82491c63163a8322b00a8615acc46e4ab0b2e1b41e09b365478",
+                "rows": [
+                    [
+                        -8.0713441700518e-13,
+                        0.0,
+                        -176508.463127336,
+                        0.0,
+                        -3.775260413861737e-12,
+                        0.0,
+                        176508.46312733597,
+                        0.0,
+                        4.4896769075364404e-42,
+                        0.0,
+                        -4.250718685727798e-12,
+                        0.0,
+                        3.775260413861737e-12,
+                        0.0,
+                        4.250718685727798e-12,
+                        0.0,
+                        -2.4871749485692965e-45,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu3/orbital_magnetization_srocc.dat": {
+                "sha256": "21a600cd8d79902a73a5d0ecf31b56413e36660af142663f236a356ffb4707c3",
+                "rows": [
+                    [
+                        -1.3432199890669686e-17,
+                        0.0,
+                        1.1929759710654858e-17,
+                        0.0,
+                        -0.3426385818652212,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T0_mu2/linear_transport_total.dat": {
+                "sha256": "7f1b8a33a9dece8776c9019d6a39073b5b1e5c68f25ff289f08c50292cb14a25",
+                "rows": [
+                    [
+                        7919.882905666033,
+                        0.0,
+                        -175619.76339534685,
+                        0.0,
+                        -3.918529532012717e-12,
+                        0.0,
+                        177397.16285932474,
+                        0.0,
+                        10071.930295874512,
+                        0.0,
+                        -4.088842969046989e-12,
+                        0.0,
+                        3.6319912957107516e-12,
+                        0.0,
+                        4.412594402408598e-12,
+                        0.0,
+                        6.111573195386248e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T300_mu3/linear_transport_hall_interband.dat": {
+                "sha256": "60966fce5088db0c91580c0f05da24e7a056ecc1a17dfcc1cbaff9b337d78fad",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        -176507.11219263426,
+                        0,
+                        -3.775235434652791e-12,
+                        0,
+                        176507.11219263426,
+                        0,
+                        0,
+                        0,
+                        -4.2506905606242055e-12,
+                        0,
+                        3.775235434652791e-12,
+                        0,
+                        4.250690560624205e-12,
+                        0,
+                        -4.9743498971299374e-45,
+                        0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu1/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "4266084e89675da623907cbbac0b6a3996990c9fa7f9a4c526841697086e3a87",
+                "rows": [
+                    [
+                        2.552808975824811e-12,
+                        0.0,
+                        -2.267268051151266e-12,
+                        0.0,
+                        58292.37215660471,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu2/orbital_magnetization_cmocc.dat": {
+                "sha256": "e3275a7c77eca99d637c942b73003e725e59b0113c0095141bc07c9fc14b6f01",
+                "rows": [
+                    [
+                        1.3624262208697853e-17,
+                        0.0,
+                        -1.2100339163179158e-17,
+                        0.0,
+                        0.3506162130352384,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu2/orbital_magnetization_total.dat": {
+                "sha256": "ab650bd7cf5af689f6b41a55fe4a1396af9365b2e34e3bc08d4c95cbf989e20b",
+                "rows": [
+                    [
+                        1.9206237775350473e-19,
+                        0.0,
+                        -1.7057950556914173e-19,
+                        0.0,
+                        0.007977634038807732,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu3/orbital_magnetization_srocc.dat": {
+                "sha256": "8b6f06bcc5d16645c19a88cd8adc01b0f25e7eef06dca088bb3a02d93ac4f560",
+                "rows": [
+                    [
+                        -1.3432136318797491e-17,
+                        0.0,
+                        1.1929703249526684e-17,
+                        0.0,
+                        -0.34263552831386546,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T300_mu3/linear_transport_drude.dat": {
+                "sha256": "16587dc5f814a09f166ad50d9427c9a638e94abd1182e5de7696892bee2ec22e",
+                "rows": [
+                    [
+                        0.2311176067103787,
+                        0.0,
+                        0.11555880335519197,
+                        0.0,
+                        4.737910937562672,
+                        0.0,
+                        0.11555880335519197,
+                        0.0,
+                        0.05777940167759729,
+                        0.0,
+                        2.3689554687813903,
+                        0.0,
+                        4.737910937562672,
+                        0.0,
+                        2.3689554687813903,
+                        0.0,
+                        97.1271742200329,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu1/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "36c829825e4b5f0f2f0e75e21c6456d9b384f9fab7930a76a0a327d92c1331a9",
+                "rows": [
+                    [
+                        2.5528089608569686e-12,
+                        0.0,
+                        -2.267268037857632e-12,
+                        0.0,
+                        58292.37143765349,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T300_mu1/linear_transport_metric.dat": {
+                "sha256": "e9e5e699420a5b98e6b5a97ae1b7b00628c6d2883a6cca5c33f16fab3ae42794",
+                "rows": [
+                    [
+                        7919.8816472176795,
+                        0.0,
+                        888.6995907769013,
+                        0.0,
+                        -1.4326909456240737e-13,
+                        0.0,
+                        888.6995907769013,
+                        0.0,
+                        10071.928695471546,
+                        0.0,
+                        1.6187569002874116e-13,
+                        0.0,
+                        -1.4326909456240737e-13,
+                        0.0,
+                        1.6187569002874116e-13,
+                        0.0,
+                        6.1115722114907356e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T0_mu1/linear_transport_drude.dat": {
+                "sha256": "3cf83719c6ad4296dd8015c941c197d79d93777b6ae7726f9144d30a5637bf16",
+                "rows": [
+                    [
+                        3.5376545930578276e-170,
+                        0.0,
+                        1.768827296528874e-170,
+                        0.0,
+                        7.252191915768685e-169,
+                        0.0,
+                        1.768827296528874e-170,
+                        0.0,
+                        8.844136482644166e-171,
+                        0.0,
+                        3.626095957884259e-169,
+                        0.0,
+                        7.252191915768685e-169,
+                        0.0,
+                        3.626095957884259e-169,
+                        0.0,
+                        1.4866993427326083e-167,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T300_mu2/linear_transport_metric.dat": {
+                "sha256": "3b2127fc714f8c8307bcfb40e084d338d000fbd9121efc5d848b42808d415454",
+                "rows": [
+                    [
+                        7919.882849112244,
+                        0.0,
+                        888.6997256429581,
+                        0.0,
+                        -1.4326911709092906e-13,
+                        0.0,
+                        888.6997256429581,
+                        0.0,
+                        10071.930223953523,
+                        0.0,
+                        1.6187571548307942e-13,
+                        0.0,
+                        -1.4326911709092906e-13,
+                        0.0,
+                        1.6187571548307944e-13,
+                        0.0,
+                        6.1115731511706775e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu2/orbital_magnetization_srocc.dat": {
+                "sha256": "26c59ff58bca89b72c2b77ec82dcd4891916c971026ebe31f8d9de776f295e33",
+                "rows": [
+                    [
+                        -1.3432199830944352e-17,
+                        0.0,
+                        1.1929759657610018e-17,
+                        0.0,
+                        -0.3426385789964309,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu2/orbital_magnetization_cmocc.dat": {
+                "sha256": "3f0e23150f4b57c820cd150e68a1e2e89d8a5ba50051fced2a629597eeb07cd9",
+                "rows": [
+                    [
+                        1.3624262291577034e-17,
+                        0.0,
+                        -1.2100339236788003e-17,
+                        0.0,
+                        0.3506162170161788,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T300_mu3/linear_transport_total.dat": {
+                "sha256": "a182abc2f6ed488ed6fa00b86477b8ed561d81bbb72f7ff334f38a28a754d02f",
+                "rows": [
+                    [
+                        7920.0538272133535,
+                        0.0,
+                        -175618.3036565153,
+                        0.0,
+                        4.737910937558754,
+                        0.0,
+                        177395.9207287532,
+                        0.0,
+                        10071.911522311771,
+                        0.0,
+                        2.3689554687773016,
+                        0.0,
+                        4.737910937566304,
+                        0.0,
+                        2.3689554687858023,
+                        0.0,
+                        97.1271742200329,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu1/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "f616e2247016aa492fd0b0bde891dbcd9bf6ceba69196a2b40e6b180ffc999e0",
+                "rows": [
+                    [
+                        -4.2591758645263353e-13,
+                        0.0,
+                        3.7827716265981343e-13,
+                        0.0,
+                        -17691.201956436264,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu3/orbital_magnetization_total.dat": {
+                "sha256": "cabe7b0a63b8e2c98fc25f82a88bdf1b9b4a9aa98b33b8def18fd497df95f771",
+                "rows": [
+                    [
+                        3.841181159365357e-18,
+                        0.0,
+                        -3.4115311422780425e-18,
+                        0.0,
+                        0.15954949158749007,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu3/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "d711eb096c712a902fa5eecbf91aacdb7f9219daedf81434960abd3b1a4319ec",
+                "rows": [
+                    [
+                        8.518209656750459e-13,
+                        0.0,
+                        -7.565417072195335e-13,
+                        0.0,
+                        35381.72149617465,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu3/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "00ebcb9eabc6534f48cccdae88167269b6352d75733758597da2ef1db9ab301c",
+                "rows": [
+                    [
+                        3.830533724967904e-12,
+                        0.0,
+                        -3.402074661959818e-12,
+                        0.0,
+                        111364.6326096713,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu2/orbital_magnetization_cmocc.dat": {
+                "sha256": "f56c876dac7bf36fdd992e92f4c3330abc5fdb023f7b6c65d4669cca189454f1",
+                "rows": [
+                    [
+                        1.3624262208697857e-17,
+                        0.0,
+                        -1.2100339163179158e-17,
+                        0.0,
+                        0.35061621303523866,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T0_mu3/linear_transport_drude.dat": {
+                "sha256": "199f6d193fb426cc5497f644db9e6012334e5d2d9c36e9d11f8c868ac0604397",
+                "rows": [
+                    [
+                        3.550174991613346e-94,
+                        0.0,
+                        1.7750874958067133e-94,
+                        0.0,
+                        7.277858732807217e-93,
+                        0.0,
+                        1.7750874958067133e-94,
+                        0.0,
+                        8.875437479033766e-95,
+                        0.0,
+                        3.638929366403691e-93,
+                        0.0,
+                        7.277858732807217e-93,
+                        0.0,
+                        3.638929366403691e-93,
+                        0.0,
+                        1.4919610402254505e-91,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T0_mu3/linear_transport_hall_interband.dat": {
+                "sha256": "3d8ca4cee542d82491c63163a8322b00a8615acc46e4ab0b2e1b41e09b365478",
+                "rows": [
+                    [
+                        -8.0713441700518e-13,
+                        0.0,
+                        -176508.463127336,
+                        0.0,
+                        -3.775260413861737e-12,
+                        0.0,
+                        176508.46312733597,
+                        0.0,
+                        4.4896769075364404e-42,
+                        0.0,
+                        -4.250718685727798e-12,
+                        0.0,
+                        3.775260413861737e-12,
+                        0.0,
+                        4.250718685727798e-12,
+                        0.0,
+                        -2.4871749485692965e-45,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu2/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "c5acdf3667931807a4446d0eb7eb8d8802c0bb681dabf224f0a7ddec5e3067cd",
+                "rows": [
+                    [
+                        -2.9787268570016937e-12,
+                        0.0,
+                        2.645545475569356e-12,
+                        0.0,
+                        -75983.58826954762,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T300_mu3/linear_transport_contact.dat": {
+                "sha256": "d26d1eed58807483a19604e8e315f23e61c285035fbd9f3a81416544ac87a779",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu3/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "4fa9a6f4e2b6781d8977e425407a98901c867090c50f98c16db941b7e961bcd2",
+                "rows": [
+                    [
+                        8.518209656750456e-13,
+                        0.0,
+                        -7.565417072195332e-13,
+                        0.0,
+                        35381.72149617466,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T300_mu2/linear_transport_total.dat": {
+                "sha256": "f7b34093443dd8b142d9bec6f7e4d6215c3affdd0e569a32b67ed5487ec06e5e",
+                "rows": [
+                    [
+                        7919.883066247648,
+                        0.0,
+                        -175619.76202393134,
+                        0.0,
+                        0.00445127564916768,
+                        0.0,
+                        177397.16169235265,
+                        0.0,
+                        10071.930278237382,
+                        0.0,
+                        0.00222563782245428,
+                        0.0,
+                        0.0044512756567182,
+                        0.0,
+                        0.0022256378309557174,
+                        0.0,
+                        0.09125115088826662,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu2/orbital_magnetization_total.dat": {
+                "sha256": "953c200e37b87c216b2f03a5114bea092e8a99be405da779ad1c5004bd4cffca",
+                "rows": [
+                    [
+                        1.9206240090734364e-19,
+                        0.0,
+                        -1.7057952613314186e-19,
+                        0.0,
+                        0.007977635150957514,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu1/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "68f3582b6853788b7265cbd767dc249fb5deb6c1ffffc755b908332b4598eb1f",
+                "rows": [
+                    [
+                        -2.978726562277445e-12,
+                        0.0,
+                        2.6455452138110803e-12,
+                        0.0,
+                        -75983.574113041,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T0_mu2/linear_transport_metric.dat": {
+                "sha256": "a20501a0a554a0cb2f477cddcfbf306b030951f20be2a7513014f649df5bd714",
+                "rows": [
+                    [
+                        7919.88290566604,
+                        0.0,
+                        888.6997319889284,
+                        0.0,
+                        -1.4326911815098323e-13,
+                        0.0,
+                        888.6997319889284,
+                        0.0,
+                        10071.930295874521,
+                        0.0,
+                        1.6187571668080463e-13,
+                        0.0,
+                        -1.4326911815098323e-13,
+                        0.0,
+                        1.6187571668080463e-13,
+                        0.0,
+                        6.1115731953862585e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu1/orbital_magnetization_cmocc.dat": {
+                "sha256": "75c14f1fdf09c3f80c9a40002c41a9059801c9c22509835894833a2b1e224b9d",
+                "rows": [
+                    [
+                        1.1511575881596207e-17,
+                        0.0,
+                        -1.0223964449323404e-17,
+                        0.0,
+                        0.2628622303556451,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T300_mu1/linear_transport_total.dat": {
+                "sha256": "63fd2ddd059b2d07063034119d28ce4fb755a7bc29f3b4afb605db32e760a973",
+                "rows": [
+                    [
+                        7919.886478965359,
+                        0.0,
+                        -175619.732878279,
+                        0.0,
+                        0.09905082741400757,
+                        0.0,
+                        177397.13689158045,
+                        0.0,
+                        10071.929903408465,
+                        0.0,
+                        0.04952541370487308,
+                        0.0,
+                        0.09905082742155807,
+                        0.0,
+                        0.04952541371337452,
+                        0.0,
+                        2.030541962067523,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu3/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "b087f62019ab34ca55816c37befc20525caff50b070dfd050b53b5e8578aa123",
+                "rows": [
+                    [
+                        -2.97871275929286e-12,
+                        0.0,
+                        2.6455329547402853e-12,
+                        0.0,
+                        -75982.91111349674,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu1/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "c5acdf3667931807a4446d0eb7eb8d8802c0bb681dabf224f0a7ddec5e3067cd",
+                "rows": [
+                    [
+                        -2.9787268570016937e-12,
+                        0.0,
+                        2.645545475569356e-12,
+                        0.0,
+                        -75983.58826954762,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu3/orbital_magnetization_cmocc.dat": {
+                "sha256": "90ec4757887c3cc950b50dc55d6a5ed5ca7bf3dcc5e33e40d38206dcf09976e8",
+                "rows": [
+                    [
+                        1.7273317478162847e-17,
+                        0.0,
+                        -1.5341234391804728e-17,
+                        0.0,
+                        0.5021850199013556,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu2/orbital_magnetization_cmocc.dat": {
+                "sha256": "c421540a3ec1c3a2a15497b0cdd755941d39aece3c48b13cd281f472a4b327e7",
+                "rows": [
+                    [
+                        1.3624262291577038e-17,
+                        0.0,
+                        -1.2100339236788003e-17,
+                        0.0,
+                        0.3506162170161791,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T0_mu3/linear_transport_total.dat": {
+                "sha256": "7f1b8a33a9dece8776c9019d6a39073b5b1e5c68f25ff289f08c50292cb14a25",
+                "rows": [
+                    [
+                        7919.882905666033,
+                        0.0,
+                        -175619.76339534685,
+                        0.0,
+                        -3.918529532012717e-12,
+                        0.0,
+                        177397.16285932474,
+                        0.0,
+                        10071.930295874512,
+                        0.0,
+                        -4.088842969046989e-12,
+                        0.0,
+                        3.6319912957107516e-12,
+                        0.0,
+                        4.412594402408598e-12,
+                        0.0,
+                        6.111573195386248e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T0_mu3/linear_transport_hall_interband.dat": {
+                "sha256": "4951276b1062c3a976173843dd285caf985d024ec6494a4d78dd66dfdf5581c1",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        -176508.4631273358,
+                        0,
+                        -3.775260413861735e-12,
+                        0,
+                        176508.4631273358,
+                        0,
+                        0,
+                        0,
+                        -4.250718685727794e-12,
+                        0,
+                        3.775260413861735e-12,
+                        0,
+                        4.250718685727794e-12,
+                        0,
+                        -4.974349897138593e-45,
+                        0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu2/orbital_magnetization_total.dat": {
+                "sha256": "54901908b09f81a428a6762603213db0eebc7ffa64c83245a4bc254e3caacc0d",
+                "rows": [
+                    [
+                        1.9206240090734672e-19,
+                        0.0,
+                        -1.7057952613314417e-19,
+                        0.0,
+                        0.007977635150957542,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T0_mu3/linear_transport_drude.dat": {
+                "sha256": "d28b4e3db559fcd483b371fd742e91135d34daee750e2c00376902f1da694f75",
+                "rows": [
+                    [
+                        3.5501749916133394e-94,
+                        0.0,
+                        1.7750874958067099e-94,
+                        0.0,
+                        7.277858732807204e-93,
+                        0.0,
+                        1.7750874958067099e-94,
+                        0.0,
+                        8.87543747903375e-95,
+                        0.0,
+                        3.638929366403685e-93,
+                        0.0,
+                        7.277858732807204e-93,
+                        0.0,
+                        3.638929366403685e-93,
+                        0.0,
+                        1.4919610402254483e-91,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu1/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "1e9d18f3a6fe54267f6b5b56e34cfc25a62ebaf3284a83ebe1e46d7052387f03",
+                "rows": [
+                    [
+                        2.55280897582481e-12,
+                        0.0,
+                        -2.267268051151266e-12,
+                        0.0,
+                        58292.37215660466,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T300_mu2/linear_transport_drude.dat": {
+                "sha256": "598699ba953d3b916c72946c636ffec59af1ebd5b16f3d8c44ee75da254a7415",
+                "rows": [
+                    [
+                        0.000217135397711524,
+                        0.0,
+                        0.0001085676988557629,
+                        0.0,
+                        0.004451275653086209,
+                        0.0,
+                        0.0001085676988557629,
+                        0.0,
+                        5.428384942788191e-5,
+                        0.0,
+                        0.002225637826543123,
+                        0.0,
+                        0.004451275653086209,
+                        0.0,
+                        0.002225637826543123,
+                        0.0,
+                        0.09125115088826662,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu1/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "38cb2d3108ee483367eb15009e91a1295c2b6bd0e870e8ebf23728df09dfa7f5",
+                "rows": [
+                    [
+                        -4.259175864526344e-13,
+                        0.0,
+                        3.7827716265981404e-13,
+                        0.0,
+                        -17691.201956436293,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu2/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "46724b594d6d2d2aee9a385867e3c2e4d99dbdf5f4f24cb16eb9ebfaed7d4f3c",
+                "rows": [
+                    [
+                        -2.9787268437569924e-12,
+                        0.0,
+                        2.645545463806122e-12,
+                        0.0,
+                        -75983.58763336412,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu3/orbital_magnetization_srocc.dat": {
+                "sha256": "fc8dff7e32021b0e2a4c2952662a26f11de507fbd0688f72bd3069683b9a1c6b",
+                "rows": [
+                    [
+                        -1.3432199890669695e-17,
+                        0.0,
+                        1.1929759710654862e-17,
+                        0.0,
+                        -0.3426385818652216,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T300_mu2/linear_transport_contact.dat": {
+                "sha256": "d26d1eed58807483a19604e8e315f23e61c285035fbd9f3a81416544ac87a779",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu1/orbital_magnetization_srocc.dat": {
+                "sha256": "21a600cd8d79902a73a5d0ecf31b56413e36660af142663f236a356ffb4707c3",
+                "rows": [
+                    [
+                        -1.3432199890669686e-17,
+                        0.0,
+                        1.1929759710654858e-17,
+                        0.0,
+                        -0.3426385818652212,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu3/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "c5acdf3667931807a4446d0eb7eb8d8802c0bb681dabf224f0a7ddec5e3067cd",
+                "rows": [
+                    [
+                        -2.9787268570016937e-12,
+                        0.0,
+                        2.645545475569356e-12,
+                        0.0,
+                        -75983.58826954762,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu3/orbital_magnetization_total.dat": {
+                "sha256": "1e83ca962ca686872357f37729de51410c77871af530cf0f0fb15305c63a6ab7",
+                "rows": [
+                    [
+                        3.841248018146962e-18,
+                        0.0,
+                        -3.411590522662907e-18,
+                        0.0,
+                        0.15955270301915245,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T300_mu3/linear_transport_total.dat": {
+                "sha256": "ba988b8564e2579830f52ce081cb276db251d2e4e29a5743a694ef469af371df",
+                "rows": [
+                    [
+                        7920.053827213359,
+                        0.0,
+                        -175618.30365651543,
+                        0.0,
+                        4.737910937558761,
+                        0.0,
+                        177395.92072875335,
+                        0.0,
+                        10071.911522311782,
+                        0.0,
+                        2.368955468777305,
+                        0.0,
+                        4.737910937566311,
+                        0.0,
+                        2.3689554687858063,
+                        0.0,
+                        97.12717422003306,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu3/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "1d17367a76a7eb2aea708eab3e341229517d485d37f3d0187815ab755b2da108",
+                "rows": [
+                    [
+                        -2.9787127592928583e-12,
+                        0.0,
+                        2.645532954740284e-12,
+                        0.0,
+                        -75982.91111349665,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T300_mu3/linear_transport_metric.dat": {
+                "sha256": "84d0c196568931fc9c59024c937e011af738ec85ce8eeac2fa652749e88b8f3d",
+                "rows": [
+                    [
+                        7919.822709606642,
+                        0.0,
+                        888.6929773155969,
+                        0.0,
+                        -1.432679898255299e-13,
+                        0.0,
+                        888.6929773155969,
+                        0.0,
+                        10071.853742910094,
+                        0.0,
+                        1.61874441817849e-13,
+                        0.0,
+                        -1.4326798982552987e-13,
+                        0.0,
+                        1.6187444181784903e-13,
+                        0.0,
+                        6.1115261321652694e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T0_mu1/linear_transport_metric.dat": {
+                "sha256": "a20501a0a554a0cb2f477cddcfbf306b030951f20be2a7513014f649df5bd714",
+                "rows": [
+                    [
+                        7919.88290566604,
+                        0.0,
+                        888.6997319889284,
+                        0.0,
+                        -1.4326911815098323e-13,
+                        0.0,
+                        888.6997319889284,
+                        0.0,
+                        10071.930295874521,
+                        0.0,
+                        1.6187571668080463e-13,
+                        0.0,
+                        -1.4326911815098323e-13,
+                        0.0,
+                        1.6187571668080463e-13,
+                        0.0,
+                        6.1115731953862585e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu1/orbital_magnetization_total.dat": {
+                "sha256": "d77f41839f096f987701146f150f2ebb592b28df7c9049727ff2632d680a536b",
+                "rows": [
+                    [
+                        -1.9206226125553436e-18,
+                        0.0,
+                        1.7057940210189254e-18,
+                        0.0,
+                        -0.07977628443054098,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu1/orbital_magnetization_srocc.dat": {
+                "sha256": "804f51215532e7de082ec3f792f2dd011f04a585f979d0a893b2d4d95f23a1af",
+                "rows": [
+                    [
+                        -1.3432198561647184e-17,
+                        0.0,
+                        1.192975853028833e-17,
+                        0.0,
+                        -0.3426385180282077,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T0_mu2/linear_transport_drude.dat": {
+                "sha256": "246ba10fe756bf2936fced97450b849af7b09bf5e10f1c5b57ccd0eb65555e61",
+                "rows": [
+                    [
+                        3.812812301452427e-257,
+                        0.0,
+                        1.9064061507262564e-257,
+                        0.0,
+                        7.81626521797732e-256,
+                        0.0,
+                        1.9064061507262564e-257,
+                        0.0,
+                        9.532030753631496e-258,
+                        0.0,
+                        3.9081326089887496e-256,
+                        0.0,
+                        7.81626521797732e-256,
+                        0.0,
+                        3.9081326089887496e-256,
+                        0.0,
+                        1.6023343696853197e-254,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu3/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "a51e8c413ef3da3124fbbfb1af5bf2c3c0ca0545736ae381d12afd3f802f73ce",
+                "rows": [
+                    [
+                        3.830562649291145e-12,
+                        0.0,
+                        -3.4021003509928033e-12,
+                        0.0,
+                        111366.02193333593,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu1/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "e4f1a384d4c31bc2f9ae9c6af619674238905797e6707880605af5e3119568ac",
+                "rows": [
+                    [
+                        -2.9787268570016957e-12,
+                        0.0,
+                        2.6455454755693563e-12,
+                        0.0,
+                        -75983.5882695477,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T0_mu2/linear_transport_hall_interband.dat": {
+                "sha256": "4951276b1062c3a976173843dd285caf985d024ec6494a4d78dd66dfdf5581c1",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        -176508.4631273358,
+                        0,
+                        -3.775260413861735e-12,
+                        0,
+                        176508.4631273358,
+                        0,
+                        0,
+                        0,
+                        -4.250718685727794e-12,
+                        0,
+                        3.775260413861735e-12,
+                        0,
+                        4.250718685727794e-12,
+                        0,
+                        -4.974349897138593e-45,
+                        0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu1/orbital_magnetization_total.dat": {
+                "sha256": "f01bd189a5a0fbab9878ad232736f48d8b0af3e0b17f5807fa10eb393a4a2a00",
+                "rows": [
+                    [
+                        -1.9206226125553475e-18,
+                        0.0,
+                        1.705794021018928e-18,
+                        0.0,
+                        -0.07977628443054112,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu1/orbital_magnetization_total.dat": {
+                "sha256": "60f8639314ececf722f5595b5bf7b64e40957be7435f54b56b2349d8a17c6a3a",
+                "rows": [
+                    [
+                        -1.920624009073483e-18,
+                        0.0,
+                        1.7057952613314565e-18,
+                        0.0,
+                        -0.0797763515095764,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu2/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "e4f1a384d4c31bc2f9ae9c6af619674238905797e6707880605af5e3119568ac",
+                "rows": [
+                    [
+                        -2.9787268570016957e-12,
+                        0.0,
+                        2.6455454755693563e-12,
+                        0.0,
+                        -75983.5882695477,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu2/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "0e771bbe555e4756a4ead6c2d9e6c9f0fe07aa504b5f69e105fd55af40aada92",
+                "rows": [
+                    [
+                        4.2591784479873106e-14,
+                        0.0,
+                        -3.7827739210896054e-14,
+                        0.0,
+                        1769.1214365588971,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T300_mu3/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "78a98021f69e0220b1eba34a2d4105aba3f3da96487a5fd87edfcb5ea184a11e",
+                "rows": [
+                    [
+                        3.8305337249679055e-12,
+                        0.0,
+                        -3.402074661959819e-12,
+                        0.0,
+                        111364.6326096714,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T300_mu2/linear_transport_contact.dat": {
+                "sha256": "d26d1eed58807483a19604e8e315f23e61c285035fbd9f3a81416544ac87a779",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T300_mu2/linear_transport_drude.dat": {
+                "sha256": "8580859b93fc30a30d1d20f17440d9d78d2ed26591afbd0dec12ed3b4bc0dd45",
+                "rows": [
+                    [
+                        0.0002171353977115237,
+                        0.0,
+                        0.00010856769885576276,
+                        0.0,
+                        0.004451275653086203,
+                        0.0,
+                        0.00010856769885576276,
+                        0.0,
+                        5.4283849427881835e-5,
+                        0.0,
+                        0.0022256378265431203,
+                        0.0,
+                        0.004451275653086203,
+                        0.0,
+                        0.0022256378265431203,
+                        0.0,
+                        0.09125115088826653,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T0_mu2/linear_transport_total.dat": {
+                "sha256": "f4d31e2f0517444308788b0058cdce397b679f2675073b0071647bdd586853bf",
+                "rows": [
+                    [
+                        7919.882905666039,
+                        0.0,
+                        -175619.76339534702,
+                        0.0,
+                        -3.9185295320127205e-12,
+                        0.0,
+                        177397.16285932492,
+                        0.0,
+                        10071.930295874521,
+                        0.0,
+                        -4.088842969046993e-12,
+                        0.0,
+                        3.6319912957107536e-12,
+                        0.0,
+                        4.412594402408602e-12,
+                        0.0,
+                        6.1115731953862564e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T300_mu2/linear_transport_hall_interband.dat": {
+                "sha256": "caa8dd39a97ce5afd3f1015cc8646826777affb5291e2b3dd340c82b3161ece7",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        -176508.46185814185,
+                        0,
+                        -3.7752603903939374e-12,
+                        0,
+                        176508.46185814185,
+                        0,
+                        0,
+                        0,
+                        -4.25071865930445e-12,
+                        0,
+                        3.7752603903939374e-12,
+                        0,
+                        4.25071865930445e-12,
+                        0,
+                        -4.9743498971385855e-45,
+                        0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T300_mu1/linear_transport_hall_interband.dat": {
+                "sha256": "5450bbd4a0cbfbf2d5e7a9df043f58694b2dcc239f263e6505c8cd37ff94bc74",
+                "rows": [
+                    [
+                        -8.071344170051505e-13,
+                        0.0,
+                        -176508.43488492994,
+                        0.0,
+                        -3.775259891650736e-12,
+                        0.0,
+                        176508.4348849299,
+                        0.0,
+                        4.489676119410672e-42,
+                        0.0,
+                        -4.25071809774927e-12,
+                        0.0,
+                        3.775259891650737e-12,
+                        0.0,
+                        4.25071809774927e-12,
+                        0.0,
+                        -2.4871749485692056e-45,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T0_mu2/linear_transport_hall_interband.dat": {
+                "sha256": "3d8ca4cee542d82491c63163a8322b00a8615acc46e4ab0b2e1b41e09b365478",
+                "rows": [
+                    [
+                        -8.0713441700518e-13,
+                        0.0,
+                        -176508.463127336,
+                        0.0,
+                        -3.775260413861737e-12,
+                        0.0,
+                        176508.46312733597,
+                        0.0,
+                        4.4896769075364404e-42,
+                        0.0,
+                        -4.250718685727798e-12,
+                        0.0,
+                        3.775260413861737e-12,
+                        0.0,
+                        4.250718685727798e-12,
+                        0.0,
+                        -2.4871749485692965e-45,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T0_mu1/linear_transport_contact.dat": {
+                "sha256": "d26d1eed58807483a19604e8e315f23e61c285035fbd9f3a81416544ac87a779",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu2/orbital_magnetization_srocc.dat": {
+                "sha256": "f4ea06472dd2aef09f813eebbaa0c0e9d59eecc0c4319deef4a0f13ba497c362",
+                "rows": [
+                    [
+                        -1.3432199830944346e-17,
+                        0.0,
+                        1.1929759657610012e-17,
+                        0.0,
+                        -0.3426385789964305,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu1/orbital_magnetization_total.dat": {
+                "sha256": "77935a363db78a617d477fc52eebf53eb87d99425fd3c7cde293ae5aab951605",
+                "rows": [
+                    [
+                        -1.920624009073487e-18,
+                        0.0,
+                        1.7057952613314584e-18,
+                        0.0,
+                        -0.07977635150957652,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu1/orbital_magnetization_srocc.dat": {
+                "sha256": "9af0e5357eb04b9024e764a6d9c9813448f3bbf9bf9f506515815cc36e7c496d",
+                "rows": [
+                    [
+                        -1.3432198561647176e-17,
+                        0.0,
+                        1.1929758530288326e-17,
+                        0.0,
+                        -0.34263851802820733,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu3/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "31630c3d6612804b3165671b5de369848c072a5a37bb50686d74aed0fbfb20be",
+                "rows": [
+                    [
+                        8.518357922894506e-13,
+                        0.0,
+                        -7.565548754234469e-13,
+                        0.0,
+                        35382.43366378829,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu2/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "d7b13b004f47bfcc49a45cb945e59fff984230eb7ab99f3c89a6f3d59cc643f8",
+                "rows": [
+                    [
+                        3.0213186282368655e-12,
+                        0.0,
+                        -2.6833732030170184e-12,
+                        0.0,
+                        77752.70906992302,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T0_mu2/linear_transport_contact.dat": {
+                "sha256": "d26d1eed58807483a19604e8e315f23e61c285035fbd9f3a81416544ac87a779",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T300_mu2/linear_transport_metric.dat": {
+                "sha256": "b1b93db22535f647280dac4fb170b15a8689f4fa9ecf9a1bb2d07b2ff8ae291a",
+                "rows": [
+                    [
+                        7919.882849112251,
+                        0.0,
+                        888.6997256429588,
+                        0.0,
+                        -1.432691170909292e-13,
+                        0.0,
+                        888.6997256429588,
+                        0.0,
+                        10071.930223953532,
+                        0.0,
+                        1.6187571548307957e-13,
+                        0.0,
+                        -1.432691170909292e-13,
+                        0.0,
+                        1.6187571548307957e-13,
+                        0.0,
+                        6.111573151170683e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T300_mu1/linear_transport_drude.dat": {
+                "sha256": "5cff35cbfb8dd5419c56472aa4117676c03ddc8b38806e1ff46841a66f3891cd",
+                "rows": [
+                    [
+                        0.004831747678923132,
+                        0.0,
+                        0.002415873839461512,
+                        0.0,
+                        0.09905082741792609,
+                        0.0,
+                        0.002415873839461512,
+                        0.0,
+                        0.0012079369197307284,
+                        0.0,
+                        0.04952541370896193,
+                        0.0,
+                        0.09905082741792609,
+                        0.0,
+                        0.04952541370896193,
+                        0.0,
+                        2.030541962067523,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T0_mu1/linear_transport_drude.dat": {
+                "sha256": "448b964eccb9fad48b5f3fafe22ef235376144711e864071640c6fe57679337e",
+                "rows": [
+                    [
+                        3.5376545930578276e-170,
+                        0.0,
+                        1.768827296528874e-170,
+                        0.0,
+                        7.252191915768685e-169,
+                        0.0,
+                        1.768827296528874e-170,
+                        0.0,
+                        8.84413648264417e-171,
+                        0.0,
+                        3.626095957884259e-169,
+                        0.0,
+                        7.252191915768685e-169,
+                        0.0,
+                        3.626095957884259e-169,
+                        0.0,
+                        1.4866993427326083e-167,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T300_mu3/linear_transport_hall_interband.dat": {
+                "sha256": "0b3b05fb4e355bc00651b1589749c6b28c7bf0f109bc664f6e0c43094c6a73c6",
+                "rows": [
+                    [
+                        -8.071344170037755e-13,
+                        0.0,
+                        -176507.11219263443,
+                        0.0,
+                        -3.775235434652793e-12,
+                        0.0,
+                        176507.11219263438,
+                        0.0,
+                        4.489639208678672e-42,
+                        0.0,
+                        -4.250690560624209e-12,
+                        0.0,
+                        3.775235434652794e-12,
+                        0.0,
+                        4.250690560624209e-12,
+                        0.0,
+                        -2.4871749485649687e-45,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T300_mu3/linear_transport_metric.dat": {
+                "sha256": "dd1fdda2dce2cd28db3d8e831f9fa716cf151d193560585cb7f616006343e64f",
+                "rows": [
+                    [
+                        7919.8227096066485,
+                        0.0,
+                        888.6929773155975,
+                        0.0,
+                        -1.4326798982553e-13,
+                        0.0,
+                        888.6929773155975,
+                        0.0,
+                        10071.853742910105,
+                        0.0,
+                        1.6187444181784916e-13,
+                        0.0,
+                        -1.4326798982553e-13,
+                        0.0,
+                        1.6187444181784916e-13,
+                        0.0,
+                        6.111526132165275e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T0_mu2/orbital_magnetization_total_A_per_m.dat": {
+                "sha256": "5dbb077b4585e58a929b105d441dae7d190f21c22f32a0cb8eac855b53b1c092",
+                "rows": [
+                    [
+                        4.259178961447223e-14,
+                        0.0,
+                        -3.7827743771172104e-14,
+                        0.0,
+                        1769.1216831893971,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu3/orbital_magnetization_cmocc.dat": {
+                "sha256": "169766769495d9577782b6ab727412d1f8c49abf0f198553d967ce460d7ee540",
+                "rows": [
+                    [
+                        1.727331747816284e-17,
+                        0.0,
+                        -1.5341234391804725e-17,
+                        0.0,
+                        0.5021850199013551,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T0_mu2/linear_transport_drude.dat": {
+                "sha256": "a2080136d6638196e9641c70a3c76b5dab186e4461a193a8d7c8202ca8546672",
+                "rows": [
+                    [
+                        3.8128123014524196e-257,
+                        0.0,
+                        1.906406150726253e-257,
+                        0.0,
+                        7.816265217977308e-256,
+                        0.0,
+                        1.906406150726253e-257,
+                        0.0,
+                        9.53203075363148e-258,
+                        0.0,
+                        3.908132608988743e-256,
+                        0.0,
+                        7.816265217977308e-256,
+                        0.0,
+                        3.908132608988743e-256,
+                        0.0,
+                        1.6023343696853175e-254,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu3/orbital_magnetization_cmocc.dat": {
+                "sha256": "5f90a656d882113c21d4012312749f682d175884d24caa13f6497062920d4455",
+                "rows": [
+                    [
+                        1.7273447908816656e-17,
+                        0.0,
+                        -1.534135023331777e-17,
+                        0.0,
+                        0.502191284884374,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T0_mu3/linear_transport_contact.dat": {
+                "sha256": "d26d1eed58807483a19604e8e315f23e61c285035fbd9f3a81416544ac87a779",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu1/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "1ab0460e0e8148f22c842f42af6547e74e81580194e498414ed1fdf24fdc7e5c",
+                "rows": [
+                    [
+                        -2.9787265622774434e-12,
+                        0.0,
+                        2.6455452138110795e-12,
+                        0.0,
+                        -75983.57411304092,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu1/orbital_magnetization_srocc.dat": {
+                "sha256": "fc8dff7e32021b0e2a4c2952662a26f11de507fbd0688f72bd3069683b9a1c6b",
+                "rows": [
+                    [
+                        -1.3432199890669695e-17,
+                        0.0,
+                        1.1929759710654862e-17,
+                        0.0,
+                        -0.3426385818652216,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T0_mu2/linear_transport_metric.dat": {
+                "sha256": "459105546d62f25b598c14f5f5311dcec62e280a8fa7b9b1f0f43c2202d987a1",
+                "rows": [
+                    [
+                        7919.882905666033,
+                        0.0,
+                        888.6997319889276,
+                        0.0,
+                        -1.4326911815098315e-13,
+                        0.0,
+                        888.6997319889276,
+                        0.0,
+                        10071.930295874512,
+                        0.0,
+                        1.6187571668080446e-13,
+                        0.0,
+                        -1.432691181509831e-13,
+                        0.0,
+                        1.618757166808045e-13,
+                        0.0,
+                        6.111573195386253e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu3/orbital_magnetization_srocc_A_per_m.dat": {
+                "sha256": "e4f1a384d4c31bc2f9ae9c6af619674238905797e6707880605af5e3119568ac",
+                "rows": [
+                    [
+                        -2.9787268570016957e-12,
+                        0.0,
+                        2.6455454755693563e-12,
+                        0.0,
+                        -75983.5882695477,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T0_mu1/linear_transport_hall_interband.dat": {
+                "sha256": "4951276b1062c3a976173843dd285caf985d024ec6494a4d78dd66dfdf5581c1",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        -176508.4631273358,
+                        0,
+                        -3.775260413861735e-12,
+                        0,
+                        176508.4631273358,
+                        0,
+                        0,
+                        0,
+                        -4.250718685727794e-12,
+                        0,
+                        3.775260413861735e-12,
+                        0,
+                        4.250718685727794e-12,
+                        0,
+                        -4.974349897138593e-45,
+                        0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T0_mu1/linear_transport_total.dat": {
+                "sha256": "7f1b8a33a9dece8776c9019d6a39073b5b1e5c68f25ff289f08c50292cb14a25",
+                "rows": [
+                    [
+                        7919.882905666033,
+                        0.0,
+                        -175619.76339534685,
+                        0.0,
+                        -3.918529532012717e-12,
+                        0.0,
+                        177397.16285932474,
+                        0.0,
+                        10071.930295874512,
+                        0.0,
+                        -4.088842969046989e-12,
+                        0.0,
+                        3.6319912957107516e-12,
+                        0.0,
+                        4.412594402408598e-12,
+                        0.0,
+                        6.111573195386248e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "orbital_magnetization_projector_T0_mu2/orbital_magnetization_cmocc_A_per_m.dat": {
+                "sha256": "407d4f5df2d637df7161eb627a63132ce2c8f2e10bcc08c06c7976092a075e54",
+                "rows": [
+                    [
+                        3.0213186466161672e-12,
+                        0.0,
+                        -2.683373219340528e-12,
+                        0.0,
+                        77752.7099527371,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_conventional_T0_mu3/linear_transport_contact.dat": {
+                "sha256": "d26d1eed58807483a19604e8e315f23e61c285035fbd9f3a81416544ac87a779",
+                "rows": [
+                    [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                ]
+            },
+            "orbital_magnetization_conventional_T300_mu1/orbital_magnetization_cmocc.dat": {
+                "sha256": "755fd18b110c0378f716f01cb0f494bb632157e35327478bdb4c32f3d12641c4",
+                "rows": [
+                    [
+                        1.1511575949091833e-17,
+                        0.0,
+                        -1.02239645092694e-17,
+                        0.0,
+                        0.26286223359766636,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T0_mu1/linear_transport_total.dat": {
+                "sha256": "f4d31e2f0517444308788b0058cdce397b679f2675073b0071647bdd586853bf",
+                "rows": [
+                    [
+                        7919.882905666039,
+                        0.0,
+                        -175619.76339534702,
+                        0.0,
+                        -3.9185295320127205e-12,
+                        0.0,
+                        177397.16285932492,
+                        0.0,
+                        10071.930295874521,
+                        0.0,
+                        -4.088842969046993e-12,
+                        0.0,
+                        3.6319912957107536e-12,
+                        0.0,
+                        4.412594402408602e-12,
+                        0.0,
+                        6.1115731953862564e-30,
+                        0.0
+                    ]
+                ]
+            },
+            "linear_transport_projector_T0_mu3/linear_transport_metric.dat": {
+                "sha256": "a20501a0a554a0cb2f477cddcfbf306b030951f20be2a7513014f649df5bd714",
+                "rows": [
+                    [
+                        7919.88290566604,
+                        0.0,
+                        888.6997319889284,
+                        0.0,
+                        -1.4326911815098323e-13,
+                        0.0,
+                        888.6997319889284,
+                        0.0,
+                        10071.930295874521,
+                        0.0,
+                        1.6187571668080463e-13,
+                        0.0,
+                        -1.4326911815098323e-13,
+                        0.0,
+                        1.6187571668080463e-13,
+                        0.0,
+                        6.1115731953862585e-30,
+                        0.0
+                    ]
+                ]
+            }
+        },
+        "model_sha256": "69d9c9a12c7eb468fb4ebef68ddd5eae3fbee95b3aaaedc45dc5d14055c0e3a6"
+    },
+    "temperatures_K": [
+        0,
+        300
+    ]
+}

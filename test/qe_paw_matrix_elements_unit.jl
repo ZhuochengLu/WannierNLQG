@@ -88,7 +88,7 @@ end
         HDF5.h5open(qualified.artifacts["provenance_hdf5"], "r") do handle
             attributes = HDF5.attributes(handle)
             @test String(read(attributes["schema"])) == "WannierNLQG.qe_paw_matrix_elements"
-            @test String(read(attributes["schema_version"])) == "1.0"
+            @test String(read(attributes["schema_version"])) == "1.1"
             @test Bool(read(attributes["passed"]))
             @test Bool(read(attributes["physical_overlap_available"]))
             @test haskey(handle, "thresholds")

@@ -3,6 +3,7 @@
 
 @enum QuantityID::UInt8 begin
     QUANTITY_SHIFT_CURRENT
+    QUANTITY_SECOND_HARMONIC_GENERATION
     QUANTITY_QUANTUM_HERMITIAN_CONNECTION
     QUANTITY_HERMITIAN_CURVATURE_TENSOR
     QUANTITY_PHOTON_DRAG_SHIFT_CURRENT
@@ -24,6 +25,9 @@
     QUANTITY_QUANTUM_CHRISTOFFEL_SYMBOL
     QUANTITY_TRIPLE_PHASE_PRODUCT
     QUANTITY_BAND_STRUCTURE
+    QUANTITY_LINEAR_TRANSPORT
+    QUANTITY_LINEAR_OPTICAL_RESPONSE
+    QUANTITY_ORBITAL_MAGNETIZATION
 end
 
 @enum MethodID::UInt8 begin
@@ -53,6 +57,7 @@ end
 
 @enum MatrixPolicy::UInt8 begin
     MATRIX_CONVENTIONAL_Q0_CURRENT
+    MATRIX_SECOND_HARMONIC
     MATRIX_CONVENTIONAL_INJECTION_CURRENT
     MATRIX_CONVENTIONAL_INJECTION_SPIN_CURRENT
     MATRIX_CONVENTIONAL_SHIFT_SPIN_CURRENT
@@ -79,6 +84,9 @@ end
     MATRIX_WILSON_SHIFT_VECTOR
     MATRIX_PHOTON_DRAG_INJECTION_CURRENT
     MATRIX_SPECTRUM
+    MATRIX_LINEAR_TRANSPORT
+    MATRIX_LINEAR_OPTICAL_RESPONSE
+    MATRIX_ORBITAL_MAGNETIZATION
 end
 
 @enum BandPolicy::UInt8 begin
@@ -140,6 +148,10 @@ end
 
 # Map a normalized public quantity symbol to its typed enum, rejecting unsupported symbols.
 quantity_id(q::Symbol) =
+    q == :linear_transport ? QUANTITY_LINEAR_TRANSPORT :
+    q == :linear_optical_response ? QUANTITY_LINEAR_OPTICAL_RESPONSE :
+    q == :orbital_magnetization ? QUANTITY_ORBITAL_MAGNETIZATION :
+    q == :second_harmonic_generation ? QUANTITY_SECOND_HARMONIC_GENERATION :
     q == :shift_current ? QUANTITY_SHIFT_CURRENT :
     q == :quantum_hermitian_connection ? QUANTITY_QUANTUM_HERMITIAN_CONNECTION :
     q == :hermitian_curvature_tensor ? QUANTITY_HERMITIAN_CURVATURE_TENSOR :
@@ -165,6 +177,10 @@ quantity_id(q::Symbol) =
 
 # Recover the public quantity symbol from a typed quantity enum, rejecting unmapped values.
 quantity_symbol(q::QuantityID) =
+    q == QUANTITY_LINEAR_TRANSPORT ? :linear_transport :
+    q == QUANTITY_LINEAR_OPTICAL_RESPONSE ? :linear_optical_response :
+    q == QUANTITY_ORBITAL_MAGNETIZATION ? :orbital_magnetization :
+    q == QUANTITY_SECOND_HARMONIC_GENERATION ? :second_harmonic_generation :
     q == QUANTITY_SHIFT_CURRENT ? :shift_current :
     q == QUANTITY_QUANTUM_HERMITIAN_CONNECTION ? :quantum_hermitian_connection :
     q == QUANTITY_HERMITIAN_CURVATURE_TENSOR ? :hermitian_curvature_tensor :
@@ -248,6 +264,45 @@ function _task_definition(
 end
 
 const TASK_DEFINITIONS = (
+    (
+        _task_definition(
+            quantity,
+            method,
+            calculation,
+            Symbol(quantity, "_", method, "_", calculation),
+            calculation==:integral ?
+            (method==:conventional ? EXECUTOR_INTEGRAL_CONVENTIONAL : EXECUTOR_INTEGRAL_PROJECTOR) :
+            (method==:conventional ? EXECUTOR_KSLICE_CONVENTIONAL : EXECUTOR_KSLICE_PROJECTOR),
+            quantity==:linear_transport ? MATRIX_LINEAR_TRANSPORT :
+            quantity==:linear_optical_response ? MATRIX_LINEAR_OPTICAL_RESPONSE :
+            MATRIX_ORBITAL_MAGNETIZATION,
+            BAND_ALL,
+            calculation==:integral ? OUTPUT_INTEGRAL : OUTPUT_KSLICE_COMPLEX,
+            FOURIER_CONVENTIONAL_Q0,
+            quantity==:orbital_magnetization ? 1 : 2,
+            (
+                quantity==:linear_transport ? "lt" :
+                quantity==:linear_optical_response ? "lor" : "om"
+            )*(calculation==:kslice ? "k" : ""),
+        ) for quantity in (:linear_transport, :linear_optical_response, :orbital_magnetization)
+        for method in (:conventional, :projector) for calculation in (:integral, :kslice)
+    )...,
+    (
+        _task_definition(
+            :second_harmonic_generation,
+            :conventional,
+            calculation,
+            calculation == :integral ? :second_harmonic_integral : :second_harmonic_kslice,
+            calculation == :integral ? EXECUTOR_INTEGRAL_CONVENTIONAL :
+            EXECUTOR_KSLICE_CONVENTIONAL,
+            MATRIX_SECOND_HARMONIC,
+            BAND_ALL,
+            calculation == :integral ? OUTPUT_INTEGRAL : OUTPUT_KSLICE_COMPLEX,
+            FOURIER_CONVENTIONAL_Q0,
+            3,
+            calculation == :integral ? "shg" : "shgk",
+        ) for calculation in (:integral, :kslice)
+    )...,
     _task_definition(
         :band_structure,
         :conventional,
@@ -606,6 +661,14 @@ function _quantity_short_label_definition(
 end
 
 const QUANTITY_SHORT_LABELS = (
+    _quantity_short_label_definition(:linear_transport, :integral, "LT"),
+    _quantity_short_label_definition(:linear_transport, :kslice, "LTK"),
+    _quantity_short_label_definition(:linear_optical_response, :integral, "LOR"),
+    _quantity_short_label_definition(:linear_optical_response, :kslice, "LORK"),
+    _quantity_short_label_definition(:orbital_magnetization, :integral, "OM"),
+    _quantity_short_label_definition(:orbital_magnetization, :kslice, "OMK"),
+    _quantity_short_label_definition(:second_harmonic_generation, :integral, "SHG"),
+    _quantity_short_label_definition(:second_harmonic_generation, :kslice, "SHGK"),
     _quantity_short_label_definition(:band_structure, :kpath, "BAND"),
     _quantity_short_label_definition(:shift_current, :integral, "SC"),
     _quantity_short_label_definition(:photon_drag_shift_current, :integral, "PDSC"),
@@ -737,7 +800,11 @@ end
 # Choose the report label for a task's matrix policy, including finite-momentum configuration where required.
 function matrix_family_label(definition::TaskDefinition, cfg::EffectiveTaskConfig)
     policy = definition.matrix_policy
-    return policy == MATRIX_CONVENTIONAL_Q0_CURRENT ? "conventional_q0_current" :
+    policy in
+    (MATRIX_LINEAR_TRANSPORT, MATRIX_LINEAR_OPTICAL_RESPONSE, MATRIX_ORBITAL_MAGNETIZATION) &&
+        return string(quantity_symbol(definition.quantity))
+    return policy == MATRIX_SECOND_HARMONIC ? "second_harmonic_generation" :
+           policy == MATRIX_CONVENTIONAL_Q0_CURRENT ? "conventional_q0_current" :
            policy == MATRIX_SPECTRUM ? "spectrum" :
            policy == MATRIX_CONVENTIONAL_INJECTION_CURRENT ? "conventional_q0_current" :
            policy == MATRIX_CONVENTIONAL_INJECTION_SPIN_CURRENT ? "conventional_q0_current" :

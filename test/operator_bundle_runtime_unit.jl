@@ -1,4 +1,5 @@
 using HDF5
+using JSON3
 using Test
 using WannierNLQG
 
@@ -129,11 +130,13 @@ end
         model_file = TEST_MODEL_FILE
         bundle_file = write_hamiltonian_position_bundle(directory, model_file)
         manifest = OperatorBundleIO.read_real_space_operator_bundle_manifest(bundle_file)
-        @test manifest.schema_version == "1.0"
-        @test Base.pkgversion(WannierNLQG) == v"1.0.1"
+        @test manifest.schema_version == "1.1"
+        @test Base.pkgversion(WannierNLQG) == v"1.1.0"
         HDF5.h5open(bundle_file, "r") do handle
             @test String(read(HDF5.attributes(handle)["wanniernlqg_version"])) ==
                   string(Base.pkgversion(WannierNLQG))
+            @test String(read(HDF5.attributes(handle["compatibility"])["minimum_reader_schema"])) ==
+                  "1.1"
         end
         internal_predecessor_file = joinpath(directory, "wannierNLQG_tb_internal_v2.4.0.h5")
         cp(bundle_file, internal_predecessor_file)
@@ -144,7 +147,7 @@ end
         end
         @test OperatorBundleIO.read_real_space_operator_bundle_manifest(
             internal_predecessor_file,
-        ).schema_version == "1.0"
+        ).schema_version == "1.1"
         @test manifest.band_frame_contract_status == "NOT_APPLICABLE"
         @test manifest.spin_family_qualification == "NOT_APPLICABLE"
         @test !manifest.spin_family_production_eligible
@@ -222,22 +225,14 @@ end
             HDF5.delete_attribute(compatibility, "minimum_reader_schema")
             HDF5.attributes(compatibility)["minimum_reader_schema"] = "5.9"
         end
-        legacy_manifest =
+        legacy_error = try
             OperatorBundleIO.read_real_space_operator_bundle_manifest(legacy_full_parent_bundle)
-        @test legacy_manifest.schema_version == "5.9"
-        @test legacy_manifest.qualification_scope == "full_parent"
-        @test legacy_manifest.target_leakage_semantics == "LEGACY_AMPLITUDE_LEAKAGE_CONTRACT"
-        @test legacy_manifest.target_leakage_formula_sha256 == "NOT_RECORDED"
-        @test legacy_manifest.target_leakage_threshold === nothing
-        legacy_runtime = run_shift_current_source(
-            joinpath(directory, "legacy_schema_runtime"),
-            model_file,
-            legacy_full_parent_bundle,
-            "direct",
-        )
-        legacy_runtime_metadata = read(legacy_runtime.metadata_path, String)
-        @test occursin(r"source\s*= legacy_input", legacy_runtime_metadata)
-        @test occursin(r"input_minimum_distance_materialized\s*= nothing", legacy_runtime_metadata)
+            nothing
+        catch caught
+            caught
+        end
+        @test legacy_error isa ArgumentError
+        @test occursin("operator-bundle migration required", sprint(showerror, legacy_error))
 
         requested = Dict(
             OperatorBundleCore.REAL_SPACE_HAMILTONIAN => [(Int8(0), Int8(0))],
@@ -336,7 +331,7 @@ end
     end
 end
 
-@testset "schema-6.0 spin-family legacy qualification is diagnostic-only" begin
+@testset "schema-6.0 spin-family legacy qualification is standard" begin
     mktempdir() do directory
         model = OperatorBundleIO.read_wannier_tb(TEST_MODEL_FILE)
         specs = Dict(
@@ -393,7 +388,7 @@ end
         )
         current_manifest = OperatorBundleIO.read_real_space_operator_bundle_manifest(current)
         @test current_manifest.spin_family_qualification == "FAIL"
-        @test current_manifest.diagnostic_only
+        @test current_manifest.quality_review_recommended
         current_spin_record = current_manifest.operator_qualification["operators"]["spin"]
         current_pair_transform = current_spin_record["pair_wigner_seitz_transform"]
         @test current_pair_transform["algorithm"] == "WannierNLQG.PairWignerSeitzSpinQToRTransform"
@@ -476,6 +471,127 @@ end
         )
         @test !isfile(failed_pair)
 
+        @testset "Standard finite pair-WS warning survives Packed readback" begin
+            extension, _ = OperatorBundleIO._load_operator_bundle_extension!()
+            raw = Base.invokelatest(
+                extension._default_operator_qualification,
+                :hamiltonian_position_spin,
+                collect(keys(operators)),
+            )
+            raw["construction_policy"] = "standard"
+            provenance =
+                test_pair_wigner_seitz_provenance(("spin",); residuals = Dict("spin"=>2.0e-8))
+            provenance["operator_qualification"] = raw
+            warning_path = joinpath(directory, "standard-finite-pair-warning.h5")
+            warning_geometry = merge(geometry, Dict("production_eligible"=>true))
+            originals = Dict(kind=>copy(op.data) for (kind, op) in operators)
+            OperatorBundleIO.write_real_space_operator_bundle(
+                warning_path,
+                model.lattice,
+                model.r_degeneracies,
+                operators;
+                profile = :hamiltonian_position_spin,
+                geometry = warning_geometry,
+                provenance,
+            )
+            restored = OperatorBundleIO.read_real_space_operator_bundle(warning_path)
+            for (kind, values) in originals
+                @test operators[kind].data == values
+                @test restored.operators[kind].data == values
+            end
+            q = restored.manifest.operator_qualification
+            transform = q["operators"]["spin"]["pair_wigner_seitz_transform"]
+            @test transform["status"] == "NUMERICAL_WARNING"
+            @test transform["residual"] == 2.0e-8
+            @test transform["tolerance"] == 1.0e-8
+            @test !q["families"]["spin"]["production_eligible"]
+            @test !q["production_eligible"]
+            @test !restored.manifest.production_eligible
+            @test warning_geometry["production_eligible"]
+            false_pass = deepcopy(q)
+            false_pass["operators"]["spin"]["pair_wigner_seitz_transform"]["status"] = "PASS"
+            false_record = false_pass["operators"]["spin"]
+            false_record["payload_sha256"] = Base.invokelatest(
+                extension._operator_qualification_digest,
+                Dict(k=>v for (k, v) in false_record if k != "payload_sha256"),
+            )
+            tampered = deepcopy(raw)
+            tampered["operators"]["spin"]["reason"] = "CHANGED_WITHOUT_RESEALING"
+            @test_throws ArgumentError Base.invokelatest(
+                extension._bind_pair_wigner_seitz_qualification,
+                tampered,
+                provenance,
+                :hamiltonian_position_spin,
+                collect(keys(operators)),
+            )
+            @test_throws ArgumentError Base.invokelatest(
+                extension._validated_operator_qualification,
+                false_pass,
+                :hamiltonian_position_spin,
+                collect(keys(operators)),
+            )
+            for value in (NaN, Inf, -1.0)
+                invalid = deepcopy(provenance)
+                invalid["pair_wigner_seitz_roundtrip_residuals"]["spin"] = value
+                @test_throws ArgumentError Base.invokelatest(
+                    extension._bind_pair_wigner_seitz_qualification,
+                    raw,
+                    invalid,
+                    :hamiltonian_position_spin,
+                    collect(keys(operators)),
+                )
+            end
+            code = "using WannierNLQG; b=WannierNLQG.IO.read_real_space_operator_bundle(ARGS[1]); @assert b.manifest.operator_qualification[\"operators\"][\"spin\"][\"pair_wigner_seitz_transform\"][\"status\"] == \"NUMERICAL_WARNING\"; println(\"FRESH_READBACK_PASS\")"
+            project = dirname(Base.active_project())
+            output = read(
+                `$(Base.julia_cmd()) --startup-file=no --threads=1 --project=$project -e $code $warning_path`,
+                String,
+            )
+            @test occursin("FRESH_READBACK_PASS", output)
+            complex_operators = deepcopy(operators)
+            home = only(
+                findall(index -> all(iszero, model.r_vectors[:, index]), axes(model.r_vectors, 2)),
+            )
+            complex_operators[OperatorBundleCore.REAL_SPACE_POSITION].data[1, 1, 1, home] +=
+                2.0e-8im * model.r_degeneracies[home]
+            center_provenance = deepcopy(provenance)
+            center_provenance["pair_wigner_seitz_roundtrip_residuals"]["spin"] = 0.0
+            center_path = joinpath(directory, "standard-complex-position-diagonal.h5")
+            OperatorBundleIO.write_real_space_operator_bundle(
+                center_path,
+                model.lattice,
+                model.r_degeneracies,
+                complex_operators;
+                profile = :hamiltonian_position_spin,
+                geometry,
+                provenance = center_provenance,
+            )
+            center_bundle = OperatorBundleIO.read_real_space_operator_bundle(center_path)
+            @test center_bundle.manifest.tb_export_status == "EXPORTED_WITH_WARNING"
+            @test center_bundle.manifest.numerical_quality == "NUMERICAL_WARNING"
+            @test center_bundle.operators[OperatorBundleCore.REAL_SPACE_POSITION].data ==
+                  complex_operators[OperatorBundleCore.REAL_SPACE_POSITION].data
+            HDF5.h5open(center_path, "r") do handle
+                @test read(
+                    HDF5.attributes(handle["diagnostics"])["wannier_center_imaginary_maximum_angstrom"],
+                ) == 2.0e-8
+                @test read(
+                    HDF5.attributes(handle["diagnostics"])["wannier_center_imaginary_tolerance_angstrom"],
+                ) == 1.0e-10
+            end
+            strict_center = deepcopy(center_provenance)
+            delete!(strict_center["operator_qualification"], "construction_policy")
+            @test_throws ErrorException OperatorBundleIO.write_real_space_operator_bundle(
+                joinpath(directory, "strict-complex-position.h5"),
+                model.lattice,
+                model.r_degeneracies,
+                complex_operators;
+                profile = :hamiltonian_position_spin,
+                geometry,
+                provenance = strict_center,
+            )
+        end
+
         tampered_pair = joinpath(directory, "spin-schema-6.3-tampered-pair-contract.h5")
         cp(current, tampered_pair)
         HDF5.h5open(tampered_pair, "r+") do handle
@@ -549,7 +665,7 @@ end
         @test numerical_manifest.spin_family_qualification_reason ==
               "NUMERICAL_SYMMETRY_QUALIFICATION_FAILED"
         @test !numerical_manifest.production_eligible
-        @test numerical_manifest.diagnostic_only
+        @test numerical_manifest.quality_review_recommended
         @test numerical_manifest.band_frame_contract_status == "PASS"
         @test numerical_manifest.band_frame_transform_sha256 == repeat("5", 64)
         @test numerical_manifest.band_frame_physical_isometry_maximum == 2.0e-10
@@ -562,6 +678,72 @@ end
             numerical_manifest.operator_qualification["families"]["spin"]["pair_wigner_seitz_transform"]
         @test numerical_pair_family["maximum_residual"] == numerical_pair["residual"]
         @test numerical_pair_family["worst_operator"] == "spin"
+
+        @testset "Standard finite band-frame evidence remains a warning" begin
+            drift = deepcopy(frame_contract)
+            drift["physical_isometry_maximum"] = 2.0e-8
+            drift["replay_maximum"] = 3.0e-8
+            drift_qualification = deepcopy(numerical_qualification)
+            drift_qualification["construction_policy"] = "standard"
+            drift_qualification["operators"]["spin"]["band_frame_contract"] = drift
+            drift_record = drift_qualification["operators"]["spin"]
+            drift_record["payload_sha256"] = Base.invokelatest(
+                extension._operator_qualification_digest,
+                Dict(k=>v for (k, v) in drift_record if k != "payload_sha256"),
+            )
+            drift_provenance = merge(
+                test_pair_wigner_seitz_provenance(("spin",)),
+                Dict("operator_qualification"=>drift_qualification, "band_frame_contract"=>drift),
+            )
+            drift_path = joinpath(directory, "standard-finite-frame-warning.h5")
+            OperatorBundleIO.write_real_space_operator_bundle(
+                drift_path,
+                model.lattice,
+                model.r_degeneracies,
+                operators;
+                profile = :hamiltonian_position_spin,
+                geometry,
+                provenance = drift_provenance,
+            )
+            restored = OperatorBundleIO.read_real_space_operator_bundle(drift_path)
+            @test restored.manifest.numerical_quality == "NUMERICAL_WARNING"
+            @test restored.manifest.tb_export_status == "EXPORTED_WITH_WARNING"
+            @test !restored.manifest.production_eligible
+            @test restored.manifest.band_frame_physical_isometry_maximum == 2.0e-8
+            @test restored.manifest.band_frame_replay_maximum == 3.0e-8
+            for (kind, op) in operators
+                @test restored.operators[kind].data == op.data
+            end
+            strict_provenance = deepcopy(drift_provenance)
+            delete!(strict_provenance["operator_qualification"], "construction_policy")
+            @test_throws ArgumentError OperatorBundleIO.write_real_space_operator_bundle(
+                joinpath(directory, "strict-frame-failure.h5"),
+                model.lattice,
+                model.r_degeneracies,
+                operators;
+                profile = :hamiltonian_position_spin,
+                geometry,
+                provenance = strict_provenance,
+            )
+            for value in (NaN, Inf, -1.0)
+                invalid = deepcopy(drift_provenance)
+                invalid["band_frame_contract"]["physical_isometry_maximum"] = value
+                @test_throws ArgumentError Base.invokelatest(
+                    extension._bundle_band_frame_contract,
+                    invalid,
+                    :hamiltonian_position_spin;
+                    standard = true,
+                )
+            end
+            invalid = deepcopy(drift_provenance)
+            invalid["band_frame_contract"]["transform_sha256"] = "bad-digest"
+            @test_throws ArgumentError Base.invokelatest(
+                extension._bundle_band_frame_contract,
+                invalid,
+                :hamiltonian_position_spin;
+                standard = true,
+            )
+        end
 
         legacy_61_digest = Base.invokelatest(
             extension._scientific_content_digest,
@@ -615,14 +797,14 @@ end
             HDF5.delete_attribute(handle, "scientific_content_sha256")
             HDF5.attributes(handle)["scientific_content_sha256"] = legacy_61_digest
         end
-        legacy_61_manifest = OperatorBundleIO.read_real_space_operator_bundle_manifest(legacy_61)
-        @test legacy_61_manifest.schema_version == "6.1"
-        @test legacy_61_manifest.spin_family_qualification == "LEGACY_NOT_RECORDED"
-        @test legacy_61_manifest.spin_family_qualification_reason ==
-              "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED"
-        @test legacy_61_manifest.band_frame_contract_status ==
-              "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED"
-        @test !legacy_61_manifest.spin_family_production_eligible
+        legacy_61_error = try
+            OperatorBundleIO.read_real_space_operator_bundle_manifest(legacy_61)
+            nothing
+        catch caught
+            caught
+        end
+        @test legacy_61_error isa ArgumentError
+        @test occursin("operator-bundle migration required", sprint(showerror, legacy_61_error))
 
         spin_config = WannierNLQG.Runtime.EffectiveTaskConfig(
             tasks = [("ZIBCK", "Conventional", "K-slice")],
@@ -721,14 +903,148 @@ end
             HDF5.delete_attribute(handle, "scientific_content_sha256")
             HDF5.attributes(handle)["scientific_content_sha256"] = legacy_digest
         end
-        manifest = OperatorBundleIO.read_real_space_operator_bundle_manifest(legacy)
-        @test manifest.schema_version == "6.0"
-        @test manifest.spin_family_qualification == "LEGACY_NOT_RECORDED"
-        @test manifest.spin_family_qualification_reason ==
-              "SCHEMA_6_0_SPIN_QUALIFICATION_NOT_RECORDED"
-        @test !manifest.spin_family_production_eligible
-        @test !manifest.production_eligible
-        @test !manifest.scoped_production_eligible
-        @test manifest.diagnostic_only
+        legacy_error = try
+            OperatorBundleIO.read_real_space_operator_bundle_manifest(legacy)
+            nothing
+        catch caught
+            caught
+        end
+        @test legacy_error isa ArgumentError
+        @test occursin("operator-bundle migration required", sprint(showerror, legacy_error))
+    end
+end
+
+@testset "Full eleven-operator Standard pair warning" begin
+    extension, _ = OperatorBundleIO._load_operator_bundle_extension!()
+    fixture = joinpath(ROOT, "examples", "fixtures", "synthetic_runtime", "synthetic_operators.h5")
+    original = OperatorBundleIO.read_real_space_operator_bundle(fixture)
+    provenance, geometry = HDF5.h5open(fixture, "r") do handle
+        (
+            Base.invokelatest(extension._read_metadata_tree, handle["provenance"]),
+            Base.invokelatest(extension._read_metadata_tree, handle["geometry"]),
+        )
+    end
+    qualification = deepcopy(original.manifest.operator_qualification)
+    qualification["construction_policy"] = "standard"
+    provenance["operator_qualification"] = qualification
+    residuals = provenance["pair_wigner_seitz_roundtrip_residuals"]
+    tolerance = provenance["pair_wigner_seitz_roundtrip_tolerance"]
+    for name in keys(residuals)
+        residuals[name] = name == "spin" ? 0.0 : 2 * tolerance
+    end
+    mktempdir() do directory
+        path = joinpath(directory, "full-warning.h5")
+        OperatorBundleIO.write_real_space_operator_bundle(
+            path,
+            original.lattice,
+            original.manifest.degeneracies,
+            original.operators;
+            profile = :full,
+            provenance,
+            geometry,
+            eligibility = Dict(
+                "production_eligible"=>false,
+                "authoritative_hamiltonian"=>provenance["authoritative_hamiltonian"],
+                "authoritative_hamiltonian_sha256"=>provenance["authoritative_hamiltonian_digest"],
+            ),
+        )
+        restored = OperatorBundleIO.read_real_space_operator_bundle(path)
+        @test length(restored.operators) == 11
+        @test getfield.(restored.manifest.entries, :component_sha256) ==
+              getfield.(original.manifest.entries, :component_sha256)
+        @test restored.manifest.numerical_quality == "NUMERICAL_WARNING"
+        @test restored.manifest.tb_export_status == "EXPORTED_WITH_WARNING"
+        @test !restored.manifest.production_eligible
+        for (kind, operator) in original.operators
+            @test restored.operators[kind].data == operator.data
+        end
+        for (name, residual) in residuals
+            transform =
+                restored.manifest.operator_qualification["operators"][name]["pair_wigner_seitz_transform"]
+            @test transform["residual"] == residual
+            @test transform["tolerance"] == tolerance
+            @test transform["status"] == (residual <= tolerance ? "PASS" : "NUMERICAL_WARNING")
+        end
+        code = "using WannierNLQG; b=WannierNLQG.IO.read_real_space_operator_bundle(ARGS[1]); @assert length(b.operators)==11; @assert !b.manifest.production_eligible; println(\"FULL_FRESH_READBACK_PASS\")"
+        project = dirname(Base.active_project())
+        @test occursin(
+            "FULL_FRESH_READBACK_PASS",
+            read(
+                `$(Base.julia_cmd()) --startup-file=no --threads=1 --project=$project -e $code $path`,
+                String,
+            ),
+        )
+    end
+end
+
+@testset "Full metadata JSON arrays preserve scientific payload" begin
+    extension, _ = OperatorBundleIO._load_operator_bundle_extension!()
+    fixture = joinpath(ROOT, "examples", "fixtures", "synthetic_runtime", "synthetic_operators.h5")
+    original = OperatorBundleIO.read_real_space_operator_bundle(fixture)
+    provenance, geometry = HDF5.h5open(fixture, "r") do handle
+        (
+            Base.invokelatest(extension._read_metadata_tree, handle["provenance"]),
+            Base.invokelatest(extension._read_metadata_tree, handle["geometry"]),
+        )
+    end
+    dense = Dict(
+        "nested" => Dict(
+            "indices" => Int64[1, 2, 3],
+            "weights" => [0.125, -2.5],
+            "valid" => Bool[true, false],
+        ),
+    )
+    parsed = JSON3.read(JSON3.write(dense))
+    mktempdir() do directory
+        bundles = []
+        for (name, metadata) in (("dense", dense), ("json", parsed))
+            path = joinpath(directory, name * ".h5")
+            OperatorBundleIO.write_real_space_operator_bundle(
+                path,
+                original.lattice,
+                original.manifest.degeneracies,
+                original.operators;
+                profile = :full,
+                provenance,
+                geometry,
+                eligibility = Dict(
+                    "production_eligible" => false,
+                    "authoritative_hamiltonian" => provenance["authoritative_hamiltonian"],
+                    "authoritative_hamiltonian_sha256" =>
+                        provenance["authoritative_hamiltonian_digest"],
+                ),
+                diagnostics = Dict("raw_metadata" => metadata),
+            )
+            push!(bundles, OperatorBundleIO.read_real_space_operator_bundle(path))
+            HDF5.h5open(path, "r") do handle
+                for key in ("indices", "weights", "valid")
+                    @test read(handle["diagnostics/raw_metadata/nested/" * key]) ==
+                          dense["nested"][key]
+                end
+            end
+        end
+        @test length(bundles[2].operators) == 11
+        @test bundles[1].manifest.scientific_content_sha256 ==
+              bundles[2].manifest.scientific_content_sha256
+        for kind in keys(original.operators)
+            @test bundles[1].operators[kind].data ==
+                  bundles[2].operators[kind].data ==
+                  original.operators[kind].data
+        end
+        path = joinpath(directory, "array-views.h5")
+        matrix = reshape(collect(Int64, 1:12), 3, 4)
+        HDF5.h5open(path, "w") do handle
+            Base.invokelatest(
+                extension._write_metadata_value,
+                handle,
+                "view",
+                view(matrix, 1:2, 1:2:4),
+            )
+            Base.invokelatest(extension._write_metadata_value, handle, "range", 1:3)
+        end
+        HDF5.h5open(path, "r") do handle
+            @test read(handle["view"]) == matrix[1:2, 1:2:4]
+            @test read(handle["range"]) == [1, 2, 3]
+        end
     end
 end

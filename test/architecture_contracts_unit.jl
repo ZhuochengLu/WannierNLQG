@@ -499,3 +499,8 @@ end
     @test isempty(production_spglib_violations(inputs))
     @test isempty(private_shared_boundary_violations(inputs))
 end
+
+@testset "aliased imports retain their source contract" begin
+    records = direct_import_records("import Library: load as local_load, save\n")
+    @test records["Library"].symbols == ["load", "save"]
+end

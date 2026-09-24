@@ -1038,7 +1038,7 @@ function _constrained_frozen_initial_frames(
         )
     end
     frames = _expand_ibz_frames(frames, representation, plan)
-    if repair_expanded_invariants || construction_policy == :diagnostic
+    if repair_expanded_invariants || construction_policy == :standard
         for kpoint in eachindex(frames)
             # Keep exact qualified input arithmetic unchanged. Diagnostic repair
             # is needed only when approximate sewing broke a hard frame invariant.

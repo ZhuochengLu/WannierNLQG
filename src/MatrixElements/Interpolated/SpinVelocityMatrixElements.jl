@@ -41,16 +41,43 @@ struct FiniteDifferenceStencil
     end
 end
 
-# Convert fractional CHK points to integer mesh coordinates, rejecting residuals above `1e-6`.
+# Convert fractional CHK points to integer mesh coordinates.  A complete
+# Monkhorst-Pack mesh may carry a uniform fractional offset (for example an
+# even, shifted MP mesh has `k*N = integer + 1/2`).  The finite-difference
+# topology only depends on differences on that mesh, so remove the common
+# offset before forming integer coordinates.  Do not silently snap a distorted
+# or incomplete list: every component must share one offset and the resulting
+# modulo-mesh keys must cover the product mesh exactly once.
 function _spin_velocity_kpt_grid_int(chk::WannierCHK)
+    chk.num_kpts == prod(chk.mp_grid) ||
+        error("CHK k-point count $(chk.num_kpts) does not cover mp_grid $(chk.mp_grid).")
     grid = Matrix{Int}(undef, chk.num_kpts, 3)
     mp = collect(chk.mp_grid)
-    @inbounds for kpoint_index in 1:chk.num_kpts, a in 1:3
-        value = round(Int, chk.kpt_red[kpoint_index, a] * mp[a])
-        abs(chk.kpt_red[kpoint_index, a] * mp[a] - value) <= 1e-6 ||
-            error("CHK k-point $(kpoint_index), component $(a) is not on mp_grid $(chk.mp_grid).")
-        grid[kpoint_index, a] = value
+    @inbounds for a in 1:3
+        scaled_origin = chk.kpt_red[1, a] * mp[a]
+        offset = mod(scaled_origin, 1.0)
+        offset >= 1.0 - 1.0e-6 && (offset = 0.0)
+        for kpoint_index in 1:chk.num_kpts
+            scaled = chk.kpt_red[kpoint_index, a] * mp[a]
+            value = round(Int, scaled - offset)
+            abs(scaled - offset - value) <= 1e-6 || error(
+                "CHK k-point $(kpoint_index), component $(a) does not share a uniform " *
+                "MP offset on mp_grid $(chk.mp_grid).",
+            )
+            grid[kpoint_index, a] = value
+        end
     end
+    keys = Set{NTuple{3, Int}}()
+    for kpoint_index in 1:chk.num_kpts
+        key = (
+            mod(grid[kpoint_index, 1], mp[1]),
+            mod(grid[kpoint_index, 2], mp[2]),
+            mod(grid[kpoint_index, 3], mp[3]),
+        )
+        key in keys && error("Duplicate CHK k-point modulo mp_grid at key=$(key).")
+        push!(keys, key)
+    end
+    length(keys) == prod(mp) || error("CHK k-points do not cover mp_grid $(chk.mp_grid).")
     return grid
 end
 

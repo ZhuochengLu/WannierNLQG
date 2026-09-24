@@ -1,3 +1,61 @@
+"""Share at most one strictly restored gauge payload while building compact contracts."""
+function _with_generation_gauge_reuse(f::F) where {F}
+    context = (owner = current_task(), slot = Ref{Any}(nothing))
+    try
+        task_local_storage(f, :wannier_generation_gauge_reuse, context)
+    finally
+        context.slot[] = nothing
+    end
+end
+
+"""Read a gauge once per construction scope; the original reader retains all validation."""
+function _read_generation_gauge(
+    path::AbstractString;
+    construction_policy,
+    source,
+    reader = _read_star_covariant_paw_gauge_hdf5,
+)
+    context = get(task_local_storage(), :wannier_generation_gauge_reuse, nothing)
+    context === nothing && return reader(path; construction_policy, source)
+    context.owner === current_task() ||
+        throw(ArgumentError("GENERATION_GAUGE_COORDINATOR_REQUIRED"))
+    canonical = realpath(path)
+    key = (canonical, repr(source), construction_policy)
+    information = stat(canonical)
+    identity = (
+        information.device,
+        information.inode,
+        information.size,
+        information.mtime,
+        information.ctime,
+    )
+    saved = context.slot[]
+    if saved !== nothing && saved.key == key
+        refreshed = verified_file_digest_identity(
+            canonical,
+            saved.identity,
+            saved.digest;
+            change_error = "GENERATION_GAUGE_CHANGED_DURING_CONSTRUCTION",
+        )
+        context.slot[] = merge(saved, (; identity = refreshed))
+        return saved.payload
+    end
+    context.slot[] = nothing
+    payload, digest, verified_identity = with_verified_file_digests([canonical]) do
+        digest = sha256_file(canonical)
+        payload = reader(canonical; construction_policy, source)
+        verified_identity = verified_file_digest_identity(
+            canonical,
+            identity,
+            digest;
+            change_error = "GENERATION_GAUGE_CHANGED_DURING_READ",
+        )
+        (payload, digest, verified_identity)
+    end
+    context.slot[] = (key = key, identity = verified_identity, digest = digest, payload = payload)
+    return payload
+end
+
 """Digest an identity rotation with the same byte contract as a sealed gauge rotation."""
 function _identity_band_rotation_sha256(num_bands::Int, num_kpts::Int)
     num_bands > 0 && num_kpts > 0 || throw(ArgumentError("band-gauge dimensions must be positive"))
@@ -74,7 +132,32 @@ end
 _rotate_double_endpoint_operator(operator, first_rotation, second_rotation) =
     _rotate_link_operator(operator, first_rotation, second_rotation)
 
-"""Resolve and verify the exact band-gauge transformation requested by a generator."""
+"""Resolve an implicit full native band range only for a sealed full-space gauge.
+
+The native operator source remains unchanged. Explicit selections retain their
+identity and are checked by the established gauge reader.
+"""
+function _generation_gauge_source(source, gauge_hdf5)
+    gauge_hdf5 === nothing && return source
+    source isa Union{QuantumEspressoWavefunctionSource, VASPWavefunctionSource} || return source
+    source.band_range === nothing || return source
+    band_range = HDF5.h5open(gauge_hdf5, "r") do handle
+        attributes = HDF5.attributes(handle)
+        target =
+            Int(read(attributes["target_band_start"])):Int(read(attributes["target_band_stop"]))
+        parent =
+            Int(read(attributes["parent_band_start"])):Int(read(attributes["parent_band_stop"]))
+        target == parent && first(target) == 1 && !isempty(target) || throw(
+            ArgumentError(
+                "WAVEFUNCTION_GAUGE_ARTIFACT_MISMATCH: implicit full source cannot select a gauge subset",
+            ),
+        )
+        target
+    end
+    return _star_source_with_band_range(source, band_range)
+end
+
+"""Reuse only a sealed compact frame contract, never a full restored gauge payload."""
 function _generation_band_gauge_contract(
     source,
     authority,
@@ -83,8 +166,39 @@ function _generation_band_gauge_contract(
     num_kpts::Int;
     construction_policy::Symbol = :strict,
 )
-    construction_policy in (:strict, :diagnostic) ||
-        throw(ArgumentError("construction_policy must be :strict or :diagnostic"))
+    source = _generation_gauge_source(source, gauge_hdf5)
+    identity =
+        () -> repr((
+            source,
+            authority,
+            gauge_hdf5 === nothing ? nothing : sha256_file(gauge_hdf5),
+            num_bands,
+            num_kpts,
+            construction_policy,
+        ))
+    return cached_preparation_artifact("band-frame", identity) do
+        _build_generation_band_gauge_contract(
+            source,
+            authority,
+            gauge_hdf5,
+            num_bands,
+            num_kpts;
+            construction_policy,
+        )
+    end
+end
+
+"""Resolve and verify the exact band-gauge transformation requested by a generator."""
+function _build_generation_band_gauge_contract(
+    source,
+    authority,
+    gauge_hdf5,
+    num_bands::Int,
+    num_kpts::Int;
+    construction_policy::Symbol = :strict,
+)
+    construction_policy in (:strict, :standard) ||
+        throw(ArgumentError("construction_policy must be :strict or :standard"))
     if authority isa NativeDFTHamiltonian && gauge_hdf5 === nothing
         return _identity_band_frame_contract(num_bands, num_kpts)
     elseif authority isa NativeDFTHamiltonian || authority isa SymmetrizedDFTHamiltonian
@@ -94,7 +208,7 @@ function _generation_band_gauge_contract(
             ),
         )
         path = abspath(something(gauge_hdf5))
-        restored = _read_star_covariant_paw_gauge_hdf5(path; construction_policy, source)
+        restored = _read_generation_gauge(path; construction_policy, source)
         _validate_star_gauge_source_identity(source, restored.payload)
         artifact_authority = get(restored.payload.source_metadata, "authoritative_hamiltonian", "")
         requested_authority = authoritative_hamiltonian_key(authority)
@@ -136,7 +250,7 @@ function _generation_band_gauge_contract(
             end
             identity_transform || throw(
                 ArgumentError(
-                    "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED: schema-$(restored.schema_version) nonidentity transform is diagnostic-only",
+                    "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED: schema-$(restored.schema_version) nonidentity transform is standard",
                 ),
             )
             identity = _identity_band_frame_contract(num_bands, num_kpts)
@@ -370,7 +484,11 @@ function read_qe_paw_spn_provenance(filename::AbstractString; verify_spn::Bool =
     schema_version = String(get(payload, "schema_version", ""))
     schema_version in ("1.0", "1.1", "1.2") ||
         throw(ArgumentError("QE_PAW_SPN_PROVENANCE_VERSION_MISMATCH"))
-    contract_version = schema_version == "1.0" ? "1.2" : schema_version
+    modern_intent =
+        haskey(payload, "band_frame_contract") &&
+        haskey(payload, "band_frame_transform_sha256") &&
+        haskey(payload, "band_frame_contract_sha256")
+    contract_version = modern_intent ? "1.2" : schema_version
     required =
         contract_version == "1.2" ?
         (
@@ -505,6 +623,84 @@ function _read_spn_provenance(filename::AbstractString; verify_spn::Bool = true)
            read_qe_paw_spn_provenance(filename; verify_spn)
 end
 
+"""Reuse one compact SPN attestation within a coordinator-owned workflow only."""
+function _with_spn_provenance_reuse(f::F) where {F}
+    existing = get(task_local_storage(), :wannier_spn_provenance_reuse, nothing)
+    existing !== nothing && existing.owner === current_task() && return f()
+    context = (owner = current_task(), slot = Ref{Any}(nothing))
+    try
+        task_local_storage(f, :wannier_spn_provenance_reuse, context)
+    finally
+        context.slot[] = nothing
+    end
+end
+
+"""Capture file replacement and in-place changes after a content-verified read."""
+function _spn_validation_file_identity(path)
+    information = stat(path)
+    return (
+        information.device,
+        information.inode,
+        information.size,
+        information.mtime,
+        information.ctime,
+    )
+end
+
+"""Reuse a qualified attestation without persisting process-local verification credentials."""
+function _read_and_validate_spn_provenance(
+    provenance_path::AbstractString,
+    spn_path::AbstractString;
+    reader = _read_and_validate_spn_provenance_uncached,
+    kwargs...,
+)
+    context = get(task_local_storage(), :wannier_spn_provenance_reuse, nothing)
+    context === nothing && return reader(provenance_path, spn_path; kwargs...)
+    context.owner === current_task() || throw(ArgumentError("SPN_VALIDATION_COORDINATOR_REQUIRED"))
+    paths = (realpath(provenance_path), realpath(spn_path))
+    key = (paths, repr((; kwargs...)))
+    identities = map(_spn_validation_file_identity, paths)
+    saved = context.slot[]
+    if saved !== nothing && saved.key == key
+        refreshed = map(paths, saved.identities, saved.digests) do path, identity, digest
+            verified_file_digest_identity(
+                path,
+                identity,
+                digest;
+                change_error = "SPN_VALIDATED_INPUT_CHANGED",
+            )
+        end
+        context.slot[] = merge(saved, (; identities = refreshed))
+        return deepcopy(saved.record)
+    end
+    context.slot[] = nothing
+    record, digests, verified_identities = with_verified_file_digests(collect(paths)) do
+        digests = map(sha256_file, paths)
+        record = reader(provenance_path, spn_path; kwargs...)
+        verified_identities = map(paths, identities, digests) do path, identity, digest
+            verified_file_digest_identity(
+                path,
+                identity,
+                digest;
+                change_error = "SPN_INPUT_CHANGED_DURING_VALIDATION",
+            )
+        end
+        (record, digests, verified_identities)
+    end
+    # Legacy attestations may name a separate byte-identical SPN copy. Keep
+    # their original validation path until all named dependencies can be bound.
+    recorded_path = get(record.artifacts, "spn", "")
+    if isfile(recorded_path) && realpath(recorded_path) == paths[2]
+        context.slot[] = (
+            key = key,
+            identities = verified_identities,
+            digests = digests,
+            record = deepcopy(record),
+        )
+    end
+    return record
+end
+
 """
 Validate a formal schema-1.2 SPN provenance artifact for bundle assembly.
 
@@ -512,7 +708,7 @@ The SPN itself is required to be in the native DFT eigenstate gauge.  For a
 symmetrized target, the returned qualification target and artifact digest bind
 the separate, mandatory native-to-symmetrized rotation step.
 """
-function _read_and_validate_spn_provenance(
+function _read_and_validate_spn_provenance_uncached(
     provenance_path::AbstractString,
     spn_path::AbstractString;
     expected_num_bands::Int,
@@ -524,12 +720,11 @@ function _read_and_validate_spn_provenance(
     band_frame_contract_sha256::Union{Nothing, AbstractString} = nothing,
 )
     record = _read_spn_provenance(provenance_path; verify_spn = true)
-    (
-        record.schema_version == "1.2" || (
-            record.schema_version == "1.0" &&
-            record.contract_sha256 != "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED"
-        )
-    ) || throw(ArgumentError("LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED: SPN schema-1.2 is required"))
+    record.contract_sha256 != "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED" || throw(
+        ArgumentError(
+            "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED: complete SPN frame contract is required",
+        ),
+    )
     record.passed || throw(ArgumentError("SPN_PROVENANCE_NOT_QUALIFIED"))
     record.spinor || throw(ArgumentError("SPN_PROVENANCE_SPINOR_REQUIRED"))
     record.num_bands == expected_num_bands && record.num_kpoints == expected_num_kpoints ||
@@ -635,12 +830,11 @@ end
 
 """Validate that one native-gauge SPN belongs to the exact generator source."""
 function _validate_generation_spn_provenance(record, spn_path, state)
-    (
-        record.schema_version == "1.2" || (
-            record.schema_version == "1.0" &&
-            record.contract_sha256 != "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED"
-        )
-    ) || throw(ArgumentError("LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED: SPN schema-1.2 is required"))
+    record.contract_sha256 != "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED" || throw(
+        ArgumentError(
+            "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED: complete SPN frame contract is required",
+        ),
+    )
     record.passed || throw(ArgumentError("SPN_PROVENANCE_NOT_QUALIFIED"))
     record.source_code == state.native.source_code ||
         throw(ArgumentError("SPN_PROVENANCE_SOURCE_CODE_MISMATCH"))

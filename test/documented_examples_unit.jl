@@ -8,7 +8,7 @@ end
         append!(files, joinpath.(root, filter(name -> endswith(name, ".jl"), names)))
     end
     sort!(files)
-    @test length(files) == 38
+    @test length(files) == 52
     for (index, path) in enumerate(files)
         example_module = load_documented_example(path, index)
         build_config = Base.invokelatest(getfield, example_module, :build_config)
@@ -22,7 +22,7 @@ end
         else
             Base.invokelatest(
                 build_config;
-                k_mesh = (2, 2),
+                k_mesh = documented_example_smoke_mesh(path),
                 output_root = mktempdir(),
                 progress_enabled = false,
             )
@@ -30,7 +30,10 @@ end
         @test config.output.system_name == "synthetic_demo"
         @test isfile(config.model.model_file)
         @test startswith(config.output.output_root, tempdir())
-        if !occursin("/band/", path)
+        if documented_example_is_spectral(path)
+            @test config.sampling.spatial_dimension == 3
+            @test isnothing(config.model.real_space_operator_bundle_file)
+        elseif !occursin("/band/", path)
             @test isfile(config.model.real_space_operator_bundle_file)
             @test config.model.real_space_replica_policy == "minimum_distance"
             @test isfile(config.model.wsvec_file)
@@ -44,7 +47,7 @@ end
     example_module = load_documented_example(path, 9000)
     config = Base.invokelatest(
         getfield(example_module, :build_config);
-        k_mesh = (2, 2),
+        k_mesh = documented_example_smoke_mesh(path),
         output_root = mktempdir(),
         progress_enabled = false,
     )

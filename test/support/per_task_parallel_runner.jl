@@ -120,6 +120,57 @@ try
             end
         end
     end
+    for family in ("integral", "kslice"), backend in ("direct", "mixed")
+        sampling =
+            family == "integral" ? BZMesh(k_mesh = (9, 8), spatial_dimension = 3) :
+            KSlice(
+                k_mesh = (9, 8),
+                spatial_dimension = 3,
+                origin = (0.13, -0.07, 0.11),
+                vector_1 = (1.0, 1.0, 0.0),
+                vector_2 = (0.0, 1.0, 1.0),
+            )
+        task = TaskSpec(
+            id = "shg",
+            quantity = "SHG",
+            method = "Conventional",
+            physics = SHGParameters(
+                photon_energies = family == "integral" ? [0.0, 0.7, 1.3] : [0.7],
+                fermi_energy = 0.0,
+                temperature = 300.0,
+                output = :both,
+            ),
+            numerics = SHGNumerics(),
+            observable = family == "integral" ? FullTensor() :
+                         KSliceSelection(component = TensorComponent(1, 2, 2), bands = AllBands()),
+        )
+        execution =
+            backend == "direct" ? ExecutionOptions(fourier_backend = "direct") :
+            ExecutionOptions(fourier_backend = "mixed", NKdiv = (3, 2), NKFFT = (3, 4))
+        cfg=TaskConfig(
+            model = ModelInput(
+                model_file = joinpath(PARALLEL_FIXTURE, "synthetic_tb.dat"),
+                real_space_replica_policy = "input",
+            ),
+            sampling = sampling,
+            tasks = [task],
+            execution = execution,
+            output = OutputOptions(
+                output_root = joinpath(PARALLEL_OUTPUT, "shg_"*family*"_"*backend),
+                response_output_digits = 17,
+                progress_enabled = false,
+            ),
+        )
+        result=WannierNLQG.run(cfg)
+        if PARALLEL_RANK == 0
+            for path in result.outputs
+                records[join(
+                    ("shg", family, backend, basename(path)),
+                    "/",
+                )]=parallel_numeric_rows(path)
+            end
+        end
+    end
     if PARALLEL_RANK == 0
         open(joinpath(PARALLEL_OUTPUT, "numerical.json"), "w") do io
             JSON3.write(io, records)

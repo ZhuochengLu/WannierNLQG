@@ -2,9 +2,10 @@ using WannierNLQG
 
 const ROOT = normpath(joinpath(@__DIR__, ".."))
 const EXAMPLE_ROOT = joinpath(ROOT, "examples", "tasks")
-const EXPECTED_TASK_COUNT = 38
+const EXPECTED_TASK_COUNT = 52
 const CURRENT_QUANTITIES = Set((
     :shift_current,
+    :second_harmonic_generation,
     :photon_drag_shift_current,
     :injection_current,
     :injection_spin_current,
@@ -57,6 +58,8 @@ function audit_guides(definitions)
         "KSlice",
         "KPath",
         "OpticalParameters",
+        "SHGParameters",
+        "SHGNumerics",
         "FiniteQOpticalParameters",
         "GeometryParameters",
         "BandParameters",
@@ -135,6 +138,38 @@ function audit_examples(definitions)
                 all(==(101), config.sampling.kpoints_per_segment),
                 "ordinary Band preset changed",
             )
+        elseif quantity in (:linear_transport, :linear_optical_response, :orbital_magnetization)
+            audit_check(config.sampling.spatial_dimension == 3, "spectral example must be 3D")
+            expected_mesh = calculation == :integral ? (8, 8, 8) : (24, 24)
+            audit_check(
+                config.sampling.k_mesh == expected_mesh,
+                "spectral demonstration mesh changed",
+            )
+            expected_physics =
+                quantity == :linear_transport ? WannierNLQG.LinearTransportParameters :
+                quantity == :linear_optical_response ? WannierNLQG.LinearOpticalResponseParameters :
+                WannierNLQG.OrbitalMagnetizationParameters
+            audit_check(task.physics isa expected_physics, "spectral parameter type mismatch")
+            audit_check(task.physics.temperature == 300.0, "spectral temperature must be explicit")
+            audit_check(
+                isnothing(config.model.real_space_operator_bundle_file),
+                "closed model must not imply material completion",
+            )
+            if quantity == :orbital_magnetization
+                audit_check(
+                    task.physics.input_semantics == :defined_finite_model,
+                    "closed orbital model must be explicit",
+                )
+            end
+            audit_check(
+                quantity == :linear_optical_response || !occursin("photon_energies", text),
+                "static task must not have a frequency axis",
+            )
+            audit_check(
+                calculation == :integral ? task.observable isa WannierNLQG.FullTensor :
+                task.observable isa WannierNLQG.KSliceSelection,
+                "spectral observable must be explicit",
+            )
         else
             expected_mesh = calculation == :integral ? (100, 100) : (200, 200)
             audit_check(config.sampling.k_mesh == expected_mesh, "ordinary example mesh changed")
@@ -207,7 +242,7 @@ function main()
     audit_check(length(definitions) == EXPECTED_TASK_COUNT, "task registry count changed")
     audit_guides(definitions)
     audit_examples(definitions)
-    println("USER_GUIDE_EXAMPLE_AUDIT_OK tasks=38 integral=9 kslice=28 kpath=1 grouped_api=true")
+    println("USER_GUIDE_EXAMPLE_AUDIT_OK tasks=52 integral=16 kslice=35 kpath=1 grouped_api=true")
     return nothing
 end
 

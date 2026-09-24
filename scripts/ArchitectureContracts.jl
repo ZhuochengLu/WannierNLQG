@@ -108,6 +108,7 @@ end
 
 """Return the imported symbol name represented by an import selector expression."""
 function _import_symbol_name(selector)
+    selector isa Expr && selector.head == :as && return _import_symbol_name(first(selector.args))
     selector isa Symbol && return string(selector)
     selector isa QuoteNode && return _import_symbol_name(selector.value)
     selector isa Expr && selector.head == :. || return ""

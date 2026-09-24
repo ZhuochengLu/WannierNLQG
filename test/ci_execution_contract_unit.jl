@@ -88,17 +88,19 @@ end
 
 @testset "Full shards and MPI-only retain the frozen scientific inventories" begin
     @test CITestPlan.validate_ci_test_plan()
+    @test count(==("disk_bounded_gauge_unit.jl"), CITestPlan.FULL_ONLY_TEST_FILES) == 1
+    @test "disk_bounded_gauge_unit.jl" in CITestPlan.full_shard_files("scientific-contracts")
     shard_sets = [Set(CITestPlan.full_shard_files(name)) for name in CITestPlan.full_shard_names()]
     @test reduce(union, shard_sets) == Set(CITestPlan.FULL_ONLY_TEST_FILES)
     for left in eachindex(shard_sets), right in (left + 1):length(shard_sets)
         @test isempty(intersect(shard_sets[left], shard_sets[right]))
     end
     @test length(CITestPlan.MPI_GATE_NAMES) == 3
-    @test length(CITestPlan.MPI_TEST_FILES) == 6
+    @test length(CITestPlan.MPI_TEST_FILES) == 7
     @test intersect(Set(CITestPlan.MPI_TEST_FILES), Set(CITestPlan.FAST_TEST_FILES)) ==
           Set(["band_structure_unit.jl"])
     @test intersect(Set(CITestPlan.MPI_TEST_FILES), Set(CITestPlan.FULL_ONLY_TEST_FILES)) ==
-          Set(["per_task_parallel_unit.jl"])
+          Set(["per_task_parallel_unit.jl", "linear_orbital_parallel_unit.jl"])
     @test Set(CITestPlan.full_shard_auxiliary_files("scientific-contracts")) ==
           Set(["band_structure_unit.jl", "mpi_runtime_compiled_modules_full_unit.jl"])
 end

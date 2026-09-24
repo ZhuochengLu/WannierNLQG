@@ -97,10 +97,11 @@ function _initialize_solver_frames(state::NamedTuple)
         for (key, value) in fixed.source_sha256
             input_summary["fixed_subspace_source_$(key)"] = value
         end
-        fixed_source_qualified = get(fixed.source_sha256, "qualified_z_seal", "false") == "true"
+        fixed_source_qualified = get(fixed.source_sha256, "z_seal_class", "") == "CONVERGED"
         input_summary["fixed_subspace_source_z_seal_class"] =
             get(fixed.source_sha256, "z_seal_class", "NOT_RECORDED")
-        input_summary["fixed_subspace_source_qualified_z_seal"] = string(fixed_source_qualified)
+        input_summary["fixed_subspace_source_strictly_converged_z_seal"] =
+            string(fixed_source_qualified)
         fixed_formal_screen = fixed_source_qualified && full_constraint_scope
         input_summary["fixed_subspace_qualification"] = if fixed_formal_screen
             "QUALIFIED_SOURCE_U_ONLY_FORMAL_SCREEN"
@@ -112,9 +113,6 @@ function _initialize_solver_frames(state::NamedTuple)
         input_summary["disentanglement_convergence"] =
             fixed_source_qualified ? "CONVERGED_INHERITED_SEAL" : "NOT_APPLICABLE"
         input_summary["z_seal_class"] = get(fixed.source_sha256, "z_seal_class", "NOT_RECORDED")
-        input_summary["qualified_z_seal"] = string(fixed_source_qualified)
-        input_summary["route_selection_eligible"] = string(fixed_formal_screen)
-        input_summary["standard_tb_export_eligible"] = "false"
         for (key, value) in fixed.invariant_residuals
             input_summary["fixed_subspace_$(key)"] = string(value)
         end
@@ -477,7 +475,7 @@ function _initialize_solver_frames(state::NamedTuple)
         )
         (
             isfinite(fixed_residuals.covariance) && (
-                config.input.construction_policy == :diagnostic ||
+                config.input.construction_policy == :standard ||
                 fixed_residuals.covariance <= projector_covariance_tolerance
             )
         ) || return _failure_result(
@@ -494,7 +492,7 @@ function _initialize_solver_frames(state::NamedTuple)
         )
         (
             isfinite(target_symmetry) && (
-                config.input.construction_policy == :diagnostic ||
+                config.input.construction_policy == :standard ||
                 target_symmetry <= projector_covariance_tolerance
             )
         ) || return _failure_result(
@@ -597,7 +595,7 @@ function _initialize_solver_frames(state::NamedTuple)
         ) : nothing
     if initial_projector_diagnostic !== nothing
         quality_continuation =
-            config.input.construction_policy == :diagnostic &&
+            config.input.construction_policy == :standard &&
             initial_projector_diagnostic.code == :ANTIUNITARY_PROJECTOR_COVARIANCE_FAILED
         push!(
             diagnostics,
@@ -762,7 +760,7 @@ function _initialize_solver_optimizer(state::NamedTuple)
             1.0,
             false,
             0,
-            cat(frames...; dims = 3),
+            _pack_matrix_field(frames),
             copy(centers),
             copy(spreads),
             sum(spreads),
@@ -927,20 +925,17 @@ function _initialize_solver_optimizer(state::NamedTuple)
     if effective_algorithms.localization == :smv_fletcher_reeves_two_stage
         _mpi_root_canonical_matrix_field!(localization_reference_frames, config.solver.parallel)
     end
-    diagnostic_disentanglement_nonconverged =
+    retained_disentanglement_nonconverged =
         config.solver.acceleration.schedule == :two_stage &&
         optimizer_phase != :disentanglement &&
         z_steps >= config.solver.acceleration.disentanglement_max_steps &&
         z_stability_count < config.solver.acceleration.z_stability_window
-    if diagnostic_disentanglement_nonconverged
-        input_summary["disentanglement_convergence"] = "DIAGNOSTIC_NONCONVERGED"
-        input_summary["z_seal_class"] = "DIAGNOSTIC_NONCONVERGED"
-        input_summary["qualified_z_seal"] = "false"
-        input_summary["route_selection_eligible"] = "false"
-        input_summary["standard_tb_export_eligible"] = "false"
+    if retained_disentanglement_nonconverged
+        input_summary["disentanglement_convergence"] = "NONCONVERGED_RETAINED"
+        input_summary["z_seal_class"] = "NONCONVERGED_RETAINED"
         input_summary["localization_convergence"] = "IN_PROGRESS"
-        input_summary["localization_qualification"] = "DIAGNOSTIC_ONLY"
-        input_summary["model_qualification"] = "DIAGNOSTIC_ONLY/Z_NONCONVERGED"
+        input_summary["localization_qualification"] = "STANDARD"
+        input_summary["model_qualification"] = "AVAILABLE_WITH_QUALITY_WARNINGS"
     end
     trajectory_previous_frames = nothing
     trajectory_two_step_frames = nothing
@@ -968,7 +963,7 @@ function _initialize_solver_optimizer(state::NamedTuple)
         config,
         config_sha256,
         convergence_values,
-        diagnostic_disentanglement_nonconverged,
+        retained_disentanglement_nonconverged,
         diagnostics,
         disentanglement_objective_history,
         effective_algorithms,

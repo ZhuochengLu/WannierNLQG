@@ -64,7 +64,7 @@ function _mpi_root_canonical_matrix_field!(
         # Production k-point fields are rectangular and uniform.  Pack them so
         # a 1000-point mesh needs one payload broadcast rather than thousands
         # of latency-dominated matrix collectives at every U call boundary.
-        packed = cat(field...; dims = 3)
+        packed = _pack_matrix_field(field)
         MPI.Bcast!(packed, 0, communicator)
         for (index, matrix) in enumerate(field)
             @views matrix .= packed[:, :, index]
@@ -982,7 +982,7 @@ function _target_symmetry_tangent_plan(
     isempty(basis) && throw(ArgumentError("target symmetry tangent nullspace is empty"))
     maximum_residual = maximum(abs, constraints * basis)
     isfinite(maximum_residual) || throw(ArgumentError("target symmetry tangent is nonfinite"))
-    construction_policy == :diagnostic ||
+    construction_policy == :standard ||
         maximum_residual <= 64tolerance ||
         throw(
             ArgumentError("target symmetry tangent residual $(maximum_residual) exceeds tolerance"),

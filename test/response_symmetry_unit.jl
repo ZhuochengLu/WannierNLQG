@@ -972,7 +972,16 @@ end
         @test !occursin("LINEAR / CIRCULAR", report)
         @test !occursin("linear/symmetric", report)
         @test !occursin("circular/antisymmetric", report)
-        @test isnothing(match(r"(?i)\b(linear|circular)\b", report))
+        # Paths may contain "linear" in a candidate or temporary directory name.
+        semantic_report = replace(
+            report,
+            directory => "<test-directory>",
+            TEST_MODEL_FILE => "<model-file>",
+            pkgdir(WannierNLQG) => "<package-directory>",
+            basename(pkgdir(WannierNLQG)) => "<package-name>",
+            dirname(directory) => "<temporary-root>",
+        )
+        @test isnothing(match(r"(?i)\b(linear|circular)\b", semantic_report))
         @test !occursin("equal Re:", report)
         @test !occursin("opposite Im:", report)
         @test occursin("full magnetic point group H-M (display)", report)
@@ -1427,14 +1436,14 @@ end
             }
             """,
         )
-        output = joinpath(directory, "run")
-        @test_throws ProcessFailedException response_symmetry_runtime_probe(
+        strict_probe = response_symmetry_runtime_probe(
             "enabled",
-            [artifact, TEST_MODEL_FILE, output, "strict"],
+            [artifact, TEST_MODEL_FILE, joinpath(directory, "run_strict"), "strict"],
         )
+        @test occursin("mode=enabled json3=true spglib=true", strict_probe)
         probe = response_symmetry_runtime_probe(
             "enabled",
-            [artifact, TEST_MODEL_FILE, output, "diagnostic"],
+            [artifact, TEST_MODEL_FILE, joinpath(directory, "run_diagnostic"), "diagnostic"],
         )
         @test occursin("mode=enabled json3=true spglib=true", probe)
     end
@@ -1453,14 +1462,14 @@ end
             covariance_max_relative_residual = 0.0,
         )
         rm(incar)
-        output = joinpath(directory, "run_without_incar")
-        @test_throws ProcessFailedException response_symmetry_runtime_probe(
+        strict_probe = response_symmetry_runtime_probe(
             "enabled",
-            [artifact, TEST_MODEL_FILE, output, "strict"],
+            [artifact, TEST_MODEL_FILE, joinpath(directory, "run_strict"), "strict"],
         )
+        @test occursin("mode=enabled json3=true spglib=true", strict_probe)
         probe = response_symmetry_runtime_probe(
             "enabled",
-            [artifact, TEST_MODEL_FILE, output, "diagnostic"],
+            [artifact, TEST_MODEL_FILE, joinpath(directory, "run_diagnostic"), "diagnostic"],
         )
         @test occursin("mode=enabled json3=true spglib=true", probe)
         @test !isfile(incar)

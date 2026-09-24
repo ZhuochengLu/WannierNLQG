@@ -2,6 +2,17 @@
 #
 # Energies and broadening use eV, temperature uses K, and Cartesian momentum uses the configured lattice convention. Construction stores settings; `run` validates combinations and reads inputs before computation.
 struct EffectiveTaskConfig
+    gamma_intra_ev::Float64
+    gamma_inter_ev::Float64
+    fs_kind::Symbol
+    eta_fs_ev::Float64
+    spectral_gap_tolerance::Float64
+    orbital_input_semantics::Symbol
+    shg_low_frequency_broadening::Float64
+    shg_eta_correction::Bool
+    shg_output::Symbol
+    shg_response::Symbol
+
     # Original task tuples are retained for validation and run provenance.
     tasks::Vector{<:Tuple}
 
@@ -10,6 +21,8 @@ struct EffectiveTaskConfig
     NKdiv::Union{Nothing, NTuple{2, Int}, NTuple{3, Int}}
     NKFFT::Union{Nothing, NTuple{2, Int}, NTuple{3, Int}}
     photon_energies::Vector{Float64}
+    fermi_energies::Vector{Float64}
+    fermi_energies_sha256::String
     fermi_energy::Float64
     temperature::Float64
     broadening::Float64
@@ -66,12 +79,25 @@ end
 
 """Construct a task configuration and reject the retired basis-correction switch."""
 function EffectiveTaskConfig(;
+    gamma_intra_ev::Float64 = 0.0,
+    gamma_inter_ev::Float64 = 0.0,
+    fs_kind::Symbol = :none,
+    eta_fs_ev::Float64 = 0.0,
+    spectral_gap_tolerance::Float64 = 1e-10,
+    orbital_input_semantics::Symbol = :unspecified,
+
+    shg_low_frequency_broadening::Float64 = 0.025,
+    shg_eta_correction::Bool = true,
+    shg_output::Symbol = :total,
+    shg_response::Symbol = :both,
     tasks::Vector{<:Tuple} = [("SC", "Conventional", "Integral")],
     k_mesh = (2, 2),
     fourier_backend::String,
     NKdiv::Union{Nothing, NTuple{2, Int}, NTuple{3, Int}} = nothing,
     NKFFT::Union{Nothing, NTuple{2, Int}, NTuple{3, Int}} = nothing,
     photon_energies::Vector{Float64} = Float64[0.10],
+    fermi_energies::Vector{Float64} = Float64[],
+    fermi_energies_sha256::String = "NOT_APPLICABLE",
     fermi_energy::Float64 = 0.0,
     temperature::Float64 = 0.0,
     broadening::Float64 = 0.040,
@@ -131,12 +157,24 @@ function EffectiveTaskConfig(;
         "unsupported keyword argument(s) for EffectiveTaskConfig: $(join(string.(keys(kwargs)), ", ")).",
     )
     return EffectiveTaskConfig(
+        gamma_intra_ev,
+        gamma_inter_ev,
+        fs_kind,
+        eta_fs_ev,
+        spectral_gap_tolerance,
+        orbital_input_semantics,
+        shg_low_frequency_broadening,
+        shg_eta_correction,
+        shg_output,
+        shg_response,
         tasks,
         k_mesh,
         fourier_backend,
         NKdiv,
         NKFFT,
         photon_energies,
+        copy(fermi_energies),
+        fermi_energies_sha256,
         fermi_energy,
         temperature,
         broadening,
@@ -262,7 +300,9 @@ end
 """
 Completed task specifications and paths to numerical outputs, metadata and progress files.
 
-Returned by `run`; numerical arrays reside in the output artifacts and the object does not itself certify physics qualification.
+Returned by `run`; numerical arrays reside in the output artifacts. `qualification` records
+whether this response could execute and whether its input evidence supports production use; it
+does not independently re-qualify the underlying material physics.
 """
 struct RunResult
     tasks::Vector{<:Tuple}
@@ -275,6 +315,7 @@ struct RunResult
     task_ids::Vector{String}
     task_results::Vector{RunResult}
     sharing::NamedTuple
+    qualification::ResponseQualificationResult
 end
 
 # Preserve the private single-bundle result constructor; the public run supplies instance metadata.
@@ -290,7 +331,32 @@ RunResult(tasks, specs, run_dir, outputs, metadata_path, progress_out_path, prog
         String[],
         RunResult[],
         NamedTuple(),
+        not_evaluated_response_qualification(),
     )
+
+# Attach an evaluated qualification while retaining private single-bundle defaults.
+RunResult(
+    tasks,
+    specs,
+    run_dir,
+    outputs,
+    metadata_path,
+    progress_out_path,
+    progress_jsonl_path,
+    qualification::ResponseQualificationResult,
+) = RunResult(
+    tasks,
+    specs,
+    run_dir,
+    outputs,
+    metadata_path,
+    progress_out_path,
+    progress_jsonl_path,
+    String[],
+    RunResult[],
+    NamedTuple(),
+    qualification,
+)
 
 # Lowercase and trim a selector, collapse whitespace/hyphens and repeated underscores, then strip outer underscores.
 function _canonical_key(value::AbstractString)
@@ -341,7 +407,11 @@ Resolve accepted quantity labels and aliases to their canonical symbols; reject 
 """
 function normalize_quantity(value::AbstractString)
     key = _canonical_key(value)
-    if key in ("shift_current", "shiftcurrent")
+    key in ("linear_transport", "linear_optical_response", "orbital_magnetization") &&
+        return Symbol(key)
+    if key in ("shg", "second_harmonic_generation")
+        return :second_harmonic_generation
+    elseif key in ("shift_current", "shiftcurrent")
         return :shift_current
     elseif key in ("quantum_hermitian_connection", "quantumhermitianconnection")
         return :quantum_hermitian_connection
@@ -442,7 +512,10 @@ end
 Return the public display name for a normalized quantity symbol, rejecting unsupported quantities.
 """
 function canonical_quantity_name(q::Symbol)
-    if q == :shift_current
+    q in (:linear_transport, :linear_optical_response, :orbital_magnetization) && return string(q)
+    if q == :second_harmonic_generation
+        return "second_harmonic_generation"
+    elseif q == :shift_current
         return "shift_current"
     elseif q == :quantum_hermitian_connection
         return "quantum_hermitian_connection"

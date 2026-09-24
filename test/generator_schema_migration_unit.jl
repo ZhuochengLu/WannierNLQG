@@ -294,10 +294,34 @@ function gsm_uiu_performance_paths(old, current)
             ),
         ),
     )
-    return Set([
+    performance_paths = Set([
         ("wavefunction_cache", "peak_cache_resident_bytes"),
         ("diagnostics", string(current_index)),
     ])
+    # Compact native preparation now decodes each fixture k point once. These
+    # execution counters are not scientific residuals; assert both historical
+    # and current values explicitly before excluding them from byte comparison.
+    for (key, former, expected) in (
+        ("total_kpoint_reads", 9, 3),
+        ("misses", 9, 3),
+        ("reloads", 6, 0),
+        ("evictions", 7, 1),
+        ("hits", 6, 3),
+    )
+        @test old["wavefunction_cache"][key] == former
+        @test current["wavefunction_cache"][key] == expected
+        push!(performance_paths, ("wavefunction_cache", key))
+        key == "total_kpoint_reads" && continue
+        prefix = "qe_uiu_cache_" * key * "="
+        old_indices = findall(note -> startswith(note, prefix), old["diagnostics"])
+        new_indices = findall(note -> startswith(note, prefix), current["diagnostics"])
+        @test length(old_indices) == length(new_indices) == 1
+        @test only(old_indices) == only(new_indices)
+        @test old["diagnostics"][only(old_indices)] == prefix * string(former)
+        @test current["diagnostics"][only(new_indices)] == prefix * string(expected)
+        push!(performance_paths, ("diagnostics", string(only(new_indices))))
+    end
+    return performance_paths
 end
 
 function gsm_hdf5_payload(object)
@@ -375,7 +399,7 @@ if !isdefined(Main, :GENERATOR_SCHEMA_FIXTURE_ONLY)
                 extension.read_qe_paw_spn_provenance,
                 joinpath(directory, "qe_spn.json"),
             )
-            @test new_vasp.schema_version == new_qe.schema_version == "1.0"
+            @test new_vasp.schema_version == new_qe.schema_version == "1.1"
             @test new_vasp.contract_sha256 != "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED"
             for binary in ("vasp.spn", "qe.spn", "fixture.uIu", "fixture.uHu")
                 @test read(joinpath(directory, binary)) == read(joinpath(GSM_FIXTURES, binary))
@@ -385,7 +409,20 @@ if !isdefined(Main, :GENERATOR_SCHEMA_FIXTURE_ONLY)
             gsm_compare_values(
                 old_h5,
                 new_h5,
-                Set([("@schema_version",), ("@payload_sha256",), ("artifacts", "@spn")]),
+                Set([
+                    ("@schema_version",),
+                    ("@payload_sha256",),
+                    ("artifacts", "@spn"),
+                    ("@operator_target_contract_sha256",),
+                    ("@target_authority",),
+                    ("@parent_audit_policy",),
+                    ("@target_generalized_norm_max_absolute",),
+                    ("@parent_generalized_norm_max_absolute",),
+                    ("@parent_audit_status",),
+                    ("target_generalized_norm_worst",),
+                    ("parent_generalized_norm_worst",),
+                    ("diagnostics",),
+                ]),
             )
             allowed = Set([
                 ("schema_version",),
@@ -400,20 +437,38 @@ if !isdefined(Main, :GENERATOR_SCHEMA_FIXTURE_ONLY)
                 ("julia_threads",),
                 ("construction_policy",),
                 ("model_qualification",),
-                ("manual_review_required",),
+                ("quality_review_recommended",),
                 ("production_eligible",),
             ])
             for name in ("qe_spn.json", "uiu.json", "hamiltonian.json", "uiu_partial.json")
                 old = JSON3.read(read(joinpath(GSM_FIXTURES, name), String), Dict{String, Any})
                 new = JSON3.read(read(joinpath(directory, name), String), Dict{String, Any})
-                @test new["schema_version"] == "1.0"
+                @test new["schema_version"] == "1.1"
                 if name in ("uiu.json", "hamiltonian.json")
-                    @test new["construction_policy"] == "diagnostic"
-                    @test new["model_qualification"] == "DIAGNOSTIC_ONLY"
-                    @test new["manual_review_required"] === true
+                    @test new["construction_policy"] == "standard"
+                    @test new["model_qualification"] == "STANDARD"
+                    @test new["quality_review_recommended"] === true
                     @test new["production_eligible"] === false
                 end
-                file_allowed = if name == "uiu.json"
+                target_scope_allowed = Set([
+                    ("operator_target_contract_sha256",),
+                    ("target_authority",),
+                    ("parent_audit_policy",),
+                    ("outer_mask_sha256",),
+                    ("frozen_mask_sha256",),
+                    ("parent_audit_status",),
+                ])
+                file_allowed = if name == "qe_spn.json"
+                    union(
+                        allowed,
+                        target_scope_allowed,
+                        Set([
+                            ("target_generalized_norm_max_absolute",),
+                            ("parent_generalized_norm_max_absolute",),
+                            ("diagnostics",),
+                        ]),
+                    )
+                elseif name == "uiu.json"
                     @test !haskey(old["input_sha256"], "AUTHORITATIVE_MMN")
                     @test new["input_sha256"]["AUTHORITATIVE_MMN"] ==
                           gsm_sha(joinpath(directory, "oracle.mmn"))
@@ -421,8 +476,13 @@ if !isdefined(Main, :GENERATOR_SCHEMA_FIXTURE_ONLY)
                           new["input_sha256"]["ORACLE_MMN"]
                     union(
                         allowed,
+                        target_scope_allowed,
                         gsm_uiu_performance_paths(old, new),
-                        Set([("input_sha256", "AUTHORITATIVE_MMN")]),
+                        Set([
+                            ("input_sha256", "AUTHORITATIVE_MMN"),
+                            ("target_generalized_normalization_max_absolute",),
+                            ("parent_generalized_normalization_max_absolute",),
+                        ]),
                     )
                 else
                     allowed

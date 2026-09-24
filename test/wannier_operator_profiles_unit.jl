@@ -1,437 +1,5 @@
-using HDF5
-using JSON3
-using LinearAlgebra
-using SHA
-
-const PROFILE_W = WannierNLQG.Wannierization
-const PROFILE_IO = WannierNLQG.IO
-const PROFILE_CORE = WannierNLQG.Core
-
-function _profile_modified_config(config; keywords...)
-    replacements = NamedTuple(keywords)
-    unknown = setdiff(keys(replacements), PROFILE_W.WANNIERIZATION_CONFIG_LEAF_FIELDS)
-    isempty(unknown) || throw(ArgumentError("unknown Wannierization config fields: $(unknown)"))
-    select(fields) = begin
-        selected = Tuple(name for name in keys(replacements) if name in fields)
-        NamedTuple{selected}(Tuple(getfield(replacements, name) for name in selected))
-    end
-    return PROFILE_W._replace_wannierization_config(
-        config;
-        input = select(PROFILE_W.WANNIERIZATION_INPUT_CONFIG_FIELDS),
-        solver = select(PROFILE_W.WANNIERIZATION_SOLVER_CONFIG_FIELDS),
-        checkpoint = select(PROFILE_W.WANNIERIZATION_CHECKPOINT_CONFIG_FIELDS),
-        runtime = select(PROFILE_W.WANNIERIZATION_RUNTIME_CONFIG_FIELDS),
-        output = select(PROFILE_W.WANNIERIZATION_OUTPUT_CONFIG_FIELDS),
-    )
-end
-
-function _profile_scientific_digest_for_schema(manifest, schema_version)
-    extension, _ = PROFILE_IO._load_operator_bundle_extension!()
-    return Base.invokelatest(
-        extension._scientific_content_digest,
-        manifest.profile,
-        manifest.inventory,
-        manifest.lattice,
-        manifest.r_vectors,
-        manifest.degeneracies,
-        getfield.(manifest.entries, :component_sha256),
-        manifest.paired_tb_sha256,
-        schema_version,
-        manifest.geometry_content_sha256,
-        manifest.authoritative_hamiltonian,
-        manifest.authoritative_hamiltonian_sha256,
-        manifest.energy_shift_qualification,
-        manifest.maximum_energy_shift_audit_reference_ev,
-        manifest.rms_energy_shift_audit_reference_ev,
-        manifest.target_energy_shift_audit_status,
-        manifest.symmetrized_parent_energy_shift_audit_status,
-        manifest.residual_gate_phase,
-        manifest.raw_preflight_diagnostic_status,
-        manifest.native_difference_qualification,
-        manifest.native_difference_audit_status,
-        manifest.qualification_scope,
-        manifest.target_anchor,
-        manifest.target_complement_completion,
-        manifest.target_complement_max_element_ev,
-        manifest.auxiliary_parent_qualification,
-        manifest.symmetrized_target_subspace_status,
-        manifest.auxiliary_parent_audit_status,
-        manifest.target_scope_production_eligible,
-        manifest.parent_audit_policy,
-        manifest.outer_mask_sha256,
-        manifest.frozen_mask_sha256,
-        manifest.target_subspace_contract_sha256,
-        manifest.target_leakage_semantics,
-        manifest.target_leakage_formula_sha256,
-        manifest.target_leakage_threshold,
-        manifest.derivative_overlap_source,
-        manifest.derivative_overlap_completeness,
-        something(manifest.derivative_overlap_source_sha256, "not_provided"),
-        manifest.derivative_overlap_algorithm_version,
-        manifest.target_authority,
-        manifest.operator_qualification_sha256,
-        manifest.band_frame_contract_sha256,
-    )
-end
-
-function _profile_geometry(model)
-    home = only(
-        findall(index -> all(iszero, @view(model.r_vectors[:, index])), axes(model.r_vectors, 2)),
-    )
-    centers = zeros(Float64, model.num_orbitals, 3)
-    for orbital in 1:model.num_orbitals, direction in 1:3
-        centers[orbital, direction] =
-            real(model.position_r[orbital, orbital, direction, home] / model.r_degeneracies[home])
-    end
-    return Dict(
-        "wannier_center_policy" => "keep_input",
-        "real_space_replica_policy" => "input",
-        "production_eligible" => true,
-        "minimum_distance_materialized" => false,
-        "mp_grid" => [2, 1, 1],
-        "wannier_center_tolerance" => 1.0e-8,
-        "wigner_seitz_tolerance" => 1.0e-5,
-        "wigner_seitz_search_size" => 3,
-        "raw_wannier_centers_cartesian" => centers,
-        "raw_wannier_centers_fractional" => centers * inv(model.lattice),
-        "final_wannier_centers_cartesian" => centers,
-        "final_wannier_centers_fractional" => centers * inv(model.lattice),
-        "center_alignment_lattice_shifts" => zeros(Int, size(centers)),
-        "replica_mapping_sha256" => repeat("0", 64),
-    )
-end
-
-function _profile_gauge_contract(
-    parent_extension,
-    route,
-    num_bands,
-    num_kpoints;
-    artifact_sha256 = nothing,
-)
-    paw = parent_extension.PAWMatrixElements
-    support = parent_extension.WannierizationInternalSupport
-    operator_export = parent_extension.OperatorExport
-    if route == :ordinary
-        return Base.invokelatest(paw._identity_band_frame_contract, num_bands, num_kpoints)
-    end
-    artifact_sha256 === nothing && error("SAWF focused contract requires an artifact digest")
-    rotations = zeros(ComplexF64, num_bands, num_bands, num_kpoints)
-    phase_offset = route == :native_sawf ? 0.17 : 0.31
-    for kpoint in 1:num_kpoints, band in 1:num_bands
-        rotations[band, band, kpoint] = cis(phase_offset * (band + kpoint))
-    end
-    transform_sha256 = Base.invokelatest(operator_export._authoritative_array_sha256, rotations)
-    target_band_gauge =
-        route == :native_sawf ? support.SAWF_COMPLETED_NATIVE_DFT_BAND_GAUGE :
-        support.SYMMETRIZED_DFT_BAND_GAUGE
-    contract_sha256 = bytes2hex(
-        SHA.sha256(
-            codeunits(
-                join(
-                    (
-                        support.NATIVE_DFT_BAND_GAUGE,
-                        target_band_gauge,
-                        transform_sha256,
-                        String(something(artifact_sha256)),
-                    ),
-                    '\0',
-                ),
-            ),
-        ),
-    )
-    return Base.invokelatest(
-        support.BandFrameTransformContract,
-        support.NATIVE_DFT_BAND_GAUGE,
-        target_band_gauge,
-        rotations,
-        transform_sha256,
-        contract_sha256,
-        String(something(artifact_sha256)),
-        "focused_identity_metric",
-        0.0,
-        1.0e-8,
-        0.0,
-        1.0e-8,
-        0.0,
-        1.0,
-        1.0,
-        "WannierNLQG.band_frame_transform_contract",
-        "1.0",
-        "PASS",
-        false,
-    )
-end
-
-function _profile_symmetry_plan(route, num_wannier)
-    route == :ordinary && return nothing
-    identity = WannierNLQG.SymmetryFoundation.SymmetryOperation(
-        Matrix{Int}(I, 3, 3),
-        zeros(3),
-        Matrix{Float64}(I, 3, 3),
-        false,
-    )
-    if route == :native_sawf
-        return WannierNLQG.SymmetryFoundation.WannierSymmetryPlan(
-            [identity],
-            reshape(Matrix{ComplexF64}(I, num_wannier, num_wannier), num_wannier, num_wannier, 1),
-            zeros(Int, 3, num_wannier, 1),
-        )
-    end
-    inversion = WannierNLQG.SymmetryFoundation.SymmetryOperation(
-        -Matrix{Int}(I, 3, 3),
-        zeros(3),
-        -Matrix{Float64}(I, 3, 3),
-        false,
-    )
-    operations = [identity, inversion]
-    representations = zeros(ComplexF64, num_wannier, num_wannier, 2)
-    representations[:, :, 1] .= Matrix{ComplexF64}(I, num_wannier, num_wannier)
-    representations[:, :, 2] .=
-        Diagonal(ComplexF64[isodd(index) ? -1 : 1 for index in 1:num_wannier])
-    return WannierNLQG.SymmetryFoundation.WannierSymmetryPlan(
-        operations,
-        representations,
-        zeros(Int, 3, num_wannier, 2),
-    )
-end
-
-function _profile_write_inputs(directory, mmn, authority, gauge_contract, parent_extension)
-    paw = parent_extension.PAWMatrixElements
-    support = parent_extension.WannierizationInternalSupport
-    mmn_file = joinpath(directory, "fixture.mmn")
-    PROFILE_IO.write_wannier_mmn(mmn_file, mmn)
-    spn_data = zeros(ComplexF64, 2, 2, 3, 2)
-    pauli = (ComplexF64[0 1; 1 0], ComplexF64[0 -im; im 0], ComplexF64[1 0; 0 -1])
-    for kpoint in 1:2, axis in 1:3
-        spn_data[:, :, axis, kpoint] .= pauli[axis]
-    end
-    spn_file = joinpath(directory, "fixture.spn")
-    PROFILE_IO.write_wannier_spn(spn_file, PROFILE_IO.WannierSPN(2, 2, spn_data))
-    spn_provenance = joinpath(directory, "fixture.spn.provenance.json")
-    write(spn_provenance, "{\"fixture\":\"normalized-schema-1.2-attestation\"}")
-    spn_sha256 = bytes2hex(SHA.sha256(read(spn_file)))
-    spn_provenance_sha256 = bytes2hex(SHA.sha256(read(spn_provenance)))
-    source_hashes = Dict("SOURCE_WAVEFUNCTIONS" => repeat("a", 64), "TOPOLOGY" => repeat("b", 64))
-    common_hashes = merge(
-        source_hashes,
-        Dict(
-            "BAND_FRAME_TRANSFORM" => gauge_contract.transform_sha256,
-            "BAND_FRAME_CONTRACT" => gauge_contract.contract_sha256,
-        ),
-    )
-    gauge_contract.gauge_artifact_sha256 === nothing ||
-        (common_hashes["WAVEFUNCTION_GAUGE_HDF5"] = something(gauge_contract.gauge_artifact_sha256))
-    native_spn_contract = Base.invokelatest(paw._identity_band_frame_contract, 2, 2)
-    spn_attestation = (
-        schema = "WannierNLQG.qe_paw_spn",
-        schema_version = "1.2",
-        source_code = :synthetic,
-        passed = true,
-        status = "PASS",
-        physical_metric = "PAW/USPP generalized overlap",
-        spinor = true,
-        num_bands = 2,
-        num_kpts = 2,
-        source_band_gauge = gauge_contract.source_band_gauge,
-        target_band_gauge = gauge_contract.source_band_gauge,
-        transform_sha256 = native_spn_contract.transform_sha256,
-        contract_sha256 = native_spn_contract.contract_sha256,
-        frame_contract = Dict{String, Any}(
-            String(key) => value for
-            (key, value) in pairs(support.band_frame_contract_summary(native_spn_contract))
-        ),
-        rotation_sha256 = native_spn_contract.transform_sha256,
-        input_sha256 = source_hashes,
-        diagnostics = String[],
-        spn_sha256,
-        provenance_sha256 = spn_provenance_sha256,
-        qualification_target_band_gauge = gauge_contract.target_band_gauge,
-        qualification_transform_sha256 = gauge_contract.transform_sha256,
-        qualification_contract_sha256 = gauge_contract.contract_sha256,
-        qualification_rotation_sha256 = gauge_contract.transform_sha256,
-        gauge_artifact_sha256 = something(gauge_contract.gauge_artifact_sha256, "NOT_APPLICABLE"),
-    )
-    spn_target = similar(spn_data)
-    for kpoint in 1:2, axis in 1:3
-        spn_target[:, :, axis, kpoint] .= Base.invokelatest(
-            paw._rotate_generation_single,
-            @view(spn_data[:, :, axis, kpoint]),
-            gauge_contract,
-            kpoint,
-        )
-    end
-    header_uiu = PROFILE_IO.WannierUIUHeader("profile", 2, 2, mmn.num_neighbors)
-    header_uhu = PROFILE_IO.WannierUHUHeader("profile", 2, 2, mmn.num_neighbors)
-    header_siu = PROFILE_IO.WannierSIUHeader("profile", 2, 2, mmn.num_neighbors)
-    header_shu = PROFILE_IO.WannierSHUHeader("profile", 2, 2, mmn.num_neighbors)
-    uiu_file = joinpath(directory, "fixture.uIu")
-    uhu_file = joinpath(directory, "fixture.uHu")
-    siu_file = joinpath(directory, "fixture.sIu")
-    shu_file = joinpath(directory, "fixture.sHu")
-    PROFILE_IO.write_wannier_uiu(uiu_file, header_uiu) do _...
-        Matrix{ComplexF64}(I, 2, 2)
-    end
-    PROFILE_IO.write_wannier_uhu(uhu_file, header_uhu) do kpoint, _...
-        Matrix{ComplexF64}(@view authority.matrices_ev[:, :, kpoint])
-    end
-    PROFILE_IO.write_wannier_siu(siu_file, header_siu) do kpoint, _neighbor, axis, _
-        Matrix{ComplexF64}(@view spn_target[:, :, axis, kpoint])
-    end
-    PROFILE_IO.write_wannier_shu(shu_file, header_shu) do kpoint, _neighbor, axis, _
-        (@view spn_target[:, :, axis, kpoint]) * (@view authority.matrices_ev[:, :, kpoint])
-    end
-    uiu_provenance = uiu_file * ".json"
-    open(uiu_provenance, "w") do io
-        JSON3.write(
-            io,
-            Dict(
-                "schema" => "WannierNLQG.wannier_uiu_generation",
-                "schema_version" => "1.2",
-                "algorithm_version" => "focused-profile-fixture",
-                "passed" => true,
-                "physical_overlap_available" => true,
-                "output_sha256" => bytes2hex(SHA.sha256(read(uiu_file))),
-                "source_band_gauge" => gauge_contract.source_band_gauge,
-                "target_band_gauge" => gauge_contract.target_band_gauge,
-                "band_frame_transform_sha256" => gauge_contract.transform_sha256,
-                "band_frame_contract_sha256" => gauge_contract.contract_sha256,
-                "band_frame_contract" => support.band_frame_contract_summary(gauge_contract),
-                "band_gauge_rotation_sha256" => gauge_contract.transform_sha256,
-                "band_gauge_rotation_semantics" => "legacy_alias_of_band_frame_transform_sha256",
-                "gauge_artifact_sha256" =>
-                    something(gauge_contract.gauge_artifact_sha256, "NOT_APPLICABLE"),
-                "input_sha256" => merge(
-                    common_hashes,
-                    Dict("ORACLE_MMN" => bytes2hex(SHA.sha256(read(mmn_file)))),
-                ),
-            ),
-        )
-    end
-    sidecars = Dict{Symbol, String}()
-    for (operator, path) in ((:uHu, uhu_file), (:sIu, siu_file), (:sHu, shu_file))
-        sidecar = path * ".json"
-        open(sidecar, "w") do io
-            JSON3.write(
-                io,
-                Dict(
-                    "schema" => "WannierNLQG.wannier_hamiltonian_operator_generation",
-                    "schema_version" => "1.3",
-                    "algorithm_version" => "focused-profile-fixture",
-                    "operator" => String(operator),
-                    "status" => "PASS",
-                    "passed" => true,
-                    "qualification_stage" => "SOURCE_OPERATOR_GENERATION",
-                    "source_generation_qualified" => true,
-                    "artifact_published" => true,
-                    "closure_residual" => 0.0,
-                    "diagnostic_reference" => 1.0e-6,
-                    "diagnostic_reference_status" =>
-                        operator == :uHu ? "ABOVE_REFERENCE" : "WITHIN_REFERENCE",
-                    "diagnostic_reference_policy" => "AUDIT_ONLY_NOT_AN_ACTUAL_OPERATOR_ERROR_BOUND",
-                    "actual_operator_error_status" => "NOT_AVAILABLE_WITHOUT_COMPLEMENT_HAMILTONIAN_OR_NBANDS_REFERENCE",
-                    "nbands_convergence_status" => "NOT_ESTABLISHED",
-                    "outer_probability_leakage_audit_maximum" => operator == :uHu ? 2.0e-6 : 0.0,
-                    "outer_probability_leakage_audit_status" =>
-                        operator == :uHu ? "ABOVE_REFERENCE" : "WITHIN_REFERENCE",
-                    "frozen_probability_leakage_audit_maximum" => 0.0,
-                    "frozen_probability_leakage_audit_status" => "WITHIN_REFERENCE",
-                    "parent_mutual_containment_audit_maximum" => 0.0,
-                    "parent_mutual_containment_audit_status" => "WITHIN_REFERENCE",
-                    "parent_overlap_contraction_excess_audit_maximum" => 0.0,
-                    "outer_overlap_contraction_excess_audit_maximum" => 0.0,
-                    "frozen_overlap_contraction_excess_audit_maximum" => 0.0,
-                    "galerkin_block_audit" => Dict(
-                        "status" => "RECORDED",
-                        "block_count" => 1,
-                        "norm_kind" => "frobenius",
-                        "maximum_frobenius_norm" => 1.0,
-                        "maximum_frobenius_product_bound" => 1.0,
-                        "minimum_block_to_bound_ratio" => 1.0,
-                        "maximum_frobenius_product_bound_slack_fraction" => 0.0,
-                        "exchange_hermiticity_max_absolute_ev" =>
-                            operator == :uHu ? 0.0 : nothing,
-                        "exchange_hermiticity_tolerance_ev" =>
-                            operator == :uHu ? 1.0e-12 : nothing,
-                        "exchange_hermiticity_status" =>
-                            operator == :uHu ? "PASS" : "NOT_APPLICABLE",
-                    ),
-                    "galerkin_cancellation_audit" => Dict(
-                        "status" => "NOT_AVAILABLE_BEFORE_FINAL_WANNIER_PROFILE_ASSEMBLY",
-                        "policy" => "DEFER_TO_FINITE_DIFFERENCE_PROFILE_CONTRACTION",
-                        "semantics" => "requires_absolute_sum_and_final_combination_in_the_actual_wannier_finite_difference_stencil",
-                        "absolute_sum" => nothing,
-                        "final_combination" => nothing,
-                        "cancellation_ratio" => nothing,
-                    ),
-                    "output_sha256" => bytes2hex(SHA.sha256(read(path))),
-                    "authoritative_hamiltonian" => authority.authority,
-                    "authoritative_hamiltonian_digest" => authority.digest,
-                    "source_band_gauge" => gauge_contract.source_band_gauge,
-                    "target_band_gauge" => gauge_contract.target_band_gauge,
-                    "band_frame_transform_sha256" => gauge_contract.transform_sha256,
-                    "band_frame_contract_sha256" => gauge_contract.contract_sha256,
-                    "band_frame_contract" => support.band_frame_contract_summary(gauge_contract),
-                    "band_gauge_rotation_sha256" => gauge_contract.transform_sha256,
-                    "band_gauge_rotation_semantics" => "legacy_alias_of_band_frame_transform_sha256",
-                    "gauge_artifact_sha256" =>
-                        something(gauge_contract.gauge_artifact_sha256, "NOT_APPLICABLE"),
-                    "spn_provenance_sha256" =>
-                        operator in (:sIu, :sHu) ? spn_provenance_sha256 : "NOT_APPLICABLE",
-                    "input_sha256" => merge(
-                        common_hashes,
-                        Dict("EIG" => first(values(authority.input_sha256))),
-                        operator in (:sIu, :sHu) ?
-                        Dict("SPN" => spn_sha256, "SPN_PROVENANCE" => spn_provenance_sha256) :
-                        Dict{String, String}(),
-                    ),
-                ),
-            )
-        end
-        sidecars[operator] = sidecar
-    end
-    return (;
-        mmn_file,
-        spn_file,
-        spn_provenance,
-        spn_attestation,
-        uiu_file,
-        uhu_file,
-        siu_file,
-        shu_file,
-        uiu_provenance,
-        uhu_provenance = sidecars[:uHu],
-        siu_provenance = sidecars[:sIu],
-        shu_provenance = sidecars[:sHu],
-    )
-end
-
-function _profile_eligibility(authority)
-    metadata = Dict{String, Any}(
-        "authoritative_hamiltonian" => authority.authority,
-        "authoritative_hamiltonian_sha256" => authority.digest,
-    )
-    authority.authority == "native_dft" && return metadata
-    merge!(
-        metadata,
-        Dict(
-            "energy_shift_qualification" => "audit_only",
-            "residual_gate_phase" => "post_symmetrization",
-            "native_difference_qualification" => "audit_only",
-            "qualification_scope" => "target_subspace",
-            "parent_audit_policy" => "audit_only",
-            "target_authority" => "outer_window",
-            "disentanglement_outer_mask_sha256" => repeat("1", 64),
-            "disentanglement_frozen_mask_sha256" => repeat("2", 64),
-            "target_subspace_contract_sha256" => repeat("3", 64),
-            "target_leakage_semantics" => PROFILE_W.TB_TARGET_LEAKAGE_WEIGHT_SEMANTICS,
-            "target_leakage_formula_sha256" => PROFILE_W.TB_TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256,
-            "target_leakage_threshold" => 1.0e-6,
-            "target_anchor" => "completed_symmetrized_target",
-            "auxiliary_parent_qualification" => "audit_only",
-        ),
-    )
-    return metadata
-end
+isdefined(@__MODULE__, :_profile_modified_config) ||
+    include(joinpath(@__DIR__, "WannierOperatorProfileTestSupport.jl"))
 
 @testset "final-projector digest and endpoint leakage are Wannier-gauge invariant" begin
     extension = first(PROFILE_W._load_wannierization_extension!()).OperatorExport
@@ -538,7 +106,7 @@ end
 end
 
 @testset "ordinary/native-SAWF/symmetrized-SAWF schema-6 profile matrix" begin
-    fixture = diagnostic_export_fixture()
+    fixture = standard_export_fixture()
     # Seal the accepted-state fixture with the same topology used by full operator profiles.
     raw_stencil = WannierNLQG.MatrixElements.build_finite_difference_stencil(
         something(fixture.result.wannier_chk),
@@ -555,7 +123,7 @@ end
         copy(raw_stencil.neighbors),
         copy(raw_stencil.reciprocal_shifts),
     )
-    fixture = diagnostic_export_fixture(; mmn_override = profile_mmn)
+    fixture = standard_export_fixture(; mmn_override = profile_mmn)
     parent_extension = first(PROFILE_W._load_wannierization_extension!())
     extension = parent_extension.OperatorExport
     eligible = PROFILE_W.WannierizationResult(
@@ -660,8 +228,12 @@ end
             for profile in (:hamiltonian_position, :hamiltonian_position_spin, :full)
                 config = _profile_modified_config(
                     fixture.config;
-                    profile,
-                    construction_policy = route == :symmetrized_sawf ? :diagnostic : :strict,
+                    profile = profile == :hamiltonian_position_spin ? nothing : profile,
+                    operator_tasks = profile == :hamiltonian_position_spin ?
+                                     (
+                        PROFILE_CORE.OperatorTask(quantity = :zeeman_interband_berry_curvature),
+                    ) : (),
+                    construction_policy = route == :symmetrized_sawf ? :standard : :strict,
                     authoritative_hamiltonian = route == :symmetrized_sawf ?
                                                 PROFILE_W.SymmetrizedDFTHamiltonian() :
                                                 PROFILE_W.NativeDFTHamiltonian(),
@@ -831,9 +403,9 @@ end
                 operator_qualification = provenance["operator_qualification"]
                 spin_family = operator_qualification["families"]["spin"]
                 if route == :symmetrized_sawf
-                    @test operator_qualification["construction_policy"] == "diagnostic"
-                    @test operator_qualification["model_qualification"] == "DIAGNOSTIC_ONLY"
-                    @test operator_qualification["manual_review_required"]
+                    @test operator_qualification["construction_policy"] == "standard"
+                    @test operator_qualification["model_qualification"] == "STANDARD"
+                    @test operator_qualification["quality_review_recommended"]
                     @test !operator_qualification["production_eligible"]
                     @test all(
                         record ->
@@ -877,7 +449,7 @@ end
                             "message" => "retained diagnostic gauge quality failure",
                             "context" => Dict(
                                 "gate_result" => "FAIL",
-                                "action" => "CONTINUE_DIAGNOSTIC",
+                                "action" => "CONTINUE_STANDARD",
                                 "stage" => "operator_profile_assembly",
                             ),
                         ),
@@ -885,13 +457,13 @@ end
                     merge!(
                         eligibility,
                         Dict(
-                            "construction_policy" => "diagnostic",
+                            "construction_policy" => "standard",
                             "construction_gate_records_json" =>
                                 String(JSON3.write(retained_records)),
-                            "manual_review_required" => true,
+                            "quality_review_recommended" => true,
                             "construction_quality_failed" => true,
-                            "diagnostic_classification" => "DIAGNOSTIC_ONLY_QUALITY_FAILED",
-                            "diagnostic_only" => true,
+                            "model_availability" => "AVAILABLE_WITH_QUALITY_WARNINGS",
+                            "quality_review_recommended" => true,
                             "production_eligible" => false,
                         ),
                     )
@@ -917,7 +489,119 @@ end
                     eligibility,
                 )
                 loaded = PROFILE_IO.read_real_space_operator_bundle(output)
-                @test loaded.manifest.schema_version == "1.0"
+                if profile == :full && route == :symmetrized_sawf
+                    original_sidecar = read(inputs.uiu_provenance)
+                    warning = JSON3.read(original_sidecar, Dict{String, Any})
+                    merge!(
+                        warning,
+                        Dict(
+                            "construction_policy" => "standard",
+                            "status" => "EXPORTED_WITH_WARNING",
+                            "passed" => false,
+                            "physical_overlap_available" => true,
+                            "production_eligible" => false,
+                            "generalized_normalization_max_absolute" => 0.01,
+                            "radial_q_max_absolute" => 0.0,
+                            "diagonal_identity_max_absolute" => 0.02,
+                            "exchange_hermiticity_max_absolute" => 0.0,
+                            "diagnostics" => [
+                                "UIU_GENERATION_NUMERICAL_WARNING",
+                                "NUMERICAL_WARNING:UIU_PREFLIGHT_GATE_FAILED",
+                                "NUMERICAL_WARNING:UIU_OUTPUT_GATE_FAILED",
+                            ],
+                        ),
+                    )
+                    write(inputs.uiu_provenance, JSON3.write(warning))
+                    warning_operators, warning_provenance = Base.invokelatest(
+                        extension._assemble_wannierization_operator_profile_from_qualified_sources,
+                        model,
+                        prepared,
+                        profile_mmn,
+                        config,
+                        authority,
+                        symmetry_plan,
+                        gauge_contract,
+                        inputs.spn_attestation,
+                        0.0,
+                        assembly_target,
+                    )
+                    @test warning_provenance["uiu_generation_status"] == "EXPORTED_WITH_WARNING"
+                    @test warning_provenance["uiu_generation_numerical_warning"]["generalized_normalization_max_absolute"] ==
+                          0.01
+                    @test all(
+                        warning_operators[k].data == operators[k].data for k in keys(operators)
+                    )
+                    warning_eligibility = merge(
+                        copy(eligibility),
+                        Dict(
+                            "numerical_quality" => "NUMERICAL_WARNING",
+                            "tb_export_status" => "EXPORTED_WITH_WARNING",
+                            "construction_quality_failed" => true,
+                            "production_eligible" => false,
+                            "physics_qualification" => "PHYSICS_HOLD",
+                        ),
+                    )
+                    warning_output = joinpath(directory, "full-warning.h5")
+                    PROFILE_IO.write_real_space_operator_bundle(
+                        warning_output,
+                        model.lattice,
+                        model.r_degeneracies,
+                        warning_operators;
+                        profile,
+                        provenance = merge(
+                            Dict(
+                                "route" => String(route),
+                                "authoritative_hamiltonian" => authority.authority,
+                                "authoritative_hamiltonian_digest" => authority.digest,
+                            ),
+                            warning_provenance,
+                        ),
+                        geometry,
+                        diagnostics = warning_eligibility,
+                        eligibility = warning_eligibility,
+                    )
+                    warning_loaded = PROFILE_IO.read_real_space_operator_bundle(warning_output)
+                    @test warning_loaded.manifest.numerical_quality == "NUMERICAL_WARNING"
+                    @test !warning_loaded.manifest.production_eligible
+                    # The existing aggregate digest binds changed qualification evidence.
+                    # Payload component digests must remain exactly unchanged.
+                    @test warning_loaded.manifest.scientific_content_sha256 !=
+                          loaded.manifest.scientific_content_sha256
+                    component_digests =
+                        [entry.component_sha256 for entry in loaded.manifest.entries]
+                    @test [entry.component_sha256 for entry in warning_loaded.manifest.entries] == component_digests
+                    @test all(
+                        warning_loaded.operators[k].data == loaded.operators[k].data for
+                        k in keys(operators)
+                    )
+                    code = """
+using WannierNLQG,HDF5
+x = WannierNLQG.IO.read_real_space_operator_bundle(ARGS[1])
+@assert x.manifest.numerical_quality == "NUMERICAL_WARNING"
+@assert !x.manifest.production_eligible
+@assert x.manifest.tb_export_status == "EXPORTED_WITH_WARNING"
+@assert x.manifest.physics_qualification == "PHYSICS_HOLD"
+h5open(ARGS[1], "r") do handle
+    record = attributes(handle["provenance/uiu_generation_numerical_warning"])
+    @assert read(record["generalized_normalization_max_absolute"]) == 0.01
+    @assert read(record["diagonal_identity_max_absolute"]) == 0.02
+    @assert read(record["status"]) == "EXPORTED_WITH_WARNING"
+    @assert !read(record["passed"])
+end
+@assert x.manifest.scientific_content_sha256 == ARGS[2]
+@assert length(x.operators) == 11
+@assert join((e.component_sha256 for e in x.manifest.entries), ",") == ARGS[3]
+println("FULL_WARNING_FRESH_READBACK_PASS ", ARGS[2])
+"""
+                    fresh = read(
+                        `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(@__DIR__)) -e $code $warning_output $(warning_loaded.manifest.scientific_content_sha256) $(join(component_digests, ","))`,
+                        String,
+                    )
+                    print(fresh)
+                    @test occursin("FULL_WARNING_FRESH_READBACK_PASS", fresh)
+                    write(inputs.uiu_provenance, original_sidecar)
+                end
+                @test loaded.manifest.schema_version == "1.1"
                 @test loaded.manifest.profile == profile
                 @test loaded.manifest.inventory == expected
                 @test Set(keys(loaded.operators)) == Set(expected)
@@ -925,14 +609,14 @@ end
                 @test loaded.manifest.band_frame_contract_status ==
                       (profile == :hamiltonian_position ? "NOT_APPLICABLE" : "PASS")
                 if route == :symmetrized_sawf
-                    @test loaded.manifest.diagnostic_only
+                    @test loaded.manifest.quality_review_recommended
                     @test !loaded.manifest.production_eligible
                     HDF5.h5open(output, "r") do handle
                         evidence = HDF5.attributes(handle["construction_evidence"])
-                        @test String(read(evidence["construction_policy"])) == "diagnostic"
-                        @test String(read(evidence["diagnostic_classification"])) ==
-                              "DIAGNOSTIC_ONLY_QUALITY_FAILED"
-                        @test Bool(read(evidence["manual_review_required"]))
+                        @test String(read(evidence["construction_policy"])) == "standard"
+                        @test String(read(evidence["model_availability"])) ==
+                              "AVAILABLE_WITH_QUALITY_WARNINGS"
+                        @test Bool(read(evidence["quality_review_recommended"]))
                         @test !Bool(read(evidence["production_eligible"]))
                         retained =
                             JSON3.read(String(read(evidence["construction_gate_records_json"])))
@@ -1060,7 +744,7 @@ end
                     @test loaded.manifest.finite_band_galerkin_qualification_reason ==
                           "NBANDS_CONVERGENCE_NOT_ESTABLISHED"
                     @test !loaded.manifest.finite_band_galerkin_production_eligible
-                    @test loaded.manifest.diagnostic_only
+                    @test loaded.manifest.quality_review_recommended
                     finite_band =
                         loaded.manifest.operator_qualification["families"]["finite_band_galerkin"]
                     @test finite_band["finite_band_risk_audit"]["uHu"]["diagnostic_reference_status"] ==
@@ -1079,17 +763,17 @@ end
                             HDF5.delete_attribute(handle, "scientific_content_sha256")
                             HDF5.attributes(handle)["scientific_content_sha256"] = legacy_digest
                         end
-                        legacy_manifest =
+                        legacy_error = try
                             PROFILE_IO.read_real_space_operator_bundle_manifest(legacy_62)
-                        @test legacy_manifest.schema_version == "6.2"
-                        @test legacy_manifest.profile == :full
-                        @test legacy_manifest.inventory == expected
-                        @test legacy_manifest.finite_band_galerkin_qualification ==
-                              "LEGACY_NOT_RECORDED"
-                        @test legacy_manifest.finite_band_galerkin_qualification_reason ==
-                              "LEGACY_GALERKIN_RISK_CONTRACT_NOT_RECORDED"
-                        @test !legacy_manifest.finite_band_galerkin_production_eligible
-                        @test legacy_manifest.diagnostic_only
+                            nothing
+                        catch caught
+                            caught
+                        end
+                        @test legacy_error isa ArgumentError
+                        @test occursin(
+                            "operator-bundle migration required",
+                            sprint(showerror, legacy_error),
+                        )
                     end
                 else
                     @test loaded.manifest.finite_band_galerkin_qualification == "NOT_APPLICABLE"
@@ -1170,4 +854,13 @@ end
     end
     @test error isa ArgumentError
     @test occursin("migrate to :hamiltonian_position_spin", sprint(showerror, error))
+end
+
+@testset "public Wannierization profiles are exactly two" begin
+    for profile in
+        (:hamiltonian_position_spin, :spin, :orbital_magnetization, :derivative, :task_derived)
+        @test_throws PROFILE_CORE.OperatorSelectionError PROFILE_IO.resolve_operator_selection(
+            profile,
+        )
+    end
 end

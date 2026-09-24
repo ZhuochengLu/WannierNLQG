@@ -155,6 +155,22 @@ function write_wannier_eig(filename::AbstractString, eig::WannierEIG)
     return path
 end
 
+# Preserve Base Float64 token parsing without allocating a split vector for each MMN row.
+function _wannier_complex_pair(row::AbstractString)
+    first_start = findfirst(!isspace, row)
+    first_start === nothing && return nothing
+    first_stop = findnext(isspace, row, first_start)
+    first_stop === nothing && return nothing
+    second_start = findnext(!isspace, row, first_stop)
+    second_start === nothing && return nothing
+    second_stop = findnext(isspace, row, second_start)
+    second_last = second_stop === nothing ? lastindex(row) : prevind(row, second_stop)
+    return ComplexF64(
+        parse(Float64, SubString(row, first_start, prevind(row, first_stop))),
+        parse(Float64, SubString(row, second_start, second_last)),
+    )
+end
+
 """
 Read formatted neighboring Bloch overlaps and integer reciprocal shifts into `WannierMMN`.
 
@@ -199,12 +215,11 @@ function read_wannier_mmn(filename::AbstractString)::WannierMMN
                         eof(io) && error(
                             "MMN file ended inside block kpoint_index=$(kpoint_index), ib=$(ib).",
                         )
-                        row = split(strip(readline(io)))
-                        length(row) >= 2 || error(
+                        value = _wannier_complex_pair(readline(io))
+                        value === nothing && error(
                             "Malformed MMN matrix row at kpoint_index=$(kpoint_index), ib=$(ib), m=$(m), n=$(n).",
                         )
-                        data[n, m, ib, kpoint_index] =
-                            ComplexF64(parse(Float64, row[1]), parse(Float64, row[2]))
+                        data[n, m, ib, kpoint_index] = value
                     end
                 end
             end

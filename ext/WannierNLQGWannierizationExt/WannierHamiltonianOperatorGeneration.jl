@@ -1,18 +1,46 @@
 const WANNIER_HAMILTONIAN_OPERATOR_GENERATION_SCHEMA = "WannierNLQG.wannier_hamiltonian_operator_generation"
-const WANNIER_HAMILTONIAN_OPERATOR_GENERATION_SCHEMA_VERSION = "1.0"
+const WANNIER_HAMILTONIAN_OPERATOR_GENERATION_SCHEMA_VERSION = "1.1"
 const WANNIER_HAMILTONIAN_OPERATOR_GENERATION_ALGORITHM_VERSION = "finite-band-paw-metric-galerkin-v5-structural-source-generation-with-audited-truncation"
 const WANNIER_HAMILTONIAN_OPERATOR_CLOSURE_SEMANTICS = "dimensionless_probability_weight"
 const WANNIER_HAMILTONIAN_OPERATOR_CLOSURE_FORMULA = "max_endpoint_lambda_max(V_dagger*(I-M_dagger_M_or_I-M_M_dagger)*V)"
 const WANNIER_HAMILTONIAN_OPERATOR_ACTUAL_ERROR_STATUS = "NOT_AVAILABLE_WITHOUT_COMPLEMENT_HAMILTONIAN_OR_NBANDS_REFERENCE"
 const WANNIER_HAMILTONIAN_OPERATOR_NBANDS_CONVERGENCE_STATUS = "NOT_ESTABLISHED"
 
+"""Restore one complete center block, or atomically seal the newly calculated payload."""
+function _operator_center_checkpoint(
+    builder::F,
+    validator::V,
+    config,
+    operator,
+    contract,
+    center,
+) where {F, V}
+    execution = config.execution
+    directory = execution.checkpoint_directory
+    path =
+        directory === nothing ? nothing :
+        joinpath(directory, string(operator), "center-$(center).bin")
+    binding = contract * ":" * string(center)
+    saved =
+        path === nothing || !execution.resume ? nothing :
+        IO.read_preparation_checkpoint(path, binding)
+    payload = saved === nothing ? builder() : saved
+    validator(payload) ||
+        throw(ArgumentError("OPERATOR_CENTER_CHECKPOINT_INVALID: $(operator) center $(center)"))
+    if path !== nothing && saved === nothing
+        IO.write_preparation_checkpoint(path, binding, payload)
+    end
+    return payload
+end
+
 """Validate and resolve protected atomic paths for a Hamiltonian-operator generator."""
 function _hamiltonian_operator_paths(
     config::WannierHamiltonianOperatorGenerationConfig;
     authoritative_mmn_file = nothing,
+    allow_completed_reuse::Bool = false,
 )
-    config.construction_policy in (:diagnostic, :strict) ||
-        throw(ArgumentError("construction_policy must be :diagnostic or :strict"))
+    config.construction_policy in (:standard, :strict) ||
+        throw(ArgumentError("construction_policy must be :standard or :strict"))
     output = abspath(config.output_file)
     provenance = abspath(config.provenance_json)
     target = config.target_contract
@@ -34,28 +62,38 @@ function _hamiltonian_operator_paths(
         isempty(strip(path)) && throw(ArgumentError("$(label) must not be empty"))
         isfile(path) || throw(ArgumentError("$(label) does not exist: $(abspath(path))"))
     end
+    recover_publication =
+        !config.overwrite &&
+        isfile(output) &&
+        !ispath(provenance) &&
+        config.execution.resume &&
+        config.execution.checkpoint_directory !== nothing
     ispath(output) &&
         !config.overwrite &&
+        !recover_publication &&
+        !allow_completed_reuse &&
         throw(ArgumentError("refusing to overwrite operator file: $(output)"))
     ispath(provenance) &&
         !config.overwrite &&
+        !allow_completed_reuse &&
         throw(ArgumentError("refusing to overwrite operator provenance: $(provenance)"))
     isfinite(config.closure_tolerance) && config.closure_tolerance > 0.0 ||
         throw(ArgumentError("closure_tolerance must be positive and finite"))
     config.max_cached_wavefunction_kpoints >= 2 ||
         throw(ArgumentError("max_cached_wavefunction_kpoints must be at least two"))
-    return (; output, provenance)
+    return (; output, provenance, recover_publication)
 end
 
 """Construct the configured Hamiltonian authority for uHu, sHu, or sIu."""
 function _generation_authoritative_hamiltonian(config::WannierHamiltonianOperatorGenerationConfig)
     eig = IO.read_wannier_eig(config.eig_file)
+    source = generation_gauge_source(config.source, config.wavefunction_gauge_hdf5)
     if config.authoritative_hamiltonian isa NativeDFTHamiltonian
         if config.wavefunction_gauge_hdf5 === nothing
             return _native_authoritative_band_hamiltonian(eig; eig_file = config.eig_file)
         end
         return _native_completed_authoritative_band_hamiltonian(
-            config.source,
+            source,
             something(config.wavefunction_gauge_hdf5),
             eig;
             eig_file = config.eig_file,
@@ -68,7 +106,7 @@ function _generation_authoritative_hamiltonian(config::WannierHamiltonianOperato
             ),
         )
         return _symmetrized_authoritative_band_hamiltonian(
-            config.source,
+            source,
             something(config.wavefunction_gauge_hdf5),
             config.authoritative_hamiltonian,
             construction_policy = config.construction_policy,
@@ -139,8 +177,12 @@ function _validate_hamiltonian_operator_closure_topology(topology)
     return nothing
 end
 
-"""Build the explicit full-parent scope retained for ordinary native generation."""
-function _hamiltonian_operator_native_identity_scope(gauge_contract, topology)
+"""Build the outer-window scope for ordinary native generation, with legacy fallback."""
+function _hamiltonian_operator_native_identity_scope(
+    gauge_contract,
+    topology,
+    target_contract = nothing,
+)
     gauge_contract.gauge_artifact_sha256 === nothing || throw(
         ArgumentError("CLOSURE_SCOPE_ARTIFACT_MISMATCH: native identity scope has an artifact"),
     )
@@ -150,12 +192,36 @@ function _hamiltonian_operator_native_identity_scope(gauge_contract, topology)
         ),
     )
     gauge_contract.status == "PASS" || throw(ArgumentError("BAND_FRAME_CONTRACT_NOT_QUALIFIED"))
-    outer_mask = trues(topology.num_bands, topology.num_kpts)
-    frozen_mask = falses(topology.num_bands, topology.num_kpts)
+    if target_contract === nothing
+        outer_mask = trues(topology.num_bands, topology.num_kpts)
+        frozen_mask = falses(topology.num_bands, topology.num_kpts)
+        authority = "full_parent_native_identity"
+        parent_audit_policy = "audit_only"
+    else
+        if target_contract.parent_audit_policy == "legacy_hard_gate"
+            outer_mask = trues(topology.num_bands, topology.num_kpts)
+            frozen_mask = falses(topology.num_bands, topology.num_kpts)
+            authority = "full_parent_native_identity"
+            parent_audit_policy = "legacy_hard_gate"
+        else
+            target_contract.target_authority == "outer_window" ||
+                throw(ArgumentError("CLOSURE_SCOPE_AUTHORITY_MISMATCH"))
+            target_contract.parent_audit_policy == "audit_only" ||
+                throw(ArgumentError("CLOSURE_SCOPE_PARENT_POLICY_MISMATCH"))
+            scope = target_contract.qualification_scope
+            size(scope.outer_mask) == (topology.num_bands, topology.num_kpts) ||
+                throw(ArgumentError("CLOSURE_SCOPE_MASK_DIMENSION_MISMATCH"))
+            qualification_mask_sha256(scope.outer_mask) == scope.outer_mask_sha256 &&
+            qualification_mask_sha256(scope.frozen_mask) == scope.frozen_mask_sha256 ||
+                throw(ArgumentError("CLOSURE_SCOPE_MASK_DIGEST_MISMATCH"))
+            outer_mask = scope.outer_mask
+            frozen_mask = scope.frozen_mask
+            authority = "outer_window"
+            parent_audit_policy = "audit_only"
+        end
+    end
     outer_mask_sha256 = qualification_mask_sha256(outer_mask)
     frozen_mask_sha256 = qualification_mask_sha256(frozen_mask)
-    authority = "full_parent_native_identity"
-    parent_audit_policy = "audit_only"
     artifact_sha256 = "NOT_APPLICABLE"
     contract_sha256 = _hamiltonian_operator_closure_scope_sha256(
         authority,
@@ -176,10 +242,10 @@ function _hamiltonian_operator_native_identity_scope(gauge_contract, topology)
         frozen_mask = BitMatrix(frozen_mask),
         outer_mask_sha256,
         frozen_mask_sha256,
-        outer_rank_minimum = topology.num_bands,
-        outer_rank_maximum = topology.num_bands,
-        frozen_rank_minimum = 0,
-        frozen_rank_maximum = 0,
+        outer_rank_minimum = minimum(count(@view outer_mask[:, k]) for k in 1:topology.num_kpts),
+        outer_rank_maximum = maximum(count(@view outer_mask[:, k]) for k in 1:topology.num_kpts),
+        frozen_rank_minimum = minimum(count(@view frozen_mask[:, k]) for k in 1:topology.num_kpts),
+        frozen_rank_maximum = maximum(count(@view frozen_mask[:, k]) for k in 1:topology.num_kpts),
         contract_sha256,
     )
 end
@@ -190,12 +256,16 @@ function _hamiltonian_operator_closure_scope(
     gauge_contract,
     topology;
     construction_policy::Symbol = :strict,
+    target_contract = nothing,
 )
-    construction_policy in (:diagnostic, :strict) ||
-        throw(ArgumentError("construction_policy must be :diagnostic or :strict"))
+    construction_policy in (:standard, :strict) ||
+        throw(ArgumentError("construction_policy must be :standard or :strict"))
     _validate_hamiltonian_operator_closure_topology(topology)
-    gauge_hdf5 === nothing &&
-        return _hamiltonian_operator_native_identity_scope(gauge_contract, topology)
+    gauge_hdf5 === nothing && return _hamiltonian_operator_native_identity_scope(
+        gauge_contract,
+        topology,
+        target_contract,
+    )
 
     path = abspath(something(gauge_hdf5))
     isfile(path) || throw(ArgumentError("CLOSURE_SCOPE_ARTIFACT_MISSING: $(path)"))
@@ -226,7 +296,10 @@ function _hamiltonian_operator_closure_scope(
         )
         artifact_status = String(read(root_attributes["status"]))
         artifact_status == "PASS" ||
-            (construction_policy == :diagnostic && artifact_status == "DIAGNOSTIC_ONLY") ||
+            (
+                construction_policy == :standard &&
+                artifact_status in ("STANDARD", "DIAGNOSTIC_ONLY")
+            ) ||
             throw(ArgumentError("CLOSURE_SCOPE_ARTIFACT_NOT_QUALIFIED"))
         haskey(handle, "qualification_scope") || throw(
             ArgumentError(
@@ -653,9 +726,8 @@ function _hamiltonian_operator_provenance(
         "operator" => String(operator),
         "qualification_stage" => "SOURCE_OPERATOR_GENERATION",
         "construction_policy" => String(config.construction_policy),
-        "model_qualification" =>
-            config.construction_policy == :diagnostic ? "DIAGNOSTIC_ONLY" : status,
-        "manual_review_required" => config.construction_policy == :diagnostic,
+        "model_qualification" => config.construction_policy == :standard ? "STANDARD" : status,
+        "quality_review_recommended" => config.construction_policy == :standard,
         "production_eligible" => config.construction_policy == :strict && artifact_published,
         "status" => status,
         "passed" => source_generation_qualified,
@@ -792,8 +864,153 @@ function _validate_hamiltonian_authority_frame_binding(authority, gauge_contract
     return nothing
 end
 
+"""Remove unused spin inputs before uHu path checks, cache identity, and generation."""
+function _hamiltonian_operator_source_config(
+    config::WannierHamiltonianOperatorGenerationConfig,
+    operator,
+)
+    operator == :uHu || return config
+    names = fieldnames(typeof(config))
+    values = map(names) do name
+        name in (:spn_file, :spn_provenance_file) && return nothing
+        name == :spn_formatted && return false
+        return getfield(config, name)
+    end
+    return WannierHamiltonianOperatorGenerationConfig(; NamedTuple{names}(values)...)
+end
+
 """Generate, roundtrip-check, and atomically qualify uHu, sHu, or sIu."""
 function _generate_hamiltonian_operator(
+    config::WannierHamiltonianOperatorGenerationConfig,
+    operator::Symbol,
+)
+    config = _hamiltonian_operator_source_config(config, operator)
+    if !(
+        config.source isa Union{
+            SymmetryFoundation.QuantumEspressoWavefunctionSource,
+            SymmetryFoundation.VASPWavefunctionSource,
+        }
+    )
+        return _generate_hamiltonian_operator_scoped(config, operator)
+    end
+    if config.source isa SymmetryFoundation.VASPWavefunctionSource &&
+       config.source.potcar_file === nothing
+        return _generate_hamiltonian_operator_scoped(config, operator)
+    end
+    if operator in (:sIu, :sHu) &&
+       any(path -> path === nothing || !isfile(path), (config.spn_file, config.spn_provenance_file))
+        return _generate_hamiltonian_operator_scoped(config, operator)
+    end
+    config.target_contract === nothing &&
+        return _generate_hamiltonian_operator_cached(config, operator)
+    operator in (:uHu, :sHu, :sIu) || throw(ArgumentError("unsupported operator $(operator)"))
+    authority_mmn =
+        operator_target_oracle_mmn_file(config.authoritative_mmn_file, config.target_contract)
+    _hamiltonian_operator_paths(
+        config;
+        authoritative_mmn_file = authority_mmn,
+        allow_completed_reuse = config.execution.resume &&
+                                config.execution.mode != :dense_reference,
+    )
+    gauge_inputs =
+        config.wavefunction_gauge_hdf5 === nothing ? String[] :
+        [something(config.wavefunction_gauge_hdf5)]
+    return SymmetryFoundation.with_verified_file_digests(gauge_inputs) do
+        validate_operator_target_contract_config(
+            something(config.target_contract),
+            config.authoritative_hamiltonian,
+            config.wavefunction_gauge_hdf5,
+        )
+        _generate_hamiltonian_operator_cached(config, operator)
+    end
+end
+
+"""Restore a complete publication only after early target authority validation."""
+function _generate_hamiltonian_operator_cached(
+    config::WannierHamiltonianOperatorGenerationConfig,
+    operator::Symbol,
+)
+    operator in (:uHu, :sHu, :sIu) || throw(ArgumentError("unsupported operator $(operator)"))
+    authority_mmn =
+        operator_target_oracle_mmn_file(config.authoritative_mmn_file, config.target_contract)
+    execution = config.execution
+    paths = _hamiltonian_operator_paths(
+        config;
+        authoritative_mmn_file = authority_mmn,
+        allow_completed_reuse = execution.resume && execution.mode != :dense_reference,
+    )
+    if !execution.resume || execution.mode == :dense_reference
+        return _generate_hamiltonian_operator_scoped(config, operator)
+    end
+    files = String[config.topology_file, config.eig_file]
+    for path in
+        (authority_mmn, config.spn_file, config.spn_provenance_file, config.wavefunction_gauge_hdf5)
+        path === nothing || push!(files, path)
+    end
+    if config.target_contract !== nothing
+        push!(
+            files,
+            config.target_contract.operator_oracle_mmn_file,
+            config.target_contract.solver_mmn_file,
+        )
+    end
+    return with_operator_publication_receipt(
+        () -> _generate_hamiltonian_operator_scoped(config, operator),
+        config,
+        operator,
+        paths,
+        files;
+        execution = execution,
+        published = result -> result.artifact_published,
+    )
+end
+
+"""Prepare native inputs only when no verified completed publication is available."""
+function _generate_hamiltonian_operator_scoped(
+    config::WannierHamiltonianOperatorGenerationConfig,
+    operator::Symbol,
+)
+    config.source isa SymmetryFoundation.VASPWavefunctionSource ||
+        return _generate_hamiltonian_operator_impl(config, operator)
+    operator in (:uHu, :sHu, :sIu) || throw(ArgumentError("unsupported operator $(operator)"))
+    authority_mmn =
+        operator_target_oracle_mmn_file(config.authoritative_mmn_file, config.target_contract)
+    paths = _hamiltonian_operator_paths(config; authoritative_mmn_file = authority_mmn)
+    inputs = String[config.topology_file, config.eig_file]
+    for path in
+        (authority_mmn, config.spn_file, config.spn_provenance_file, config.wavefunction_gauge_hdf5)
+        path === nothing || push!(inputs, path)
+    end
+    if config.target_contract !== nothing
+        push!(
+            inputs,
+            config.target_contract.operator_oracle_mmn_file,
+            config.target_contract.solver_mmn_file,
+        )
+    end
+    if operator in (:sHu, :sIu)
+        for (label, path) in (
+            ("SPN_FILE_REQUIRED", config.spn_file),
+            ("SPN_PROVENANCE_REQUIRED", config.spn_provenance_file),
+        )
+            path === nothing && throw(ArgumentError("$(label): sHu/sIu generation input missing"))
+            isfile(path) || throw(ArgumentError("$(label): $(abspath(path))"))
+        end
+    end
+    config.source.potcar_file === nothing &&
+        throw(ArgumentError("VASP_PAW_DATA_REQUIRED: operator generation requires POTCAR"))
+    return with_vasp_operator_artifacts(
+        config.source,
+        dirname(paths.output);
+        execution = config.execution,
+        additional_inputs = inputs,
+    ) do
+        _generate_hamiltonian_operator_impl(config, operator)
+    end
+end
+
+"""Run unchanged Hamiltonian/spin operator kernels inside the selected preparation scope."""
+function _generate_hamiltonian_operator_impl(
     config::WannierHamiltonianOperatorGenerationConfig,
     operator::Symbol,
 )
@@ -846,6 +1063,7 @@ function _generate_hamiltonian_operator(
         gauge_contract,
         state.topology,
         construction_policy = config.construction_policy,
+        target_contract = config.target_contract,
     )
     overlaps = _hamiltonian_operator_neighbor_overlaps(state, gauge_contract)
     closure_metrics = _hamiltonian_operator_closure_metrics(
@@ -892,6 +1110,22 @@ function _generate_hamiltonian_operator(
     topology = state.topology
     numerical_tolerance = closure_metrics.numerical_tolerance
     block_audit = _HamiltonianOperatorGalerkinBlockAudit()
+    center_contract = bytes2hex(
+        SHA.sha256(
+            join(
+                [
+                    WANNIER_HAMILTONIAN_OPERATOR_GENERATION_ALGORITHM_VERSION,
+                    sha256_file(@__FILE__),
+                    authority.digest,
+                    gauge_contract.contract_sha256,
+                    repr(sort!(collect(input_sha256); by = first)),
+                ],
+                "\n",
+            ),
+        ),
+    )
+    write_path =
+        paths.recover_publication ? IO.operator_publication_candidate(paths.output) : paths.output
     if operator == :uHu
         header = IO.WannierUHUHeader(
             "Generated by WannierNLQG finite-band Galerkin uHu",
@@ -914,10 +1148,32 @@ function _generate_hamiltonian_operator(
         ]
         function populate_center!(center)
             hamiltonian = @view authority.matrices_ev[:, :, center]
+            validator =
+                payload ->
+                    size(payload) == (topology.num_neighbors, topology.num_neighbors) && all(
+                        block ->
+                            size(block) == (topology.num_bands, topology.num_bands) &&
+                            all(isfinite, block),
+                        payload,
+                    )
+            cached_blocks =
+                _operator_center_checkpoint(validator, config, operator, center_contract, center) do
+                    blocks = Matrix{Matrix{ComplexF64}}(
+                        undef,
+                        topology.num_neighbors,
+                        topology.num_neighbors,
+                    )
+                    for first in 1:topology.num_neighbors, second in 1:topology.num_neighbors
+                        left = @view overlaps[:, :, first, center]
+                        right = @view overlaps[:, :, second, center]
+                        blocks[first, second] = left' * hamiltonian * right
+                    end
+                    blocks
+                end
             for first in 1:topology.num_neighbors, second in 1:topology.num_neighbors
                 left = @view overlaps[:, :, first, center]
                 right = @view overlaps[:, :, second, center]
-                block = left' * hamiltonian * right
+                block = cached_blocks[first, second]
                 bound =
                     overlap_frobenius[first, center] *
                     hamiltonian_frobenius[center] *
@@ -936,7 +1192,9 @@ function _generate_hamiltonian_operator(
                 max(block_audit.exchange_hermiticity_maximum, exchange.maximum_residual)
             block_audit.exchange_hermiticity_tolerance =
                 max(block_audit.exchange_hermiticity_tolerance, exchange.tolerance)
-            exchange.status == "PASS" || throw(
+            isfinite(exchange.maximum_residual) ||
+                throw(ArgumentError("FATAL_INTEGRITY: nonfinite UHU exchange residual"))
+            (config.construction_policy == :standard || exchange.status == "PASS") || throw(
                 ArgumentError(
                     "UHU_EXCHANGE_HERMITICITY_FAILED: residual $(exchange.maximum_residual) exceeds $(exchange.tolerance)",
                 ),
@@ -945,7 +1203,7 @@ function _generate_hamiltonian_operator(
             return nothing
         end
         IO.write_wannier_uhu(
-            paths.output,
+            write_path,
             header;
             formatted = config.formatted,
         ) do center, second, first, _header
@@ -954,7 +1212,7 @@ function _generate_hamiltonian_operator(
         end
         count = Ref(0)
         IO.foreach_wannier_uhu_block(
-            paths.output;
+            write_path;
             formatted = config.formatted,
             expected_num_bands = topology.num_bands,
             expected_num_kpts = topology.num_kpts,
@@ -980,14 +1238,44 @@ function _generate_hamiltonian_operator(
         ]
         hamiltonian_frobenius =
             [norm(@view(authority.matrices_ev[:, :, center])) for center in 1:topology.num_kpts]
-        writer(paths.output, header; formatted = config.formatted) do center, neighbor, ispol, _
+        cached_spin_center = Ref(0)
+        cached_spin_blocks = Ref{Any}(nothing)
+        writer(write_path, header; formatted = config.formatted) do center, neighbor, ispol, _
+            if cached_spin_center[] != center
+                validator =
+                    payload ->
+                        size(payload) == (topology.num_neighbors, 3) && all(
+                            block ->
+                                size(block) == (topology.num_bands, topology.num_bands) &&
+                                all(isfinite, block),
+                            payload,
+                        )
+                cached_spin_blocks[] = _operator_center_checkpoint(
+                    validator,
+                    config,
+                    operator,
+                    center_contract,
+                    center,
+                ) do
+                    blocks = Matrix{Matrix{ComplexF64}}(undef, topology.num_neighbors, 3)
+                    for local_neighbor in 1:topology.num_neighbors, component in 1:3
+                        native_spin = @view something(spn).data[:, :, component, center]
+                        rotated_spin =
+                            rotate_generation_single(native_spin, gauge_contract, center)
+                        link = @view overlaps[:, :, local_neighbor, center]
+                        blocks[local_neighbor, component] =
+                            operator == :sHu ?
+                            rotated_spin * (@view authority.matrices_ev[:, :, center]) * link :
+                            rotated_spin * link
+                    end
+                    blocks
+                end
+                cached_spin_center[] = center
+            end
             native_spin_matrix = @view something(spn).data[:, :, ispol, center]
             spin_matrix = rotate_generation_single(native_spin_matrix, gauge_contract, center)
             overlap = @view overlaps[:, :, neighbor, center]
-            block =
-                operator == :sHu ?
-                spin_matrix * (@view authority.matrices_ev[:, :, center]) * overlap :
-                spin_matrix * overlap
+            block = cached_spin_blocks[][neighbor, ispol]
             bound = if operator == :sHu
                 norm(spin_matrix) * hamiltonian_frobenius[center] * overlap_frobenius[neighbor, center]
             else
@@ -1003,7 +1291,7 @@ function _generate_hamiltonian_operator(
         end
         count = Ref(0)
         reader(
-            paths.output;
+            write_path;
             formatted = config.formatted,
             expected_num_bands = topology.num_bands,
             expected_num_kpts = topology.num_kpts,
@@ -1013,6 +1301,9 @@ function _generate_hamiltonian_operator(
         end
         count[] == topology.num_kpts * topology.num_neighbors * 3 ||
             error("$(operator) record-count roundtrip failed")
+    end
+    if paths.recover_publication
+        IO.verify_operator_publication_candidate(write_path, paths.output)
     end
     push!(diagnostics, "SOURCE_OPERATOR_STRUCTURE_PASS")
     push!(diagnostics, "ARTIFACT_PUBLISHED")

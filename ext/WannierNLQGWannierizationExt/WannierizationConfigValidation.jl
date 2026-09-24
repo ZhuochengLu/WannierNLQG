@@ -249,8 +249,8 @@ end
 function _validate_symmetry_covariant_wavefunction_preparation_config(
     config::SymmetryCovariantWavefunctionPreparationConfig,
 )
-    config.construction_policy in (:diagnostic, :strict) ||
-        throw(ArgumentError("construction_policy must be :diagnostic or :strict"))
+    config.construction_policy in (:standard, :strict) ||
+        throw(ArgumentError("construction_policy must be :standard or :strict"))
     config.sewing_backend isa AugmentationAwareSewing || throw(
         ArgumentError("star-covariant wavefunction preparation requires AugmentationAwareSewing"),
     )
@@ -354,8 +354,8 @@ end
 function _validate_band_representation_preparation_config(
     config::BandRepresentationPreparationConfig,
 )
-    config.construction_policy in (:diagnostic, :strict) ||
-        throw(ArgumentError("construction_policy must be :diagnostic or :strict"))
+    config.construction_policy in (:standard, :strict) ||
+        throw(ArgumentError("construction_policy must be :standard or :strict"))
     _validate_wannierization_mode_contract(config)
     representation_source = _representation_source(config)
     if config.sewing_backend isa AugmentationAwareSewing
@@ -404,8 +404,8 @@ end
 
 # Validate all scalar configuration contracts before any expensive I/O.
 function _validate_wannierization_config(config::SymmetryAdaptedWannierizationConfig)
-    config.input.construction_policy in (:diagnostic, :strict) ||
-        throw(ArgumentError("construction_policy must be :diagnostic or :strict"))
+    config.input.construction_policy in (:standard, :strict) ||
+        throw(ArgumentError("construction_policy must be :standard or :strict"))
     _validate_wannierization_mode_contract(config)
     representation_source = _representation_source(config)
     if _effective_wannierization_mode(config) == :ordinary
@@ -565,14 +565,13 @@ function _validate_wannierization_config(config::SymmetryAdaptedWannierizationCo
     config.output.final_tb_symmetry_report_enabled === nothing ||
         config.output.final_tb_symmetry_report_enabled isa Bool ||
         throw(ArgumentError("final_tb_symmetry_report_enabled must be nothing or Bool"))
-    config.output.profile == :spin && throw(
-        ArgumentError("profile=:spin was removed; migrate to profile=:hamiltonian_position_spin"),
-    )
-    config.output.profile in (:hamiltonian_position, :hamiltonian_position_spin, :full) || throw(
-        ArgumentError(
-            "profile must be :hamiltonian_position, :hamiltonian_position_spin, or :full",
-        ),
-    )
+    # Resolve the mutually exclusive fixed-profile and task-derived operator
+    # selection once.  Every downstream requirement is derived from this
+    # resolved source closure so that unrequested operator sources never become
+    # a configuration hard gate.
+    operator_selection =
+        resolve_operator_selection(config.output.profile, config.output.operator_tasks)
+    resolved_operator_sources = resolved_source_inventory(operator_selection)
     isfinite(config.output.operator_closure_tolerance) &&
     config.output.operator_closure_tolerance > 0.0 || throw(
         ArgumentError(
@@ -585,7 +584,7 @@ function _validate_wannierization_config(config::SymmetryAdaptedWannierizationCo
     isfinite(config.output.spin_family_idempotence_tolerance) &&
     config.output.spin_family_idempotence_tolerance > 0.0 ||
         throw(ArgumentError("spin_family_idempotence_tolerance must be positive and finite"))
-    if config.output.profile in (:hamiltonian_position_spin, :full)
+    if :spn in resolved_operator_sources
         config.output.spn_file === nothing &&
             throw(ArgumentError("SPN_FILE_REQUIRED: selected output profile requires spn_file"))
         config.output.spn_provenance_file === nothing && throw(
@@ -596,21 +595,22 @@ function _validate_wannierization_config(config::SymmetryAdaptedWannierizationCo
         isempty(strip(something(config.output.spn_provenance_file))) &&
             throw(ArgumentError("SPN_PROVENANCE_REQUIRED: spn_provenance_file must not be empty"))
     end
-    if config.output.profile == :full
-        for (label, value) in (
-            ("uiu_file", config.output.uiu_file),
-            ("uhu_file", config.output.uhu_file),
-            ("siu_file", config.output.siu_file),
-            ("shu_file", config.output.shu_file),
-            ("uiu_provenance_json", config.output.uiu_provenance_json),
-            ("uhu_provenance_json", config.output.uhu_provenance_json),
-            ("siu_provenance_json", config.output.siu_provenance_json),
-            ("shu_provenance_json", config.output.shu_provenance_json),
-        )
-            value === nothing && throw(
-                ArgumentError("FULL_OPERATOR_INPUT_REQUIRED: profile=:full requires $(label)"),
-            )
-        end
+    for (label, value, source) in (
+        ("uiu_file", config.output.uiu_file, :uiu),
+        ("uhu_file", config.output.uhu_file, :uhu),
+        ("siu_file", config.output.siu_file, :siu),
+        ("shu_file", config.output.shu_file, :shu),
+        ("uiu_provenance_json", config.output.uiu_provenance_json, :uiu),
+        ("uhu_provenance_json", config.output.uhu_provenance_json, :uhu),
+        ("siu_provenance_json", config.output.siu_provenance_json, :siu),
+        ("shu_provenance_json", config.output.shu_provenance_json, :shu),
+    )
+        source in resolved_operator_sources || continue
+        value === nothing || continue
+        operator_selection_mode(operator_selection) === :profile &&
+            resolved_operator_profile(operator_selection) === :full &&
+            throw(ArgumentError("FULL_OPERATOR_INPUT_REQUIRED: profile=:full requires $(label)"))
+        throw(ArgumentError("OPERATOR_SOURCE_INPUT_REQUIRED: operator_tasks require $(label)"))
     end
     acceleration = config.solver.acceleration
     acceleration.strategy in (:fixed, :adaptive, :anderson_z) ||
@@ -731,8 +731,8 @@ function _validate_wannierization_config(config::SymmetryAdaptedWannierizationCo
         throw(ArgumentError("z_projector_tolerance must be positive and finite"))
     acceleration.z_stability_window > 0 ||
         throw(ArgumentError("z_stability_window must be positive"))
-    acceleration.disentanglement_limit_policy in (:diagnostic_continue, :strict_hold) || throw(
-        ArgumentError("disentanglement_limit_policy must be :diagnostic_continue or :strict_hold"),
+    acceleration.disentanglement_limit_policy in (:standard_continue, :strict_hold) || throw(
+        ArgumentError("disentanglement_limit_policy must be :standard_continue or :strict_hold"),
     )
     0.0 < acceleration.joint_z_backtracking_factor < 1.0 ||
         throw(ArgumentError("joint_z_backtracking_factor must be in (0, 1)"))

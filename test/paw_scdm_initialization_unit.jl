@@ -338,7 +338,7 @@ end
     )
     @test ordinary_result.status != PAW_SCDM_W.INVALID_INPUT
     @test ordinary_result.input_summary["paw_scdm_authority_usage"] == "input_provenance_only"
-    @test ordinary_result.input_summary["covariance_qualification"] == "DIAGNOSTIC_ONLY"
+    @test ordinary_result.input_summary["covariance_qualification"] == "STANDARD"
     @test ordinary_result.input_summary["symmetry_constraints_applied"] == "false"
 
     bad_spinor = copied_paw_scdm_artifact(artifact; spinor = true)

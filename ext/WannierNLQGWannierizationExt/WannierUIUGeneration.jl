@@ -1,5 +1,5 @@
 const WANNIER_UIU_GENERATION_SCHEMA = "WannierNLQG.wannier_uiu_generation"
-const WANNIER_UIU_GENERATION_SCHEMA_VERSION = "1.0"
+const WANNIER_UIU_GENERATION_SCHEMA_VERSION = "1.1"
 const WANNIER_UIU_ALGORITHM_VERSION = "paw-neighbor-neighbor-v4-frame-contract-bound"
 
 """Validated topology shared by MMN- and NNKP-authoritative uIu generation."""
@@ -55,12 +55,12 @@ function _uiu_matrix_bytes(matrix::AbstractMatrix{<:Complex})
 end
 
 """Return the number of bands in an eager native-wavefunction dataset."""
-_uiu_num_bands(native::NativeWavefunctionData) = size(first(native.kpoints).coefficients, 1)
+_uiu_num_bands(native::NativeWavefunctionData) = native_point_metadata(native, 1).num_bands
 """Return the number of k-points in an eager native-wavefunction dataset."""
 _uiu_num_kpoints(native::NativeWavefunctionData) = length(native.kpoints)
 """Return one eager native-wavefunction k-point in fractional coordinates."""
 _uiu_kpoint_fractional(native::NativeWavefunctionData, index::Int) =
-    native.kpoints[index].k_fractional
+    native_point_metadata(native, index).k_fractional
 
 """Read and validate the MMN- or NNKP-authoritative neighbor topology."""
 function _uiu_topology(filename::AbstractString, native)
@@ -183,22 +183,45 @@ function _validate_operator_target_contract_files(contract::WannierOperatorTarge
         throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: oracle MMN path is not absolute"))
     contract.solver_mmn_file == abspath(contract.solver_mmn_file) ||
         throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: solver MMN path is not absolute"))
-    expected_contract_sha256 = wannier_operator_target_contract_sha256(
-        contract.operator_oracle_mmn_file,
-        contract.operator_oracle_mmn_sha256,
-        contract.solver_mmn_file,
-        contract.solver_mmn_sha256,
-        contract.source_band_gauge,
-        contract.target_band_gauge,
-        contract.band_frame_transform_sha256,
-        contract.band_frame_contract_sha256,
-        contract.gauge_artifact_sha256,
-        contract.authoritative_hamiltonian,
-        contract.authoritative_hamiltonian_digest,
-        contract.num_bands,
-        contract.num_kpoints,
-        contract.num_neighbors,
-    )
+    expected_contract_sha256 = if contract.parent_audit_policy == "audit_only"
+        wannier_operator_target_contract_sha256(
+            contract.operator_oracle_mmn_file,
+            contract.operator_oracle_mmn_sha256,
+            contract.solver_mmn_file,
+            contract.solver_mmn_sha256,
+            contract.source_band_gauge,
+            contract.target_band_gauge,
+            contract.band_frame_transform_sha256,
+            contract.band_frame_contract_sha256,
+            contract.gauge_artifact_sha256,
+            contract.authoritative_hamiltonian,
+            contract.authoritative_hamiltonian_digest,
+            contract.num_bands,
+            contract.num_kpoints,
+            contract.num_neighbors,
+            contract.qualification_scope.outer_mask_sha256,
+            contract.qualification_scope.frozen_mask_sha256,
+            contract.target_authority,
+            contract.parent_audit_policy,
+        )
+    else
+        wannier_operator_target_contract_sha256(
+            contract.operator_oracle_mmn_file,
+            contract.operator_oracle_mmn_sha256,
+            contract.solver_mmn_file,
+            contract.solver_mmn_sha256,
+            contract.source_band_gauge,
+            contract.target_band_gauge,
+            contract.band_frame_transform_sha256,
+            contract.band_frame_contract_sha256,
+            contract.gauge_artifact_sha256,
+            contract.authoritative_hamiltonian,
+            contract.authoritative_hamiltonian_digest,
+            contract.num_bands,
+            contract.num_kpoints,
+            contract.num_neighbors,
+        )
+    end
     contract.contract_sha256 == expected_contract_sha256 ||
         throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: contract digest differs"))
     for (role, path, expected) in (
@@ -442,38 +465,52 @@ function _uiu_vasp_state(source::VASPWavefunctionSource, topology_file::Abstract
         throw(ArgumentError("VASP_PAW_DATA_REQUIRED: uIu generation requires POTCAR"))
     source.representation_cutoff_ev === nothing ||
         throw(ArgumentError("VASP_PAW_RAW_COEFFICIENTS_REQUIRED: uIu requires the full cutoff"))
-    native =
-        read_vasp_wavefunctions(source; normalize_coefficients = false, require_spin_basis = false)
+    native = read_vasp_wavefunctions(
+        source;
+        point_provider = native_vasp_point_provider,
+        normalize_coefficients = false,
+        # An explicit basis is already available and must carry the same
+        # provenance marker as SPN. Scalar overlaps without it remain supported.
+        require_spin_basis = source.spin_basis_saxis !== nothing,
+    )
     get(native.source_metadata, "coefficient_normalization", "") == "vasp_raw" ||
         throw(ArgumentError("VASP_PAW_RAW_COEFFICIENTS_REQUIRED"))
     topology = _uiu_topology(topology_file, native)
-    paw = read_vasp_paw_system(something(source.potcar_file), native.structure)
-    radial_q_maximum, radial_q_worst = _paw_radial_q_gate(paw)
-    projectors = _paw_projectors(native, paw)
-    generalized_norm, generalized_norm_worst =
-        _paw_generalized_norm_residuals(native, paw, projectors)
+    prepared = _vasp_operator_paw_context(source, native)
+    (;
+        paw,
+        radial_q_maximum,
+        radial_q_worst,
+        projectors,
+        generalized_norm,
+        generalized_norm_worst,
+    ) = prepared
+    input_sha256 = merge(
+        _vasp_operator_input_sha256(source, native),
+        Dict("TOPOLOGY" => topology.source_sha256),
+    )
+    preparation_identity = _vasp_raw_context_identity(source, native, input_sha256)
     finite_b_cache = Dict{Tuple{String, NTuple{3, Float64}}, Matrix{ComplexF64}}()
     function overlap(left_index, right_index, shift, b_fractional)
-        pseudo =
-            _paw_pseudo_mmn_block(native.kpoints[left_index], native.kpoints[right_index], shift)
-        b_cartesian = transpose(native.reciprocal_lattice) * b_fractional
-        augmentation = _paw_mmn_augmentation_block(
-            projectors[left_index],
-            projectors[right_index],
-            paw,
-            shift,
-            b_cartesian,
-            finite_b_cache,
-        )
-        return pseudo .+ augmentation
+        identity = () -> preparation_identity * repr((left_index, right_index, shift, b_fractional))
+        return cached_preparation_artifact("vasp-overlap", identity; unit = left_index) do
+            pseudo = _paw_pseudo_mmn_block(
+                native.kpoints[left_index],
+                native.kpoints[right_index],
+                shift,
+            )
+            b_cartesian = transpose(native.reciprocal_lattice) * b_fractional
+            augmentation = _paw_mmn_augmentation_block(
+                projectors[left_index],
+                projectors[right_index],
+                paw,
+                shift,
+                b_cartesian,
+                finite_b_cache,
+            )
+            return pseudo .+ augmentation
+        end
     end
-    input_sha256 = merge(
-        native.input_sha256,
-        Dict(
-            "POTCAR" => sha256_file(something(source.potcar_file)),
-            "TOPOLOGY" => topology.source_sha256,
-        ),
-    )
     diagnostics = String[
         "radial_q_worst=$(radial_q_worst)",
         "generalized_norm_worst=$(generalized_norm_worst)",
@@ -518,6 +555,45 @@ struct QEUIUCacheEntry
     beta_overlap::Array{ComplexF64, 3}
 end
 
+"""Byte-bounded beta overlaps survive eviction of much larger wavefunction coefficients."""
+mutable struct QEBetaOverlapCache
+    budget_bytes::Int
+    resident_bytes::Int
+    entries::Dict{Int, Array{ComplexF64, 3}}
+    recency::Vector{Int}
+    builds::Int
+    hits::Int
+end
+
+"""Construct a worker-private compact cache with an explicit byte limit."""
+function QEBetaOverlapCache(budget_bytes::Int)
+    budget_bytes >= 0 || throw(ArgumentError("QE_BETA_CACHE_NEGATIVE_BUDGET"))
+    return QEBetaOverlapCache(budget_bytes, 0, Dict{Int, Array{ComplexF64, 3}}(), Int[], 0, 0)
+end
+
+"""Reuse a beta contraction without changing its original arithmetic or array."""
+function _qe_cached_beta_overlap!(builder::F, cache::QEBetaOverlapCache, index::Int) where {F}
+    if haskey(cache.entries, index)
+        cache.hits += 1
+        deleteat!(cache.recency, something(findfirst(==(index), cache.recency)))
+        push!(cache.recency, index)
+        return cache.entries[index]
+    end
+    value = builder()
+    all(isfinite, value) || throw(ArgumentError("QE_BETA_CACHE_NONFINITE"))
+    cache.builds += 1
+    bytes = Base.summarysize(value)
+    bytes > cache.budget_bytes && return value
+    while cache.resident_bytes + bytes > cache.budget_bytes
+        evicted = popfirst!(cache.recency)
+        cache.resident_bytes -= Base.summarysize(pop!(cache.entries, evicted))
+    end
+    cache.entries[index] = value
+    push!(cache.recency, index)
+    cache.resident_bytes += bytes
+    return value
+end
+
 """Deterministic bounded LRU cache for streamed QE uIu generation."""
 mutable struct QEUIUWavefunctionCache
     max_entries::Int
@@ -531,12 +607,22 @@ mutable struct QEUIUWavefunctionCache
     reloads::Int
     peak_entries::Int
     peak_resident_bytes::Int
+    max_bytes::Int
+    estimate_bytes::Function
+    entry_bytes::Dict{Int, Int}
+    resident_bytes::Int
 end
 
-"""Construct a bounded QE wavefunction cache with at least two resident entries."""
-function QEUIUWavefunctionCache(max_entries::Int, loader::Function)
+"""Bound cached coefficients by both entry count and scientific payload bytes."""
+function QEUIUWavefunctionCache(
+    max_entries::Int,
+    loader::Function;
+    max_bytes::Int = typemax(Int),
+    estimate_bytes::Function = _ -> 0,
+)
     max_entries >= 2 ||
         throw(ArgumentError("QE_UIU_CACHE_TOO_SMALL: at least two k-points are required"))
+    max_bytes > 0 || throw(ArgumentError("QE_UIU_CACHE_BYTE_BUDGET_MUST_BE_POSITIVE"))
     return QEUIUWavefunctionCache(
         max_entries,
         loader,
@@ -549,21 +635,34 @@ function QEUIUWavefunctionCache(max_entries::Int, loader::Function)
         0,
         0,
         0,
+        max_bytes,
+        estimate_bytes,
+        Dict{Int, Int}(),
+        0,
     )
 end
 
-"""Estimate the scientific payload bytes currently resident in the QE cache."""
-function _qe_uiu_cache_resident_bytes(cache::QEUIUWavefunctionCache)
-    return sum(
-        Base.summarysize(entry.point.k_fractional) +
-        Base.summarysize(entry.point.g_vectors) +
-        Base.summarysize(entry.point.coefficients) +
-        Base.summarysize(entry.point.energies_ev) +
-        Base.summarysize(entry.beta_overlap) for entry in values(cache.entries)
-    )
+"""Measure a payload once when it enters the cache."""
+_qe_uiu_entry_bytes(entry::QEUIUCacheEntry) =
+    Base.summarysize(entry.point.k_fractional) +
+    Base.summarysize(entry.point.g_vectors) +
+    Base.summarysize(entry.point.coefficients) +
+    Base.summarysize(entry.point.energies_ev) +
+    Base.summarysize(entry.beta_overlap)
+
+"""Read incremental accounting without traversing every cached array."""
+_qe_uiu_cache_resident_bytes(cache::QEUIUWavefunctionCache) = cache.resident_bytes
+
+"""Release the oldest entry and update its exact resident-byte accounting."""
+function _qe_uiu_evict_oldest!(cache::QEUIUWavefunctionCache)
+    index = popfirst!(cache.recency)
+    delete!(cache.entries, index)
+    cache.resident_bytes -= pop!(cache.entry_bytes, index)
+    cache.evictions += 1
+    nothing
 end
 
-"""Fetch one QE cache entry while updating deterministic LRU diagnostics."""
+"""Fetch one QE entry with deterministic LRU eviction before coefficient loading."""
 function _qe_uiu_cache_entry!(cache::QEUIUWavefunctionCache, index::Int)
     if haskey(cache.entries, index)
         cache.hits += 1
@@ -575,17 +674,29 @@ function _qe_uiu_cache_entry!(cache::QEUIUWavefunctionCache, index::Int)
     cache.misses += 1
     previous_loads = get(cache.load_counts, index, 0)
     previous_loads > 0 && (cache.reloads += 1)
-    while length(cache.entries) >= cache.max_entries
-        evicted = popfirst!(cache.recency)
-        delete!(cache.entries, evicted)
-        cache.evictions += 1
+    estimated = cache.estimate_bytes(index)
+    estimated >= 0 || throw(ArgumentError("QE_UIU_CACHE_NEGATIVE_SIZE_ESTIMATE"))
+    while !isempty(cache.entries) && (
+        length(cache.entries) >= cache.max_entries ||
+        estimated > cache.max_bytes - cache.resident_bytes
+    )
+        _qe_uiu_evict_oldest!(cache)
     end
     entry = cache.loader(index)
-    cache.entries[index] = entry
-    push!(cache.recency, index)
     cache.load_counts[index] = previous_loads + 1
+    bytes = _qe_uiu_entry_bytes(entry)
+    while !isempty(cache.entries) && bytes > cache.max_bytes - cache.resident_bytes
+        _qe_uiu_evict_oldest!(cache)
+    end
+    # A point larger than the cache allowance remains a transient work item;
+    # the preparation process budget still governs that work item separately.
+    bytes > cache.max_bytes && return entry
+    cache.entries[index] = entry
+    cache.entry_bytes[index] = bytes
+    cache.resident_bytes += bytes
+    push!(cache.recency, index)
     cache.peak_entries = max(cache.peak_entries, length(cache.entries))
-    cache.peak_resident_bytes = max(cache.peak_resident_bytes, _qe_uiu_cache_resident_bytes(cache))
+    cache.peak_resident_bytes = max(cache.peak_resident_bytes, cache.resident_bytes)
     return entry
 end
 
@@ -619,8 +730,154 @@ function _qe_uiu_selected_bands(total_bands::Int, topology_path::AbstractString)
     throw(ArgumentError("topology_file must use .mmn or .nnkp"))
 end
 
+"""Reserve one quarter of the usable preparation budget for cached coefficients."""
+function _qe_coefficient_cache_budget()
+    execution = get(task_local_storage(), :wannier_preparation_execution, nothing)
+    budget = execution === nothing ? 24 * 1024^3 : execution.memory_budget_bytes
+    budget > 0 || throw(ArgumentError("preparation memory budget must be positive"))
+    max(1, (budget ÷ 4) * 3 ÷ 4)
+end
+
+"""Identify a shared state without confusing topology roles or source settings."""
+_qe_operator_state_key(source, topology_file, cache_size) =
+    (repr(source), realpath(topology_file), cache_size)
+
+"""Reuse only the owner task's explicitly prepared QE state."""
+function _uiu_qe_state(source::QuantumEspressoWavefunctionSource, topology_file, cache_size)
+    prepared = get(task_local_storage(), :wannier_qe_operator_preparation, nothing)
+    if prepared !== nothing
+        prepared.owner === current_task() ||
+            throw(ArgumentError("QE_OPERATOR_STATE_REQUIRES_PRIVATE_WORKER_CONTEXT"))
+        prepared.key == _qe_operator_state_key(source, topology_file, cache_size) ||
+            throw(ArgumentError("QE_OPERATOR_PREPARATION_CONTEXT_MISMATCH"))
+        # Registry lookups check input identity without repeating their content hashes.
+        foreach(sha256_file, prepared.paths)
+        state = prepared.state[]
+        if state === nothing
+            state = _build_uiu_qe_state(source, topology_file, cache_size)
+            prepared.state[] = state
+        end
+        cache = state.wavefunction_cache
+        cache.max_bytes = min(cache.max_bytes, _qe_coefficient_cache_budget())
+        while cache.resident_bytes > cache.max_bytes
+            _qe_uiu_evict_oldest!(cache)
+        end
+        # Operators append their own provenance keys. Share expensive native
+        # caches, but keep stage metadata independent of execution order.
+        if !get(task_local_storage(), :wannier_qe_defer_norm, false)
+            state = _qe_state_with_completed_norm(state)
+        end
+        return merge(
+            state,
+            (input_sha256 = copy(state.input_sha256), diagnostics = copy(state.diagnostics)),
+        )
+    end
+    return _build_uiu_qe_state(source, topology_file, cache_size)
+end
+
+"""Share validated native inputs and PAW state across sequential operator stages.
+
+Each worker must create its own scope. All mutable coefficient and radial caches
+belong to that scope; no process-global state or shared mutable worker cache exists.
+"""
+function _with_qe_operator_preparation(
+    f::F,
+    source::QuantumEspressoWavefunctionSource,
+    topology_file,
+    cache_size::Int;
+    checkpoint_directory::Union{Nothing, String} = nothing,
+    implementation_contract::String = "",
+    additional_inputs = String[],
+) where {F}
+    checkpoint_directory !== nothing &&
+        isempty(implementation_contract) &&
+        throw(ArgumentError("OPERATOR_PREPARATION_IMPLEMENTATION_CONTRACT_REQUIRED"))
+    existing = get(task_local_storage(), :wannier_qe_operator_preparation, nothing)
+    if existing !== nothing &&
+       existing.owner === current_task() &&
+       existing.key == _qe_operator_state_key(source, topology_file, cache_size)
+        # Recheck inherited identities and new dependencies, but do not parse XML
+        # or replace the already validated native state for a nested stage.
+        return with_verified_file_digests(vcat(existing.paths, additional_inputs)) do
+            _with_spn_provenance_reuse(f)
+        end
+    end
+    metadata = read_qe_xml(source)
+    paths = String[metadata.xml_file, abspath(topology_file)]
+    append!(paths, values(metadata.upf_files))
+    append!(
+        paths,
+        [qe_wavefunction_file(source, index) for index in eachindex(metadata.kpoint_nodes)],
+    )
+    native_paths = copy(paths)
+    append!(paths, additional_inputs)
+    return with_verified_file_digests(paths) do
+        run = function ()
+            # Target verification and completed-stage reuse need no coefficient
+            # replay. Materialize native state only for a missing operator block.
+            state = Ref{Any}(nothing)
+            prepared = (
+                key = _qe_operator_state_key(source, topology_file, cache_size),
+                state = state,
+                owner = current_task(),
+                paths = paths,
+            )
+            task_local_storage(
+                () -> _with_spn_provenance_reuse(f),
+                :wannier_qe_operator_preparation,
+                prepared,
+            )
+        end
+        checkpoint_directory === nothing && return run()
+        inputs = sort!([(realpath(path), sha256_file(path)) for path in unique(native_paths)])
+        contract = bytes2hex(SHA.sha256(implementation_contract * repr((source, inputs))))
+        with_preparation_artifact_cache(run, checkpoint_directory, contract)
+    end
+end
+
+"""Share native QE preparation across standalone operator calls without stage-dependent namespaces."""
+function _with_qe_operator_artifacts(
+    f,
+    source,
+    topology_file,
+    output_directory,
+    cache_size;
+    execution = nothing,
+    additional_inputs = String[],
+)
+    selected =
+        execution === nothing ? get(task_local_storage(), :wannier_preparation_execution, nothing) :
+        execution
+    if selected !== nothing && (!selected.resume || selected.mode == :dense_reference)
+        return task_local_storage(:wannier_preparation_artifact_cache, nothing) do
+            task_local_storage(f, :wannier_qe_operator_preparation, nothing)
+        end
+    end
+    root, implementation = _preparation_implementation_paths()
+    return with_verified_file_digests(implementation) do
+        contract = bytes2hex(
+            SHA.sha256(repr([(relpath(path, root), sha256_file(path)) for path in implementation])),
+        )
+        directory =
+            selected === nothing || selected.checkpoint_directory === nothing ?
+            joinpath(output_directory, ".wannier_preparation", "qe") :
+            joinpath(selected.checkpoint_directory, "shared-qe-native")
+        return task_local_storage(:wannier_preparation_execution, selected) do
+            _with_qe_operator_preparation(
+                f,
+                source,
+                topology_file,
+                cache_size;
+                checkpoint_directory = directory,
+                implementation_contract = contract,
+                additional_inputs = additional_inputs,
+            )
+        end
+    end
+end
+
 """Prepare the validated lazy QE PAW state used for bounded-memory uIu generation."""
-function _uiu_qe_state(
+function _build_uiu_qe_state(
     source::QuantumEspressoWavefunctionSource,
     topology_file::AbstractString,
     max_cached_wavefunction_kpoints::Int,
@@ -657,7 +914,10 @@ function _uiu_qe_state(
         ),
     )
     selected_bands = _qe_uiu_selected_bands(total_bands, topology_path)
-    kpoints_fractional = reduce(vcat, transpose(header.k_fractional) for header in headers)
+    kpoints_fractional = Matrix{Float64}(undef, length(headers), 3)
+    for (index, header) in enumerate(headers)
+        kpoints_fractional[index, :] .= header.k_fractional
+    end
     native = QEUIULazyNative(
         :qe,
         metadata.structure,
@@ -678,11 +938,24 @@ function _uiu_qe_state(
         native.spinor == nnkp.spinor ||
             throw(ArgumentError("QE_NNKP_SPIN_MISMATCH: native and NNKP spinor conventions differ"))
     end
-    upf_data = Dict(
-        label => read_qe_upf_data(path) for
-        (label, path) in sort!(collect(metadata.upf_files); by = first)
+    preparation_identity = bytes2hex(
+        SHA.sha256(
+            repr((
+                sort!(collect(input_sha256); by = first),
+                topology.source_sha256,
+                selected_bands,
+            )),
+        ),
     )
-    plan = build_qe_projector_plan(metadata, upf_data)
+    upf_data = cached_preparation_artifact("qe-upf", () -> preparation_identity) do
+        Dict(
+            label => read_qe_upf_data(path) for
+            (label, path) in sort!(collect(metadata.upf_files); by = first)
+        )
+    end
+    plan = cached_preparation_artifact("qe-projector-plan", () -> preparation_identity) do
+        build_qe_projector_plan(metadata, upf_data)
+    end
     metadata.spinorbit &&
         !native.spinor &&
         throw(ArgumentError("QE_UPF_DATA_REQUIRED: spin-orbit calculation has scalar coefficients"))
@@ -696,6 +969,9 @@ function _uiu_qe_state(
         energies[index] = values
     end
     radial_cache = Dict{Tuple{String, Int, Int}, Float64}()
+    beta_cache = QEBetaOverlapCache(256 * 1024^2)
+    beta_contractions = Ref(0)
+    normalization_points = Ref(0)
     function load_entry(index::Int)
         point = read_qe_wavefunction_kpoint(
             wavefunction_files[index],
@@ -706,58 +982,122 @@ function _uiu_qe_state(
             metadata.reciprocal_lattice,
             false,
         )
-        beta_overlap, _ = _qe_beta_overlap(point, native, upf_data, plan, radial_cache)
+        beta_overlap = _qe_cached_beta_overlap!(beta_cache, index) do
+            cached_preparation_artifact(
+                "qe-beta",
+                () -> preparation_identity * ":" * string(index);
+                unit = index,
+            ) do
+                beta_contractions[] += 1
+                first(_qe_beta_overlap(point, native, upf_data, plan, radial_cache))
+            end
+        end
         return QEUIUCacheEntry(point, beta_overlap)
     end
-    wavefunction_cache = QEUIUWavefunctionCache(max_cached_wavefunction_kpoints, load_entry)
-    generalized_norm = 0.0
-    generalized_norm_worst = (0, 0, 0)
+    estimate_bytes =
+        index -> begin
+            plane_waves = headers[index].plane_wave_count
+            bands = length(selected_bands)
+            16 * bands * spin_components * (plane_waves + plan.num_channels) +
+            24 * plane_waves +
+            8 * bands +
+            24 +
+            5 * 128
+        end
+    wavefunction_cache = QEUIUWavefunctionCache(
+        max_cached_wavefunction_kpoints,
+        load_entry;
+        max_bytes = _qe_coefficient_cache_budget(),
+        estimate_bytes,
+    )
+    deferred_norm = get(task_local_storage(), :wannier_qe_defer_norm, false)
+    norm_result = Ref{Any}(nothing)
+    norm_points = Dict{Int, Any}()
     norm_cache = Dict{Tuple{String, NTuple{3, Float64}, Int, Bool}, Array{ComplexF64, 4}}()
-    for index in 1:_uiu_num_kpoints(native)
-        entry = _qe_uiu_cache_entry!(wavefunction_cache, index)
-        value, local_index = _qe_generalized_norm_residual_point(
+    function norm_point(entry, cache)
+        _qe_generalized_norm_residual_point(
             entry.point,
             entry.beta_overlap,
             upf_data,
             plan,
             metadata.spinorbit,
-            norm_cache,
+            cache,
         )
-        if value > generalized_norm
-            generalized_norm = value
-            generalized_norm_worst = (index, local_index[1], local_index[2])
-        end
     end
+    function accept_norm(index, value)
+        value === nothing || (norm_points[index] = value)
+        nothing
+    end
+    function finish_norm()
+        if norm_result[] === nothing
+            norm_result[] =
+                cached_preparation_artifact("qe-generalized-norm", () -> preparation_identity) do
+                    maximum_value = 0.0
+                    worst = (0, 0, 0)
+                    for index in 1:_uiu_num_kpoints(native)
+                        value, local_index = if haskey(norm_points, index)
+                            norm_points[index]
+                        else
+                            normalization_points[] += 1
+                            norm_point(_qe_uiu_cache_entry!(wavefunction_cache, index), norm_cache)
+                        end
+                        if value > maximum_value
+                            maximum_value = value
+                            worst = (index, local_index[1], local_index[2])
+                        end
+                    end
+                    (maximum_value, worst)
+                end
+            empty!(norm_points)
+        end
+        norm_result[]
+    end
+    if deferred_norm
+        norm_result[] = cached_preparation_artifact(
+            () -> nothing,
+            "qe-generalized-norm",
+            () -> preparation_identity;
+            build_missing = false,
+        )
+    else
+        finish_norm()
+    end
+    generalized_norm = norm_result[] === nothing ? nothing : norm_result[][1]
+    generalized_norm_worst = norm_result[] === nothing ? nothing : norm_result[][2]
     finite_b_cache = Dict{Tuple{String, NTuple{3, Float64}, Int, Bool}, Array{ComplexF64, 4}}()
+    overlap_contractions = Ref(0)
     function overlap(left_index, right_index, shift, b_fractional)
-        left = _qe_uiu_cache_entry!(wavefunction_cache, left_index)
-        right = _qe_uiu_cache_entry!(wavefunction_cache, right_index)
-        pseudo = _paw_pseudo_mmn_block(
-            left.point,
-            right.point,
-            shift;
-            threaded_spin = Threads.nthreads() > 1,
-        )
-        b_cartesian_bohr_inverse =
-            BOHR_TO_ANGSTROM .* (transpose(native.reciprocal_lattice) * b_fractional)
-        augmentation = _qe_augmentation_block(
-            left.beta_overlap,
-            right.beta_overlap,
-            upf_data,
-            plan,
-            Vector{Float64}(b_fractional),
-            b_cartesian_bohr_inverse,
-            metadata.spinorbit,
-            finite_b_cache,
-        )
-        return pseudo .+ augmentation
+        identity = () -> preparation_identity * repr((left_index, right_index, shift, b_fractional))
+        return cached_preparation_artifact("qe-overlap", identity; unit = left_index) do
+            overlap_contractions[] += 1
+            left = _qe_uiu_cache_entry!(wavefunction_cache, left_index)
+            right = _qe_uiu_cache_entry!(wavefunction_cache, right_index)
+            pseudo = _paw_pseudo_mmn_block(
+                left.point,
+                right.point,
+                shift;
+                threaded_spin = Threads.nthreads() > 1,
+            )
+            b_cartesian_bohr_inverse =
+                BOHR_TO_ANGSTROM .* (transpose(native.reciprocal_lattice) * b_fractional)
+            augmentation = _qe_augmentation_block(
+                left.beta_overlap,
+                right.beta_overlap,
+                upf_data,
+                plan,
+                Vector{Float64}(b_fractional),
+                b_cartesian_bohr_inverse,
+                metadata.spinorbit,
+                finite_b_cache,
+            )
+            return pseudo .+ augmentation
+        end
     end
     q0_by_atom = [
         _qe_q0_scalar_matrix(upf_data[atom.atomic_type_label], atom.channels) for atom in plan.atoms
     ]
     pauli_matrices = _vasp_paw_cartesian_pauli_matrices()
-    function spn_block(index::Int)
-        entry = _qe_uiu_cache_entry!(wavefunction_cache, index)
+    function spn_evaluate(entry::QEUIUCacheEntry)
         point = entry.point
         bands = size(point.coefficients, 1)
         pseudo = zeros(ComplexF64, bands, bands, 3)
@@ -784,6 +1124,21 @@ function _uiu_qe_state(
             throw(ArgumentError("QE_PAW_SPN_NONFINITE: pseudo or augmentation block is non-finite"))
         return pseudo .+ augmentation, pseudo, augmentation
     end
+    spn_input = function (index)
+        norm_result[] === nothing && (normalization_points[] += 1)
+        _qe_uiu_cache_entry!(wavefunction_cache, index)
+    end
+    spn_block = index -> spn_evaluate(spn_input(index))
+    function spn_evaluate_with_norm(entry)
+        spin = spn_evaluate(entry)
+        local_norm =
+            norm_result[] === nothing ?
+            norm_point(
+                entry,
+                Dict{Tuple{String, NTuple{3, Float64}, Int, Bool}, Array{ComplexF64, 4}}(),
+            ) : nothing
+        (spin..., local_norm)
+    end
     input_sha256["TOPOLOGY"] = topology.source_sha256
     diagnostics = String[
         "generalized_norm_worst=$(generalized_norm_worst)",
@@ -798,8 +1153,25 @@ function _uiu_qe_state(
         input_sha256,
         diagnostics,
         wavefunction_cache,
+        beta_cache,
+        beta_contractions,
+        normalization_points,
+        overlap_contractions,
         spn_block,
+        spn_input,
+        spn_evaluate,
+        spn_evaluate_with_norm,
+        accept_norm,
+        finish_norm,
     )
+end
+
+"""Expose completed normalization only after its ordered reduction is available."""
+function _qe_state_with_completed_norm(state)
+    value, worst = state.finish_norm()
+    diagnostics = filter(item -> !startswith(item, "generalized_norm_worst="), state.diagnostics)
+    pushfirst!(diagnostics, "generalized_norm_worst=$(worst)")
+    merge(state, (generalized_norm = value, diagnostics = diagnostics))
 end
 
 """Dispatch uIu state construction for a VASP wavefunction source."""
@@ -808,6 +1180,85 @@ _uiu_source_state(source::VASPWavefunctionSource, topology_file, _) =
 """Dispatch uIu state construction for a QE wavefunction source."""
 _uiu_source_state(source::QuantumEspressoWavefunctionSource, topology_file, cache_size) =
     _uiu_qe_state(source, topology_file, cache_size)
+
+"""Attach target-hard and parent-audit generalized-norm evidence to one uIu state."""
+function _uiu_state_with_qualification_scope(state, target_contract)
+    if target_contract === nothing
+        return merge(
+            state,
+            (
+                parent_generalized_norm = state.generalized_norm,
+                target_generalized_norm_worst = (0, 0, 0),
+                parent_generalized_norm_worst = (0, 0, 0),
+                target_authority = "full_parent",
+                parent_audit_policy = "legacy_hard_gate",
+                outer_mask_sha256 = "LEGACY_NOT_RECORDED",
+                frozen_mask_sha256 = "LEGACY_NOT_RECORDED",
+            ),
+        )
+    end
+    contract = something(target_contract)
+    if contract.parent_audit_policy == "legacy_hard_gate"
+        return merge(
+            state,
+            (
+                parent_generalized_norm = state.generalized_norm,
+                target_generalized_norm_worst = (0, 0, 0),
+                parent_generalized_norm_worst = (0, 0, 0),
+                target_authority = "full_parent",
+                parent_audit_policy = "legacy_hard_gate",
+                outer_mask_sha256 = contract.qualification_scope.outer_mask_sha256,
+                frozen_mask_sha256 = contract.qualification_scope.frozen_mask_sha256,
+            ),
+        )
+    end
+    contract.target_authority == "outer_window" ||
+        throw(ArgumentError("UIU_TARGET_AUTHORITY_MISMATCH"))
+    contract.parent_audit_policy == "audit_only" ||
+        throw(ArgumentError("UIU_PARENT_AUDIT_POLICY_MISMATCH"))
+    scope = contract.qualification_scope
+    size(scope.outer_mask) == (state.topology.num_bands, state.topology.num_kpts) ||
+        throw(ArgumentError("UIU_QUALIFICATION_SCOPE_DIMENSION_MISMATCH"))
+    _operator_qualification_mask_sha256(scope.outer_mask) == scope.outer_mask_sha256 ||
+        throw(ArgumentError("UIU_OUTER_MASK_DIGEST_MISMATCH"))
+    _operator_qualification_mask_sha256(scope.frozen_mask) == scope.frozen_mask_sha256 ||
+        throw(ArgumentError("UIU_FROZEN_MASK_DIGEST_MISMATCH"))
+    target_maximum = 0.0
+    target_worst = (0, 0, 0)
+    for kpoint in 1:state.topology.num_kpts
+        overlap = state.overlap(kpoint, kpoint, (0, 0, 0), zeros(3))
+        all(isfinite, overlap) || throw(ArgumentError("FATAL_INTEGRITY: nonfinite uIu q=0 metric"))
+        selected = BitVector(@view scope.outer_mask[:, kpoint])
+        isempty(findall(selected)) && throw(ArgumentError("UIU_EMPTY_TARGET_SCOPE"))
+        value, local_index = _paw_scoped_identity_residual(overlap, selected)
+        if value > target_maximum
+            target_maximum = value
+            target_worst = (kpoint, local_index[1], local_index[2])
+        end
+    end
+    diagnostics = filter(item -> !startswith(item, "generalized_norm_worst="), state.diagnostics)
+    append!(
+        diagnostics,
+        (
+            "target_generalized_norm_worst=$(target_worst)",
+            "parent_generalized_norm_max_absolute=$(state.generalized_norm)",
+        ),
+    )
+    return merge(
+        state,
+        (
+            generalized_norm = target_maximum,
+            parent_generalized_norm = state.generalized_norm,
+            target_generalized_norm_worst = target_worst,
+            parent_generalized_norm_worst = (0, 0, 0),
+            target_authority = "outer_window",
+            parent_audit_policy = "audit_only",
+            outer_mask_sha256 = scope.outer_mask_sha256,
+            frozen_mask_sha256 = scope.frozen_mask_sha256,
+            diagnostics,
+        ),
+    )
+end
 
 """Compute one center-to-neighbor physical-overlap block."""
 function _uiu_center_neighbor_block(state, center::Int, neighbor::Int)
@@ -954,7 +1405,11 @@ function _uiu_read_header!(io::Base.IO, topology::WannierNeighborTopology)
 end
 
 """Scan, validate, and safely truncate a partial uIu stream at record boundaries."""
-function _uiu_scan_partial(partial::AbstractString, topology::WannierNeighborTopology)
+function _uiu_scan_partial(
+    partial::AbstractString,
+    topology::WannierNeighborTopology;
+    repair_truncated::Bool = true,
+)
     isfile(partial) || return (0, String[], 0.0, 0.0)
     completed = 0
     checksums = String[]
@@ -1017,11 +1472,37 @@ function _uiu_scan_partial(partial::AbstractString, topology::WannierNeighborTop
         end
     end
     if truncate_at !== nothing
+        repair_truncated || throw(ArgumentError("UIU_UNCOMMITTED_OUTPUT_TRUNCATED"))
         open(partial, "r+") do io
             truncate(io, something(truncate_at))
         end
     end
     return completed, checksums, diagonal_maximum, hermiticity_maximum
+end
+
+"""Recover an interrupted final rename only after read-only payload verification."""
+function _uiu_recover_publication!(paths, topology, fingerprint, execution_contract)
+    isfile(paths.output) &&
+    isfile(paths.checkpoint) &&
+    !ispath(paths.provenance) &&
+    !ispath(paths.partial) || throw(ArgumentError("UIU_PUBLICATION_RECOVERY_STATE_MISMATCH"))
+    completed, checksums, diagonal, hermiticity =
+        _uiu_scan_partial(paths.output, topology; repair_truncated = false)
+    all(isfinite, (diagonal, hermiticity)) ||
+        throw(ArgumentError("UIU_UNCOMMITTED_OUTPUT_NONFINITE"))
+    completed == topology.num_kpts || throw(ArgumentError("UIU_UNCOMMITTED_OUTPUT_INCOMPLETE"))
+    _uiu_validate_checkpoint(
+        paths.checkpoint,
+        fingerprint,
+        completed,
+        checksums,
+        execution_contract,
+    )
+    checkpoint = JSON3.read(read(paths.checkpoint, String))
+    Int(checkpoint.completed_kpoints) == completed ||
+        throw(ArgumentError("UIU_PUBLICATION_CHECKPOINT_INCOMPLETE"))
+    mv(paths.output, paths.partial; force = false)
+    return completed
 end
 
 """Return the restart-sensitive execution contract for the selected source state."""
@@ -1200,6 +1681,11 @@ function _uiu_provenance_payload(
 )
     json_number(value) = isfinite(value) ? value : nothing
     output_hash = isfile(paths.output) ? sha256_file(paths.output) : "NOT_PUBLISHED"
+    published_warning =
+        !passed &&
+        config.construction_policy == :standard &&
+        "UIU_GENERATION_NUMERICAL_WARNING" in diagnostics
+    published = passed || published_warning
     return Dict(
         "schema" => WANNIER_UIU_GENERATION_SCHEMA,
         "schema_version" => WANNIER_UIU_GENERATION_SCHEMA_VERSION,
@@ -1218,12 +1704,11 @@ function _uiu_provenance_payload(
             authoritative_hamiltonian_key(config.authoritative_hamiltonian),
         "construction_policy" => String(config.construction_policy),
         "model_qualification" =>
-            config.construction_policy == :diagnostic ? "DIAGNOSTIC_ONLY" :
-            passed ? "PASS" : "FAILED_GATE",
-        "manual_review_required" => config.construction_policy == :diagnostic,
+            config.construction_policy == :standard ? "STANDARD" : passed ? "PASS" : "FAILED_GATE",
+        "quality_review_recommended" => config.construction_policy == :standard,
         "production_eligible" => config.construction_policy == :strict && passed,
-        "status" => passed ? "PASS" : "FAILED_GATE",
-        "physical_overlap_available" => passed,
+        "status" => passed ? "PASS" : published_warning ? "EXPORTED_WITH_WARNING" : "FAILED_GATE",
+        "physical_overlap_available" => published,
         "passed" => passed,
         "num_bands" => state.topology.num_bands,
         "num_kpts" => state.topology.num_kpts,
@@ -1233,6 +1718,19 @@ function _uiu_provenance_payload(
         "relative_reciprocal_shift" => "G2-G1",
         "paw_metric" => "pseudo_plus_finite_b_augmentation",
         "generalized_normalization_max_absolute" => state.generalized_norm,
+        "target_generalized_normalization_max_absolute" => state.generalized_norm,
+        "parent_generalized_normalization_max_absolute" => state.parent_generalized_norm,
+        "target_authority" => state.target_authority,
+        "parent_audit_policy" => state.parent_audit_policy,
+        "parent_audit_status" =>
+            state.parent_generalized_norm <= config.thresholds.generalized_norm_max_absolute &&
+            diagonal <= config.thresholds.diagonal_identity_max_absolute ? "PASS" :
+            "AUDIT_EXCEEDED",
+        "outer_mask_sha256" => state.outer_mask_sha256,
+        "frozen_mask_sha256" => state.frozen_mask_sha256,
+        "operator_target_contract_sha256" =>
+            config.target_contract === nothing ? "LEGACY_NOT_RECORDED" :
+            config.target_contract.contract_sha256,
         "radial_q_max_absolute" => state.radial_q_maximum,
         "mmn_parity" =>
             mmn_parity === nothing ? nothing :
@@ -1319,8 +1817,157 @@ end
 Generate, qualify, checkpoint, and atomically publish a native PAW Wannier90 uIu file.
 """
 function generate_wannier_uiu(config::WannierUIUGenerationConfig)
-    config.construction_policy in (:diagnostic, :strict) ||
-        throw(ArgumentError("construction_policy must be :diagnostic or :strict"))
+    execution =
+        config.execution === nothing ?
+        get(task_local_storage(), :wannier_preparation_execution, nothing) : config.execution
+    if !(config.source isa Union{QuantumEspressoWavefunctionSource, VASPWavefunctionSource}) ||
+       !config.resume ||
+       (execution !== nothing && (!execution.resume || execution.mode == :dense_reference))
+        return _generate_wannier_uiu_scoped(config)
+    end
+    if config.source isa VASPWavefunctionSource && config.source.potcar_file === nothing
+        return _generate_wannier_uiu_scoped(config)
+    end
+    config.construction_policy in (:standard, :strict) ||
+        throw(ArgumentError("construction_policy must be :standard or :strict"))
+    config.max_cached_wavefunction_kpoints >= 2 ||
+        throw(ArgumentError("max_cached_wavefunction_kpoints must be at least two"))
+    oracle = _effective_uiu_oracle_mmn_file(config)
+    authority_mmn =
+        _operator_target_oracle_mmn_file(config.authoritative_mmn_file, config.target_contract)
+    authority_mmn === nothing && (authority_mmn = oracle)
+    paths = _uiu_partial_paths(config)
+    inputs = String[config.topology_file]
+    for path in (oracle, authority_mmn, config.wavefunction_gauge_hdf5)
+        path === nothing || push!(inputs, path)
+    end
+    if config.target_contract !== nothing
+        push!(
+            inputs,
+            config.target_contract.operator_oracle_mmn_file,
+            config.target_contract.solver_mmn_file,
+        )
+    end
+    _validate_generation_output_paths(paths, inputs, config.source)
+    return with_verified_file_digests(inputs) do
+        _validate_authoritative_mmn_binding(
+            config.topology_file,
+            authority_mmn;
+            oracle_mmn_file = oracle,
+        )
+        config.target_contract === nothing || _validate_operator_target_contract_config(
+            something(config.target_contract),
+            config.authoritative_hamiltonian,
+            config.wavefunction_gauge_hdf5,
+        )
+        _with_operator_publication_receipt(
+            () -> _generate_wannier_uiu_scoped(config),
+            config,
+            :uIu,
+            paths,
+            inputs;
+            execution = execution,
+            published = result -> haskey(result.artifacts, "uiu_sha256"),
+        )
+    end
+end
+
+"""Prepare a missing uIu publication inside the configured native-data scope."""
+function _generate_wannier_uiu_scoped(config::WannierUIUGenerationConfig)
+    if !(config.source isa VASPWavefunctionSource) && config.execution === nothing
+        return _generate_wannier_uiu_impl(config)
+    end
+    config.construction_policy in (:standard, :strict) ||
+        throw(ArgumentError("construction_policy must be :standard or :strict"))
+    config.max_cached_wavefunction_kpoints >= 2 ||
+        throw(ArgumentError("max_cached_wavefunction_kpoints must be at least two"))
+    paths = _uiu_partial_paths(config)
+    inputs = String[config.topology_file]
+    for path in
+        (config.oracle_mmn_file, config.authoritative_mmn_file, config.wavefunction_gauge_hdf5)
+        path === nothing || push!(inputs, path)
+    end
+    if config.target_contract !== nothing
+        push!(
+            inputs,
+            config.target_contract.operator_oracle_mmn_file,
+            config.target_contract.solver_mmn_file,
+        )
+    end
+    _validate_generation_output_paths(
+        (;
+            output = paths.output,
+            provenance = paths.provenance,
+            scratch = paths.scratch,
+            partial = paths.partial,
+            checkpoint = paths.checkpoint,
+        ),
+        inputs,
+        config.source,
+    )
+    recover =
+        config.resume &&
+        isfile(paths.output) &&
+        isfile(paths.checkpoint) &&
+        !ispath(paths.provenance) &&
+        !ispath(paths.partial)
+    ispath(paths.output) &&
+        !config.overwrite &&
+        !recover &&
+        throw(ArgumentError("refusing to overwrite uIu output: $(paths.output)"))
+    ispath(paths.provenance) &&
+        !config.overwrite &&
+        throw(ArgumentError("refusing to overwrite uIu provenance: $(paths.provenance)"))
+    if config.source isa QuantumEspressoWavefunctionSource
+        execution = something(config.execution)
+        reuse = execution.resume && execution.mode != :dense_reference
+        root, implementation = _preparation_implementation_paths()
+        return with_verified_file_digests(implementation) do
+            contract = bytes2hex(
+                SHA.sha256(
+                    repr([(relpath(path, root), sha256_file(path)) for path in implementation]),
+                ),
+            )
+            directory =
+                reuse ?
+                joinpath(
+                    something(execution.checkpoint_directory, dirname(paths.output)),
+                    "shared-qe-native",
+                ) : nothing
+            run =
+                () -> _with_qe_operator_preparation(
+                    () -> _generate_wannier_uiu_impl(config),
+                    config.source,
+                    config.topology_file,
+                    config.max_cached_wavefunction_kpoints;
+                    checkpoint_directory = directory,
+                    implementation_contract = contract,
+                    additional_inputs = inputs,
+                )
+            task_local_storage(:wannier_preparation_execution, execution) do
+                reuse && return run()
+                task_local_storage(:wannier_preparation_artifact_cache, nothing) do
+                    task_local_storage(run, :wannier_qe_operator_preparation, nothing)
+                end
+            end
+        end
+    end
+    config.source.potcar_file === nothing &&
+        throw(ArgumentError("VASP_PAW_DATA_REQUIRED: uIu generation requires POTCAR"))
+    return _with_vasp_operator_artifacts(
+        config.source,
+        dirname(paths.output);
+        execution = config.execution,
+        additional_inputs = inputs,
+    ) do
+        _generate_wannier_uiu_impl(config)
+    end
+end
+
+"""Execute the existing uIu validation, scientific kernels and publication within its scope."""
+function _generate_wannier_uiu_impl(config::WannierUIUGenerationConfig)
+    config.construction_policy in (:standard, :strict) ||
+        throw(ArgumentError("construction_policy must be :standard or :strict"))
     config.max_cached_wavefunction_kpoints >= 2 ||
         throw(ArgumentError("max_cached_wavefunction_kpoints must be at least two"))
     effective_oracle_mmn_file = _effective_uiu_oracle_mmn_file(config)
@@ -1357,8 +2004,15 @@ function generate_wannier_uiu(config::WannierUIUGenerationConfig)
         ),
         config.source,
     )
+    recover_publication =
+        config.resume &&
+        isfile(paths.output) &&
+        isfile(paths.checkpoint) &&
+        !ispath(paths.provenance) &&
+        !ispath(paths.partial)
     ispath(paths.output) &&
         !config.overwrite &&
+        !recover_publication &&
         throw(ArgumentError("refusing to overwrite uIu output: $(paths.output)"))
     ispath(paths.provenance) &&
         !config.overwrite &&
@@ -1369,6 +2023,7 @@ function generate_wannier_uiu(config::WannierUIUGenerationConfig)
         config.topology_file,
         config.max_cached_wavefunction_kpoints,
     )
+    state = _uiu_state_with_qualification_scope(state, config.target_contract)
     gauge_contract = _generation_band_gauge_contract(
         config.source,
         config.authoritative_hamiltonian,
@@ -1411,11 +2066,22 @@ function generate_wannier_uiu(config::WannierUIUGenerationConfig)
         state.radial_q_maximum mmn_max = (mmn_parity === nothing ? NaN : mmn_parity.max_absolute) mmn_rms =
         (mmn_parity === nothing ? NaN : mmn_parity.root_mean_square) mmn_relative_l2 =
         (mmn_parity === nothing ? NaN : mmn_parity.relative_l2)
+    if config.construction_policy == :standard
+        all(isfinite, (state.generalized_norm, state.radial_q_maximum)) ||
+            throw(ArgumentError("FATAL_INTEGRITY: nonfinite uIu native metric residual"))
+        if mmn_parity !== nothing
+            mmn_parity.finite && all(
+                isfinite,
+                (mmn_parity.max_absolute, mmn_parity.root_mean_square, mmn_parity.relative_l2),
+            ) || throw(ArgumentError("FATAL_INTEGRITY: nonfinite uIu MMN parity residual"))
+        end
+    end
     preflight_pass =
         state.generalized_norm <= config.thresholds.generalized_norm_max_absolute &&
         state.radial_q_maximum <= config.thresholds.radial_q_max_absolute &&
         (!config.require_mmn_oracle || _uiu_mmn_passes(something(mmn_parity), config.thresholds))
-    if !preflight_pass
+    if !preflight_pass &&
+       (config.target_contract !== nothing || config.construction_policy != :standard)
         diagnostics =
             vcat(state.diagnostics, _uiu_cache_diagnostics(state), ["UIU_PREFLIGHT_GATE_FAILED"])
         return _uiu_failed_result(
@@ -1427,6 +2093,10 @@ function generate_wannier_uiu(config::WannierUIUGenerationConfig)
             mmn_parity,
             diagnostics,
         )
+    end
+
+    if recover_publication
+        _uiu_recover_publication!(paths, state.topology, fingerprint, execution_contract)
     end
 
     if !config.resume && (isfile(paths.partial) || isfile(paths.checkpoint))
@@ -1477,10 +2147,13 @@ function generate_wannier_uiu(config::WannierUIUGenerationConfig)
     verified_checksums == checksums || throw(ArgumentError("UIU_WRITE_CHECKSUM_READBACK_FAILED"))
     diagonal = max(diagonal, verified_diagonal)
     hermiticity = max(hermiticity, verified_hermiticity)
+    # The diagonal uIu block is the same q=0 PAW metric qualified above.
+    # Its outer-window residual is the hard gate; the complete-parent maximum
+    # remains a required audit, but must not disqualify excluded high bands.
     output_pass =
-        diagonal <= config.thresholds.diagonal_identity_max_absolute &&
+        state.generalized_norm <= config.thresholds.diagonal_identity_max_absolute &&
         hermiticity <= config.thresholds.exchange_hermiticity_max_absolute
-    if !output_pass
+    if !output_pass && config.construction_policy != :standard
         diagnostics =
             vcat(state.diagnostics, _uiu_cache_diagnostics(state), ["UIU_OUTPUT_GATE_FAILED"])
         return _uiu_failed_result(
@@ -1494,7 +2167,6 @@ function generate_wannier_uiu(config::WannierUIUGenerationConfig)
         )
     end
     mv(paths.partial, paths.output; force = config.overwrite)
-    isfile(paths.checkpoint) && rm(paths.checkpoint; force = true)
     count = Ref(0)
     foreach_wannier_uiu_block(
         paths.output;
@@ -1511,7 +2183,21 @@ function generate_wannier_uiu(config::WannierUIUGenerationConfig)
     catch
         0
     end
-    diagnostics = vcat(state.diagnostics, _uiu_cache_diagnostics(state), ["UIU_GENERATION_PASS"])
+    quality_pass = preflight_pass && output_pass
+    diagnostics = vcat(
+        state.diagnostics,
+        _uiu_cache_diagnostics(state),
+        [quality_pass ? "UIU_GENERATION_PASS" : "UIU_GENERATION_NUMERICAL_WARNING"],
+    )
+    preflight_pass || push!(diagnostics, "NUMERICAL_WARNING:UIU_PREFLIGHT_GATE_FAILED")
+    diagonal > config.thresholds.diagonal_identity_max_absolute &&
+        push!(diagnostics, "PARENT_AUDIT_EXCEEDED:UIU_DIAGONAL_IDENTITY")
+    if !output_pass
+        # Retain the schema-1.0 warning token for readers while declaring the
+        # target-scoped meaning explicitly in schema-1.1 provenance.
+        push!(diagnostics, "NUMERICAL_WARNING:UIU_OUTPUT_GATE_FAILED")
+        push!(diagnostics, "UIU_TARGET_OUTPUT_GATE_FAILED")
+    end
     payload = _uiu_provenance_payload(
         config,
         state,
@@ -1521,13 +2207,14 @@ function generate_wannier_uiu(config::WannierUIUGenerationConfig)
         mmn_parity,
         diagonal,
         hermiticity,
-        true,
+        quality_pass,
         resumed_from,
         checksums,
         peak_memory,
         diagnostics,
     )
     _uiu_atomic_json(paths.provenance, payload)
+    isfile(paths.checkpoint) && rm(paths.checkpoint; force = true)
     artifacts = Dict(
         "uiu" => paths.output,
         "provenance_json" => paths.provenance,
@@ -1543,7 +2230,7 @@ function generate_wannier_uiu(config::WannierUIUGenerationConfig)
         mmn_parity,
         diagonal,
         hermiticity,
-        true,
+        quality_pass,
         resumed_from,
         peak_memory,
         artifacts,

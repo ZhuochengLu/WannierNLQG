@@ -1133,7 +1133,7 @@ function write_band_representation_hdf5(
                             "scoped_production_eligible",
                             "global_production_eligible",
                             "production_eligible",
-                            "diagnostic_only",
+                            "quality_review_recommended",
                         )
                 ),
             )
@@ -1186,6 +1186,11 @@ function write_band_representation_hdf5(
             compatibility_attributes["validation_profile"] = "empirical"
             compatibility_attributes["maximum_required_block_unitarity_residual"] =
                 validation === nothing ? NaN : validation.maximum_unitarity_residual
+            if get(representation.conventions, "sewing_role", "") == "identity_only_no_symmetry"
+                compatibility_attributes["measurement_scope"] = "IDENTITY_BOOKKEEPING_ONLY"
+                compatibility_attributes["physical_representation_status"] = "NOT_RUN"
+                compatibility_attributes["physical_representation_reason"] = "nontrivial physical band sewing overlaps are unavailable; WIN target actions alone do not supply them"
+            end
             compatibility_attributes["qualification_sha256"] =
                 validation === nothing || validation.oracle_sha256 === nothing ? "" :
                 something(validation.oracle_sha256)
@@ -1443,17 +1448,16 @@ function read_band_representation_hdf5(filename::AbstractString)
                                 "schema-1.0 artifact is missing correction input identity",
                             ),
                         )
-                    diagnostic = get(representation.conventions, "diagnostic_only", "false")
+                    diagnostic =
+                        get(representation.conventions, "quality_review_recommended", "false")
                     production = get(representation.conventions, "production_eligible", "true")
-                    get(gauge_metadata, "diagnostic_only", "") == diagnostic || throw(
+                    get(gauge_metadata, "quality_review_recommended", "") == diagnostic || throw(
                         ArgumentError("diagnostic qualification metadata contradicts conventions"),
                     )
                     diagnostic == "true" &&
                         production != "false" &&
                         throw(
-                            ArgumentError(
-                                "DIAGNOSTIC_ONLY representation cannot be production eligible",
-                            ),
+                            ArgumentError("STANDARD representation cannot be production eligible"),
                         )
                 end
             end

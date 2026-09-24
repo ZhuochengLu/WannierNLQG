@@ -2,6 +2,42 @@
 
 ## 1. Scope and status
 
+### Standard export and bounded preparation
+
+Standard export treats finite quality residuals as `NUMERICAL_WARNING`, including
+accepted-frame isometry, Frozen embedding, fixed-projector drift, Fourier and text
+roundtrips, center readback and Hermiticity. It retains the original thresholds and
+values, emits `EXPORTED_WITH_WARNING`, and denies production eligibility. No polar
+repair or additional symmetry projection is introduced by this export policy.
+Nonfinite scientific data, rank/dimension or support errors, checkpoint identity,
+provenance/digest mismatch and Packed-HDF5 content mismatch remain fatal integrity
+errors. Final symmetry qualification failure does not veto a structurally valid TB.
+Strict construction retains its previous numerical gates and replacement behavior.
+
+Full Packed-HDF5 serialization and fresh readback apply the same rule to spin-family
+pair-Wigner-Seitz roundtrips, finite band-frame isometry/replay evidence, and finite
+imaginary position home diagonals. Their residuals remain available for review;
+warning classification propagates to the export summary and sidecars. Operator
+component digests are unchanged when only qualification metadata changes. The
+bundle-wide scientific-content digest also binds qualification metadata, so it
+must not be mistaken for an array-only digest across policy-metadata revisions.
+
+Ordinary preparation uses the existing identity representation and existing matrix
+inputs without introducing crystal-symmetry constraints. The expert input field
+`preparation_execution` accepts `WavefunctionPreparationExecutionConfig`: serial
+streaming by default, at most four workers, a 24 GiB process budget, and optional
+private checkpoint storage. Native AMN and PAW-SCDM work is partitioned by k point;
+source reads and checkpoint commits remain coordinator-owned. This execution
+configuration does not enter the solver trajectory digest. The existing
+`prepare_paw_scdm_input_artifact` expert interface accepts the same optional
+`execution` configuration. Full-profile preparation preserves all native bands and
+augmentation contributions until the existing mathematical projection boundary.
+Formatted MMN values use the same Base `Float64` token parser and column order,
+with direct token spans instead of one temporary `split` vector per complex value.
+The external-matrix route therefore reduces parsing allocations without adding
+native wavefunction reads or nontrivial symmetry preparation.
+
+
 `WannierNLQG.Wannierization` is the expert API for constructing either
 symmetry-adapted Wannier functions (SAWFs) or ordinary full-BZ MLWFs without a
 Python or WannierBerri runtime dependency. The first-stage implementation supports native VASP
@@ -32,8 +68,9 @@ The extension implementation uses the private nested modules
 one another; the parent extension explicitly rebinds the established expert
 entrypoints and does not bulk-import a component namespace. Direct stdlib,
 external-package, project-module, component, and symbol imports are checked
-against `test/contracts/wannierization_components.toml`. Checkpoint legacy
-readers remain in `SolverCheckpoint`;
+against `test/contracts/wannierization_components.toml`. Historical checkpoint
+decoder logic is isolated behind the public checkpoint wire gate and is not a
+reader compatibility promise;
 retired duplicate `Legacy*WavefunctionSource` and `LegacyBandRepresentation`
 models are not compatibility readers and have been removed.
 
@@ -44,13 +81,14 @@ pseudoinverse or regularization fallback paths. Type-I--IV magnetic-group operat
 algebra, complete corepresentation windows, and target multiplicity are hard
 preflight contracts; they do not by themselves prove Wannierizability.
 
-The expert public-schema-1.0 workflow separates disentanglement (`Z`) from
+The expert public-schema-1.2 workflow separates disentanglement (`Z`) from
 localization (`U`). Under `schedule=:two_stage`, a sealed
 `DisentanglementState` owns the projector/frame field, invariant spread,
 outer/frozen masks, residual, history, and convergence status. The Z stage does
 not evaluate centers, full spread, U gradients, line searches, or localization
-polar transports. Schema-2.27 and older target-scoped checkpoints remain
-diagnostic-only and cannot be continued under the PAW-S leakage-weight contract.
+polar transports. Wire `1.1` (the former internal `2.28` layout) remains
+readable; older internal layouts require external migration and cannot be
+continued directly.
 
 Spectral clustering, frame transport, and projectability use
 `WannierizationNumericalThresholds`; `representation_tolerance` remains solely
@@ -92,7 +130,7 @@ An augmentation-aware `PAWSCDMInputArtifact` is not itself a SAWF authority.
 With explicit `wannierization_mode=:ordinary`, its strict gauge/representation Hamiltonian and magnetic
 identity is input provenance only. The solver builds a full-BZ identity
 representation, skips symmetry projection, little-group processing, and
-covariance rejection, while retaining covariance as `DIAGNOSTIC_ONLY`.
+covariance rejection, while retaining the accepted model as `STANDARD`.
 The symmetry-adapted mode keeps the original strict gate.
 
 The contiguous raw-Z kernel and MPI k-point decomposition are qualification
@@ -258,7 +296,7 @@ PAW-aware MMN/AMN from completed states and compares them with the independent
 rectangular-parent rotation oracle. Backend, source, artifact, or direct/oracle
 mismatch fails before representation, Z, U, or TB construction.
 
-With `construction_policy=:diagnostic`, completed-state matrix generation and
+With `construction_policy=:standard`, completed-state matrix generation and
 native-DFT Hamiltonian construction can consume an integrity-verified diagnostic
 gauge capsule. Finite generalized-norm or external-reference MMN/AMN parity
 failures retain their original metrics and FAIL status while construction
@@ -353,6 +391,7 @@ constructors. A concise overview is in the
 | `eig_file` | Wannier90 EIG energies in eV. |
 | `mmn_file` | Wannier90 MMN neighbor overlaps. |
 | `amn_file` | Optional formatted AMN; otherwise generated only when the native source exposes a physical overlap metric. |
+| `preparation_execution` | Optional `WavefunctionPreparationExecutionConfig` for bounded ordinary native-data preparation: execution mode, worker limit, RSS budget, checkpoint directory, and resume. Defaults to streaming serial; external-matrix inputs retain the identity path without native wavefunction reads. Execution settings do not change the solver scientific contract. |
 | `matrix_elements` | Typed `ExternalWannier90Matrices` or `NativeVASPPAWMatrices`; external QE PAW MMN/AMN is the qualified physical-overlap path, and neither QE nor VASP falls back to pseudo AMN. |
 | `projection_basis` | Optional prebuilt ordered projection basis; WIN is used when absent. |
 | `band_representation` | Optional in-memory `BandRepresentation`. |
@@ -366,7 +405,7 @@ constructors. A concise overview is in the
 | `num_wannier` | Target dimension; zero derives it from the projection basis. |
 | `initialization` | `:amn`, `:random`, `:restart`, or sealed `:fixed_subspace`. |
 | `restart_hdf5` | Checkpoint required by `initialization=:restart`. |
-| `fixed_subspace_hdf5` | Wire `1.0` capsule with schema `wanniernlqg.wannierization-fixed-subspace`, required by `initialization=:fixed_subspace`; historical `wanniernlqg.sawf-fixed-subspace` 1.0/1.1 capsules remain read-only compatible under their original validation rules. |
+| `fixed_subspace_hdf5` | Wire `2.0` capsule with schema `wanniernlqg.wannierization-fixed-subspace`, required by `initialization=:fixed_subspace`; the reader also accepts wire `1.0` and `1.1`, and historical `wanniernlqg.sawf-fixed-subspace` 1.0/1.1 capsules remain read-only compatible under their original validation rules. |
 | `z_mix_ratio` | Independent Z mixing ratio in `[0,1]`. |
 | `u_mix_ratio` | Independent unitary-geodesic U mixing ratio in `[0,1]`. |
 | `acceleration` | `WannierizationAccelerationConfig`; defaults to `schedule=:two_stage` and `u_acceptance=:armijo`. |
@@ -383,7 +422,7 @@ constructors. A concise overview is in the
 | `representation_tolerance` | Representation and invariant tolerance; not a spectral, transport, or projectability rank tolerance. |
 | `empirical_covariance_budget` | Optional finite-cutoff covariance budget; never relaxes target algebra or frozen/isometry gates. |
 | `target_center_matching_tolerance` | Geometric tolerance used only to choose the unique lattice image of each target center; default `1e-8`. |
-| `construction_policy` | `:diagnostic` (default) retains failed quality checks and continues feasible construction; `:strict` preserves historical blocking behavior. Diagnostic artifacts require manual review. |
+| `construction_policy` | `:standard` (default) retains failed quality checks and continues feasible construction; `:strict` preserves historical blocking behavior. Quality review is recommended when warnings are retained. |
 | `compatibility_policy` | `:strict`, `:warn`, or `:off` controls compatibility evaluation; `construction_policy` determines whether quality failures stop construction. Missing data and impossible subspaces still stop. |
 | `localize` | Enable localization; the formal path is a symmetry-projected MV gradient with rank-gated polar retraction and Armijo search. |
 | `symmetrize_z` | Project Z over each little group. |
@@ -396,18 +435,19 @@ constructors. A concise overview is in the
 | `iteration_observer` | Optional in-process diagnostic callback; excluded from the scientific restart hash. |
 | `tb_output_formats` | Legacy format selector retained for one migration cycle. A finite invariant-valid accepted state always emits Packed HDF5. |
 | `write_wannier90_tb` | Optionally emit the Wannier90 `*_tb.dat` exchange file; default `false`. |
-| `profile` | Final Packed-HDF5 output policy: `:hamiltonian_position`, `:hamiltonian_position_spin`, or `:full`. It is excluded from the solver restart digest. |
-| `final_tb_symmetry_report_enabled` | Controls the `FINAL DIAGNOSTIC TB SYMMETRY` report block. `nothing` enables it for symmetry-adapted mode and disables it for ordinary mode; `true`/`false` force display/hide without changing checkpoint or solver state. |
-| `spn_file` | SPN input required by `:hamiltonian_position_spin` and `:full`. |
-| `spn_provenance_file` | Schema-1.0 SPN provenance (complete former 1.2 contract) required for source, metric, band/k-point order, frame transform/contract, and digest qualification of spin-bearing profiles. |
-| `uiu_file` | uIu input required by `:full`. |
-| `uhu_file` | uHu input required by `:full`. |
-| `siu_file` | sIu input required by `:full`. |
-| `shu_file` | sHu input required by `:full`. |
-| `uiu_provenance_json` | Schema-1.0 uIu provenance sidecar (complete former 1.2 contract) required by `:full`. |
-| `uhu_provenance_json` | Schema-1.0 uHu provenance sidecar (complete former 1.3 contract) required by `:full`. |
-| `siu_provenance_json` | Schema-1.0 sIu provenance sidecar (complete former 1.3 contract) required by `:full`. |
-| `shu_provenance_json` | Schema-1.0 sHu provenance sidecar (complete former 1.3 contract) required by `:full`. |
+| `operator_tasks` | Tuple of `WannierNLQG.Core.OperatorTask` requests; default `()`. Nonempty tasks require `profile=nothing`; see Section 9 for the canonical union and supported dependencies. |
+| `profile` | Final Packed-HDF5 output policy: `:hamiltonian_position` (default) or `:full`; use `nothing` with nonempty `operator_tasks`. It is excluded from the solver restart digest. |
+| `final_tb_symmetry_report_enabled` | Controls the `FINAL TB SYMMETRY QUALIFICATION` report block. `nothing` enables it for symmetry-adapted mode and disables it for ordinary mode; `true`/`false` force display/hide without changing checkpoint or solver state. |
+| `spn_file` | SPN input required by `:full` and task-derived selections whose source closure contains `spn`. |
+| `spn_provenance_file` | Schema-1.0 SPN provenance (complete former 1.2 contract) required for source, metric, band/k-point order, frame transform/contract, and digest qualification of `:full` and task-derived selections whose source closure contains `spn`. |
+| `uiu_file` | uIu input required by `:full` and task-derived selections whose source closure contains `uiu`. |
+| `uhu_file` | uHu input required by `:full` and task-derived selections whose source closure contains `uhu`. |
+| `siu_file` | sIu input required by `:full` and task-derived selections whose source closure contains `siu`. |
+| `shu_file` | sHu input required by `:full` and task-derived selections whose source closure contains `shu`. |
+| `uiu_provenance_json` | Schema-1.0 uIu provenance sidecar (complete former 1.2 contract) required by `:full` and task-derived selections whose source closure contains `uiu`. |
+| `uhu_provenance_json` | Schema-1.0 uHu provenance sidecar (complete former 1.3 contract) required by `:full` and task-derived selections whose source closure contains `uhu`. |
+| `siu_provenance_json` | Schema-1.0 sIu provenance sidecar (complete former 1.3 contract) required by `:full` and task-derived selections whose source closure contains `siu`. |
+| `shu_provenance_json` | Schema-1.0 sHu provenance sidecar (complete former 1.3 contract) required by `:full` and task-derived selections whose source closure contains `shu`. |
 | `spn_formatted` | Read SPN from the formatted Wannier90 representation instead of sequential unformatted input. |
 | `operator_files_formatted` | Read uIu/uHu/sIu/sHu from formatted representations instead of sequential unformatted input. |
 | `operator_closure_tolerance` | Compatibility field: positive finite Galerkin-leakage diagnostic reference; default `1e-6`. An excess is `ABOVE_REFERENCE`, not a publication veto or operator-error estimate. |
@@ -518,13 +558,13 @@ qualified symmetry-projected Z seal requires both
 `abs(Delta Omega_I/Omega_I) <= 1e-10` and projector drift `<= 1e-10` for three
 consecutive accepted iterations; ordinary exact SMV--FR retains its established
 relative-objective termination order. Reaching the Z iteration ceiling is classified
-as `DIAGNOSTIC_NONCONVERGED`, never as a qualified seal. The expert-only
-`disentanglement_limit_policy=:diagnostic_continue` default continues into U
+as `NONCONVERGED_RETAINED`, never as a qualified seal. The expert-only
+`disentanglement_limit_policy=:standard_continue` default continues into U
 only when the last accepted state is finite, full rank, isometric,
 frozen-containing, corepresentation covariant, and complete under k-star
 expansion. A failed continuation gate records U as `NOT_RUN` and preserves the
 checkpoint; a passed gate records U and any resulting model as
-`DIAGNOSTIC_ONLY/Z_NONCONVERGED`. The explicit `:strict_hold` policy still stops
+`AVAILABLE_WITH_QUALITY_WARNINGS`. The explicit `:strict_hold` policy still stops
 at the boundary. Neither policy makes a nonconverged route rankable or eligible
 for a standard or production TB. Projected AMN is then polar/SVD
 aligned to construct the localization frame, after which Z is frozen and only
@@ -563,7 +603,7 @@ The common U controls are `u_acceptance`, `u_initial_step`, `u_armijo_c1`,
 `u_objective_tolerance`. `:armijo` requires sufficient decrease from the common
 base point, `:monotone` permits only `objective <= base`, and
 `:invariant_only` checks finite/isometry/frozen/symmetry invariants without an
-objective-decrease requirement and is diagnostic-only. Localization search
+objective-decrease requirement and is standard. Localization search
 failure is `LOCALIZATION_FAILED`; only a true rank failure is
 `SINGULAR_LOCALIZATION`. A rejected trial Z and its derived `F0` are discarded;
 the previous committed Z/frame boundary is retained while all attempted steps
@@ -625,7 +665,7 @@ full-BZ Bloch projector and performs U-only localization. Frozen states constrai
 the Z/disentanglement subspace and its containment gate only; an internal U
 rotation never freezes a target-space Wannier block. The capsule is
 production/ranking eligible only when its source records
-`z_seal_class=CONVERGED` and `qualified_z_seal=true`; an older or diagnostic
+`source_sha256["z_seal_class"] == "CONVERGED"`; an older or diagnostic
 seal remains a U-only diagnostic and cannot be silently promoted. The default
 configuration field `localization_algorithm=:symmetry_projected_gradient`
 remains available through `algorithm_profile=:custom`; symmetry `:auto` instead
@@ -815,8 +855,8 @@ physical authority for either Hamiltonian route. Under
 5/1-micro-eV audit references and record `WITHIN_AUDIT_REFERENCE` or
 `AUDIT_REFERENCE_EXCEEDED`; nonfinite shifts
 still fail structurally. Energy audits do not rank block partitions or alter
-WFC, EIG, MMN, AMN, or sewing. `qualification_mode=:diagnostic_only` permanently labels the gauge,
-representation, matrix, TB, and band artifacts `DIAGNOSTIC_ONLY`; those
+WFC, EIG, MMN, AMN, or sewing. `qualification_mode=:standard` permanently labels the gauge,
+representation, matrix, TB, and band artifacts `STANDARD`; those
 artifacts cannot become production eligible or overwrite a strict HOLD.
 
 The only accepted `residual_gate_phase=:post_symmetrization` freezes the gate
@@ -835,22 +875,36 @@ selected target and the full parent eigensystem. The full-parent result cannot
 be omitted, but under the explicit target contract it is `AUDIT_PASS` or
 `AUDIT_EXCEEDED` evidence and cannot block an otherwise qualified target.
 
+The same scope rule applies to generated PAW MMN/AMN, SPN, uIu, and ordinary
+native-identity uHu/sIu/sHu closure. A single target contract is derived from
+EIG, the outer/frozen windows, and degeneracy closure, then passed to every
+generator. Target generalized norm, parity, identity, and closure failures are
+blocking even under `construction_policy=:standard`. Complete-parent values
+remain mandatory audit evidence, while parent-only finite residual exceedance
+is recorded as `AUDIT_EXCEEDED`. Structural parent failures such as nonfinite
+arrays, inconsistent dimensions/topology/source/spin basis, invalid radial-q,
+or non-Hermitian SPN remain blocking.
+
 Checkpoint/read statuses include `IN_PROGRESS_CHECKPOINT`; terminal statuses are `COMPLETED`, `COMPLETED_WITH_WARNINGS`, `MAX_ITERATIONS`,
 `REPRESENTATION_INCOMPATIBLE`, `REPRESENTATION_VALIDATION_UNDETERMINED`,
 `LOCALIZATION_FAILED`, `SINGULAR_LOCALIZATION`, `INVALID_INPUT`, and
 `IO_FAILURE`. Warning-bearing or maximum-iteration states retain the last finite
-iterate and structured diagnostic context.
+iterate and structured diagnostic context. A failure receipt written by
+`_workflow_failure` records `stage`, `substage_id`, `current_iteration`, and
+`last_successful_operation` in both the diagnostics context and the summary,
+alongside the existing full stacktrace rendering.
 
 ## 6. HDF5 schemas and restart
 
 Construction policy is part of restart identity. Missing policy metadata means
-historical `strict`; a policy change starts a new trajectory. Public schema 1.0
-uses an additive `diagnostic_construction_v1` sub-contract to seal policy,
-manual-review status, and complete diagnostic contexts. A failed quality check
+historical `strict`; a policy change starts a new trajectory. Public checkpoint
+schema 1.2 uses an additive `standard_construction_v1` sub-contract to seal policy,
+quality-review status, and complete diagnostic contexts, and persists the typed
+`WannierizationEligibility` block described below. A failed quality check
 retains its original `gate_result=FAIL` independently of
-`action=CONTINUE_DIAGNOSTIC`; convergence never erases that evidence.
-Diagnostic construction remains ineligible for production. Finite accepted
-states can be exported for manual inspection even when optimization stops
+`action=CONTINUE_STANDARD`; convergence never erases that evidence.
+Standard construction remains independently unqualified for production. Finite accepted
+states remain available even when optimization stops
 without convergence. Structural, rank, metric, provenance, and persistence
 integrity errors remain blocking. Gauge-chain diagnostics consume the sealed
 solver stencil rather than rebuilding stricter weights after optimization.
@@ -862,7 +916,7 @@ preparation, and validation-context readers accept only wire `1.0`. Every
 non-`1.0` version, including historical `1.1–1.17`, is rejected without
 readback or migration. The readers do not infer file age or distinguish
 historical files that also used `1.0`. An accepted file must satisfy the
-complete current contract and its strict/diagnostic qualification restrictions.
+complete current contract and its strict/standard qualification restrictions.
 Historical fixtures retain their original identifiers as rejection evidence.
 A combined workflow referencing an old Band file fails explicitly, even when
 its checkpoint or other linked format remains supported. See the
@@ -887,7 +941,7 @@ the symmetrized authority. Target-subspace authority, frozen target anchor,
 complement completion, unified Wannierization mode, representation source, and
 symmetry-constraint flag remain bound to the artifact. Target qualification
 requires the four digest-bound PAW-S probability weights, their common threshold,
-and the formula SHA-256. An incomplete payload or a diagnostic-only representation
+and the formula SHA-256. An incomplete payload or a standard representation
 cannot acquire production or restart eligibility from its wire label.
 
 Current capsules use `WannierNLQG.star_covariant_paw_gauge/1.0` with the
@@ -909,24 +963,24 @@ The explicit historical capsule identifiers are
 `WannierNLQG.star_covariant_paw_gauge/1.8`; their presence in the reader is
 readback compatibility, not target qualification.
 
-New checkpoints use `WannierNLQG.wannierization_checkpoint/1.0`; readers also decode
-legacy 2.0--2.28 for their declared diagnostic/readback purposes. Public schema
-1.0 preserves the complete legacy 2.28 contract and binds
-the Hamiltonian authority, target masks and contract digest, PAW-S leakage
-semantics, formula SHA-256, and common threshold into the scientific and restart
-identity. Schema 2.27 and older target checkpoints used amplitude leakage gates;
-they are readable only as legacy evidence and return
-`RESTART_SEMANTICS_INCOMPATIBLE` for continuation. They are never migrated or
-automatically upgraded.
+New checkpoints use `WannierNLQG.wannierization_checkpoint/1.2`; the public
+reader accepts wire `1.1` and `1.2` and rejects every other wire identifier with
+`CHECKPOINT_MIGRATION_REQUIRED`. Wire `1.2` maps internally to numerical contract
+version `2.29` and preserves the complete former `2.28` numerical contract while
+binding the Hamiltonian authority, target masks and contract digest, PAW-S
+leakage semantics, formula SHA-256, and common threshold into the scientific and
+restart identity; the prior identifier
+`WannierNLQG.wannierization_checkpoint/1.1` remains readable with unchanged
+readback. Schema 2.27 and older target checkpoints used amplitude leakage gates;
+they are historical evidence only and are never implicitly migrated or upgraded.
 Historical schemas include `WannierNLQG.wannierization_checkpoint/2.24`, `WannierNLQG.wannierization_checkpoint/2.23`, `WannierNLQG.wannierization_checkpoint/2.22`, `WannierNLQG.wannierization_checkpoint/2.21`, `WannierNLQG.wannierization_checkpoint/2.20`, `WannierNLQG.wannierization_checkpoint/2.19`, `WannierNLQG.wannierization_checkpoint/2.18`, `WannierNLQG.wannierization_checkpoint/2.17`, `WannierNLQG.wannierization_checkpoint/2.16`, `WannierNLQG.wannierization_checkpoint/2.15`, `WannierNLQG.wannierization_checkpoint/2.14`, `WannierNLQG.wannierization_checkpoint/2.13`, `WannierNLQG.wannierization_checkpoint/2.12`, `WannierNLQG.wannierization_checkpoint/2.11`,
 `WannierNLQG.wannierization_checkpoint/2.10`,
 `WannierNLQG.wannierization_checkpoint/2.9`,
 `WannierNLQG.wannierization_checkpoint/2.8`,
 `WannierNLQG.wannierization_checkpoint/2.7`,
 `WannierNLQG.wannierization_checkpoint/2.6`, and
-`WannierNLQG.wannierization_checkpoint/2.5`. Schemas 2.0--2.3
-are read/check/export only and fail direct restart as
-`RESTART_SEMANTICS_INCOMPATIBLE`. Schema 2.4 separately stores the
+`WannierNLQG.wannierization_checkpoint/2.5`. Schemas 2.0--2.3 are likewise
+external-migration inputs only. Schema 2.4 separately stored the
 disentanglement/localization states, counters, objectives, and every
 localization trial step/objective/required/actual change. The representation schema records
 k-star/IBZ maps, group operations, band blocks, sewing matrices, energies,
@@ -938,7 +992,60 @@ empirical absolute and paired-oracle residuals, qualification
 SHA-256, input SHA-256 values, and generation metadata. Every cross-language
 array carries an explicit axis contract; in particular, sewing is
 `[kpoint, operation, target_band, source_band]`. Schema-1.0 product metadata is
-derived in memory and marked `derived_v1.0`. Schema 2.5 additionally binds the
+derived in memory and marked `derived_v1.0`.
+
+Public checkpoint schema `1.2` carries the complete numerical layout formerly
+tracked internally as 2.28, plus the `standard_construction_v1` policy, the
+quality-evidence seal, and the typed `WannierizationEligibility` block, and maps
+internally to numerical contract version `2.29`. The historical 2.x descriptions
+below are layout provenance only: the current reader accepts wire `1.1` and
+`1.2`, and every older wire identifier is rejected with
+`CHECKPOINT_MIGRATION_REQUIRED` before any state or array is returned; conversion
+must be performed by an independent migration tool.
+
+The typed `WannierizationEligibility` block is the single derived source of truth
+for wannierization qualification. It replaces the deleted summary keys
+`qualified_z_seal`, `route_selection_eligible`, `standard_tb_export_eligible`,
+and `accepted_state_tb_export_eligible`, plus the summary-level
+`production_eligible` key that the workflow and periodic paths previously wrote
+into the checkpoint `input_summary` group; the bundle-level `production_eligible`
+booleans in operator-bundle status metadata are unchanged. Its fields are
+`execution_eligible`, `export_eligible`, `production_eligible`,
+`qualification_status` (`PASS`, `DIAGNOSTIC_ONLY`, or `NOT_EVALUATED`),
+`quality_review_recommended`, `strictly_converged_z_seal`, `reasons`,
+`verified_contracts`, `unverified_contracts`, and `conflicting_contracts`. The
+block is persisted into the `input_summary` group and as HDF5 attributes under the
+exact keys `wannierization_eligibility_execution_eligible`,
+`wannierization_eligibility_export_eligible`,
+`wannierization_eligibility_production_eligible`,
+`wannierization_eligibility_qualification_status`,
+`wannierization_eligibility_quality_review_recommended`,
+`wannierization_eligibility_strictly_converged_z_seal`,
+`wannierization_eligibility_reasons`,
+`wannierization_eligibility_verified_contracts`,
+`wannierization_eligibility_unverified_contracts`, and
+`wannierization_eligibility_conflicting_contracts`; list-valued fields are
+serialized as one sorted, unique, `|`-separated string. Wire `1.2` binds the
+typed block with the scientific digest `_wannierization_checkpoint_sha256_v2_29`,
+and newly written checkpoints no longer carry the HDF5 attribute
+`qualified_z_seal`.
+
+Read the three booleans independently. `execution_eligible` reports that the
+workflow reached a structurally valid accepted state. `export_eligible` reports
+that the accepted-state TB structural gate allowed export; it requires
+`execution_eligible` and is the field that gates TB publication.
+`production_eligible` reports the strict scoped production contract and requires
+an execution-eligible `PASS`. `strictly_converged_z_seal` carries the retained
+`z_seal_class == "CONVERGED"` Z-stability signal that the deleted
+`qualified_z_seal` key used to hold, namely that the Z-stability counter reached
+`z_stability_window`. `qualification_status` is `PASS` only when execution,
+export, and production eligibility all hold with no conflicts, `DIAGNOSTIC_ONLY`
+for a completed run that is not production-eligible, and `NOT_EVALUATED` for
+periodic or in-progress checkpoints. Missing evidence is retained in
+`unverified_contracts`, and an explicit contradiction is retained in
+`conflicting_contracts` and prevents execution eligibility.
+
+Historical schema 2.5 additionally bound the
 canonical final exported-TB symmetry qualification payload and its SHA-256.
 Schema 2.6 persists the previous accepted U gradient/search direction, CG
 beta/restart counters, and the Anderson reason. Schema 2.7 additionally binds
@@ -946,44 +1053,29 @@ beta/restart counters, and the Anderson reason. Schema 2.7 additionally binds
 checkpoint digest and numerical restart digest. Schema 2.8 additionally binds
 `joint_update_contract=type_iv_block_gauss_seidel_v1`, the Z limit policy,
 qualified-seal/route/export classifications, Z stability and `Omega_I` history,
-joint backtracking counts, transport spectra, and typed acceptance reasons.
+joint backtracking counts, transport spectra, and typed acceptance reasons. Those
+legacy qualified-seal/route/export classifications are retired and are replaced
+by the typed `WannierizationEligibility` block in wire `1.2`.
 Schema 2.9 additionally binds the parent representation digest, effective
 operation-subgroup digest, constraint scope, and terminal local Z/link-quality
-fields. Schema 2.8 is read as the exact legacy default `:full`; changing scope
-starts with empty U/CG history and an explicit compatibility-reset record.
+fields. Schema 2.8 recorded the historical default `:full`.
 Schema 2.10 binds `mv_centered_residual_unwrapped_delta_v2`, the discrete
 active-orbit digest/count, generalized-gradient norm, accepted RCG/L-BFGS history and restart
-reason, and all new branch/Wolfe/L-BFGS controls. Reading 2.4--2.9 preserves the
-accepted frames, projectors, and compatible Z history but clears the old U
-gradient, search direction, CG/L-BFGS history, and formula-dependent phase state;
-the first resumed U step is projected steepest descent and records
-`LEGACY_U_PHASE_CHART_RESET`, so it is not a bitwise strict continuation.
-For 2.4/2.5, unavailable CG fields are empty as well. The pre-2.6 config digest
-is accepted only when all three appended RCG controls
-remain at their defaults and the selected localization algorithm existed in the
-old schema. Any changed new control still fails as `RESTART_CONFIG_MISMATCH`;
-unknown or contradictory metadata fails before data are returned.
-The stored `effective_algorithm_profile` is also compared with the current
-explicit profile before continuation. An incompatible stored/current pair fails
-with `RESTART_EFFECTIVE_PROFILE_MISMATCH`; the checkpoint remains readable but
-cannot seed a numerically different route.
-Reading schema 2.7 preserves the accepted physical state, but a joint restart
-clears legacy joint/CG history and records
-`LEGACY_JOINT_UPDATE_CONTRACT_RESET`. A two-stage diagnostic boundary remains
-`DIAGNOSTIC_NONCONVERGED`; it is never upgraded to a qualified Z seal. Such
-compatibility restarts are not bitwise strict continuations.
+reason, and all new branch/Wolfe/L-BFGS controls. Earlier releases used
+version-specific reset rules for 2.4--2.9 optimizer histories. Those
+in-process compatibility paths are not part of the public 1.2 reader contract.
 Schema 2.11 additionally binds `sewing_backend`, `sewing_metric`, the frozen PAW
 thresholds, and the strict-sewing diagnostic digest in both the scientific
-checkpoint and restart configuration. Schema 2.10 is accepted only with the
-implicit `CoefficientMappingSewing()` identity; it cannot initialize or resume
-an augmentation-aware representation, Z, U, or checkpoint trajectory.
+checkpoint and restart configuration. Schema 2.10 had the implicit
+`CoefficientMappingSewing()` identity and is not readable by the current
+checkpoint reader.
 Schema 2.12 additionally binds the wavefunction-gauge backend and gauge HDF5
 SHA-256. Schema 2.11 and older checkpoints have only the implicit
 `NativeEigenstateGauge()` identity and cannot initialize or resume a
 `star_covariant_paw` trajectory.
 Schema 2.13 additionally binds the adaptive block-policy audit; schema 2.14
 binds the Hamiltonian-weighted far-band residual contract; schema 2.15 binds
-the discrete-Hamiltonian correction identity and permanent strict/diagnostic
+the discrete-Hamiltonian correction identity and permanent strict/standard
 qualification. Schema 2.16 binds the Hamiltonian authority and its independent
 native/symmetrized qualification. Schema 2.17 additionally binds the
 energy-shift audit-only contract, both references, and both audit statuses.
@@ -998,14 +1090,14 @@ SHA-256 values, a stable scientific checkpoint digest, and complete restart
 state inside HDF5. A converged, representation-compatible, finite run updates
 `.wannierization.validated.h5`; nonconverged and hard-failure runs never overwrite that
 copy until TB text and Packed HDF5 have both passed round-trip validation.
-Only public schema 1.0 and legacy schema 2.28 may continue the current target
-leakage-weight trajectory. The
+Public schema `1.2` continues the current target leakage-weight trajectory, and
+wire `1.1` checkpoints remain readable with unchanged readback. The
 restart digest includes the finite-difference stencil, expanded projection
 basis, common AMN, complete acceleration configuration, separated stage
 history, target masks, and leakage formula identity; only a larger iteration
 ceiling or output-only settings may change during strict continuation. Older
-checkpoints may still expose their original arrays for diagnosis but cannot
-seed the current target solver.
+checkpoints require external migration and expose no arrays through the current
+reader.
 
 ## 7. Construction example
 
@@ -1036,22 +1128,40 @@ With `checkpoint_hdf5="demo.wannierization.h5"`, durable output names are fixed 
 `demo_wannierization_tb.dat.diagnostics.json` sidecar. `COMPLETED` and
 `COMPLETED_WITH_WARNINGS` may publish the
 ordinary TB. For `:two_stage` and `:joint`, `MAX_ITERATIONS` and a line-search
-`LOCALIZATION_FAILED` may publish a diagnostic TB only from the last accepted
+`LOCALIZATION_FAILED` may publish a standard TB only from the last accepted
 finite, full-rank, isometric frame that passes frozen, symmetry, and fixed-
-projector checks. A standard TB additionally requires a qualified converged Z
-seal and converged U; diagnostic continuation across a nonconverged Z boundary
+projector checks. A standard TB additionally requires `strictly_converged_z_seal`
+and converged U; diagnostic continuation across a nonconverged Z boundary
 can never satisfy that export contract. The failed trial is never exported, the model is marked
 nonconverged and physics-ineligible, and `.wannierization.validated.h5` is not updated.
 Non-finite/rank/isometry/frozen/symmetry failures, invalid representation or
 checkpoint data, and absence of a valid accepted state prohibit TB export.
+
+The accepted-state TB export gate is structural. Terminal solver status classes
+such as `MAX_ITERATIONS`, `LOCALIZATION_FAILED`, and `SINGULAR_LOCALIZATION` no
+longer block TB export by themselves: when the structural gate passes they only
+affect the classification and warnings, and `STATUS_NOT_STANDARD_EXPORTABLE` is
+no longer a blocking reason. The gate reports `SOLVER_NOT_REACHED` when the
+optimizer schedule metadata is simply absent, instead of
+`SOLVER_SCHEDULE_IDENTITY_MISMATCH`; a genuine schedule mismatch is still caught
+earlier by the identity checks. When the result already carries a hard failure
+such as `IO_FAILURE`, `accepted_state_export_gate_reason` and
+`model_availability` keep pointing at that true primary reason rather than being
+overwritten by a secondary gate. `HARD_ERROR_PRESENT` is narrowed to identity,
+provenance, and contract-inconsistency error codes; numerical and quality error
+codes are demoted to warnings. Still hard-blocking: absence of an accepted state,
+checkpoint/restart identity mismatch, non-finite arrays, illegal dimensions,
+per-k rank deficiency, non-finite residual, Hamiltonian authority mismatch, and
+TB/Packed round-trip inconsistency, together with refusing to overwrite existing
+outputs. The `:strict` route behavior is unchanged.
 TB publication checks lattice, R vectors, degeneracies, Hamiltonian, position,
 R/-R Hermiticity, finite values, and modulo-lattice Wannier centers after the
 formal Wannier90 reader round trip. The Packed HDF5 is then read back and its
 scientific arrays and digest are checked before atomic publication. Its manifest
 exposes optional SAWF status, eligibility, checkpoint, and input digests; Runtime
-may read diagnostic models but emits one root-process warning.
+may read standard models but emits one root-process warning.
 
-Every final TB, including a structurally exportable nonconverged diagnostic TB,
+Every final TB, including a structurally exportable nonconverged standard TB,
 is passed once through `qualify_exported_wannierization_tb`. Using the shared
 `WannierSymmetryPlan` convention, the gate evaluates Hamiltonian and centerless-
 position covariance, Wannier-center orbits, Hamiltonian/position Hermiticity,
@@ -1068,7 +1178,7 @@ does not promote solver, representation, band, or physics qualification.
 
 The `.wannierization.out` report uses human-readable `INPUT`, `SOLVER
 CONFIGURATION`, `PROGRESS`, `CONSTRUCTION GATE AND DIAGNOSTIC SUMMARY`, `FINAL
-SPREADING`, optional `FINAL DIAGNOSTIC TB SYMMETRY`, and `FINAL STATUS`
+SPREADING`, optional `FINAL TB SYMMETRY QUALIFICATION`, and `FINAL STATUS`
 sections. Ordinary mode may force the symmetry section on, but the writer only
 prints the real qualification payload; unavailable work remains `NOT_RUN` or
 `NOT_APPLICABLE`.
@@ -1094,28 +1204,29 @@ eligibility.
 The formal Hamiltonian-covariance gate always uses `representation_tolerance`;
 it never inherits the empirical finite-cutoff budget used by dynamic projector
 checks. The raw-sewing empirical floor and formal TB threshold are persisted as
-separate fields and assessed independently. Checkpoint 2.21, Packed HDF5 5.7,
-and JSON retain one payload SHA-256. Legacy
-schemas return `NOT_RUN/LEGACY_SCHEMA_FIELD_ABSENT` without blocking access to
-their original data.
+separate fields and assessed independently. Historical checkpoint 2.21, Packed
+HDF5 5.7, and JSON used one payload SHA-256; current readers do not expose those
+legacy payloads.
 
-Packed HDF5/operator bundle 6.0 and TB qualification 1.7 carry the same
+Packed HDF5/operator bundle 1.1, using the complete former 6.3 numerical layout,
+and TB qualification 1.7 carry the same
 Hamiltonian authority, target-mask digests, PAW-S leakage formula/threshold,
 and parent-audit policy. `target_scope_production_eligible`
 applies only to the selected outer-window Hamiltonian, while
 `global_production_eligible` remains false. Retired candidate authority keys are
 not readable, resumable, relabelable, or migratable.
 
-Historical bundle labels retained for documentation and readback audits are
+Historical bundle labels retained for documentation and migration audits are
 Packed HDF5 5.2, Packed HDF5 5.3, Packed HDF5 5.4, Packed HDF5 5.5,
 Packed HDF5 5.6, Packed HDF5 5.7, Packed HDF5 5.8, and Packed HDF5 5.9. Historical
 qualification labels are TB qualification 1.2, TB qualification 1.3,
-TB qualification 1.4, TB qualification 1.5, and TB qualification 1.6; none is promoted to the
-target-subspace contract by readback.
+TB qualification 1.4, TB qualification 1.5, and TB qualification 1.6. The public
+operator-bundle reader rejects every historical bundle identifier with an
+external-migration requirement.
 
 Both target-scoped Hamiltonian routes use star-gauge wire schema 1.0
 with the complete former 1.11 contract,
-representation wire schema 1.0, checkpoint 1.0, Packed HDF5/operator bundle 1.0,
+representation wire schema 1.0, checkpoint 1.2, Packed HDF5/operator bundle 1.1,
 and TB qualification 1.7. `NativeDFTHamiltonian` retains the native target Hamiltonian;
 `SymmetrizedDFTHamiltonian` freezes the completed ragged outer-window target
 states and applies
@@ -1154,11 +1265,194 @@ projection, ordering, spin/conjugation, rank, covariance, or Kramers contract.
 `SymmetryAdaptedWannierizationConfig.output.profile` is an output policy and is not
 part of the SAWF restart digest. It accepts exactly:
 
-| profile | schema-1.0 inventory and qualification |
+| profile | Packed HDF5 inventory and qualification |
 | --- | --- |
 | `:hamiltonian_position` | Hamiltonian and position |
-| `:hamiltonian_position_spin` | Hamiltonian, position, and source-, gauge-, and symmetry-qualified spin |
 | `:full` | all eleven operators; requires qualified uIu/uHu/sIu/sHu files and sidecars |
+
+Existing Packed bundles with `operator_profile=hamiltonian_position_spin` remain
+readable under their supported wire contract. That historical bundle profile is
+not a public choice for new Wannierization output. Neither `:spin`, `:derivative`,
+`:orbital_magnetization`, nor `:task_derived` is a public fixed profile.
+
+### Task-derived selection and canonical union
+
+Use the Core-owned typed task and explicitly disable the default profile:
+
+```julia
+import WannierNLQG.Wannierization as W
+import WannierNLQG.Core as C
+
+output = W.WannierizationOutputConfig(
+    profile = nothing,
+    operator_tasks = (
+        C.OperatorTask(quantity=:orbital_magnetization, method=:conventional),
+        C.OperatorTask(quantity=:linear_transport, method=:projector),
+        C.OperatorTask(quantity=:berry_curvature, method=:conventional),
+    ),
+    uiu_file = "seed.uIu",
+    uhu_file = "seed.uHu",
+    uiu_provenance_json = "seed.uIu.provenance.json",
+    uhu_provenance_json = "seed.uHu.provenance.json",
+)
+requirements = C.resolve_operator_requirements(output.operator_tasks)
+```
+
+This export configuration is combined with the existing input, solver, checkpoint,
+and runtime groups and a qualified operator target contract. The union above is
+exactly the five OAM operators below, with sources
+`mmn, chk, eig, uiu, uhu, authoritative_hamiltonian, operator_target_contract`.
+It requires no SPN/sIu/sHu. Adding
+`C.OperatorTask(quantity=:injection_spin_current, method=:conventional)` adds the
+four spin-family operators and sources `spn, siu, shu`, yielding nine operators,
+not all eleven. The axial and symmetric unweighted derivative contractions remain
+unselected. These examples select operator types with all Cartesian components;
+there is no public arbitrary operator-name or component-subset export interface.
+
+Exactly one selection mode is legal: a supported nonempty profile with empty
+`operator_tasks`, or `profile=nothing` with nonempty tasks. Failures are identified
+by `AMBIGUOUS_OPERATOR_SELECTION`, `EMPTY_OPERATOR_TASK_SELECTION`,
+`UNSUPPORTED_OPERATOR_PROFILE`, `UNSUPPORTED_OPERATOR_TASK`, or
+`UNSUPPORTED_OPERATOR_TASK_METHOD`.
+
+`OperatorTask.method` defaults to `:all`. `normalized_tasks` is the sorted,
+deduplicated tuple of requested `(quantity, method)` pairs and retains `:all`.
+Expansion is recorded in each `task_dependency_closure.expanded_methods`; it does
+not replace the requested method. For example, `shift_current/:all` expands to
+`conventional, geometric_loop, projector, wilson_loop` and adds the full derivative
+overlap tensor. Reordering or duplicating identical requests leaves the resolved
+inventory and selection SHA-256 unchanged. Replacing `:all` with explicit method
+requests can preserve the inventory while changing the requested-pair digest.
+Operators follow `REAL_SPACE_OPERATOR_REGISTRY` order; sources follow
+`OPERATOR_TASK_SOURCE_REGISTRY` order. Registry version is `1.0`.
+
+### Complete supported task dependencies
+
+The following table describes the export default
+`resolve_operator_requirements(tasks; orbital_input_semantics=:unspecified)`
+and enumerates every registered quantity/method pair in
+`src/Core/OperatorTaskRequirements.jl`. The group abbreviations are exact
+inventories, not additional public profiles. Each listed method is separately
+supported; `:all` takes the union of all methods listed for its quantity.
+
+| Group | Persisted operator inventory (canonical order) | Source inventory (canonical order) |
+| --- | --- | --- |
+| G | `hamiltonian`, `position` | `mmn`, `chk`, `eig`, `authoritative_hamiltonian` |
+| P | G + `derivative_overlap_tensor` | `mmn`, `chk`, `eig`, `uiu`, `authoritative_hamiltonian`, `operator_target_contract` |
+| O | `hamiltonian`, `position`, `hamiltonian_weighted_connection`, `hamiltonian_weighted_axial_derivative_overlap`, `derivative_overlap_tensor` | `mmn`, `chk`, `eig`, `uiu`, `uhu`, `authoritative_hamiltonian`, `operator_target_contract` |
+| Z | G + `spin` | `mmn`, `chk`, `eig`, `spn`, `authoritative_hamiltonian` |
+| S | G + `spin`, `spin_times_hamiltonian`, `spin_times_position`, `spin_times_hamiltonian_position` | `mmn`, `chk`, `eig`, `spn`, `siu`, `shu`, `authoritative_hamiltonian`, `operator_target_contract` |
+
+| Quantity | Method | Group |
+| --- | --- | --- |
+| `band_structure` | `:conventional` | G |
+| `berry_curvature` | `:conventional` | G |
+| `berry_curvature_dipole` | `:conventional` | G |
+| `berry_curvature_quadrupole` | `:conventional` | G |
+| `hermitian_curvature_tensor` | `:conventional` | G |
+| `injection_current` | `:conventional` | G |
+| `injection_spin_current` | `:conventional` | S |
+| `interband_berry_curvature` | `:conventional` | G |
+| `interband_quantum_metric` | `:conventional` | G |
+| `linear_optical_response` | `:conventional` | G |
+| `linear_optical_response` | `:projector` | G |
+| `linear_transport` | `:conventional` | G |
+| `linear_transport` | `:projector` | G |
+| `orbital_magnetization` | `:conventional` | O |
+| `orbital_magnetization` | `:projector` | O |
+| `photon_drag_injection_current` | `:conventional` | G |
+| `photon_drag_shift_current` | `:geometric_loop` | G |
+| `quantum_christoffel_symbol` | `:conventional` | G |
+| `quantum_hermitian_connection` | `:conventional` | G |
+| `quantum_hermitian_connection` | `:geometric_loop` | G |
+| `quantum_hermitian_connection` | `:projector` | P |
+| `quantum_hermitian_connection` | `:wilson_loop` | G |
+| `quantum_metric` | `:conventional` | G |
+| `quantum_metric_dipole` | `:conventional` | G |
+| `quantum_metric_quadrupole` | `:conventional` | G |
+| `second_harmonic_generation` | `:conventional` | G |
+| `shift_current` | `:conventional` | G |
+| `shift_current` | `:geometric_loop` | G |
+| `shift_current` | `:projector` | P |
+| `shift_current` | `:wilson_loop` | G |
+| `shift_spin_current` | `:conventional` | S |
+| `shift_vector` | `:geometric_loop` | G |
+| `shift_vector` | `:wilson_loop` | G |
+| `triple_phase_product` | `:conventional` | G |
+| `zeeman_interband_berry_curvature` | `:conventional` | Z |
+| `zeeman_interband_quantum_metric` | `:conventional` | Z |
+
+Only the listed task vocabulary is accepted; generic `spectrum`, `spin_response`,
+or unregistered methods are rejected rather than inferred from their names.
+In particular, Projector linear transport and linear optical response use G,
+while Projector shift current and quantum Hermitian connection use P.
+
+H and position reconstruct `internal_connection`, `gauge_correction`, and
+`berry_connection` at runtime. These are `MatrixElementKind` capabilities, not
+persisted `RealSpaceOperatorKind` values. Geometry-only G therefore needs neither
+uIu/uHu nor spin-family files nor an operator target contract.
+
+`authoritative_hamiltonian` is a semantic source closure, not a filename or an
+optional label. It binds the selected native or symmetrized backend, authority
+digest, and complete input SHA-256 map. MMN/CHK/EIG retain their explicit source
+roles; a symmetrized authority cannot silently fall back to EIG. Hamiltonian and
+all Hamiltonian-weighted operators consume the same authority. See the
+[storage contract](STORAGE_SCHEMAS.md#task-derived-packed-operator-selection).
+
+Source closure is resolved before native/operator source generation. Only selected
+sources are required, read, generated, and bound into source identity. Unselected
+files do not become requirements or gain qualification merely by existing.
+OAM uses MMN plus the authority for the weighted connection, uIu for the full
+`derivative_overlap_tensor`, and the formal uHu transform/axial contraction for
+`hamiltonian_weighted_axial_derivative_overlap`; all five share the final Wannier
+gauge and target-contract digest. OAM alone never generates the spin family or
+unweighted axial/symmetric derivative operators.
+
+Runtime may explicitly call the shared resolver with
+`orbital_input_semantics=:defined_finite_model` to reconstruct OAM from H/position
+within that declared finite model. This is a Runtime demand specialization; the
+export default remains the five-operator OAM closure. Such reconstruction does not
+qualify a finite-model substitute as a five-operator OAM export or establish the
+missing physical source/target evidence.
+
+Runtime uses the same Core requirements through `operator_demand_plan()`. Its
+required operators and Cartesian components must be subsets of the bundle's
+validated inventory and stored components. An OAM bundle can serve H/position-only
+tasks but cannot serve spin-current tasks. Missing operators/components are hard
+errors. `construction_policy=:standard` does not relax source, gauge, target,
+digest, shape, or finiteness checks. Engineering, Numerical, Physics, and Production
+qualification remain separate.
+
+### Neighbor-order reconstruction boundary
+
+Streamed uIu/uHu neighbor indices identify source-file records; the finite-difference
+stencil uses an internal neighbor order. `overlap_order[internal,kpoint]` maps to
+the source index, so each source index must be mapped back to the internal index
+before selecting neighbor states, displacement vectors and weights. The corrected
+constructors validate a per-k bijection and map both indices; invalid maps fail
+with `OPERATOR_NEIGHBOR_ORDER_MISMATCH`. The former
+assembly defect omitted that inverse mapping in the direct derivative-overlap and
+Hamiltonian-weighted tensor paths.
+
+Previously derived full derivative-overlap tensors, their axial/symmetric
+contractions, and Hamiltonian-weighted axial derivative overlaps from the affected
+paths require reconstruction with a corrected, validated assembler before reuse
+as corrected results. This includes affected task-derived and full bundles. Rebuild
+the dependent bundle metadata, qualification and response outputs; do not relabel
+an old payload. Raw uIu/uHu records and other raw inputs are not invalidated by
+this assembly defect and must not be reordered to compensate for it. Their own
+source/gauge/authority checks still apply. See the
+[rebuild boundary](WANNIERIZATION_CONFIG_MIGRATION.md#neighbor-order-derived-operator-rebuild).
+Corrected profile construction records an additive neighbor-order receipt;
+legacy absence remains readable as `LEGACY_UNVERIFIED`, with no automatic upgrade.
+The exact raw-bundle constructor marker alone is not a qualified receipt.
+
+The mapping-only diagnostic does not close all OAM differences: real-material
+same-matrix kernel parity, position/curvature construction, off-grid interpolation,
+subspace convergence and finite-window effects remain open. It does not establish
+a corrected production bundle or material convergence.
+
+### Fixed full-profile example
 
 For example, the final export policy and its formal inputs are selected directly
 on the existing configuration object:
@@ -1184,7 +1478,7 @@ W.SymmetryAdaptedWannierizationConfig(
 )
 ```
 
-The first two profiles need only the sources required by their exact inventory;
+The default `:hamiltonian_position` profile retains its minimal source requirements;
 the `:full` inputs above are all mandatory and source-hash checked.
 `spn_provenance_file` and both spin-family tolerances are export-qualification
 settings, so changing them does not change the completed solver restart digest.
@@ -1192,13 +1486,9 @@ The covariance and repeat-projection idempotence tolerances are positive finite
 hard thresholds; exceeding either is a numerical qualification failure, not a
 license to relabel the projected data as production-qualified.
 
-The removed `:spin` name has no compatibility alias. Schema-5.x non-spin files
-remain diagnostic readback inputs only. Schema-6.0 spin/full files remain
-readable as `LEGACY_NOT_RECORDED`. Schema-6.1 spin/full files with a nonidentity
-band map are `LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED`; neither legacy class is
-spin-family production eligible. Schema-6.2 full files additionally remain
-diagnostic as `LEGACY_GALERKIN_RISK_CONTRACT_NOT_RECORDED`. A historical file
-is never promoted to formal schema-1.0 status. An export failure leaves the completed solver checkpoint intact and
+The removed `:spin` name has no compatibility alias. Schema-5.x and schema-6.x
+operator bundles require external migration and are rejected by the public 1.1
+reader. A historical file is never promoted by relabelling. An export failure leaves the completed solver checkpoint intact and
 does not publish a partial final HDF5 file.
 
 Ordinary, native-Hamiltonian SAWF, and symmetrized-Hamiltonian SAWF routes share
@@ -1207,7 +1497,7 @@ symmetrized route is bound to the Reynolds-projected Hamiltonian and gauge
 artifact digest; TB, uHu/sHu, and every Hamiltonian-weighted operator consume
 that same authority and may not fall back to EIG by label.
 
-Packed HDF5 1.0 records source, band-frame, physical-metric/replay,
+Packed HDF5 1.1 records source, band-frame, physical-metric/replay,
 projection, covariance,
 idempotence, threshold, and digest evidence under
 `/qualification/operators/<operator>`. The spin-family aggregate is stored
@@ -1216,7 +1506,7 @@ requires source and same-gauge qualification but records symmetry as
 `NOT_APPLICABLE`. Native and symmetrized SAWF apply the same Wannier symmetry
 plan to the emitted spin family. Structural source/gauge/topology/support
 failures publish no final HDF5; a finite covariance/idempotence failure may
-publish only a `DIAGNOSTIC_ONLY` schema-1.0 bundle.
+publish only a `STANDARD` schema-1.1 bundle.
 
 All four emitted spin-family operators use the same pair-dependent
 minimum-distance Wigner-Seitz storage as the final TB. For each orbital pair
@@ -1243,12 +1533,12 @@ formatted and Fortran sequential-unformatted form. Formal generators are
 uses `generate_vasp_paw_spn`. uHu/sHu use a finite-band Galerkin Hamiltonian.
 `WannierUIUGenerationConfig` and
 `WannierHamiltonianOperatorGenerationConfig` expose
-`construction_policy=:diagnostic` by default. The policy is propagated into
+`construction_policy=:standard` by default. The policy is propagated into
 the band-frame, gauge, and Hamiltonian-authority checks, including the
-full-profile assembler. Diagnostic construction can retain an
-identity-consistent `DIAGNOSTIC_ONLY` gauge and its failed quality evidence;
-operator provenance and the assembled bundle retain `DIAGNOSTIC_ONLY`,
-`manual_review_required=true`, and `production_eligible=false`. Explicit
+full-profile assembler. Standard construction can retain an
+identity-consistent `STANDARD` gauge and its failed quality evidence;
+operator provenance and the assembled bundle retain `STANDARD`,
+`quality_review_recommended=true`, and `production_eligible=false`. Explicit
 `:strict` retains the historical PASS-only gate. Missing or malformed
 data, non-finite matrices, and source, frame, digest, topology, or dimensional
 inconsistency remain blocking under both policies.
@@ -1366,12 +1656,36 @@ public templates document the input contracts without shipping a material case. 
 history, accepted frames, checkpoint identity, TB export, `wsvec`/replica
 contract, and fresh-process readback are independent validation boundaries.
 Solver `COMPLETED` status alone does not override any recorded `HOLD`,
-`DIAGNOSTIC_ONLY`, or `NOT_RUN` qualification.
+`STANDARD`, or `NOT_RUN` qualification.
 
-Packed diagnostic exports now seal construction policy, complete original gate
+Packed standard exports now seal construction policy, complete original gate
 records and manual-review/quality flags in the versioned
 `wanniernlqg.construction-evidence/1.0` sub-contract. Standalone public Packed
 readers verify the sub-contract and its scientific-content binding, including
 agreement with duplicated diagnostics and root flags. Historical unsealed
 metadata remains historical evidence; re-export creates a separate sealed file
 without upgrading model qualification. See [storage contracts](STORAGE_SCHEMAS.md).
+
+
+### Ordinary diagnostic completion and human-readable output
+
+Ordinary preparation measures unitarity of its supplied identity bookkeeping sewing
+matrices. This value is scoped as `IDENTITY_BOOKKEEPING_ONLY`; it is not evidence
+for nontrivial physical band sewing or space-group covariance. The machine record
+retains `NOT_RUN` and the missing physical-overlap reason for that separate question.
+
+Both ordinary workflow export and accepted-checkpoint-only export recompute accepted
+frame isometry and projector idempotence without changing the frame. These measurements
+are stored in existing diagnostic metadata and are not new qualification gates.
+The internal `OperatorExport._ordinary_accepted_state_report(result, config)` also
+supports report-only composition; it returns string metadata suitable for merging into
+`input_summary`. `export_wannierization_tb` already includes it in its returned export
+summary and Packed-HDF5 diagnostics. Final report rendering recomputes these measurements
+from the accepted frame, so a legacy checkpoint does not require a new solver run.
+
+Ordinary `.out` omits unavailable solver-covariance, little-group and preflight group-law
+items, and omits individual final-TB metrics without finite measured values. Overall
+`INCOMPLETE` and its reason remain visible. All original typed qualification metrics,
+reasons and schema remain in JSON/HDF5. Actual final-TB measurements use the independent
+post-hoc qualification context and remain displayed, even when they fail. Symmetry-adapted
+rendering and both routes' solver and exported scientific arrays are unchanged.

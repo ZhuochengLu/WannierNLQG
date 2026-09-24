@@ -166,7 +166,13 @@ function _star_payload_sha256(
         payload.star_representatives,
         payload.extra_bands_per_star,
         payload.rotations,
-        reduce(hcat, (point.energies_ev for point in payload.native.kpoints)),
+        reduce(
+            hcat,
+            (
+                native_point_metadata(payload.native, k).energies_ev for
+                k in eachindex(payload.native.kpoints)
+            ),
+        ),
     )
         write(buffer, _star_array_sha256(values), '\n')
     end
@@ -700,16 +706,20 @@ function _write_star_covariant_paw_gauge_hdf5(
             throw(ArgumentError("BAND_FRAME_CONTRACT_DIGEST_MISMATCH"))
     end
     logical_digest = _star_payload_sha256(payload; schema_version, contract_version)
+    # The standalone star-gauge wire contract is intentionally unchanged.  Map the
+    # renamed public Standard route onto its historical non-production status and
+    # field names at this storage boundary.
+    wire_status = status == :STANDARD ? :DIAGNOSTIC_ONLY : status
     return atomic_hdf5_write(filename) do temporary
         HDF5.h5open(temporary, "w") do handle
             attributes = HDF5.attributes(handle)
             attributes["schema"] = STAR_COVARIANT_PAW_GAUGE_SCHEMA
             attributes["schema_version"] = schema_version
-            attributes["status"] = String(status)
+            attributes["status"] = String(wire_status)
             attributes["root_cause"] = String(root_cause)
-            attributes["production_eligible"] = status == :PASS
-            attributes["diagnostic_only"] = status == :DIAGNOSTIC_ONLY
-            attributes["scoped_production_eligible"] = status == :PASS
+            attributes["production_eligible"] = wire_status == :PASS
+            attributes["diagnostic_only"] = wire_status == :DIAGNOSTIC_ONLY
+            attributes["scoped_production_eligible"] = wire_status == :PASS
             attributes["global_production_eligible"] = false
             attributes["wavefunction_gauge_backend"] = "star_covariant_paw"
             attributes["sewing_backend"] = "augmentation_aware_paw_q0"
@@ -952,6 +962,94 @@ function _write_star_covariant_paw_gauge_hdf5(
     end
 end
 
+"""Return the private QE contract-1.11 derived-storage selection."""
+_qe_disk_bounded() = get(task_local_storage(), :qe_disk_bounded_gauge, false)
+
+"""One immutable source element at a time, with a guard even on cache hits."""
+struct _QEGuardedProvider{T, V, F} <: AbstractVector{T}
+    values::V
+    guard::F
+end
+"""Expose the underlying provider shape."""
+Base.size(values::_QEGuardedProvider) = size(values.values)
+"""Use linear indexing for guarded source elements."""
+Base.IndexStyle(::Type{<:_QEGuardedProvider}) = IndexLinear()
+"""Validate the source before every cached or uncached access."""
+function Base.getindex(values::_QEGuardedProvider, index::Int)
+    values.guard(index)
+    return values.values[index]
+end
+
+"""Detect file replacement during lazy use; existing digest checks remain authoritative."""
+function _qe_stat_guard(path)
+    filename = abspath(path)
+    fingerprint = stat(filename)
+    return _ -> begin
+        current = stat(filename)
+        (current.inode, current.device, current.size, current.mtime) ==
+        (fingerprint.inode, fingerprint.device, fingerprint.size, fingerprint.mtime) ||
+            throw(ArgumentError("DISK_BOUNDED_SOURCE_CHANGED: $(filename)"))
+        nothing
+    end
+end
+
+"""Propagate source validity through derived caches, including repeated indices."""
+_qe_provider_guard(values) = values isa _QEGuardedProvider ? values.guard : (_ -> nothing)
+"""Attach one immutable-input guard to a bounded provider."""
+function _qe_guarded(values::AbstractVector{T}, guard) where {T}
+    return _QEGuardedProvider{T, typeof(values), typeof(guard)}(values, guard)
+end
+
+"""Read a sealed representative without retaining or copying the full set."""
+struct _QERepresentativeMap{V} <: AbstractDict{Int, PlaneWaveKPoint}
+    indices::Dict{Int, Int}
+    values::V
+end
+"""Return the sealed representative count."""
+Base.length(values::_QERepresentativeMap) = length(values.indices)
+"""Expose representative indices without loading coefficients."""
+Base.keys(values::_QERepresentativeMap) = keys(values.indices)
+"""Check a representative index without I/O."""
+Base.haskey(values::_QERepresentativeMap, key) = haskey(values.indices, key)
+"""Load one representative through the guarded provider."""
+Base.getindex(values::_QERepresentativeMap, key) = values.values[values.indices[key]]
+"""Iterate representatives without materializing the map."""
+function Base.iterate(values::_QERepresentativeMap, state...)
+    item = iterate(values.indices, state...)
+    item === nothing && return nothing
+    pair, next = item
+    return (first(pair) => values[first(pair)]), next
+end
+
+"""Resolve the existing companion contract, rather than invent a wire marker."""
+function _qe_bounded_contract(filename)
+    try
+        return HDF5.h5open(filename, "r") do file
+            attrs = HDF5.attributes(file)
+            haskey(attrs, "source_code") || return false
+            String(read(attrs["source_code"])) == "qe" || return false
+            _star_gauge_contract_version(
+                String(read(attrs["schema_version"])),
+                attrs,
+                read_string_dictionary(file["source_metadata"]),
+                read_string_dictionary(file["input_sha256"]),
+            ) == "1.11"
+        end
+    catch exception
+        exception isa InterruptException && rethrow()
+        # This is only a route probe. The established reader owns every error.
+        return false
+    end
+end
+
+"""Enable bounded derived providers without changing any public configuration."""
+function _read_star_covariant_paw_gauge_hdf5(filename::AbstractString; kwargs...)
+    bounded = _qe_bounded_contract(filename)
+    return task_local_storage(:qe_disk_bounded_gauge, bounded) do
+        _read_star_covariant_paw_gauge_hdf5_impl(filename; kwargs...)
+    end
+end
+
 """
 Read the public 1.0 full-contract capsule or a historical 1.0--1.11 capsule.
 
@@ -964,15 +1062,15 @@ contracts regenerate nonrepresentative wavefunctions by stored magnetic
 transport. Physical replay is checked against the sealed representative frames;
 the logical digest uses the producer's sealed bytes after that check passes.
 """
-function _read_star_covariant_paw_gauge_hdf5(
+function _read_star_covariant_paw_gauge_hdf5_impl(
     filename::AbstractString;
     require_pass::Bool = true,
     construction_policy::Union{Nothing, Symbol} = nothing,
     source::Union{Nothing, AbstractWavefunctionSource} = nothing,
 )
     construction_policy === nothing ||
-        construction_policy in (:strict, :diagnostic) ||
-        throw(ArgumentError("construction_policy must be :strict or :diagnostic"))
+        construction_policy in (:strict, :standard) ||
+        throw(ArgumentError("construction_policy must be :strict or :standard"))
     effective_require_pass =
         construction_policy === nothing ? require_pass : construction_policy == :strict
     HDF5.enable_complex_support()
@@ -984,7 +1082,7 @@ function _read_star_covariant_paw_gauge_hdf5(
         schema_version in STAR_COVARIANT_PAW_GAUGE_SUPPORTED_SCHEMA_VERSIONS ||
             throw(ArgumentError("unsupported wavefunction-gauge HDF5 schema version"))
         status = Symbol(String(read(attributes["status"])))
-        construction_policy == :diagnostic &&
+        construction_policy == :standard &&
             !(status in (:PASS, :DIAGNOSTIC_ONLY)) &&
             throw(
                 ArgumentError(
@@ -1159,17 +1257,50 @@ function _read_star_covariant_paw_gauge_hdf5(
         recorded_keys == canonical_band_operation_key.(operations) ||
             throw(ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: operation keys differ"))
 
-        representative_points = Dict{Int, PlaneWaveKPoint}()
-        for name in keys(handle["representative_frames"])
-            group = handle["representative_frames"][name]
-            index = Int(read(HDF5.attributes(group)["full_kpoint_index"]))
-            representative_points[index] = PlaneWaveKPoint(
-                Float64.(read(group["k_fractional"])),
-                Int.(read(group["g_vectors"])),
-                ComplexF64.(read(group["coefficients"])),
-                Float64.(read(group["energies_ev"]));
-                normalize_coefficients = false,
+        representative_points = if _qe_disk_bounded()
+            names = String.(collect(keys(handle["representative_frames"])))
+            indices = Dict(
+                Int(
+                    read(
+                        HDF5.attributes(handle["representative_frames"][name])["full_kpoint_index"],
+                    ),
+                ) => i for (i, name) in enumerate(names)
             )
+            length(indices) == length(names) ||
+                throw(ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: duplicate representative"))
+            path = abspath(filename)
+            guard = _qe_stat_guard(path)
+            values = preparation_source_vector(PlaneWaveKPoint, length(names)) do i
+                HDF5.h5open(path, "r") do file
+                    group = file["representative_frames"][names[i]]
+                    PlaneWaveKPoint(
+                        Float64.(read(group["k_fractional"])),
+                        Int.(read(group["g_vectors"])),
+                        ComplexF64.(read(group["coefficients"])),
+                        Float64.(read(group["energies_ev"]));
+                        normalize_coefficients = false,
+                    )
+                end
+            end
+            _QERepresentativeMap(
+                indices,
+                _QEGuardedProvider{PlaneWaveKPoint, typeof(values), typeof(guard)}(values, guard),
+            )
+        else
+            representative_points =
+                preparation_dictionary(Int, PlaneWaveKPoint, "sealed-representatives")
+            for name in keys(handle["representative_frames"])
+                group = handle["representative_frames"][name]
+                index = Int(read(HDF5.attributes(group)["full_kpoint_index"]))
+                representative_points[index] = PlaneWaveKPoint(
+                    Float64.(read(group["k_fractional"])),
+                    Int.(read(group["g_vectors"])),
+                    ComplexF64.(read(group["coefficients"])),
+                    Float64.(read(group["energies_ev"]));
+                    normalize_coefficients = false,
+                )
+            end
+            representative_points
         end
         sort!(collect(keys(representative_points))) == star_representatives ||
             throw(ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: representative inventory differs"))
@@ -1250,7 +1381,7 @@ function _read_star_covariant_paw_gauge_hdf5(
             end
             replay.points
         else
-            legacy_points = Vector{PlaneWaveKPoint}(undef, size(kpoints, 1))
+            legacy_points = preparation_vector(PlaneWaveKPoint, "legacy-readback", size(kpoints, 1))
             for kpoint in axes(kpoints, 1)
                 representative = representative_for_kpoint[kpoint]
                 representative_point = representative_points[representative]
@@ -1288,6 +1419,11 @@ function _read_star_covariant_paw_gauge_hdf5(
                 )
             end
             legacy_points
+        end
+        if _qe_disk_bounded()
+            gauge_guard = _qe_stat_guard(filename)
+            source_guard = _qe_provider_guard(points)
+            points = _qe_guarded(points, k -> (gauge_guard(k); source_guard(k)))
         end
         native = NativeWavefunctionData(
             Symbol(String(read(attributes["source_code"]))),
@@ -1713,7 +1849,7 @@ function _read_star_covariant_paw_gauge_hdf5(
         end
         return (
             payload = payload,
-            status = status,
+            status = status == :DIAGNOSTIC_ONLY ? :STANDARD : status,
             root_cause = Symbol(String(read(attributes["root_cause"]))),
             diagnostics = String.(read(handle["diagnostics"])),
             schema_version = schema_version,

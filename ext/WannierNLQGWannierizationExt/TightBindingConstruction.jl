@@ -153,6 +153,7 @@ function _inverse_pair_wigner_seitz_fourier(
     search_size::Int,
     audit::Union{Nothing, AbstractDict} = nothing,
     label::AbstractString = "SAWF operator",
+    construction_policy::Symbol = :strict,
 ) where {N}
     r_vectors = _pair_wigner_seitz_support(
         chk;
@@ -174,7 +175,8 @@ function _inverse_pair_wigner_seitz_fourier(
         label = "SAWF operator",
     )
     roundtrip_error = unit_degeneracy_roundtrip_error(values, output, chk, plan)
-    roundtrip_error <= 1.0e-10 || error(
+    isfinite(roundtrip_error) || error("FATAL_INTEGRITY: nonfinite Wigner-Seitz roundtrip")
+    (construction_policy == :standard || roundtrip_error <= 1.0e-10) || error(
         "center-aware Wigner-Seitz $(label) transform round-trip error " *
         "$(roundtrip_error) exceeds 1.0e-10",
     )
@@ -207,17 +209,13 @@ function build_wannier_tight_binding_model(
     wigner_seitz_tolerance::Float64 = 1.0e-5,
     wigner_seitz_search_size::Int = 3,
     construction_diagnostics::Union{Nothing, AbstractDict} = nothing,
-    allow_legacy_diagnostic_export::Bool = false,
+    construction_policy::Symbol = :strict,
 )
     result.wannier_chk === nothing &&
         throw(ArgumentError("tight-binding construction requires a result with WannierCHK data"))
     result.status != IN_PROGRESS_CHECKPOINT ||
         throw(ArgumentError("tight-binding construction rejects an in-progress checkpoint"))
-    legacy_diagnostic_read_only =
-        get(result.input_summary, "restart_continuation_semantics", "") ==
-        "LEGACY_DIAGNOSTIC_READ_ONLY"
     result.restart_state !== nothing ||
-        (allow_legacy_diagnostic_export && legacy_diagnostic_read_only) ||
         throw(ArgumentError("tight-binding construction requires a finite accepted restart state"))
     real_space_replica_policy in (:mp_grid, :minimum_distance) ||
         throw(ArgumentError("real_space_replica_policy must be :mp_grid or :minimum_distance"))
@@ -268,6 +266,7 @@ function build_wannier_tight_binding_model(
             wigner_seitz_tolerance = wigner_seitz_tolerance,
             search_size = wigner_seitz_search_size,
             audit = transform_audit,
+            construction_policy,
             label,
         )
     end

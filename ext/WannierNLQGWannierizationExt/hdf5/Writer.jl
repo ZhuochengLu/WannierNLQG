@@ -318,7 +318,7 @@ function write_wannierization_checkpoint_hdf5(
     endswith(output_path, ".sawf.h5") && throw(
         ArgumentError(
             "new checkpoint output rejects the legacy .sawf.h5 suffix; " *
-            "use .wannierization.h5 (legacy files remain readable through restart_hdf5)",
+            "use .wannierization.h5 (legacy files require external migration)",
         ),
     )
     return atomic_hdf5_write(output_path) do temporary
@@ -340,13 +340,13 @@ function write_wannierization_checkpoint_hdf5(
             attributes["production_eligible"] = production_eligible
             attributes["scoped_production_eligible"] = production_eligible
             attributes["global_production_eligible"] = false
-            attributes["diagnostic_only"] = !production_eligible
+            attributes["quality_review_recommended"] = !production_eligible
             attributes["stopping_reason"] = _checkpoint_stopping_reason(result)
             attributes["iterations_completed"] = iterations_completed
             attributes["convergence_metric_name"] = "center_spread_window_std_max"
             attributes["convergence_metric"] = convergence_metric
             attributes["convergence_tolerance"] = convergence_tolerance
-            attributes["checkpoint_sha256"] = _wannierization_checkpoint_sha256_v1_0(result)
+            attributes["checkpoint_sha256"] = _wannierization_checkpoint_sha256_v2_29(result)
             attributes["algorithm_profile"] =
                 get(result.input_summary, "algorithm_profile", "legacy")
             attributes["effective_algorithm_profile"] =
@@ -442,7 +442,6 @@ function write_wannierization_checkpoint_hdf5(
             attributes["disentanglement_limit_policy"] =
                 result.input_summary["disentanglement_limit_policy"]
             attributes["z_seal_class"] = result.input_summary["z_seal_class"]
-            attributes["qualified_z_seal"] = result.input_summary["qualified_z_seal"] == "true"
             attributes["constraint_operation_scope"] =
                 result.input_summary["constraint_operation_scope"]
             attributes["constraint_operation_parent_representation_sha256"] =
@@ -593,6 +592,12 @@ function write_wannierization_checkpoint_hdf5(
                 "z_u_stage_semantics",
                 "disentanglement_localization_decoupled_v1",
             )
+            # Mirror the typed eligibility block as root attributes so the
+            # derived qualification is observable without opening the summary
+            # group; the Reader cross-checks these against input_summary.
+            for key in WANNIERIZATION_ELIGIBILITY_SUMMARY_KEYS
+                attributes[key] = checkpoint_summary[key]
+            end
             write_string_dictionary(summary, checkpoint_summary)
             _write_initialization_report(
                 handle,

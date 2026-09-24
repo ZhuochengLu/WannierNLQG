@@ -1,7 +1,7 @@
 # Documentation
 
 This directory contains the public, English-language documentation for
-WannierNLQG 1.0.1. The version 1.0.0 documents remain the public API baseline.
+WannierNLQG 1.1.0. The version 1.0.0 documents remain the public API baseline.
 
 ## Start here
 
@@ -36,3 +36,5 @@ WannierNLQG 1.0.1. The version 1.0.0 documents remain the public API baseline.
 Material-specific campaigns, private diagnostics, and release evidence are not
 part of the public source tree. Public package tests and examples use
 repository-owned synthetic fixtures.
+
+- [Second-harmonic generation](SECOND_HARMONIC_GENERATION.md): parameters, seven terms, output units, and zero-temperature policy.

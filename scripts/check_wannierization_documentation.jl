@@ -58,8 +58,8 @@ for contract in (
     "SolverCheckpoint",
     "OperatorExport",
     "WorkflowOrchestration",
-    "WannierNLQG.wannierization_checkpoint/1.0",
-    "Packed HDF5 1.0",
+    "WannierNLQG.wannierization_checkpoint/1.1",
+    "Packed HDF5 1.1",
 )
     documentation_check(occursin(contract, text), "guide omits $(contract)")
 end
@@ -91,7 +91,7 @@ for (group, group_type) in config_groups, field in fieldnames(group_type)
         "migration table omits $(field) -> $(group).$(field)",
     )
 end
-documentation_check(leaf_count == 73, "grouped configuration must contain 73 leaves")
+documentation_check(leaf_count == 75, "grouped configuration must contain 75 leaves")
 
 documentation_check(
     Set(names(WannierNLQG.Wannierization; all = false, imported = false)) ==

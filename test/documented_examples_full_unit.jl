@@ -10,7 +10,7 @@ end
         append!(files, joinpath.(root, filter(name -> endswith(name, ".jl"), names)))
     end
     sort!(files)
-    @test length(files) == 38
+    @test length(files) == 52
     mktempdir() do directory
         for (index, path) in enumerate(files)
             @testset "$(basename(path))" begin
@@ -26,7 +26,7 @@ end
                 else
                     Base.invokelatest(
                         getfield(example_module, :build_config);
-                        k_mesh = (2, 2),
+                        k_mesh = documented_example_smoke_mesh(path),
                         output_root,
                         progress_enabled = false,
                     )
@@ -45,7 +45,7 @@ end
     mktempdir() do directory
         config = Base.invokelatest(
             getfield(example_module, :build_config);
-            k_mesh = (2, 2),
+            k_mesh = documented_example_smoke_mesh(path),
             output_root = directory,
             progress_enabled = false,
         )

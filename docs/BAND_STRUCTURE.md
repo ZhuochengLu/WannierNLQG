@@ -63,14 +63,14 @@ The two result files are written under `output_root/<id>/`:
 The task-local `metadata.txt` records the input/TB summary, hashes, lattice and Fourier
 conventions, maximum Hermiticity residual, and replica provenance. A text TB is
 marked `INPUT_QUALIFICATION_NOT_PROVIDED`; an HDF5 operator bundle retains its
-manifest production/diagnostic state. Passing numerical checks never promotes
+manifest availability and production-qualification state. Passing numerical checks never promotes
 physical or production qualification.
 
 ### Replica policy
 
 - `auto`: text TB uses its input R support unless explicit `mp_grid` or
-  `wsvec_file` requests minimum distance; current schema-1.0 Packed HDF5 (and supported historical 6.x) inherits the manifest
-  policy, while legacy Packed input remains input-only.
+  `wsvec_file` requests minimum distance; current schema-1.1 Packed HDF5 inherits
+  the manifest policy, while historical schemas require external migration.
 - `input`: preserves input R support and rejects an already-materialized HDF5
   minimum-distance bundle because that transformation cannot be reversed.
 - `minimum_distance`: text or input-support HDF5 requires an explicit

@@ -6,6 +6,7 @@ using Printf
 using SHA
 using ..Core
 using ..IO
+import ..IO: spectral_response_source_digest
 using ..MatrixElements
 using ..Responses
 using ..SymmetryFoundation: response_symmetry_group_report
@@ -17,6 +18,7 @@ import ..MatrixElements:
     require_matrix_element_pairs
 
 include("Environment.jl")
+include("QualificationTypes.jl")
 include("Config.jl")
 include("Planning/TaskRegistry.jl")
 include("Validation.jl")
@@ -31,6 +33,7 @@ include("ResponseSetup.jl")
 include("ReplicaPreparation.jl")
 include("BundleKLoop.jl")
 include("OperatorBundleSetup.jl")
+include("ResponseQualification.jl")
 include("Execution/KPathDriver.jl")
 include("Execution/BandStructureKernel.jl")
 include("BandStructure.jl")
@@ -66,6 +69,7 @@ export ACTIVE_PROGRESS,
     PhotonDragTransitionScreenWorkspace,
     ProgressContext,
     ResponseComponentPlan,
+    ResponseQualificationResult,
     ResponseSymmetryExecutionPlan,
     ResponseTensorSymmetryPlan,
     RunContext,
@@ -82,6 +86,15 @@ export ACTIVE_PROGRESS,
     ExecutionOptions,
     OutputOptions,
     OpticalParameters,
+    SeparateRelaxation,
+    FermiSurfaceBroadening,
+    LinearTransportParameters,
+    LinearOpticalResponseParameters,
+    OrbitalMagnetizationParameters,
+    LinearResponseNumerics,
+    OrbitalNumerics,
+    SHGParameters,
+    SHGNumerics,
     FiniteQOpticalParameters,
     GeometryParameters,
     BandParameters,

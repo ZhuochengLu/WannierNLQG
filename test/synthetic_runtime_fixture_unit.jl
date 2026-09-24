@@ -38,7 +38,7 @@ end
     manifest = WannierNLQG.IO.read_real_space_operator_bundle_manifest(
         SyntheticRuntimeFixture.OPERATOR_BUNDLE_FILE,
     )
-    @test manifest.schema_version == "1.0"
+    @test manifest.schema_version == "1.1"
     @test manifest.profile == :full
     @test manifest.num_orbitals == 4
     @test manifest.degeneracies == [2, 4]

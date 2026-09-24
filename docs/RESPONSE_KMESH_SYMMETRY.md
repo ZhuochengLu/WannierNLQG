@@ -39,11 +39,14 @@ K-slice charge/spin shift/injection task. Finite-q tasks remain out of scope.
   It introduces no additional runtime tag and does not alter mesh reduction,
   tensor projection, normalization, or any response formula.
 
-- `strict` accepts only a sealed complete-contract artifact (current wire 1.0; historical 1.1) with
-  `production_eligible=true` and all six formal gates at `PASS`.
-- `diagnostic` may consume the historical schema-1.0 layout, an unsealed complete-contract artifact,
-  or a failed physical gate. Its outputs are always `DIAGNOSTIC_ONLY` unless the
-  same artifact would also satisfy strict policy.
+- `strict` retains hard structural, schema, summary, model/hash, exact group,
+  mesh-action, and explicit contract-conflict checks. A readable artifact that
+  lacks a seal, production eligibility, covariance qualification, or another
+  supplementary production proof now continues as `DIAGNOSTIC_ONLY` rather
+  than stopping the response calculation.
+- `diagnostic` retains the same integrity and conflict checks and may also
+  consume the historical schema-1.0 layout. The configuration value remains
+  for compatibility; neither policy disables confirmed conflicts.
 - The historical schema-1.0 field contract remains readable but can never receive
   production eligibility. A manually written integrand `PASS` in a historical 1.0 artifact or
   in a current writer call is only an external claim.

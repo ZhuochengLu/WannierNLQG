@@ -397,7 +397,11 @@ function progress_numerics_lines(ctx::ProgressContext)
         "  Energy grid",
         progress_kv_line("photon_energies range", photon_energy_range),
         progress_kv_line("photon_energies points", length(ctx.photon_energies)),
-        progress_kv_line("fermi_energy", "$(cfg.fermi_energy) eV"),
+        progress_kv_line(
+            "fermi energies",
+            isempty(cfg.fermi_energies) ? "$(cfg.fermi_energy) eV" :
+            "$(first(cfg.fermi_energies)) -> $(last(cfg.fermi_energies)) eV ($(length(cfg.fermi_energies)) points)",
+        ),
         progress_kv_line("temperature", "$(cfg.temperature) K"),
         "",
         "  Smearing / screening",
@@ -898,6 +902,36 @@ function progress_response_symmetry!(summary::NamedTuple)
         progress_write_jsonl_event!(
             ctx,
             "response_symmetry_plan";
+            extra = [string(key) => getproperty(summary, key) for key in keys(summary)],
+        )
+    finally
+        Base.unlock(ctx.lock)
+    end
+    return nothing
+end
+
+"""Record the unified execution/production qualification before the numerical loop."""
+function progress_response_qualification!(qualification::ResponseQualificationResult)
+    ctx = ACTIVE_PROGRESS[]
+    ctx === nothing && return nothing
+    summary = response_qualification_summary(qualification)
+    Base.lock(ctx.lock)
+    try
+        progress_emit_text!(
+            ctx,
+            "[$(progress_hms(progress_elapsed(ctx)))] QUALIFY   " *
+            "execution=$(summary.execution_eligible) status=$(summary.qualification_status) " *
+            "production=$(summary.production_eligible)",
+        )
+        for reason in summary.reasons
+            progress_emit_text!(ctx, "  reason=$(reason)")
+        end
+        for contract in summary.unverified_contracts
+            progress_emit_text!(ctx, "  unverified=$(contract)")
+        end
+        progress_write_jsonl_event!(
+            ctx,
+            "response_qualification";
             extra = [string(key) => getproperty(summary, key) for key in keys(summary)],
         )
     finally
@@ -1740,6 +1774,7 @@ function progress_run_done!(
     response_symmetry_summaries = NamedTuple[],
     band_summary = NamedTuple(),
     replica_summary = NamedTuple(),
+    qualification_summary = NamedTuple(),
 )
     ctx = ACTIVE_PROGRESS[]
     ctx === nothing && return nothing
@@ -2077,6 +2112,29 @@ function progress_run_done!(
             )
             progress_emit_text!(ctx, "")
         end
+        if !isempty(keys(qualification_summary))
+            progress_emit_text!(ctx, "QUALIFICATION")
+            progress_emit_text!(
+                ctx,
+                "  execution_eligible=$(qualification_summary.execution_eligible)",
+            )
+            progress_emit_text!(
+                ctx,
+                "  qualification_status=$(qualification_summary.qualification_status)",
+            )
+            progress_emit_text!(
+                ctx,
+                "  production_eligible=$(qualification_summary.production_eligible)",
+            )
+            progress_emit_text!(
+                ctx,
+                "  quality_review_recommended=$(qualification_summary.quality_review_recommended)",
+            )
+            for reason in qualification_summary.reasons
+                progress_emit_text!(ctx, "  reason=$(reason)")
+            end
+            progress_emit_text!(ctx, "")
+        end
         progress_emit_text!(ctx, "DONE")
         progress_emit_text!(ctx, "  elapsed      : $(progress_hms(progress_elapsed(ctx)))")
         progress_write_jsonl_event!(
@@ -2094,6 +2152,7 @@ function progress_run_done!(
                 "response_symmetry_summaries" => response_symmetry_summaries,
                 "band_summary" => band_summary,
                 "replica_summary" => replica_summary,
+                "qualification_summary" => qualification_summary,
                 "system_summary" => ctx.system_summary,
             ],
         )
@@ -2113,7 +2172,24 @@ function progress_run_failed!(err)
     Base.lock(ctx.lock)
     try
         progress_emit_text!(ctx, "[$(progress_hms(progress_elapsed(ctx)))] FAILED   $(message)")
-        progress_write_jsonl_event!(ctx, "run_failed"; extra = ["error_message" => message])
+        extra = Pair{String, Any}["error_message" => message]
+        if err isa ResponseQualificationError
+            summary = response_qualification_summary(err.qualification)
+            append!(
+                extra,
+                Pair{String, Any}[
+                    "error_code" => err.code,
+                    "execution_eligible" => summary.execution_eligible,
+                    "qualification_status" => summary.qualification_status,
+                    "production_eligible" => summary.production_eligible,
+                    "qualification_reasons" => summary.reasons,
+                    "conflicting_contracts" => summary.conflicting_contracts,
+                    "unverified_contracts" => summary.unverified_contracts,
+                    "input_qualification" => summary.input_qualification,
+                ],
+            )
+        end
+        progress_write_jsonl_event!(ctx, "run_failed"; extra)
     finally
         Base.unlock(ctx.lock)
     end

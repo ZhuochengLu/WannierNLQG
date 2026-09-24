@@ -6,6 +6,8 @@ const RegistryRuntime = WannierNLQG.Runtime
 @testset "typed task registry characterization" begin
     expected = Set{Tuple{Symbol, Symbol, Symbol}}()
     push!(expected, (:band_structure, :conventional, :kpath))
+    push!(expected, (:second_harmonic_generation, :conventional, :integral))
+    push!(expected, (:second_harmonic_generation, :conventional, :kslice))
     for calculation in (:integral, :kslice)
         for method in (:conventional, :projector, :geometric_loop, :wilson_loop)
             push!(expected, (:shift_current, method, calculation))
@@ -42,6 +44,13 @@ const RegistryRuntime = WannierNLQG.Runtime
         push!(expected, (:shift_vector, method, :kslice))
     end
 
+    for quantity in (:linear_transport, :linear_optical_response, :orbital_magnetization),
+        method in (:conventional, :projector),
+        calculation in (:integral, :kslice)
+
+        push!(expected, (quantity, method, calculation))
+    end
+
     actual = Set(
         (
             RegistryRuntime.quantity_symbol(definition.quantity),
@@ -49,10 +58,18 @@ const RegistryRuntime = WannierNLQG.Runtime
             RegistryRuntime.calculation_symbol(definition.calculation),
         ) for definition in RegistryRuntime.TASK_DEFINITIONS
     )
-    @test length(RegistryRuntime.TASK_DEFINITIONS) == 38
+    @test length(RegistryRuntime.TASK_DEFINITIONS) == 52
     @test actual == expected
 
     expected_labels = Dict(
+        (:linear_transport, :integral) => "LT",
+        (:linear_transport, :kslice) => "LTK",
+        (:linear_optical_response, :integral) => "LOR",
+        (:linear_optical_response, :kslice) => "LORK",
+        (:orbital_magnetization, :integral) => "OM",
+        (:orbital_magnetization, :kslice) => "OMK",
+        (:second_harmonic_generation, :integral) => "SHG",
+        (:second_harmonic_generation, :kslice) => "SHGK",
         (:band_structure, :kpath) => "BAND",
         (:shift_current, :integral) => "SC",
         (:photon_drag_shift_current, :integral) => "PDSC",
@@ -88,11 +105,11 @@ const RegistryRuntime = WannierNLQG.Runtime
             RegistryRuntime.calculation_symbol(definition.calculation),
         ) => definition.label for definition in RegistryRuntime.QUANTITY_SHORT_LABELS
     )
-    @test length(RegistryRuntime.QUANTITY_SHORT_LABELS) == 28
+    @test length(RegistryRuntime.QUANTITY_SHORT_LABELS) == 36
     @test actual_labels == expected_labels
-    @test length(unique(values(actual_labels))) == 28
-    @test count(pair -> pair[1][2] == :integral, collect(actual_labels)) == 6
-    @test count(pair -> pair[1][2] == :kslice, collect(actual_labels)) == 21
+    @test length(unique(values(actual_labels))) == 36
+    @test count(pair -> pair[1][2] == :integral, collect(actual_labels)) == 10
+    @test count(pair -> pair[1][2] == :kslice, collect(actual_labels)) == 25
     @test count(pair -> pair[1][2] == :kpath, collect(actual_labels)) == 1
 
     band_definition = RegistryRuntime.task_definition(:band_structure, :conventional, :kpath)

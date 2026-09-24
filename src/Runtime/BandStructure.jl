@@ -26,6 +26,8 @@ function run_task_bundle_fused!(
         replica = loaded_sources.replica_summary
         model = loaded_sources.model
         manifest = loaded_sources.manifest
+        qualification = assess_response_qualification(manifest, ctx, cfg, plan.specs)
+        progress_response_qualification!(qualification)
         progress_system_summary!(model)
         progress_task_start!(spec)
         path_plan = make_kpath_plan(cfg, model.lattice)
@@ -140,7 +142,8 @@ function run_task_bundle_fused!(
                 )
                 entry_index === nothing ? nothing : manifest.entries[entry_index].component_sha256
             end,
-            manifest_diagnostic_only = manifest === nothing ? nothing : manifest.diagnostic_only,
+            manifest_quality_review_recommended = manifest === nothing ? nothing :
+                                                  manifest.quality_review_recommended,
             manifest_physics_qualification = manifest === nothing ? nothing :
                                              manifest.physics_qualification,
             manifest_tb_usability = manifest === nothing ? nothing : manifest.tb_usability,
@@ -159,6 +162,7 @@ function run_task_bundle_fused!(
             NamedTuple(),
             band_summary,
             runtime_replica_summary(replica),
+            qualification,
         )
     finally
         release_runtime_storage!(loaded_sources)

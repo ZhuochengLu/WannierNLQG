@@ -47,7 +47,11 @@ function operator_demand_plan(specs::Vector{NormalizedTaskSpec}, cfg::EffectiveT
         definition !== nothing &&
             definition.matrix_policy in (MATRIX_PROJECTOR_SHIFT_CURRENT, MATRIX_PROJECTOR_QHC)
     end
-    required = RealSpaceOperatorKind[REAL_SPACE_HAMILTONIAN, REAL_SPACE_POSITION]
+    resolution = resolve_operator_requirements(
+        [OperatorTask(quantity = spec.quantity, method = spec.method) for spec in specs];
+        orbital_input_semantics = cfg.orbital_input_semantics,
+    )
+    required = collect(resolution.required_operators)
     components = Dict{RealSpaceOperatorKind, Vector{NTuple{2, Int8}}}(
         REAL_SPACE_HAMILTONIAN => [(Int8(0), Int8(0))],
         REAL_SPACE_POSITION => _all_rank_one_components(),
@@ -56,38 +60,20 @@ function operator_demand_plan(specs::Vector{NormalizedTaskSpec}, cfg::EffectiveT
     # Cartesian home-cell centers. Packed/MPI inputs must therefore retain every
     # position component even for a one-component K-slice response request.
 
-    if has_capability(matrix_plan, SPIN)
-        push!(required, REAL_SPACE_SPIN)
+    if REAL_SPACE_SPIN in required
         components[REAL_SPACE_SPIN] = _required_rank_one_components(matrix_plan, SPIN, integral)
     end
-    needs_spin_velocity = any(
-        kind -> has_capability(matrix_plan, kind),
-        (
-            SPIN_TIMES_HAMILTONIAN,
-            SPIN_TIMES_POSITION,
-            SPIN_TIMES_HAMILTONIAN_POSITION,
-            SPIN_VELOCITY,
-        ),
+    for (operator, capability, rank) in (
+        (REAL_SPACE_SPIN_TIMES_HAMILTONIAN, SPIN_TIMES_HAMILTONIAN, 1),
+        (REAL_SPACE_SPIN_TIMES_POSITION, SPIN_TIMES_POSITION, 2),
+        (REAL_SPACE_SPIN_TIMES_HAMILTONIAN_POSITION, SPIN_TIMES_HAMILTONIAN_POSITION, 2),
     )
-    if needs_spin_velocity
-        for kind in (
-            REAL_SPACE_SPIN,
-            REAL_SPACE_SPIN_TIMES_HAMILTONIAN,
-            REAL_SPACE_SPIN_TIMES_POSITION,
-            REAL_SPACE_SPIN_TIMES_HAMILTONIAN_POSITION,
-        )
-            kind in required || push!(required, kind)
-        end
-        components[REAL_SPACE_SPIN] = _required_rank_one_components(matrix_plan, SPIN, integral)
-        components[REAL_SPACE_SPIN_TIMES_HAMILTONIAN] =
-            _required_rank_one_components(matrix_plan, SPIN_TIMES_HAMILTONIAN, integral)
-        components[REAL_SPACE_SPIN_TIMES_POSITION] =
-            _required_rank_two_components(matrix_plan, SPIN_TIMES_POSITION, integral)
-        components[REAL_SPACE_SPIN_TIMES_HAMILTONIAN_POSITION] =
-            _required_rank_two_components(matrix_plan, SPIN_TIMES_HAMILTONIAN_POSITION, integral)
+        operator in required || continue
+        components[operator] =
+            rank == 1 ? _required_rank_one_components(matrix_plan, capability, integral) :
+            _required_rank_two_components(matrix_plan, capability, integral)
     end
     if requires_full_projector_geometry
-        push!(required, REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR)
         components[REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR] = if integral || band_structure
             _all_rank_two_components()
         else
@@ -107,6 +93,17 @@ function operator_demand_plan(specs::Vector{NormalizedTaskSpec}, cfg::EffectiveT
             sort!(collect(selected))
         end
     end
+    for kind in (
+        REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION,
+        REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR,
+        REAL_SPACE_HAMILTONIAN_WEIGHTED_AXIAL_DERIVATIVE_OVERLAP,
+    )
+        kind in required || continue
+        haskey(components, kind) && continue
+        components[kind] =
+            kind == REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR ? _all_rank_two_components() :
+            _all_rank_one_components()
+    end
     for kind in required
         isempty(get(components, kind, NTuple{2, Int8}[])) && throw(
             ArgumentError(
@@ -121,12 +118,77 @@ function operator_demand_plan(specs::Vector{NormalizedTaskSpec}, cfg::EffectiveT
     )
 end
 
+"""
+Re-derive the operator dependency closure recorded by one task-derived manifest.
+
+The persisted identity, not the stored profile label, is authoritative: a fresh
+Runtime process re-resolves the recorded requested tasks through the shared Core
+requirement registry and rejects any bundle whose persisted inventory disagrees
+with that closure.  Fixed-profile bundles return nothing and keep the legacy
+complete-family gate.
+"""
+function _manifest_task_closure(manifest::OperatorBundleManifest)
+    manifest.operator_selection_mode == "tasks" || return nothing
+    tokens = manifest.requested_tasks
+    isempty(tokens) && throw(
+        ArgumentError(
+            "TASK_DERIVED_OPERATOR_SELECTION_INVALID: bundle declares a task-derived " *
+            "selection without requested tasks",
+        ),
+    )
+    resolution = validate_task_derived_operator_selection(
+        tokens,
+        manifest.inventory,
+        Symbol.(split(manifest.resolved_source_inventory, ','; keepempty = false)),
+        something(manifest.operator_selection_sha256, ""),
+        manifest.operator_requirement_registry_version,
+    )
+    manifest.resolved_operator_inventory ==
+    join(real_space_operator_name.(manifest.inventory), ",") || throw(
+        ArgumentError(
+            "TASK_DERIVED_OPERATOR_SELECTION_INVALID: resolved inventory disagrees with manifest",
+        ),
+    )
+    return resolution
+end
+
+# Require one loaded bundle to reconstruct the complete spin-current operator family.
+function _require_spin_current_bundle(manifest::OperatorBundleManifest)
+    inventory = canonical_operator_inventory(manifest.inventory)
+    family = (
+        REAL_SPACE_SPIN,
+        REAL_SPACE_SPIN_TIMES_HAMILTONIAN,
+        REAL_SPACE_SPIN_TIMES_POSITION,
+        REAL_SPACE_SPIN_TIMES_HAMILTONIAN_POSITION,
+    )
+    if manifest.operator_selection_mode == "tasks"
+        _manifest_task_closure(manifest)
+        all(kind -> kind in inventory, family) || throw(
+            ArgumentError(
+                "TASK_DERIVED_OPERATOR_SELECTION_INVALID: injection/shift spin current " *
+                "requires the complete spin-current family; persisted inventory is " *
+                "$(join(real_space_operator_name.(inventory), ", "))",
+            ),
+        )
+        return manifest
+    end
+    inventory == collect(OPERATOR_PROFILE_INVENTORIES[:full]) || throw(
+        ArgumentError(
+            "Injection/shift spin current requires a formal schema-6 full bundle. Current " *
+            "bundle inventory: $(join(real_space_operator_name.(inventory), ", ")). Regenerate " *
+            "with qualified SPN/uIu/uHu/sIu/sHu provenance.",
+        ),
+    )
+    return manifest
+end
+
 """Validate an operator and component dependency closure against one manifest."""
 function validate_operator_demand(manifest::OperatorBundleManifest, demand::OperatorDemandPlan)
+    _manifest_task_closure(manifest)
     if demand.requires_full_projector_geometry
-        manifest.schema_version in ("6.0", "6.1", "6.2", "6.3", "1.0") || throw(
+        manifest.schema_version == OPERATOR_BUNDLE_SCHEMA_VERSION || throw(
             ArgumentError(
-                "PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: public schema 1.0 or legacy 6.x exact-uIu provenance is required",
+                "PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: current Packed HDF5 schema $(OPERATOR_BUNDLE_SCHEMA_VERSION) exact-uIu provenance is required",
             ),
         )
         manifest.derivative_overlap_completeness == "full_hilbert_space" || throw(
@@ -177,19 +239,13 @@ function validate_operator_demand(manifest::OperatorBundleManifest, demand::Oper
         )
     end
     any(
-            kind -> kind in demand.required_operators,
-            (
-                REAL_SPACE_SPIN_TIMES_HAMILTONIAN,
-                REAL_SPACE_SPIN_TIMES_POSITION,
-                REAL_SPACE_SPIN_TIMES_HAMILTONIAN_POSITION,
-            ),
-        ) &&
-        manifest.profile != :full &&
-        throw(
-            ArgumentError(
-                "Injection/shift spin current requires a formal schema-6 full bundle. Current bundle profile: $(manifest.profile). Regenerate with qualified SPN/uIu/uHu/sIu/sHu provenance.",
-            ),
-        )
+        kind -> kind in demand.required_operators,
+        (
+            REAL_SPACE_SPIN_TIMES_HAMILTONIAN,
+            REAL_SPACE_SPIN_TIMES_POSITION,
+            REAL_SPACE_SPIN_TIMES_HAMILTONIAN_POSITION,
+        ),
+    ) && _require_spin_current_bundle(manifest)
     return manifest
 end
 
@@ -480,7 +536,7 @@ function _runtime_sources_from_component_load(loaded, ctx::RunContext)
     wannierization_status = something(loaded.manifest.wannierization_status, "not_provided")
     stopping_reason = something(loaded.manifest.stopping_reason, "not_provided")
     loaded.manifest.production_eligible || runtime_notice(
-        "WARNING: operator bundle is diagnostic-only " *
+        "WARNING: operator bundle is quality-review-recommended " *
         "wannier_center_policy=$(loaded.manifest.wannier_center_policy); " *
         "wannierization_status=$(wannierization_status); " *
         "stopping_reason=$(stopping_reason); " *
@@ -542,6 +598,17 @@ function _runtime_sources_from_component_load(loaded, ctx::RunContext)
         model = model,
         spin = spin_velocity === nothing ? spin : nothing,
         spin_velocity = spin_velocity,
+        orbital = haskey(loaded.components, REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION) ?
+                  OrbitalRealSpaceSources(
+            _packed_operator(runtime_stub, REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION, 1),
+            _packed_operator(runtime_stub, REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR, 2),
+            _packed_operator(
+                runtime_stub,
+                REAL_SPACE_HAMILTONIAN_WEIGHTED_AXIAL_DERIVATIVE_OVERLAP,
+                1,
+            ),
+            manifest.operator_qualification,
+        ) : nothing,
         derivative_overlap = derivative_overlap,
         manifest = manifest,
         read_mode = loaded.read_mode,
@@ -677,6 +744,7 @@ function _runtime_sources_from_legacy_components(
         model = model,
         spin = spin_velocity === nothing ? spin : nothing,
         spin_velocity = spin_velocity,
+        orbital = nothing,
         derivative_overlap = nothing,
         manifest = nothing,
         read_mode = read_mode,
@@ -760,6 +828,7 @@ const RuntimeLoadedSources = NamedTuple{
         :model,
         :spin,
         :spin_velocity,
+        :orbital,
         :derivative_overlap,
         :manifest,
         :read_mode,
@@ -771,6 +840,7 @@ const RuntimeLoadedSources = NamedTuple{
         TightBindingModel,
         Union{Nothing, SpinRealSpaceData},
         Union{Nothing, SpinVelocityRealSpaceData},
+        Union{Nothing, OrbitalRealSpaceSources},
         Union{Nothing, DerivativeOverlapRealSpaceData},
         Any,
         Symbol,
@@ -796,6 +866,7 @@ function load_runtime_model_and_sources(
                 model = sources.model,
                 spin = sources.spin_velocity === nothing ? sources.spin : nothing,
                 spin_velocity = sources.spin_velocity,
+                orbital = nothing,
                 derivative_overlap = nothing,
                 manifest = nothing,
                 read_mode = :legacy,

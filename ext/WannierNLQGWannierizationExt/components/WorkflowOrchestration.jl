@@ -58,6 +58,11 @@ import ..WannierizationInternalSupport:
     WannierizationArtifacts,
     WannierizationResult,
     WannierizationStatus,
+    WannierizationEligibility,
+    WANNIERIZATION_ELIGIBILITY_SUMMARY_KEYS,
+    wannierization_eligibility_summary,
+    wannierization_eligibility_from_summary,
+    not_evaluated_wannierization_eligibility,
     authoritative_hamiltonian_key,
     canonical_band_block_labels,
     read_band_representation_preparation_hdf5,
@@ -88,6 +93,9 @@ import ..RepresentationPreparation:
     validate_band_representation_compatibility,
     validate_wannierization_config
 import ..PAWMatrixElements:
+    with_spn_provenance_reuse,
+    native_preparation_source_files,
+    preparation_implementation_paths,
     TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256,
     TARGET_LEAKAGE_WEIGHT_SEMANTICS,
     generate_vasp_paw_matrix_elements_impl,
@@ -122,6 +130,7 @@ import ..SolverCheckpoint:
     wannierization_checkpoint_sha256_v2_4,
     wannierization_checkpoint_sha256_v2_6,
     wannierization_production_eligible,
+    wannierization_scoped_production_eligible,
     wannierization_result_is_finite,
     read_wannierization_checkpoint_hdf5,
     read_wannierization_fixed_subspace_hdf5,
@@ -129,8 +138,8 @@ import ..SolverCheckpoint:
 import ..OperatorExport:
     atomic_checkpoint_copy,
     bind_packed_checkpoint_sha256!,
-    diagnostic_nonconverged_tb_export_allowed,
-    diagnostic_nonconverged_tb_export_gate,
+    accepted_state_tb_export_allowed,
+    accepted_state_tb_export_gate,
     export_wannierization_tb,
     open_wannierization_log,
     preflight_wannierization_operator_profile,
@@ -141,7 +150,8 @@ import ..OperatorExport:
     wannierization_output_paths,
     write_wannierization_final,
     write_tb_symmetry_json,
-    qualify_exported_wannierization_tb
+    qualify_exported_wannierization_tb,
+    operator_output_requires_target_contract
 
 include("../WannierizationWorkflow.jl")
 

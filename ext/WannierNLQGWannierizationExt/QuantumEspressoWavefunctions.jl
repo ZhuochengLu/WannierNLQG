@@ -493,6 +493,7 @@ function _read_qe_wavefunction_header(filename::AbstractString, expected_spin_co
                 k_fractional = Vector{Float64}(transpose(binary_reciprocal) \ k_cartesian),
                 num_bands = Int(read(root_attributes["nbnd"])),
                 spin_components,
+                plane_wave_count = size(handle["MillerIndices"], 2),
             )
         end
     end
@@ -507,7 +508,7 @@ function _read_qe_wavefunction_header(filename::AbstractString, expected_spin_co
         dimensions = _qe_record_values(read_fortran_record(io), Int32)
         length(dimensions) == 4 ||
             throw(ArgumentError("QE dimension record must contain four Int32 values"))
-        _, _, spin_components, num_bands = Int.(dimensions)
+        _, plane_wave_count, spin_components, num_bands = Int.(dimensions)
         spin_components == expected_spin_components ||
             throw(ArgumentError("QE binary/XML spin-component mismatch"))
         reciprocal_record = _qe_record_values(read_fortran_record(io), Float64)
@@ -518,6 +519,7 @@ function _read_qe_wavefunction_header(filename::AbstractString, expected_spin_co
             k_fractional = Vector{Float64}(transpose(binary_reciprocal) \ k_cartesian),
             num_bands,
             spin_components,
+            plane_wave_count,
         )
     end
 end
@@ -530,6 +532,7 @@ function _read_qe_wavefunctions(
     normalize_coefficients::Bool = true,
     metadata = nothing,
     native_paw_construction::Bool = false,
+    point_storage = nothing,
 )
     _qe_validate_reader_purpose(purpose)
     metadata_value = metadata === nothing ? _read_qe_xml(source) : metadata
@@ -565,12 +568,33 @@ function _read_qe_wavefunctions(
         cutoff <= metadata_value.cutoff_ev + 1.0e-10 ||
         throw(ArgumentError("representation cutoff exceeds the QE wavefunction cutoff"))
     spin_components = metadata_value.noncollinear ? 2 : 1
-    points = PlaneWaveKPoint[]
+    points = point_storage === nothing ? PlaneWaveKPoint[] : point_storage
+    if point_storage !== nothing && !(point_storage isa Vector)
+        points =
+            preparation_source_vector(PlaneWaveKPoint, length(metadata_value.kpoint_nodes)) do index
+                node = metadata_value.kpoint_nodes[index]
+                energies =
+                    HARTREE_TO_EV .*
+                    _qe_xml_numbers(_qe_xml_required(node, "./*[local-name()='eigenvalues']"))
+                _read_qe_wavefunction_kpoint(
+                    _qe_wavefunction_file(source, index),
+                    selected_bands,
+                    energies,
+                    spin_components,
+                    cutoff,
+                    metadata_value.reciprocal_lattice,
+                    normalize_coefficients,
+                )
+            end
+    end
     hashes = Dict("data-file-schema.xml" => sha256_file(metadata_value.xml_file))
     for label in sort!(collect(keys(metadata_value.upf_files)))
         upf_file = metadata_value.upf_files[label]
         hashes["UPF:$(label):$(basename(upf_file))"] = sha256_file(upf_file)
     end
+    # Retain coordinates while each point is already loaded; a second traversal
+    # would reread every coefficient file through a bounded source provider.
+    kpoints = Matrix{Float64}(undef, length(metadata_value.kpoint_nodes), 3)
     for (kpoint_index, xml_kpoint) in enumerate(metadata_value.kpoint_nodes)
         energies =
             HARTREE_TO_EV .*
@@ -578,21 +602,20 @@ function _read_qe_wavefunctions(
         length(energies) == metadata_value.num_bands ||
             throw(ArgumentError("QE XML band count mismatch at k-point $(kpoint_index)"))
         wavefunction_file = _qe_wavefunction_file(source, kpoint_index)
-        point = _read_qe_wavefunction_kpoint(
-            wavefunction_file,
-            selected_bands,
-            energies,
-            spin_components,
-            cutoff,
-            metadata_value.reciprocal_lattice,
-            normalize_coefficients,
-        )
-        push!(points, point)
+        point =
+            points isa Vector ?
+            _read_qe_wavefunction_kpoint(
+                wavefunction_file,
+                selected_bands,
+                energies,
+                spin_components,
+                cutoff,
+                metadata_value.reciprocal_lattice,
+                normalize_coefficients,
+            ) : points[kpoint_index]
+        points isa Vector && push!(points, point)
+        kpoints[kpoint_index, :] .= point.k_fractional
         hashes[basename(wavefunction_file)] = sha256_file(wavefunction_file)
-    end
-    kpoints = Matrix{Float64}(undef, length(points), 3)
-    for (index, point) in enumerate(points)
-        kpoints[index, :] .= point.k_fractional
     end
     return NativeWavefunctionData(
         :qe,
@@ -655,5 +678,9 @@ function _read_qe_raw_wavefunctions(source::QuantumEspressoWavefunctionSource, m
         normalize_coefficients = false,
         metadata,
         native_paw_construction = true,
+        point_storage = get(task_local_storage(), :wannier_preparation_execution, nothing) !==
+                        nothing &&
+                        get(task_local_storage(), :wannier_preparation_execution, nothing).mode ==
+                        :dense_reference ? nothing : :bounded_source,
     )
 end

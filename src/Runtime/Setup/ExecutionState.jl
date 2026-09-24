@@ -1,7 +1,7 @@
 using Base.Threads
 
 """
-Output paths and family/Fourier/symmetry/band/replica summaries returned after the shared k loop and output stage.
+Output paths, qualification, and family/Fourier/symmetry/band/replica summaries returned after the shared k loop and output stage.
 """
 struct FusedBundleRunResult
     outputs::Vector{String}
@@ -11,6 +11,7 @@ struct FusedBundleRunResult
     response_symmetry_summary::NamedTuple
     band_summary::NamedTuple
     replica_summary::NamedTuple
+    qualification::ResponseQualificationResult
 end
 
 """

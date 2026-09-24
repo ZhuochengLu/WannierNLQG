@@ -255,8 +255,27 @@ function _symmetrized_authoritative_band_hamiltonian(
     requested_authority::SymmetrizedDFTHamiltonian;
     construction_policy::Symbol = :strict,
 )
+    identity =
+        () -> repr((source, requested_authority, sha256_file(gauge_hdf5), construction_policy))
+    return IO.cached_preparation_artifact("symmetrized-hamiltonian", identity) do
+        _build_symmetrized_authoritative_band_hamiltonian(
+            source,
+            gauge_hdf5,
+            requested_authority;
+            construction_policy,
+        )
+    end
+end
+
+"""Build and strictly verify the compact Hamiltonian authority from its gauge artifact."""
+function _build_symmetrized_authoritative_band_hamiltonian(
+    source::AbstractWavefunctionSource,
+    gauge_hdf5::AbstractString,
+    requested_authority::SymmetrizedDFTHamiltonian;
+    construction_policy::Symbol = :strict,
+)
     path = abspath(gauge_hdf5)
-    restored = read_star_covariant_paw_gauge_hdf5(path; construction_policy, source)
+    restored = read_generation_gauge(path; construction_policy, source)
     payload = restored.payload
     authority = get(payload.source_metadata, "authoritative_hamiltonian", "")
     authority == authoritative_hamiltonian_key(requested_authority) || throw(

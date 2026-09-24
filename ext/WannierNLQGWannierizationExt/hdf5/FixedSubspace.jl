@@ -1,46 +1,17 @@
 const WANNIERIZATION_CHECKPOINT_SCHEMA = "WannierNLQG.wannierization_checkpoint"
-# Public numbering changes the wire identity, not the complete legacy 2.28 contract.
-const WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION = "1.0"
-const WANNIERIZATION_CHECKPOINT_READABLE_SCHEMA_VERSIONS = (
-    "1.0",
-    "2.0",
-    "2.1",
-    "2.2",
-    "2.3",
-    "2.4",
-    "2.5",
-    "2.6",
-    "2.7",
-    "2.8",
-    "2.9",
-    "2.10",
-    "2.11",
-    "2.12",
-    "2.13",
-    "2.14",
-    "2.15",
-    "2.16",
-    "2.17",
-    "2.18",
-    "2.19",
-    "2.20",
-    "2.21",
-    "2.22",
-    "2.23",
-    "2.24",
-    "2.25",
-    "2.26",
-    "2.27",
-    "2.28",
-)
+# Schema 1.2 binds the Standard construction contract and the typed eligibility
+# block. Older checkpoints require an explicit external migration and are never
+# interpreted by this reader.
+const WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION = "1.2"
+const WANNIERIZATION_CHECKPOINT_READABLE_SCHEMA_VERSIONS = ("1.1", "1.2")
 const WANNIERIZATION_U_CONVERGENCE_DIAGNOSTICS_SCHEMA = "wanniernlqg.wannierization-u-convergence-diagnostics"
 # Public numbering retains every field of the former 1.5 diagnostic stream.
 const WANNIERIZATION_U_CONVERGENCE_DIAGNOSTICS_SCHEMA_VERSION = "1.0"
 const WANNIERIZATION_FIXED_SUBSPACE_SCHEMA = "wanniernlqg.wannierization-fixed-subspace"
 const LEGACY_SAWF_FIXED_SUBSPACE_SCHEMA = "wanniernlqg.sawf-fixed-subspace"
 # Public numbering retains the former 1.1 projector/frame and Z/U semantics.
-const WANNIERIZATION_FIXED_SUBSPACE_SCHEMA_VERSION = "1.0"
-const WANNIERIZATION_FIXED_SUBSPACE_READABLE_SCHEMA_VERSIONS = ("1.0", "1.1")
+const WANNIERIZATION_FIXED_SUBSPACE_SCHEMA_VERSION = "2.0"
+const WANNIERIZATION_FIXED_SUBSPACE_READABLE_SCHEMA_VERSIONS = ("1.0", "1.1", "2.0")
 
 """Atomically persist a sealed full-BZ projector field and deterministic frame."""
 function write_wannierization_fixed_subspace_hdf5(
@@ -91,8 +62,8 @@ function read_wannierization_fixed_subspace_hdf5(filename::AbstractString)
             String(read(attributes["z_u_stage_semantics"])) ==
             "disentanglement_localization_decoupled_v1" ||
                 throw(ArgumentError("fixed-subspace Z/U stage semantics differ"))
-        elseif version == "1.1"
-            throw(ArgumentError("fixed-subspace 1.1 capsule omits Z/U stage semantics"))
+        elseif version in ("1.1", "2.0")
+            throw(ArgumentError("fixed-subspace $(version) capsule omits Z/U stage semantics"))
         end
         hashes = read_string_dictionary(handle["source_sha256"])
         residuals = Dict{String, Float64}()

@@ -43,9 +43,9 @@ function _build_band_representation(
     sewing_backend::AbstractBandSewingBackend = CoefficientMappingSewing(),
     strict_metric = nothing,
     return_diagnostics::Bool = false,
-    construction_policy::Symbol = :diagnostic,
+    construction_policy::Symbol = :standard,
 )
-    construction_policy in (:strict, :diagnostic) ||
+    construction_policy in (:strict, :standard) ||
         throw(ArgumentError("unknown construction policy"))
     built = if sewing_backend isa CoefficientMappingSewing
         legacy = build_canonical_band_representation(
@@ -110,7 +110,8 @@ function _generate_amn(native::NativeWavefunctionData, basis::WannierProjectionB
     amn = zeros(ComplexF64, nb, basis.num_wannier, nk)
     spin_components = native.spinor ? 2 : 1
     volume_normalization = inv(sqrt(abs(det(native.structure.lattice))))
-    for (kpoint_index, point) in enumerate(native.kpoints)
+    function point_amn(kpoint_index, point)
+        block_amn = zeros(ComplexF64, nb, basis.num_wannier)
         band_norms = [norm(@view point.coefficients[band, :, :]) for band in 1:nb]
         all(>(1.0e-14), band_norms) ||
             throw(ArgumentError("native wavefunction contains a zero-norm band"))
@@ -148,17 +149,50 @@ function _generate_amn(native::NativeWavefunctionData, basis::WannierProjectionB
                 normalized_conjugate[band, g_index] =
                     conj(point.coefficients[band, g_index, spin]) / band_norms[band]
             end
-            @views amn[:, :, kpoint_index] .+= normalized_conjugate * trial_matrices[spin]
+            block_amn .+= normalized_conjugate * trial_matrices[spin]
         end
         for wannier in 1:basis.num_wannier
-            norm_value = norm(@view amn[:, wannier, kpoint_index])
+            norm_value = norm(@view block_amn[:, wannier])
             norm_value > 1.0e-14 || throw(
                 ArgumentError(
                     "native AMN projection $(wannier) vanished at k-point $(kpoint_index)",
                 ),
             )
         end
+        all(isfinite, block_amn) ||
+            throw(ArgumentError("FATAL_INTEGRITY: nonfinite native AMN block"))
+        return block_amn
     end
+    identity_parts = [
+        "ordinary-native-amn-v1",
+        string(VERSION),
+        projection_basis_sha256(basis),
+        sha256_file(@__FILE__),
+        sha256_file(joinpath(@__DIR__, "NativeSourceDispatch.jl")),
+        sha256_file(joinpath(@__DIR__, "QuantumEspressoWavefunctions.jl")),
+    ]
+    append!(
+        identity_parts,
+        [key * "=" * native.input_sha256[key] for key in sort!(collect(keys(native.input_sha256)))],
+    )
+    contract = bytes2hex(sha256(join(identity_parts, "\n")))
+    foreach_preparation_block(
+        point_amn,
+        k -> native.kpoints[k],
+        (k, values) -> (amn[:, :, k] .= values),
+        nk;
+        contract,
+        label = "native-amn",
+        fingerprint = point -> join(
+            (
+                bytes2hex(sha256(reinterpret(UInt8, vec(point.coefficients)))),
+                bytes2hex(sha256(reinterpret(UInt8, vec(point.g_vectors)))),
+                repr(point.k_fractional),
+                repr(native.reciprocal_lattice),
+            ),
+            ":",
+        ),
+    )
     return amn
 end
 

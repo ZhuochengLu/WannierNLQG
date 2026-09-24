@@ -53,5 +53,8 @@ const SYMMETRY_FOUNDATION_INTEGRATION_API = (
     :validate_public_band_representation_contract,
     :validate_unified_representation_mode_contract,
     :validate_vasp_magnetic_moment_sources,
+    :verified_file_digest_identity,
+    :with_verified_file_digests,
+    :native_point_metadata,
     :write_band_representation_summary,
 )

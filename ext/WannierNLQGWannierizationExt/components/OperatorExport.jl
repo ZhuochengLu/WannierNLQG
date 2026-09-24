@@ -51,6 +51,7 @@ import WannierNLQG.MatrixElements:
 import WannierNLQG.SymmetryFoundation:
     AbstractWavefunctionSource,
     BandRepresentation,
+    BandRepresentationQualificationScope,
     WannierSymmetryPlan,
     maximum_real_space_covariance_error,
     qualification_mask_sha256,
@@ -84,6 +85,11 @@ import WannierNLQG.Wannierization:
     WannierizationDiagnostic,
     WannierizationIteration,
     WannierizationResult,
+    WannierizationEligibility,
+    WANNIERIZATION_ELIGIBILITY_SUMMARY_KEYS,
+    wannierization_eligibility_summary,
+    wannierization_eligibility_from_summary,
+    not_evaluated_wannierization_eligibility,
     authoritative_hamiltonian_key,
     tb_symmetry_payload_sha256,
     wannier_operator_target_contract_sha256
@@ -92,12 +98,14 @@ import ..WannierizationInternalSupport:
     atomic_hdf5_write,
     band_frame_contract_sha256,
     band_frame_contract_summary,
+    canonical_band_block_labels,
     projection_basis_sha256,
     read_tb_symmetry_qualification_group,
     required_attribute,
     tb_symmetry_not_run,
     updated_wannierization_result,
     validate_persisted_authority_key,
+    window_masks_from_energies,
     write_string_dictionary,
     write_tb_symmetry_qualification_group
 import ..RepresentationPreparation:
@@ -108,6 +116,11 @@ import ..RepresentationPreparation:
     symmetry_constraints_applied,
     wannier_gauge_link_diagnostics
 import ..PAWMatrixElements:
+    with_operator_publication_receipt,
+    with_vasp_operator_artifacts,
+    with_generation_gauge_reuse,
+    read_generation_gauge,
+    generation_gauge_source,
     STAR_COVARIANT_PAW_GAUGE_SCHEMA,
     WANNIER_UIU_GENERATION_SCHEMA,
     WANNIER_UIU_GENERATION_SCHEMA_VERSION,
@@ -155,8 +168,8 @@ include("../TBSymmetryQualification.jl")
 # Stable, non-private names form the only cross-component export surface.
 const atomic_checkpoint_copy = _atomic_checkpoint_copy
 const bind_packed_checkpoint_sha256! = _bind_packed_checkpoint_sha256!
-const diagnostic_nonconverged_tb_export_allowed = _diagnostic_nonconverged_tb_export_allowed
-const diagnostic_nonconverged_tb_export_gate = _diagnostic_nonconverged_tb_export_gate
+const accepted_state_tb_export_allowed = _accepted_state_tb_export_allowed
+const accepted_state_tb_export_gate = _accepted_state_tb_export_gate
 const export_wannierization_tb = _export_wannierization_tb
 const open_wannierization_log = _open_wannierization_log
 const preflight_wannierization_operator_profile = _preflight_wannierization_operator_profile
@@ -169,12 +182,17 @@ const wannierization_output_paths = _wannierization_output_paths
 const write_wannierization_final = _write_wannierization_final
 const write_tb_symmetry_json = _write_tb_symmetry_json
 
+"""Whether this output configuration needs a shared operator target contract."""
+operator_output_requires_target_contract(config) =
+    _operator_selection_requires_target_contract(_resolved_operator_selection(config))
+
 const OPERATOR_EXPORT_INTEGRATION_API = (
+    :operator_output_requires_target_contract,
     :AuthoritativeBandHamiltonian,
     :atomic_checkpoint_copy,
     :bind_packed_checkpoint_sha256!,
-    :diagnostic_nonconverged_tb_export_allowed,
-    :diagnostic_nonconverged_tb_export_gate,
+    :accepted_state_tb_export_allowed,
+    :accepted_state_tb_export_gate,
     :export_wannierization_tb,
     :open_wannierization_log,
     :preflight_wannierization_operator_profile,

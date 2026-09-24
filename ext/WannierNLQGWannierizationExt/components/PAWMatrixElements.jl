@@ -30,6 +30,21 @@ import SHA
 import SHA: sha256
 import WannierNLQG.Core: reciprocal_lattice
 import WannierNLQG.IO:
+    operator_publication_candidate,
+    verify_operator_publication_candidate,
+    cached_preparation_artifact,
+    with_preparation_artifact_cache,
+    read_preparation_checkpoint,
+    write_preparation_checkpoint,
+    preparation_restore_vectors!,
+    preparation_dictionary,
+    preparation_sealed_vector,
+    preparation_compact_workspace!,
+    preparation_vector,
+    preparation_source_vector,
+    foreach_preparation_block,
+    with_preparation_storage,
+    preparation_release!,
     WannierAMN,
     WannierEIG,
     WannierMMN,
@@ -49,6 +64,9 @@ import WannierNLQG.IO:
     write_wannier_mmn,
     write_wannier_spn
 import WannierNLQG.SymmetryFoundation:
+    verified_file_digest_identity,
+    native_point_metadata,
+    with_verified_file_digests,
     AbstractWavefunctionSource,
     BOHR_TO_ANGSTROM,
     BandRepresentation,
@@ -139,6 +157,7 @@ import ..WannierizationInternalSupport:
     write_band_frame_contract_attributes!,
     write_string_dictionary
 import ..RepresentationPreparation:
+    native_vasp_point_provider,
     QEProjectorAtomPlan,
     QEProjectorChannel,
     QEProjectorPlan,
@@ -170,14 +189,17 @@ import ..RepresentationPreparation:
 include("../VASPPawMatrixElements.jl")
 include("../VASPPawSpinMatrixElements.jl")
 include("../QEPAWMatrixElements.jl")
+include("../OperatorPublicationReuse.jl")
 include("../WannierUIUGeneration.jl")
 include("../QEPAWSpinMatrixElements.jl")
 include("../AugmentationAwareBandSewing.jl")
+include("../star_gauge/PreparationExecution.jl")
 include("../star_gauge/FrameContract.jl")
 include("../star_gauge/StarTransport.jl")
 include("../star_gauge/PartitionReynolds.jl")
 include("../star_gauge/Persistence.jl")
 include("../star_gauge/ConstructionWorkflow.jl")
+include("../star_gauge/StarPreparationKernel.jl")
 include("../PAWSCDMInitialization.jl")
 include("../PAWBlockPartitionAudit.jl")
 include("../SymmetryCompletedQEPAWMatrixElements.jl")
@@ -190,6 +212,8 @@ const generate_vasp_paw_matrix_elements_impl = _generate_vasp_paw_matrix_element
 const native_hamiltonian_gauge_covariance_residual = _native_hamiltonian_gauge_covariance_residual
 const paw_metric_passes = _paw_metric_passes
 const qe_spn_payload_sha256 = _qe_spn_payload_sha256
+const with_operator_publication_receipt = _with_operator_publication_receipt
+const with_spn_provenance_reuse = _with_spn_provenance_reuse
 const read_and_validate_spn_provenance = _read_and_validate_spn_provenance
 const read_augmentation_aware_native_source = _read_augmentation_aware_native_source
 const read_star_covariant_paw_gauge_hdf5 = _read_star_covariant_paw_gauge_hdf5
@@ -216,7 +240,23 @@ const validate_operator_target_contract_frame = _validate_operator_target_contra
 const validate_star_gauge_source_identity = _validate_star_gauge_source_identity
 const validate_generation_spn_provenance = _validate_generation_spn_provenance
 
+const with_generation_gauge_reuse = _with_generation_gauge_reuse
+const read_generation_gauge = _read_generation_gauge
+const generation_gauge_source = _generation_gauge_source
+
+# Metadata-only dependency enumeration shared by the workflow cache.
+const native_preparation_source_files = _preparation_source_files
+const preparation_implementation_paths = _preparation_implementation_paths
+
+const with_vasp_operator_artifacts = _with_vasp_operator_artifacts
+
 const PAW_MATRIX_ELEMENTS_INTEGRATION_API = (
+    :with_vasp_operator_artifacts,
+    :native_preparation_source_files,
+    :preparation_implementation_paths,
+    :with_generation_gauge_reuse,
+    :read_generation_gauge,
+    :generation_gauge_source,
     :QE_PAW_SPN_SCHEMA,
     :QE_PAW_SPN_SCHEMA_VERSION,
     :STAR_COVARIANT_PAW_GAUGE_SCHEMA,
@@ -230,6 +270,8 @@ const PAW_MATRIX_ELEMENTS_INTEGRATION_API = (
     :native_hamiltonian_gauge_covariance_residual,
     :paw_metric_passes,
     :qe_spn_payload_sha256,
+    :with_operator_publication_receipt,
+    :with_spn_provenance_reuse,
     :read_and_validate_spn_provenance,
     :read_augmentation_aware_native_source,
     :read_star_covariant_paw_gauge_hdf5,

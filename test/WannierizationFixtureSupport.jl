@@ -115,12 +115,12 @@ function modified_wannierization_config(config; keywords...)
     )
 end
 
-# Supply an honest mode contract for diagnostic-only persistence; this does not qualify arrays.
+# Supply an honest mode contract for standard persistence; this does not qualify arrays.
 function diagnostic_public_band_representation(representation)
     config = WANNIERIZATION.BandRepresentationPreparationConfig(
         wannierization_mode = :symmetry_adapted,
-        win_file = "diagnostic-only.win",
-        eig_file = "diagnostic-only.eig",
+        win_file = "standard.win",
+        eig_file = "standard.eig",
         band_representation = representation,
         num_wannier = 1,
     )

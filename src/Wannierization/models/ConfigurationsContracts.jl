@@ -427,8 +427,8 @@ This backend is deliberately not described as a gauge-only operation.  It
 Reynolds-projects the full PAW-S-orthogonal parent Hamiltonian, solves the
 far-block Sylvester equation for a near-identity unitary, and records the
 Hamiltonian, energy, and wavefunction changes.  `qualification_mode=:strict`
-is production-capable only when every physical gate passes;
-`:diagnostic_only` permanently taints all downstream artifacts.
+is production-capable only when every physical gate passes. `:standard` keeps
+the accepted model available while production eligibility remains independent.
 """
 struct FarBandCovarianceCorrection <: AbstractDiscreteHamiltonianCorrection
     thresholds::ControlledHamiltonianSymmetryThresholds
@@ -436,10 +436,10 @@ struct FarBandCovarianceCorrection <: AbstractDiscreteHamiltonianCorrection
 
     function FarBandCovarianceCorrection(;
         thresholds::ControlledHamiltonianSymmetryThresholds = ControlledHamiltonianSymmetryThresholds(),
-        qualification_mode::Symbol = :strict,
+        qualification_mode::Symbol = :standard,
     )
-        qualification_mode in (:strict, :diagnostic_only) ||
-            throw(ArgumentError("qualification_mode must be :strict or :diagnostic_only"))
+        qualification_mode in (:strict, :standard) ||
+            throw(ArgumentError("qualification_mode must be :strict or :standard"))
         return new(thresholds, qualification_mode)
     end
 end
@@ -693,9 +693,19 @@ _wavefunction_gauge_backend_key(::NativeEigenstateGauge) = "native_eigenstate"
 """Return the persisted identity of the PAW k-star covariant gauge backend."""
 _wavefunction_gauge_backend_key(::StarCovariantPAWGauge) = "star_covariant_paw"
 
+"""Bounded execution and private restart storage for native-wavefunction preparation."""
+Base.@kwdef struct WavefunctionPreparationExecutionConfig
+    mode::Symbol = :streaming_serial
+    max_workers::Int = 1
+    memory_budget_bytes::Int = 24 * 1024^3
+    checkpoint_directory::Union{Nothing, String} = nothing
+    resume::Bool = true
+end
+
 """Configuration for the restartable symmetry-covariant wavefunction stage."""
 Base.@kwdef struct SymmetryCovariantWavefunctionPreparationConfig
-    construction_policy::Symbol = :diagnostic
+    execution::WavefunctionPreparationExecutionConfig = WavefunctionPreparationExecutionConfig()
+    construction_policy::Symbol = :standard
     source::SymmetryFoundation.AbstractWavefunctionSource
     sewing_backend::AbstractBandSewingBackend = AugmentationAwareSewing()
     wavefunction_gauge_backend::AbstractWavefunctionGaugeBackend = StarCovariantPAWGauge()
@@ -708,6 +718,14 @@ Base.@kwdef struct SymmetryCovariantWavefunctionPreparationConfig
     preflight_diagnostics_jsonl::Union{Nothing, String} = nothing
     maximum_star_count::Union{Nothing, Int} = nothing
     selected_star_indices::Union{Nothing, Vector{Int}} = nothing
+end
+
+"""Preserve the original positional expert constructor with serial execution defaults."""
+function SymmetryCovariantWavefunctionPreparationConfig(args::Vararg{Any, 13})
+    return SymmetryCovariantWavefunctionPreparationConfig(
+        WavefunctionPreparationExecutionConfig(),
+        args...,
+    )
 end
 
 """Auditable outcome of one standalone symmetry-covariant wavefunction stage."""
@@ -750,7 +768,7 @@ Base.@kwdef struct PAWBlockPartitionAuditConfig
     block_partition_policy::AbstractPAWBlockPartitionPolicy = FixedGapPAWBlockPartition()
 end
 
-"""Summary of a persisted diagnostic-only PAW block-partition audit."""
+"""Summary of a persisted standard PAW block-partition audit."""
 struct PAWBlockPartitionAuditResult
     status::Symbol
     root_cause::Symbol
@@ -775,7 +793,7 @@ end
 
 """Read-only configuration for preparing a qualified band representation."""
 Base.@kwdef struct BandRepresentationPreparationConfig
-    construction_policy::Symbol = :diagnostic
+    construction_policy::Symbol = :standard
     # Select representation source, qualification windows, and compatibility policy.
     wannierization_mode::Symbol = :auto
     source::Union{Nothing, SymmetryFoundation.AbstractWavefunctionSource} = nothing
@@ -1086,7 +1104,7 @@ const _WANNIERIZATION_ACCELERATION_DEFAULTS = (
     disentanglement_objective_tolerance = 1.0e-10,
     z_projector_tolerance = 1.0e-10,
     z_stability_window = 3,
-    disentanglement_limit_policy = :diagnostic_continue,
+    disentanglement_limit_policy = :standard_continue,
     joint_z_backtracking_factor = 0.5,
     joint_z_backtracking_max_steps = 12,
     constraint_operation_scope = :full,
@@ -1223,5 +1241,5 @@ generalized Armijo trials when a Type-IV phase-cut orbit is active.
 `constraint_operation_scope=:full` applies the complete unitary and
 antiunitary operation set. The expert-only `:unitary` and `:identity` scopes
 are causal ablations: they rebuild the corresponding k-star partition and are
-always diagnostic-only, never production-qualified.
+always standard, never production-qualified.
 """ WannierizationAccelerationConfig

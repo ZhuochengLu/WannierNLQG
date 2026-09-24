@@ -50,6 +50,50 @@ struct PlaneWaveKPoint
     end
 end
 
+"""Validate coefficient dimensions in one pass, including disk-backed providers."""
+function _native_point_dimensions(points)
+    first_point = first(points)
+    dimensions = (size(first_point.coefficients, 1), size(first_point.coefficients, 3))
+    for index in 2:length(points)
+        point = points[index]
+        size(point.coefficients, 1) == dimensions[1] ||
+            throw(ArgumentError("native k-points do not share one band count"))
+        size(point.coefficients, 3) == dimensions[2] ||
+            throw(ArgumentError("native k-points do not share one spin convention"))
+    end
+    return dimensions
+end
+
+"""Metadata-indexed source whose decoded blocks are dimension-checked on access.
+
+The reader validates every record header before constructing this provider. Large
+coefficient blocks are validated when consumed, without an eager validation scan.
+"""
+struct IndexedPlaneWavePoints{V <: AbstractVector{PlaneWaveKPoint}} <:
+       AbstractVector{PlaneWaveKPoint}
+    parent::V
+    coordinates::Vector{Vector{Float64}}
+    energies::Vector{Vector{Float64}}
+    num_bands::Int
+    spin_components::Int
+end
+"""Use linear k-point indexing for the metadata-indexed source."""
+Base.IndexStyle(::Type{<:IndexedPlaneWavePoints}) = IndexLinear()
+"""Expose the validated source record count without decoding coefficients."""
+Base.size(points::IndexedPlaneWavePoints) = size(points.parent)
+"""Validate decoded dimensions against the source record metadata."""
+function Base.getindex(points::IndexedPlaneWavePoints, index::Int)
+    point = points.parent[index]
+    size(point.coefficients, 1) == points.num_bands ||
+        throw(ArgumentError("native k-points do not share one band count"))
+    size(point.coefficients, 3) == points.spin_components ||
+        throw(ArgumentError("native k-points do not share one spin convention"))
+    return point
+end
+"""Use already checked record dimensions; block reads retain their own checks."""
+_native_point_dimensions(points::IndexedPlaneWavePoints) =
+    (points.num_bands, points.spin_components)
+
 """Native wavefunction data after source-specific parsing and cutoff selection."""
 struct NativeWavefunctionData
     source_code::Symbol
@@ -57,7 +101,7 @@ struct NativeWavefunctionData
     reciprocal_lattice::Matrix{Float64}
     mp_grid::NTuple{3, Int}
     spinor::Bool
-    kpoints::Vector{PlaneWaveKPoint}
+    kpoints::AbstractVector{PlaneWaveKPoint}
     input_sha256::Dict{String, String}
     source_metadata::Dict{String, String}
 
@@ -73,18 +117,15 @@ struct NativeWavefunctionData
     )
         reciprocal = Matrix{Float64}(reciprocal_lattice)
         mesh = Tuple(Int.(mp_grid))
-        points = PlaneWaveKPoint[kpoints...]
+        points =
+            kpoints isa AbstractVector{PlaneWaveKPoint} && !(kpoints isa Vector) ? kpoints :
+            PlaneWaveKPoint[kpoints...]
         size(reciprocal) == (3, 3) ||
             throw(ArgumentError("reciprocal lattice must have size (3, 3)"))
         prod(mesh) == length(points) ||
             throw(ArgumentError("native k-point count does not match mp_grid"))
         isempty(points) && throw(ArgumentError("native wavefunction source contains no k-points"))
-        band_count = size(first(points).coefficients, 1)
-        spin_components = size(first(points).coefficients, 3)
-        all(point -> size(point.coefficients, 1) == band_count, points) ||
-            throw(ArgumentError("native k-points do not share one band count"))
-        all(point -> size(point.coefficients, 3) == spin_components, points) ||
-            throw(ArgumentError("native k-points do not share one spin convention"))
+        band_count, spin_components = _native_point_dimensions(points)
         Bool(spinor) == (spin_components == 2) ||
             throw(ArgumentError("native spinor flag disagrees with coefficient storage"))
         return new(
@@ -123,14 +164,127 @@ function _normalized_native_wavefunctions(native::NativeWavefunctionData)
     )
 end
 
+"""Return source metadata without decoding indexed coefficient blocks.
+
+The fallback preserves eager and transformed native datasets. Returned arrays are
+borrowed read-only metadata, just like the corresponding PlaneWaveKPoint fields.
 """
-Compute one streaming SHA-256 without changing the input file.
+function native_point_metadata(native::NativeWavefunctionData, index::Int)
+    points = native.kpoints
+    checkbounds(points, index)
+    if points isa IndexedPlaneWavePoints
+        return (;
+            k_fractional = points.coordinates[index],
+            energies_ev = points.energies[index],
+            num_bands = points.num_bands,
+            spin_components = points.spin_components,
+        )
+    end
+    point = points[index]
+    return (;
+        point.k_fractional,
+        point.energies_ev,
+        num_bands = size(point.coefficients, 1),
+        spin_components = size(point.coefficients, 3),
+    )
+end
+
+"""Verify content again after a metadata-only identity change.
+
+The identity is `(device, inode, size, mtime, ctime)` and the digest is the
+previously verified hexadecimal SHA-256. Return an updated identity without
+mutating the caller's credential. A changed ctime can reflect filesystem metadata
+updates; accept it only after comparing a fresh content digest. Other identity
+changes or a content mismatch raise an ArgumentError with `change_error`.
+
+This non-exported integration contract is shared by preparation and operator
+attestations; unchanged identities require no content read.
 """
+function verified_file_digest_identity(
+    path,
+    identity,
+    digest;
+    file_hasher = p -> open(io -> bytes2hex(SHA.sha256(io)), p, "r"),
+    change_error = "VERIFIED_INPUT_CHANGED",
+)
+    current = _digest_file_identity(path)
+    current == identity && return current
+    current[1:4] == identity[1:4] || throw(ArgumentError("$(change_error): $(path)"))
+    observed = file_hasher(path)
+    after = _digest_file_identity(path)
+    after[1:4] == current[1:4] && observed == digest ||
+        throw(ArgumentError("$(change_error): $(path)"))
+    # Keep the identity captured immediately before the verified content read.
+    # Some filesystems publish a delayed ctime-only refresh after metadata
+    # changes.  Returning `after` would then force an unnecessary third hash
+    # on the next lookup despite the checked content and stable device/inode,
+    # size, and mtime.  A later identity change still re-enters this strict
+    # verification path.
+    return current
+end
+
+"""Compute a streaming SHA-256, reusing a verified execution-scoped credential."""
 function sha256_file(filename::AbstractString)
     isfile(filename) || throw(ArgumentError("input file does not exist: $(filename)"))
+    registry = get(task_local_storage(), :wannier_verified_file_digests, nothing)
+    if registry !== nothing
+        path = realpath(filename)
+        if haskey(registry, path)
+            identity, digest = registry[path]
+            current = verified_file_digest_identity(path, identity, digest)
+            if current != identity
+                refreshed = copy(registry)
+                refreshed[path] = (current, digest)
+                task_local_storage(:wannier_verified_file_digests, refreshed)
+            end
+            return digest
+        end
+    end
     return open(filename, "r") do io
         bytes2hex(SHA.sha256(io))
     end
+end
+
+"""Identify changes to an already content-verified input within one execution scope."""
+function _digest_file_identity(path::AbstractString)
+    information = stat(path)
+    return (
+        information.device,
+        information.inode,
+        information.size,
+        information.mtime,
+        information.ctime,
+    )
+end
+
+"""Verify declared inputs once and reuse their digests only for the callback lifetime.
+
+The registry is immutable once shared and never serialized. Nested scopes and
+metadata refreshes use private copies. A ctime-only change requires a fresh
+content match before replacing the task-local credential. Undeclared files retain
+streaming hashes.
+"""
+function with_verified_file_digests(f::F, paths; file_hasher = sha256_file) where {F}
+    parent = get(task_local_storage(), :wannier_verified_file_digests, nothing)
+    registry = parent === nothing ? Dict{String, Tuple{Tuple, String}}() : copy(parent)
+    for filename in paths
+        path = realpath(filename)
+        if haskey(registry, path)
+            identity, digest = registry[path]
+            registry[path] = (verified_file_digest_identity(path, identity, digest), digest)
+            continue
+        end
+        before = _digest_file_identity(path)
+        digest = file_hasher(path)
+        after = verified_file_digest_identity(
+            path,
+            before,
+            digest;
+            change_error = "INPUT_CHANGED_DURING_DIGEST",
+        )
+        registry[path] = (after, digest)
+    end
+    return task_local_storage(f, :wannier_verified_file_digests, registry)
 end
 
 """

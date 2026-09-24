@@ -54,3 +54,42 @@ Scientific formulas, units, tensor-index order, numerical filenames and column
 layouts are governed by their calculation documentation. Package tests use
 synthetic inputs and do not confer material-specific Physics or Production
 qualification.
+
+## 1.1.0 operator-selection update
+
+The original public baseline above is retained. New Wannierization output accepts
+only `:hamiltonian_position` and `:full` fixed profiles. Task-derived export uses
+`WannierizationOutputConfig(profile=nothing, operator_tasks=(... ,))` with qualified
+`WannierNLQG.Core.OperatorTask` values. The default method is `:all`; normalized
+requested pairs retain it and the per-task closure records expansion. No arbitrary
+operator-name export API is introduced. Existing `hamiltonian_position_spin`
+bundles remain readable within supported wire versions, but that profile is no
+longer accepted for new Wannierization output. See the
+[1.1.0 migration](docs/WANNIERIZATION_CONFIG_MIGRATION.md#task-derived-output-selection-in-110)
+and [complete API/dependency reference](docs/WANNIERIZATION.md#task-derived-selection-and-canonical-union).
+
+## 1.1.0 chemical-potential vector migration
+
+`LinearTransportParameters` and `OrbitalMagnetizationParameters` no longer
+accept `fermi_energy=`. Use an exact `Vector{Float64}`:
+
+```julia
+LinearTransportParameters(fermi_energies=Float64[mu], ...)
+OrbitalMagnetizationParameters(fermi_energies=Float64[mu], ...)
+```
+
+Multiple strictly increasing values are evaluated in one Integral task. A
+KSlice requires a one-element vector. Scalar, range, tuple, generator, empty,
+nonfinite, duplicate, or non-increasing inputs fail instead of being collected
+or sorted. Linear optical and all unrelated quantities retain their existing
+scalar occupation inputs.
+
+Integral results use the new vector schemas and are read through
+`read_linear_transport_result` or `read_orbital_magnetization_result`. Old
+scalar directories are not accepted by these readers and must be recomputed;
+renaming or editing headers is not a migration. The three-mechanism linear
+response contract writes `drude`, `quantum_metric`, `berry_curvature`, and
+`total`; `berry_curvature` combines the former contact and interband Hall
+summands and represents the anomalous-Hall-effect mechanism. The strict DC
+reader accepts only `wanniernlqg.linear-transport-vector/2.0` four-file
+results, not historical `/1.0` five-file results.

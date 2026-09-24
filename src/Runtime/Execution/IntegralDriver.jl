@@ -9,6 +9,28 @@ function _run_integral_bundle_fused!(
     shared_sources = nothing,
     mixed_memory_limit_bytes::Int = mixed_fourier_memory_limit(),
 )
+    if any(spec->spec.quantity in SPECTRAL_RESPONSE_QUANTITIES, specs)
+        return prepare_spectral_response(
+            cfg,
+            ctx,
+            specs;
+            prepare_only,
+            progress_owner,
+            shared_sources,
+            mixed_memory_limit_bytes,
+        )
+    end
+    if any(spec -> spec.quantity == :second_harmonic_generation, specs)
+        return prepare_second_harmonic(
+            cfg,
+            ctx,
+            specs;
+            prepare_only,
+            progress_owner,
+            shared_sources,
+            mixed_memory_limit_bytes,
+        )
+    end
     cleanup_workspaces = MatrixElementWorkspace[]
     loaded_sources_ref = Ref{Any}(nothing)
     cleaned = Ref(false)
@@ -106,6 +128,14 @@ function _run_integral_bundle_owned!(
     response_symmetry_plan = prepare_response_symmetry_execution_plan(cfg, ctx, specs, comm)
     response_symmetry_plan === nothing ||
         progress_response_symmetry!(response_symmetry_metadata(response_symmetry_plan))
+    qualification = assess_response_qualification(
+        loaded_sources.manifest,
+        ctx,
+        cfg,
+        specs;
+        response_symmetry_plan,
+    )
+    progress_response_qualification!(qualification)
     numerical_response_symmetry_plan =
         response_symmetry_plan === nothing || response_symmetry_plan.explanation_only ? nothing :
         response_symmetry_plan
@@ -753,6 +783,7 @@ function _run_integral_bundle_owned!(
                 response_symmetry_summary,
                 NamedTuple(),
                 runtime_replica_summary(loaded_sources.replica_summary),
+                qualification,
             )
             return result
         finally

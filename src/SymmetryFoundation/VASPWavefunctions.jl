@@ -196,6 +196,44 @@ function _vasp_cutoff_rows(
     ]
 end
 
+"""Decode one WAVECAR coefficient record with the original band and spin arithmetic."""
+function _read_vasp_coefficient_record(
+    path,
+    header,
+    bands,
+    record,
+    spin_transform;
+    normalize_coefficients::Bool,
+)
+    coefficients =
+        zeros(ComplexF64, length(bands), length(record.retained_positions), record.spin_components)
+    open(path, "r") do io
+        for (output_band, band) in enumerate(bands)
+            raw = read_values_at(
+                io,
+                header.coefficient_type,
+                header.record_length * (record.header_record_index + band),
+                record.stored_count,
+            )
+            reshaped = reshape(raw, record.full_count, record.spin_components)
+            coefficients[output_band, :, :] .= reshaped[record.retained_positions, :]
+        end
+    end
+    if record.spin_components == 2 && spin_transform !== nothing
+        for band in axes(coefficients, 1), g_index in axes(coefficients, 2)
+            coefficients[band, g_index, :] .=
+                something(spin_transform) * @view(coefficients[band, g_index, :])
+        end
+    end
+    return PlaneWaveKPoint(
+        record.kpoint,
+        record.retained_g,
+        coefficients,
+        record.energies;
+        normalize_coefficients,
+    )
+end
+
 """
 Read selected VASP bands and plane waves into the native representation boundary.
 """
@@ -203,6 +241,7 @@ function read_vasp_wavefunctions(
     source::VASPWavefunctionSource;
     normalize_coefficients::Bool = true,
     require_spin_basis::Bool = true,
+    point_provider = nothing,
 )
     header = read_vasp_wavecar_header(source.wavecar_file)
     saxis = _read_vasp_saxis(source)
@@ -224,7 +263,7 @@ function read_vasp_wavefunctions(
     bands = selected_band_range(source.band_range, header.num_bands)
     bounds = _vasp_grid_bounds(header.reciprocal_lattice, header.cutoff_ev)
     grid = _vasp_g_grid(bounds)
-    points = PlaneWaveKPoint[]
+    records = NamedTuple[]
     kpoint_matrix = zeros(Float64, header.num_kpoints, 3)
     detected_spinor = false
     open(source.wavecar_file, "r") do io
@@ -271,39 +310,42 @@ function read_vasp_wavefunctions(
                 ) < cutoff
             ]
             retained_g = grid[full_rows[retained_positions], :]
-            coefficients =
-                zeros(ComplexF64, length(bands), length(retained_positions), spin_components)
-            for (output_band, band) in enumerate(bands)
-                band_record_index = header_record_index + band
-                raw = read_values_at(
-                    io,
-                    header.coefficient_type,
-                    header.record_length * band_record_index,
-                    stored_count,
-                )
-                reshaped = reshape(raw, length(full_rows), spin_components)
-                coefficients[output_band, :, :] .= reshaped[retained_positions, :]
-            end
-            if spin_components == 2 && spin_transform !== nothing
-                for band in axes(coefficients, 1), g_index in axes(coefficients, 2)
-                    coefficients[band, g_index, :] .=
-                        something(spin_transform) * @view(coefficients[band, g_index, :])
-                end
-            end
             push!(
-                points,
-                PlaneWaveKPoint(
+                records,
+                (;
+                    header_record_index,
+                    stored_count,
                     kpoint,
                     retained_g,
-                    coefficients,
-                    band_table[bands, 1];
-                    normalize_coefficients,
+                    retained_positions,
+                    full_count = length(full_rows),
+                    spin_components,
+                    energies = band_table[bands, 1],
                 ),
             )
         end
     end
-    all(point -> size(point.coefficients, 3) == (detected_spinor ? 2 : 1), points) ||
+    all(record -> record.spin_components == (detected_spinor ? 2 : 1), records) ||
         throw(ArgumentError("WAVECAR spinor convention changes across k-points"))
+    # Each invocation opens a private stream. No shared seek position crosses workers.
+    loader =
+        index -> _read_vasp_coefficient_record(
+            source.wavecar_file,
+            header,
+            bands,
+            records[index],
+            spin_transform;
+            normalize_coefficients,
+        )
+    points =
+        point_provider === nothing ? [loader(index) for index in eachindex(records)] :
+        IndexedPlaneWavePoints(
+            point_provider(loader, length(records)),
+            [record.kpoint for record in records],
+            [record.energies for record in records],
+            length(bands),
+            detected_spinor ? 2 : 1,
+        )
     return NativeWavefunctionData(
         :vasp,
         structure,

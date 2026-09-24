@@ -31,7 +31,7 @@ function check_per_task_parallel_outputs(reference, actual)
     end
 end
 
-@testset "Independent task parameters: 1/2 threads and MPI ranks" begin
+@testset "Independent task parameters: 1/2/4 threads and MPI ranks" begin
     mktempdir() do directory
         cases = if isdefined(@__MODULE__, :RUN_MPI_TESTS) && RUN_MPI_TESTS
             NamedTuple[
@@ -43,6 +43,7 @@ end
             NamedTuple[
                 (label = "threads1", threads = 1, ranks = nothing),
                 (label = "threads2", threads = 2, ranks = nothing),
+                (label = "threads4", threads = 4, ranks = nothing),
             ]
         end
         records = Dict{String, Any}()

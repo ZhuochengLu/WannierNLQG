@@ -10,10 +10,13 @@ include(joinpath(@__DIR__, "Wannierization", "Wannierization.jl"))
 include(joinpath(@__DIR__, "Responses", "Responses.jl"))
 include(joinpath(@__DIR__, "Runtime", "Runtime.jl"))
 
+using .IO: read_linear_transport_result, read_orbital_magnetization_result
+
 using .Runtime:
     TaskConfig,
     TaskSpec,
     RunResult,
+    ResponseQualificationResult,
     run,
     ModelInput,
     BZMesh,
@@ -22,6 +25,15 @@ using .Runtime:
     ExecutionOptions,
     OutputOptions,
     OpticalParameters,
+    SeparateRelaxation,
+    FermiSurfaceBroadening,
+    LinearTransportParameters,
+    LinearOpticalResponseParameters,
+    OrbitalMagnetizationParameters,
+    LinearResponseNumerics,
+    OrbitalNumerics,
+    SHGParameters,
+    SHGNumerics,
     FiniteQOpticalParameters,
     GeometryParameters,
     BandParameters,
@@ -43,6 +55,7 @@ using .Runtime:
 export TaskConfig,
     TaskSpec,
     RunResult,
+    ResponseQualificationResult,
     run,
     ModelInput,
     BZMesh,
@@ -51,6 +64,15 @@ export TaskConfig,
     ExecutionOptions,
     OutputOptions,
     OpticalParameters,
+    SeparateRelaxation,
+    FermiSurfaceBroadening,
+    LinearTransportParameters,
+    LinearOpticalResponseParameters,
+    OrbitalMagnetizationParameters,
+    LinearResponseNumerics,
+    OrbitalNumerics,
+    SHGParameters,
+    SHGNumerics,
     FiniteQOpticalParameters,
     GeometryParameters,
     BandParameters,
@@ -68,5 +90,6 @@ export TaskConfig,
     TensorComponent,
     FullTensor,
     KSliceSelection
+export read_linear_transport_result, read_orbital_magnetization_result
 
 end

@@ -25,7 +25,7 @@ SPEC.loader.exec_module(runner)
 FAKE = r'''#!/usr/bin/env python3
 import json, os, pathlib, signal, subprocess, sys, time
 task = os.environ['WANNIERNLQG_TEST_TASK_ID']
-directory = pathlib.Path(os.environ['TMPDIR']).parent
+directory = pathlib.Path(os.environ['WANNIERNLQG_TEST_OUTPUT_ROOT']).parent
 (directory / 'environment.json').write_text(json.dumps(dict(os.environ)))
 (directory / 'started').write_text(str(time.monotonic()))
 if os.environ.get('FAKE_INTERRUPT'):
@@ -81,7 +81,9 @@ class SchedulerTests(unittest.TestCase):
         for row in result["tasks"]:
             directory = self.output / row["task"]
             env = json.loads((directory / "environment.json").read_text())
-            self.assertEqual(env["TMPDIR"], str(directory / "tmp"))
+            temporary = Path(env["TMPDIR"])
+            self.assertTrue(temporary.is_dir())
+            self.assertNotIn(" ", str(temporary))
             self.assertEqual(env["WANNIERNLQG_TEST_OUTPUT_ROOT"], str(directory / "output"))
             self.assertEqual(env["OPENBLAS_NUM_THREADS"], "1")
             self.assertEqual(env["JULIA_NUM_PRECOMPILE_TASKS"], "1")

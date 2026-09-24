@@ -731,7 +731,7 @@ plt.close(fig)
         HDF5.h5open(packed_model, "w") do handle
             root_attributes = HDF5.attributes(handle)
             root_attributes["schema"] = "wanniernlqg.real-space-operators"
-            root_attributes["schema_version"] = "5.7"
+            root_attributes["schema_version"] = "1.1"
             root_attributes["scientific_content_sha256"] = repeat("a", 64)
             model_group = HDF5.create_group(handle, "model")
             model_group["lattice"] = packed_lattice

@@ -4,14 +4,14 @@ if !isdefined(@__MODULE__, :WANNIERIZATION_FIXTURE_SUPPORT_LOADED)
     include(joinpath(@__DIR__, "WannierizationFixtureSupport.jl"))
 end
 
-@testset "Diagnostic construction preserves finite-difference arithmetic and hard rank" begin
+@testset "Standard construction preserves finite-difference arithmetic and hard rank" begin
     fixture = synthetic_wannierization_fixture()
     solver = WANNIERIZATION_IMPLEMENTATION.SolverCheckpoint
     strict = solver._finite_difference_weights(fixture.representation, fixture.mmn)
     diagnostic = solver._finite_difference_weights(
         fixture.representation,
         fixture.mmn;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
     )
     @test strict.weights == diagnostic.weights
     @test strict.digest == diagnostic.digest
@@ -23,7 +23,7 @@ end
         fixture.plan,
     )
     diagnostic_result = WANNIERIZATION._solve_symmetry_adapted_wannierization(
-        modified_wannierization_config(fixture.config; construction_policy = :diagnostic),
+        modified_wannierization_config(fixture.config; construction_policy = :standard),
         fixture.representation,
         fixture.eig,
         fixture.mmn,
@@ -39,7 +39,7 @@ end
     perturbed = solver._finite_difference_weights(
         fixture.representation,
         fixture.mmn;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
     )
     @test perturbed.completeness_residual > 1.0e-10
     @test all(isfinite, perturbed.weights)
@@ -47,16 +47,16 @@ end
     @test_throws ArgumentError solver._finite_difference_weights(
         fixture.representation,
         fixture.mmn;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
     )
 end
 
-@testset "Diagnostic quality failures reach accepted state, persist, and export" begin
+@testset "Standard quality failures reach accepted state, persist, and export" begin
     fixture = synthetic_wannierization_fixture()
     fixture.representation.reciprocal_lattice[1, 2] += 2.0e-7
     config = modified_wannierization_config(
         fixture.config;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
         max_iterations = 2,
         write_wannier90_tb = true,
         tb_output_formats = (:packed_hdf5, :wannier90_tb),
@@ -78,22 +78,35 @@ end
     )
     @test result.restart_state !== nothing
     @test result.input_summary["has_accepted_state"] == "true"
-    @test startswith(result.input_summary["model_qualification"], "DIAGNOSTIC_ONLY")
+    @test startswith(result.input_summary["model_qualification"], "STANDARD")
     failures = filter(d -> d.code == :MMN_STENCIL_COMPLETENESS_FAILED, result.diagnostics)
     @test length(failures) == 1
     @test only(failures).severity == :error
     @test only(failures).context["gate_result"] == "FAIL"
-    @test only(failures).context["action"] == "CONTINUE_DIAGNOSTIC"
+    @test only(failures).context["action"] == "CONTINUE_STANDARD"
     exported = WANNIERIZATION_IMPLEMENTATION.OperatorExport
-    gate = exported._diagnostic_nonconverged_tb_export_gate(result, config)
+    gate = exported._accepted_state_tb_export_gate(result, config)
     @test gate.allowed
+    nonfinite = exported.updated_wannierization_result(
+        result;
+        input_summary = merge(result.input_summary, Dict("hard_gate_covariance"=>"NaN")),
+    )
+    @test !exported._accepted_state_tb_export_gate(nonfinite, config).allowed
+    nonapplicable = exported.updated_wannierization_result(
+        result;
+        input_summary = merge(
+            result.input_summary,
+            Dict("hard_gate_target_symmetry"=>"NaN", "symmetry_constraints_applied"=>"false"),
+        ),
+    )
+    @test exported._accepted_state_tb_export_gate(nonapplicable, config).allowed
     @test !WANNIERIZATION_IMPLEMENTATION.SolverCheckpoint.wannierization_production_eligible(result)
     mktempdir() do directory
         checkpoint = joinpath(directory, "diagnostic.wannierization.h5")
         WANNIERIZATION.write_wannierization_checkpoint_hdf5(checkpoint, result)
         restored = WANNIERIZATION.read_wannierization_checkpoint_hdf5(checkpoint)
         @test restored.v_matrix == result.v_matrix
-        @test restored.input_summary["construction_policy"] == "diagnostic"
+        @test restored.input_summary["construction_policy"] == "standard"
         @test only(filter(d -> d.code == :MMN_STENCIL_COMPLETENESS_FAILED, restored.diagnostics)).context ==
               only(failures).context
         paths = exported._wannierization_output_paths(checkpoint)
@@ -106,12 +119,13 @@ end
             nothing,
         )
         @test isfile(packed) && isfile(exchange)
-        @test isfile(metadata["wannier90_diagnostic_metadata"])
-        sidecar = JSON3.read(read(metadata["wannier90_diagnostic_metadata"], String))
+        @test isfile(metadata["wannierization_quality_metadata"])
+        sidecar = JSON3.read(read(metadata["wannierization_quality_metadata"], String))
         @test String(sidecar.wannier90_tb_sha256) == bytes2hex(SHA.sha256(read(exchange)))
         @test !sidecar.production_eligible
-        @test metadata["diagnostic_classification"] == "DIAGNOSTIC_ONLY_QUALITY_FAILED"
-        @test occursin("CONTINUE_DIAGNOSTIC", metadata["construction_gate_records_json"])
+        @test metadata["model_availability"] == "AVAILABLE_WITH_QUALITY_WARNINGS"
+        @test metadata["numerical_quality"] == "NUMERICAL_WARNING"
+        @test occursin("CONTINUE_STANDARD", metadata["construction_gate_records_json"])
         @test all(isfinite, WANNIER_IO.read_wannier_tb(exchange).hamiltonian_r)
         @test WANNIER_IO.read_real_space_operator_bundle(packed) !== nothing
     end
@@ -122,10 +136,10 @@ end
             result;
             status = WANNIERIZATION.SINGULAR_LOCALIZATION,
         )
-    @test exported._diagnostic_nonconverged_tb_export_gate(failed, config).allowed
+    @test exported._accepted_state_tb_export_gate(failed, config).allowed
     support = WANNIERIZATION_IMPLEMENTATION.WannierizationInternalSupport
     missing = support.updated_wannierization_result(result; restart_state = nothing)
-    @test !exported._diagnostic_nonconverged_tb_export_gate(missing, config).allowed
+    @test !exported._accepted_state_tb_export_gate(missing, config).allowed
     corrupted = support.updated_wannierization_result(
         result;
         diagnostics = vcat(
@@ -139,15 +153,15 @@ end
             ],
         ),
     )
-    @test !exported._diagnostic_nonconverged_tb_export_gate(corrupted, config).allowed
+    @test !exported._accepted_state_tb_export_gate(corrupted, config).allowed
 end
 
-@testset "Diagnostic Z handoff retains geometry gates" begin
+@testset "Standard Z handoff retains geometry gates" begin
     fixture = synthetic_wannierization_fixture()
     solver = WANNIERIZATION_IMPLEMENTATION.SolverCheckpoint
     frames = [reshape(ComplexF64[1, 0], 2, 1) for _ in 1:2]
     z = [Matrix{ComplexF64}(I, 2, 2) for _ in 1:2]
-    qualifier(values; policy = :diagnostic) = solver._qualify_nonconverged_disentanglement_state(
+    qualifier(values; policy = :standard) = solver._qualify_nonconverged_disentanglement_state(
         values,
         z,
         zeros(1, 3),
@@ -173,7 +187,7 @@ end
     solver = WANNIERIZATION_IMPLEMENTATION.SolverCheckpoint
     config = modified_wannierization_config(
         fixture.config;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
         max_iterations = 3,
         acceleration = WANNIERIZATION.WannierizationAccelerationConfig(
             schedule = :two_stage,
@@ -231,10 +245,10 @@ end
     @test continued.latest_restart_state.optimizer_state.phase == :localization
     @test state.latest_restart_state.frames == retained
     @test continued.z_steps == state.z_steps == 0
-    @test continued.diagnostic_disentanglement_nonconverged
+    @test continued.retained_disentanglement_nonconverged
     @test any(d -> d.code == :SYNTHETIC_Z_TRIAL_FAILED, continued.diagnostics)
     @test any(
-        d -> d.code == :DISENTANGLEMENT_FAILED_TRIAL_CONTINUED_DIAGNOSTIC,
+        d -> d.code == :DISENTANGLEMENT_FAILED_TRIAL_CONTINUED_STANDARD,
         continued.diagnostics,
     )
     terminal = solver._run_solver_iterations(continued)
@@ -243,7 +257,7 @@ end
         solver._assemble_solver_terminal_result(terminal)
     @test result.restart_state !== nothing
     @test result.restart_state.optimizer_state.u_steps > 0
-    @test result.input_summary["qualified_z_seal"] == "false"
+    @test result.input_summary["z_seal_class"] == "NONCONVERGED_RETAINED"
     @test state.latest_restart_state.frames == retained
     strict_state = merge(
         state,
@@ -331,7 +345,7 @@ end
             fixture.representation,
             (magnetic = false,);
             public_origin_fallback_validated = true,
-            construction_policy = :diagnostic,
+            construction_policy = :standard,
         ) == requested
         @test workflow._effective_compatibility_policy(
             requested,
@@ -367,7 +381,7 @@ end
     reflection = ComplexF64[1 0; 0 -1]
     probe = ComplexF64[2+3im 4+5im; 6+7im 8+9im]
     expected = ComplexF64[2 0; 0 8]
-    for policy in (:strict, :diagnostic)
+    for policy in (:strict, :standard)
         tangent = solver._target_symmetry_tangent_plan(
             [reflection, identity_matrix],
             [false, true];
@@ -384,10 +398,11 @@ function public_diagnostic_chain_fresh_read(result, expected_code)
     script = """
     using WannierNLQG, HDF5, SHA
     result = WannierNLQG.Wannierization.read_wannierization_checkpoint_hdf5(ARGS[1])
-    result.input_summary["production_eligible"] == "false" || error("production flag changed")
+    result.input_summary["wannierization_eligibility_production_eligible"] == "false" ||
+        error("production flag changed")
     bytes2hex(sha256(reinterpret(UInt8, vec(result.v_matrix)))) == ARGS[5] || error("accepted arrays changed")
     bundle = WannierNLQG.IO.read_real_space_operator_bundle(ARGS[2])
-    bundle.manifest.diagnostic_only && !bundle.manifest.production_eligible || error("Packed eligibility changed")
+    bundle.manifest.quality_review_recommended && !bundle.manifest.production_eligible || error("Packed eligibility changed")
     tb = WannierNLQG.IO.read_wannier_tb(ARGS[3])
     all(isfinite, tb.hamiltonian_r) || error("TB is nonfinite")
     h5open(ARGS[2], "r") do handle
@@ -403,7 +418,7 @@ function public_diagnostic_chain_fresh_read(result, expected_code)
     return occursin("PUBLIC_DIAGNOSTIC_CHAIN_FRESH_READ_PASS", read(command, String))
 end
 
-@testset "Public diagnostic antiunitary quality chain reaches readable TB" begin
+@testset "Public standard antiunitary quality chain reaches readable TB" begin
     isdefined(@__MODULE__, :BandPublicSchemaTestSupport) ||
         include(joinpath(@__DIR__, "BandPublicSchemaTestSupport.jl"))
     W = WANNIERIZATION
@@ -491,13 +506,13 @@ end
             err
         end
         @test strict isa Exception || strict.status==:FAILED
-        prepared=prep(:diagnostic)
+        prepared=prep(:standard)
         @test prepared.status in (:PASS, :PASS_WITH_WARNINGS)
         representation=S.read_band_representation_hdf5(prepared.output_hdf5)
         @test representation.sewing_matrices==sewing
         cfg=modified_wannierization_config(
             f.config;
-            construction_policy = :diagnostic,
+            construction_policy = :standard,
             projection_basis = basis,
             num_wannier = 2,
             win_file = win,
@@ -519,7 +534,7 @@ end
         result=W.construct_symmetry_adapted_wannier_functions(cfg)
         @test result.restart_state!==nothing
         @test result.restart_state.optimizer_state.u_steps>0
-        @test result.input_summary["production_eligible"]=="false"
+        @test result.input_summary["wannierization_eligibility_production_eligible"]=="false"
         @test any(
             d->d.code==:THETA_SQUARED_FAILED && get(d.context, "gate_result", "")=="FAIL",
             result.diagnostics,
@@ -528,7 +543,7 @@ end
     end
 end
 
-@testset "QE diagnostic admission retains metric and identity hard gates" begin
+@testset "QE standard admission retains metric and identity hard gates" begin
     paw = WANNIERIZATION_IMPLEMENTATION.PAWMatrixElements
     metric = ComplexF64[1.001 0; 0 0.999]
     retained = copy(metric)
@@ -553,8 +568,9 @@ function public_diagnostic_checkpoint_fresh_read(result, expected_code)
     using WannierNLQG, SHA
     result = WannierNLQG.Wannierization.read_wannierization_checkpoint_hdf5(ARGS[1])
     bytes2hex(sha256(reinterpret(UInt8, vec(result.v_matrix)))) == ARGS[3] || error("accepted arrays changed")
-    result.input_summary["construction_policy"] == "diagnostic" || error("policy changed")
-    result.input_summary["production_eligible"] == "false" || error("production flag changed")
+    result.input_summary["construction_policy"] == "standard" || error("policy changed")
+    result.input_summary["wannierization_eligibility_production_eligible"] == "false" ||
+        error("production flag changed")
     any(d -> string(d.code) == ARGS[2], result.diagnostics) || error("original diagnostics disappeared")
     println("PUBLIC_DIAGNOSTIC_CHECKPOINT_FRESH_READ_PASS")
     """
@@ -563,7 +579,7 @@ function public_diagnostic_checkpoint_fresh_read(result, expected_code)
     return occursin("PUBLIC_DIAGNOSTIC_CHECKPOINT_FRESH_READ_PASS", read(command, String))
 end
 
-@testset "Public native QE parity failure reaches diagnostic solve and fresh checkpoint" begin
+@testset "Public native QE parity failure reaches standard solve and fresh checkpoint" begin
     isdefined(@__MODULE__, :QEPAWMatrixElementsTestSupport) ||
         include(joinpath(@__DIR__, "QEPAWMatrixElementsTestSupport.jl"))
     W = WANNIERIZATION
@@ -620,7 +636,7 @@ end
         )
         write(eig, "1 1 $(-.25*S.HARTREE_TO_EV)\n")
         base=synthetic_wannierization_fixture()
-        for policy in (:strict, :diagnostic)
+        for policy in (:strict, :standard)
             cfg=modified_wannierization_config(
                 base.config;
                 construction_policy = policy,
@@ -651,12 +667,50 @@ end
                 tb_output_formats = (:packed_hdf5, :wannier90_tb),
             )
             result=W.construct_symmetry_adapted_wannier_functions(cfg)
+            if policy == :standard
+                workflow = WANNIERIZATION_IMPLEMENTATION.WorkflowOrchestration
+                basis =
+                    cfg.input.projection_basis === nothing ?
+                    workflow.build_wannier_projection_basis(cfg.input.win_file) :
+                    cfg.input.projection_basis
+                normalized = workflow._config_with_projection_basis(cfg, basis)
+                restored = workflow._resolve_wannier_matrix_elements(
+                    normalized,
+                    basis;
+                    generator = (_, _) ->
+                        error("native matrix generator reentered on accepted cache hit"),
+                )
+                @test restored.mmn.data == WI.read_wannier_mmn(restored.mmn_file).data
+                @test restored.amn == WI.read_wannier_amn(restored.amn_file).data
+                @test restored.paw_result !== nothing
+                @test !restored.paw_result.passed
+                @test haskey(result.input_summary, "native_matrix_acceptance_json")
+                accepted = workflow._resolve_wannier_matrix_elements(
+                    normalized,
+                    basis;
+                    accepted_result = result,
+                    generator = (_, _) -> error("ACCEPTED_MATRIX_REGENERATION_FORBIDDEN"),
+                    implementation_catalog = () ->
+                        error("CONSUMER_IMPLEMENTATION_SCAN_FORBIDDEN"),
+                )
+                @test accepted.mmn.data == restored.mmn.data
+                @test accepted.amn == restored.amn
+                @test accepted.paw_result.diagnostics == restored.paw_result.diagnostics
+                @test !accepted.paw_result.passed
+                @test accepted.paw_result.input_sha256 == restored.paw_result.input_sha256
+                reference_file = joinpath(dir, "accepted-reference.json")
+                write(reference_file, result.input_summary["native_matrix_acceptance_json"])
+                code = "using WannierNLQG,HDF5,EzXML,Spglib,JSON3; W=WannierNLQG.Wannierization; E=first(W._load_wannierization_extension!()).WorkflowOrchestration; reference=JSON3.read(read(ARGS[1],String),Dict{String,String}); result=E._restore_accepted_matrix_reference(reference,reference[\"input_identity_sha256\"]); @assert !result.paw_result.passed; @assert result.mmn.data==WannierNLQG.IO.read_wannier_mmn(result.mmn_file).data; @assert result.amn==WannierNLQG.IO.read_wannier_amn(result.amn_file).data; println(\"FRESH_ACCEPTED_NATIVE_DIAGNOSTIC_PASS\")"
+                command =
+                    `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(@__DIR__)) -e $code $reference_file`
+                @test occursin("FRESH_ACCEPTED_NATIVE_DIAGNOSTIC_PASS", read(command, String))
+            end
             if policy==:strict
                 @test result.restart_state===nothing
             else
                 @test result.restart_state!==nothing
                 @test result.restart_state.optimizer_state.u_steps>0
-                @test result.input_summary["production_eligible"]=="false"
+                @test result.input_summary["wannierization_eligibility_production_eligible"]=="false"
                 @test any(
                     d->d.code==:NATIVE_QE_PAW_QUALITY_CHECK &&
                        get(d.context, "gate_result", "")=="FAIL",
@@ -685,11 +739,11 @@ end
         @test !failed_parity.passed && !failed_parity.physical_overlap_available
         @test workflow._require_native_qe_paw_qualification(
             failed_parity;
-            construction_policy = :diagnostic,
+            construction_policy = :standard,
         ) === nothing
         @test_throws ArgumentError workflow._require_native_qe_paw_qualification(
             failed_parity;
-            construction_policy = :diagnostic,
+            construction_policy = :standard,
             propagation_identity = true,
         )
         missing_oracle = W.generate_qe_paw_matrix_elements(
@@ -700,7 +754,7 @@ end
         )
         @test_throws ArgumentError workflow._require_native_qe_paw_qualification(
             missing_oracle;
-            construction_policy = :diagnostic,
+            construction_policy = :standard,
         )
         invalid_amn = WI.WannierAMN(1, 1, 1, zeros(ComplexF64, 1, 1, 1))
         fields = fieldnames(W.QEPAWMatrixElementResult)
@@ -709,7 +763,7 @@ end
         )
         @test_throws ArgumentError workflow._require_native_qe_paw_qualification(
             rank_deficient;
-            construction_policy = :diagnostic,
+            construction_policy = :standard,
         )
 
         # A genuine diagnostic capsule must also pass the default completed-matrix source into solve.
@@ -724,12 +778,12 @@ end
             W.SymmetryCovariantWavefunctionPreparationConfig(
                 source = completed_source,
                 wavefunction_gauge_backend = backend,
-                construction_policy = :diagnostic,
+                construction_policy = :standard,
                 output_hdf5 = joinpath(dir, "gauge.h5"),
                 target_band_count = 1,
             ),
         )
-        @test gauge.status == :DIAGNOSTIC_ONLY
+        @test gauge.status == :STANDARD
         gauge_file = something(gauge.output_hdf5)
         original_gauge_sha256 = bytes2hex(SHA.sha256(read(gauge_file)))
         tampered_gauge = joinpath(dir, "gauge-one-ulp-tampered.h5")
@@ -745,7 +799,7 @@ end
         tamper_error = try
             WANNIERIZATION_IMPLEMENTATION.PAWMatrixElements._read_star_covariant_paw_gauge_hdf5(
                 tampered_gauge;
-                construction_policy = :diagnostic,
+                construction_policy = :standard,
                 source = completed_source,
             )
             nothing
@@ -757,7 +811,7 @@ end
         @test bytes2hex(SHA.sha256(read(gauge_file))) == original_gauge_sha256
         completed_config = modified_wannierization_config(
             base.config;
-            construction_policy = :diagnostic,
+            construction_policy = :standard,
             initialization = :amn,
             wannierization_mode = :symmetry_adapted,
             band_representation = nothing,
@@ -792,7 +846,7 @@ end
         end
         @test completed.restart_state !== nothing
         @test completed.restart_state.optimizer_state.u_steps > 0
-        @test completed.input_summary["production_eligible"] == "false"
+        @test completed.input_summary["wannierization_eligibility_production_eligible"] == "false"
         @test completed.input_summary["wavefunction_gauge_hdf5_sha256"] == gauge.artifact_sha256
         @test any(d -> d.code == :PAW_SEWING_QUALITY_CHECK, completed.diagnostics)
         @test public_diagnostic_checkpoint_fresh_read(completed, "PAW_SEWING_QUALITY_CHECK")
@@ -894,14 +948,14 @@ end
             join((d.message for d in strict.diagnostics), "\n")
         @test occursin("projection centers do not map uniquely", strict_reason)
         @test basis.blocks[1].positions_fractional == input_centers
-        prepared=prep(:diagnostic)
+        prepared=prep(:standard)
         @test prepared.status in (:PASS, :PASS_WITH_WARNINGS)
         center_failures = filter(d -> d.code == :PROJECTION_CENTER_RESIDUAL, prepared.diagnostics)
         @test !isempty(center_failures)
         @test all(
             d ->
                 get(d.context, "gate_result", "") == "FAIL" &&
-                get(d.context, "action", "") == "CONTINUE_DIAGNOSTIC",
+                get(d.context, "action", "") == "CONTINUE_STANDARD",
             center_failures,
         )
         @test all(
@@ -915,7 +969,7 @@ end
         @test representation.sewing_matrices==sewing
         cfg=modified_wannierization_config(
             f.config;
-            construction_policy = :diagnostic,
+            construction_policy = :standard,
             projection_basis = basis,
             num_wannier = 2,
             win_file = win,
@@ -937,7 +991,7 @@ end
         result=W.construct_symmetry_adapted_wannier_functions(cfg)
         @test result.restart_state!==nothing
         @test result.restart_state.optimizer_state.u_steps>0
-        @test result.input_summary["production_eligible"]=="false"
+        @test result.input_summary["wannierization_eligibility_production_eligible"]=="false"
         @test any(
             d->d.code==:PROJECTION_CENTER_RESIDUAL && get(d.context, "gate_result", "")=="FAIL",
             result.diagnostics,
@@ -947,7 +1001,7 @@ end
     end
 end
 
-@testset "Public periodic diagnostic checkpoint restarts in a fresh process" begin
+@testset "Public periodic standard checkpoint restarts in a fresh process" begin
     W = WANNIERIZATION
     WI = WANNIER_IO
     mktempdir() do directory
@@ -990,7 +1044,7 @@ end
         WI.write_wannier_mmn(mmn, fixture.mmn)
         prepared = W.prepare_band_representation(
             W.BandRepresentationPreparationConfig(
-                construction_policy = :diagnostic,
+                construction_policy = :standard,
                 wannierization_mode = :symmetry_adapted,
                 win_file = win,
                 eig_file = eig,
@@ -1020,8 +1074,8 @@ function periodic_public_test_config(directory; observer = nothing, restart = fa
     W = WannierNLQG.Wannierization
     acceleration = W.WannierizationAccelerationConfig(schedule = :two_stage,
         disentanglement_max_steps = 2, localization_max_steps = 6,
-        disentanglement_limit_policy = :diagnostic_continue)
-    config = modified_wannierization_config(f.config; construction_policy = :diagnostic,
+        disentanglement_limit_policy = :standard_continue)
+    config = modified_wannierization_config(f.config; construction_policy = :standard,
         win_file = joinpath(directory, "model.win"), eig_file = joinpath(directory, "model.eig"),
         mmn_file = joinpath(directory, "model.mmn"), band_representation = nothing,
         band_representation_hdf5 = joinpath(directory, "representation.h5"),
@@ -1047,12 +1101,12 @@ end
         @test prior.status == W.IN_PROGRESS_CHECKPOINT
         @test prior.restart_state.iteration == 4
         @test prior.restart_state.optimizer_state.u_steps > 0
-        @test prior.input_summary["construction_policy"] == "diagnostic"
-        @test prior.input_summary["manual_review_required"] == "true"
-        @test prior.input_summary["manual_review_status"] == "REQUIRED"
-        @test prior.input_summary["production_eligible"] == "false"
+        @test prior.input_summary["construction_policy"] == "standard"
+        @test prior.input_summary["quality_review_recommended"] == "true"
+        @test prior.input_summary["quality_review_status"] == "RECOMMENDED"
+        @test prior.input_summary["wannierization_eligibility_production_eligible"] == "false"
         @test prior.input_summary["global_production_eligible"] == "false"
-        @test prior.input_summary["model_qualification"] == "DIAGNOSTIC_ONLY"
+        @test prior.input_summary["model_qualification"] == "STANDARD"
         @test prior.input_summary["construction_quality_failed"] == "true"
         @test prior.input_summary["operator_profile_preflight_status"] == "NOT_APPLICABLE"
         @test prior.input_summary["operator_profile_preflight_profile"] == "hamiltonian_position"
@@ -1102,7 +1156,7 @@ end
             @test isequal(recovered.history[1:length(prior.history)], prior.history)
             @test recovered.artifacts.packed_hdf5 !== nothing
             @test recovered.artifacts.wannier90_tb !== nothing
-            @test recovered.input_summary["production_eligible"] == "false"
+            @test recovered.input_summary["wannierization_eligibility_production_eligible"] == "false"
             prior_center = only(filter(d -> d.code == :PROJECTION_CENTER_RESIDUAL, prior.diagnostics))
             recovered_center = only(filter(d -> d.code == :PROJECTION_CENTER_RESIDUAL, recovered.diagnostics))
             @test recovered_center.context == prior_center.context
@@ -1124,7 +1178,7 @@ end
         bytes2hex(SHA.sha256(reinterpret(UInt8, vec(result.v_matrix)))) == ARGS[4] || error("accepted arrays differ")
         bundle = WannierNLQG.IO.read_real_space_operator_bundle(ARGS[2])
         tb = WannierNLQG.IO.read_wannier_tb(ARGS[3])
-        bundle.manifest.diagnostic_only && !bundle.manifest.production_eligible || error("qualification differs")
+        bundle.manifest.quality_review_recommended && !bundle.manifest.production_eligible || error("qualification differs")
         all(isfinite, tb.hamiltonian_r) || error("nonfinite TB")
         println("PERIODIC_RESTART_DUAL_FRESH_READ_PASS")
         """
@@ -1132,5 +1186,74 @@ end
         command =
             `$(Base.julia_cmd()) --startup-file=no --threads=1 --project=$(dirname(@__DIR__)) -e $(fresh_readback) $(output.checkpoint) $(output.packed) $(output.wannier90) $(digest)`
         @test occursin("PERIODIC_RESTART_DUAL_FRESH_READ_PASS", read(command, String))
+    end
+end
+
+@testset "Standard export classifies measured quality without masking integrity" begin
+    exported = WANNIERIZATION_IMPLEMENTATION.OperatorExport
+    function quality(code; context = Dict("value"=>"0.5", "threshold"=>"1e-10"))
+        WANNIERIZATION.WannierizationDiagnostic(
+            code,
+            :error,
+            "fixture";
+            context = merge(Dict("action"=>"CONTINUE_STANDARD"), context),
+        )
+    end
+    for code in (
+        :MMN_STENCIL_COMPLETENESS_FAILED,
+        :TARGET_SYMMETRY_TANGENT_RESIDUAL_FAILED,
+        :SOLVER_TRIAL_COVARIANCE_FAILED,
+        :SOLVER_TRIAL_TARGET_SYMMETRY_FAILED,
+    )
+        @test exported._standard_construction_quality_error(quality(code))
+        @test !exported._standard_construction_quality_error(
+            quality(code; context = Dict("value"=>"Inf")),
+        )
+        @test !exported._standard_construction_quality_error(
+            quality(code; context = Dict{String, String}()),
+        )
+    end
+    @test exported._standard_construction_quality_error(
+        WANNIERIZATION.WannierizationDiagnostic(
+            :THETA_SQUARED_FAILED,
+            :error,
+            "raw audit";
+            context = Dict("maximum_error"=>"0.2", "tolerance"=>"1e-10"),
+        ),
+    )
+    @test !exported._standard_construction_quality_error(quality(:UNKNOWN_ERROR))
+    @test !exported._standard_construction_quality_error(quality(:FROZEN_MASK_IDENTITY_MISMATCH))
+    @test !exported._standard_construction_quality_error(
+        quality(
+            :TARGET_REPRESENTATION_GROUP_LAW_FAILED;
+            context = Dict("band_count"=>"2", "target_count"=>"1"),
+        ),
+    )
+    for code in (
+        :REQUIRED_BLOCK_UNITARITY_FAILED,
+        :ANTIUNITARY_GROUP_LAW_FAILED,
+        :TARGET_REPRESENTATION_GROUP_LAW_FAILED,
+        :THETA_SQUARED_FAILED,
+        :ANTIUNITARY_PROJECTOR_COVARIANCE_FAILED,
+    )
+        @test exported._standard_construction_quality_error(
+            quality(code; context = Dict("maximum_error"=>"0.5")),
+        )
+        @test !exported._standard_construction_quality_error(
+            quality(code; context = Dict("maximum_error"=>"NaN")),
+        )
+    end
+    for (source, target, allowed) in ((2, 2, true), (2, 4, false), (3, 3, false), (-2, -2, false))
+        diagnostic=quality(
+            :KRAMERS_BLOCK_NOT_CLOSED;
+            context = Dict(
+                "maximum_error"=>"0.2",
+                "source_rank"=>string(source),
+                "target_rank"=>string(target),
+                "source_kpoint"=>"1",
+                "target_kpoint"=>"1",
+            ),
+        )
+        @test exported._standard_construction_quality_error(diagnostic)==allowed
     end
 end

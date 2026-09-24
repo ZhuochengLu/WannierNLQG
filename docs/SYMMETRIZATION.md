@@ -1,9 +1,16 @@
 # Wannier operator symmetrization
 
-WannierNLQG 1.0.x writes one variable-capability model package. Packed HDF5 1.0
+WannierNLQG 1.1.0 writes one variable-capability model package. Packed HDF5 1.1
 stores the complete raw-to-final Wannier-center lifecycle and the single final
 real-space replica materialization. Its exact operator inventory is inferred
 from explicitly configured input paths. Hamiltonian and position are mandatory.
+
+The profile inference below belongs to `SymmetrizationConfig` and is unchanged
+by Wannierization task selection. New `WannierizationOutputConfig` exports accept
+only `:hamiltonian_position` or `:full`, or `profile=nothing` with `operator_tasks`.
+The Symmetrization `hamiltonian_position_spin` and `derivative` names are not
+additional public Wannierization profiles. See the
+[Wannierization dependency table](WANNIERIZATION.md#complete-supported-task-dependencies).
 
 ## 1. Scientific input boundary
 
@@ -27,7 +34,7 @@ does not read QE or VASP magnetic moments.
 The Symmetrization spin profile validates projection, covariance, idempotence,
 and exact serialization, but it does not create the independent spin
 source/gauge qualification required by schema 1.0. Its bundle therefore remains
-explicitly diagnostic-only. Production spin/full publication belongs to the
+explicitly standard. Production spin/full publication belongs to the
 Wannierization workflow that owns that qualification evidence.
 
 The derivative family contains Hamiltonian-weighted connection,
@@ -97,7 +104,7 @@ bodies without changing their numerical statements or storage contracts.
 | win_file | required structural, projection, and mesh authority |
 | tb_file | required Hamiltonian and position input |
 | output_tb_file | required symmetrized Wannier90 TB output |
-| output_real_space_operator_bundle_file | required Packed HDF5 schema-1.0 output for every accepted profile |
+| output_real_space_operator_bundle_file | required Packed HDF5 schema-1.1 output for every accepted profile; older schemas require external migration |
 | chk_file | optional; required by derivative or `hamiltonian_position_spin` profiles |
 | eig_file | optional; must be paired with MMN |
 | mmn_file | optional; must be paired with EIG |
@@ -112,7 +119,7 @@ bodies without changing their numerical statements or storage contracts.
 | support_tolerance | default `1e-12` |
 | wigner_seitz_tolerance | default `1e-5` |
 | wigner_seitz_search_size | default `3` |
-| wannier_center_policy | `:symmetrize` (default), `:validate`, or diagnostic-only `:keep_input` |
+| wannier_center_policy | `:symmetrize` (default), `:validate`, or standard `:keep_input` |
 | wannier_center_tolerance | affine covariance and branch-alignment tolerance; default `1e-8` |
 | real_space_replica_policy | `:minimum_distance` (default) or `:input` |
 | check_roundtrip | default `true` |
@@ -172,9 +179,9 @@ equally between ties, builds one global R support, and writes unit degeneracies.
 `:input` preserves the normalized projected input support. This workflow writes
 the materialization state into the bundle and never repeats it itself.
 
-## 5. Packed HDF5 1.0
+## 5. Packed HDF5 1.1
 
-The writer schema is `wanniernlqg.real-space-operators/1.0`. Its only large dataset is
+The writer schema is `wanniernlqg.real-space-operators/1.1`. Its only large dataset is
 one contiguous, uncompressed, one-dimensional ComplexF64 payload. A versioned
 index records the stable operator ID, canonical name, Cartesian component,
 zero-based element offset, length, logical `(num_wannier,num_wannier,num_R)`
@@ -182,7 +189,7 @@ shape, and component digest. Metadata groups store model, symmetry,
 diagnostics, provenance, compatibility, and geometry contracts. Geometry stores
 the MP grid, both policies, tolerances, raw/aligned/final centers, branch shifts,
 operation residuals, idempotence, replica statistics, algorithm identifiers,
-and a geometry SHA-256. Schema 1.0 also stores a digest-sealed qualification
+and a geometry SHA-256. Schema 1.1 also stores a digest-sealed qualification
 record for every operator under `/qualification/operators`, plus the aggregate
 spin-family status under `/qualification/families/spin` and at the root. A root
 band-frame summary binds the transform, physical metric, replay, source/artifact,
@@ -202,21 +209,10 @@ operators retain the existing `1e-12` text/serialization gate.
 
 The strict reader rejects missing Hamiltonian or position, profile/inventory
 disagreement, unknown IDs, gaps, overlaps, trailing payload, wrong shapes,
-non-finite values, geometry inconsistencies, and digest failures. It reads
-schema 3/4 for compatibility (schema-3 derivative families remain rejected
-because their center convention is ambiguous); the writer only creates public
-schema 1.0 with the complete former 6.3 contract. Legacy 6.3 remains readable
-with its original recorded-version digest. Public 1.0 requires all current
-fields and sealed qualification metadata; a version-label edit cannot upgrade
-a historical file.
-Schema 2 and historical cache files are not converted. Earlier readable 5.x
-artifacts retain their recorded capabilities; read compatibility does not
-retroactively add full-uIu provenance. Spin-bearing schema-6.0 artifacts are
-readable only as `LEGACY_NOT_RECORDED` diagnostic input and never acquire
-schema-1.0 spin-family production qualification. Spin/full schema-6.1 files with
-a nonidentity transform are diagnostic
-`LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED` inputs. Schema-6.2 full files are
-diagnostic `LEGACY_GALERKIN_RISK_CONTRACT_NOT_RECORDED` inputs.
+non-finite values, geometry inconsistencies, digest failures, and every wire
+schema other than `1.1`. The writer creates only public schema `1.1` with the
+complete current field contract. A version-label edit cannot upgrade a
+historical file; older bundles require an external migration tool.
 
 ## 6. Runtime use
 
@@ -237,10 +233,10 @@ plan or any `MatrixElementWorkspace`. `ModelInput.real_space_replica_policy`
 is `auto`, `input`, or `minimum_distance`; `wsvec_file` is considered only when
 explicitly supplied and is never guessed from adjacent files. `auto` preserves
 text input support unless `mp_grid` or `wsvec_file` requests minimum distance;
-for current schema-1.0 and supported historical 6.x bundles it inherits the recorded lifecycle. An already materialized
+for current schema-1.1 bundles it inherits the recorded lifecycle. An already materialized
 bundle is reused without a second transform and cannot be reversed to `input`.
-Legacy Packed bundles have no authoritative lifecycle record: they are admitted
-only as input support and reject runtime minimum-distance or `wsvec_file` use.
+Older Packed bundles are rejected before runtime planning and require external
+migration.
 When both `wsvec_file` and `mp_grid` are supplied, their complete canonical maps
 and SHA-256 must agree. The same plan materializes every demanded operator
 component once, including scalar Wannier90 `N_R` and pair/tie weights.

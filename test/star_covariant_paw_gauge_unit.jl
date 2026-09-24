@@ -180,7 +180,7 @@ end
     @test STAR_GAUGE_W.StarCovariantPAWGauge().hamiltonian_correction isa
           STAR_GAUGE_W.NoDiscreteHamiltonianCorrection
     correction = STAR_GAUGE_W.FarBandCovarianceCorrection()
-    @test correction.qualification_mode == :strict
+    @test correction.qualification_mode == :standard
     @test correction.thresholds.far_rotation_operator == 5.0e-4
     @test correction.thresholds.hamiltonian_correction_operator_ev == 1.0e-5
     @test_throws ArgumentError STAR_GAUGE_W.StarCovariantPAWGauge(
@@ -244,8 +244,8 @@ end
         Inf,
         5.0e-6,
     )
-    @test STAR_GAUGE_W.FarBandCovarianceCorrection(qualification_mode = :diagnostic_only).qualification_mode ==
-          :diagnostic_only
+    @test STAR_GAUGE_W.FarBandCovarianceCorrection(qualification_mode = :standard).qualification_mode ==
+          :standard
     @test_throws ArgumentError STAR_GAUGE_W.PAWHamiltonianResidualThresholds(pair_ev = 0.0)
     @test_throws ArgumentError STAR_GAUGE_W.PAWCancellationStabilityThresholds(
         bigfloat_precision_bits = 64,
@@ -1324,7 +1324,7 @@ end
     @test maximum(abs, result.vectors' * result.vectors - I) <= 1.0e-12
 end
 
-@testset "columnar PAW block audit is diagnostic-only" begin
+@testset "columnar PAW block audit is standard" begin
     extension =
         first(STAR_GAUGE_W._load_wannierization_extension!()).PAWMatrixElements.PAWMatrixElements
     mktempdir() do directory
@@ -1352,7 +1352,7 @@ end
                 kpoint_indices = [1],
             ),
         )
-        @test result.status == :DIAGNOSTIC_ONLY
+        @test result.status == :STANDARD
         @test result.violation_count == 0
         @test isfile(hdf5) && isfile(csv) && isfile(json)
         HDF5.h5open(hdf5, "r") do handle
@@ -2019,7 +2019,9 @@ end
         symmetrized_gauge_backend = STAR_GAUGE_W.StarCovariantPAWGauge(
             buffer_policy = STAR_GAUGE_W.ClosureDrivenBandBuffer(max_extra_bands = 0),
             block_partition_policy = STAR_GAUGE_W.HamiltonianWeightedPAWBlockPartition(),
-            hamiltonian_correction = STAR_GAUGE_W.FarBandCovarianceCorrection(),
+            hamiltonian_correction = STAR_GAUGE_W.FarBandCovarianceCorrection(
+                qualification_mode = :strict,
+            ),
         )
         symmetrized_result = STAR_GAUGE_W.prepare_symmetry_covariant_wavefunctions(
             STAR_GAUGE_W.SymmetryCovariantWavefunctionPreparationConfig(
@@ -2862,43 +2864,43 @@ end
         @test matrix_result.mmn_parity.max_absolute <= 1.0e-12
         @test matrix_result.amn_parity.max_absolute <= 1.0e-12
 
-        diagnostic_gauge = joinpath(directory, "diagnostic-only-gauge.h5")
+        standard_gauge = joinpath(directory, "standard-gauge.h5")
         Base.invokelatest(
             extension._write_star_covariant_paw_gauge_hdf5,
-            diagnostic_gauge,
+            standard_gauge,
             restored.payload;
-            status = :DIAGNOSTIC_ONLY,
+            status = :STANDARD,
             root_cause = :CONTROLLED_SYMMETRIZATION_HOLD,
-            diagnostics = ["synthetic diagnostic-only qualification test"],
+            diagnostics = ["synthetic standard qualification test"],
         )
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
-            diagnostic_gauge,
+            standard_gauge,
         )
-        diagnostic_restored = Base.invokelatest(
+        standard_restored = Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
-            diagnostic_gauge;
+            standard_gauge;
             require_pass = false,
         )
-        @test diagnostic_restored.status == :DIAGNOSTIC_ONLY
+        @test standard_restored.status == :STANDARD
         @test_throws ArgumentError STAR_GAUGE_W.generate_symmetry_completed_qe_paw_matrix_elements(
             source,
-            diagnostic_gauge,
+            standard_gauge,
             fixture.nnkp_file;
-            artifact_dir = joinpath(directory, "diagnostic-matrices-strict-rejected"),
+            artifact_dir = joinpath(directory, "standard-matrices-strict-rejected"),
+            qualification_mode = :strict,
         )
-        diagnostic_matrix_result = STAR_GAUGE_W.generate_symmetry_completed_qe_paw_matrix_elements(
+        standard_matrix_result = STAR_GAUGE_W.generate_symmetry_completed_qe_paw_matrix_elements(
             source,
-            diagnostic_gauge,
+            standard_gauge,
             fixture.nnkp_file;
-            artifact_dir = joinpath(directory, "diagnostic-matrices"),
-            qualification_mode = :diagnostic_only,
+            artifact_dir = joinpath(directory, "standard-matrices-default"),
         )
-        @test diagnostic_matrix_result.passed
-        @test occursin("DIAGNOSTIC_ONLY", basename(diagnostic_matrix_result.artifacts["mmn"]))
-        HDF5.h5open(diagnostic_matrix_result.artifacts["provenance_hdf5"], "r") do handle
+        @test standard_matrix_result.passed
+        @test occursin("STANDARD", basename(standard_matrix_result.artifacts["mmn"]))
+        HDF5.h5open(standard_matrix_result.artifacts["provenance_hdf5"], "r") do handle
             attributes = HDF5.attributes(handle)
-            @test Bool(read(attributes["diagnostic_only"]))
+            @test Bool(read(attributes["quality_review_recommended"]))
             @test !Bool(read(attributes["production_eligible"]))
         end
 

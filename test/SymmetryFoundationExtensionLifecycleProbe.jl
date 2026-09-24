@@ -203,7 +203,13 @@ end
 # Enter each facade with all weak-dependency triggers still cold in this calling frame.
 function probe_operator_bundle_function_entry()
     assert_cold_parent()
-    filename = joinpath(@__DIR__, "fixtures", "schema_compatibility", "packed_6_3.h5")
+    filename = joinpath(
+        dirname(@__DIR__),
+        "examples",
+        "fixtures",
+        "synthetic_runtime",
+        "synthetic_operators.h5",
+    )
     first_manifest = WannierNLQG.IO.read_real_space_operator_bundle_manifest(filename)
     first_manifest.num_orbitals > 0 || error("operator facade did not read the fixture")
     second_manifest = WannierNLQG.IO.read_real_space_operator_bundle_manifest(filename)

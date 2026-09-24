@@ -16,6 +16,7 @@ include("Interpolated/MixedFourierMatrixElements.jl")
 include("Interpolated/SharedInterpolationCache.jl")
 include("Interpolated/HamiltonianMatrixElements.jl")
 include("Interpolated/PositionMatrixElements.jl")
+include("Interpolated/OpticalPositionDerivatives.jl")
 include("Interpolated/SpinMatrixElements.jl")
 include("Interpolated/SpinVelocityMatrixElements.jl")
 include("RealSpaceReplicaPolicies.jl")
@@ -27,6 +28,7 @@ include("GeometricLoopMatrixElements.jl")
 include("ConventionCovariantTransport.jl")
 include("MatrixElementsIntegrationContracts.jl")
 
+export optical_position_vertices
 export MatrixElementKind, MatrixElementRequest, MatrixElementPlan, MatrixElementSources
 export MatrixElementWorkspace, KPointBatchWorkspace, KPointMatrixData, KPointOffset
 export MatrixElementEvaluationCounts, matrix_data!
@@ -79,5 +81,17 @@ export mark_degenerate_groups!, degenerate_group_summary, extract_wannier_center
 export ConventionFrameConnector,
     IdentityConventionFrameConnector, WannierCenterConventionFrameConnector
 export make_convention_frame_connector, compute_convention_covariant_overlap!
+
+include("Interpolated/SpectralResponseGeometry.jl")
+include("Interpolated/OrbitalResponseOperators.jl")
+export OrbitalCompletion,
+    finite_model_orbital_completion,
+    OrbitalRealSpaceSources,
+    orbital_completion,
+    validate_orbital_sources,
+    SpectralResponseGeometry,
+    spectral_response_geometry,
+    conventional_spectral_pair,
+    projector_spectral_pair
 
 end

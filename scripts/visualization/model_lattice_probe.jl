@@ -17,21 +17,9 @@ payload = HDF5.h5open(path, "r") do handle
     schema == "wanniernlqg.real-space-operators" ||
         error("unsupported packed model schema $(schema)")
     schema_version = String(read(root_attributes["schema_version"]))
-    schema_version in (
-        "1.0",
-        "5.0",
-        "5.1",
-        "5.2",
-        "5.3",
-        "5.4",
-        "5.5",
-        "5.6",
-        "5.7",
-        "6.0",
-        "6.1",
-        "6.2",
-        "6.3",
-    ) || error("unsupported packed model schema_version $(schema_version)")
+    schema_version == "1.1" || error(
+        "operator-bundle migration required: expected schema 1.1, found $(schema_version)",
+    )
     scientific_content_sha256 =
         lowercase(String(read(root_attributes["scientific_content_sha256"])))
     length(scientific_content_sha256) == 64 &&

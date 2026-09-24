@@ -1,5 +1,5 @@
 const QE_PAW_MATRIX_ELEMENT_SCHEMA = "WannierNLQG.qe_paw_matrix_elements"
-const QE_PAW_MATRIX_ELEMENT_SCHEMA_VERSION = "1.0"
+const QE_PAW_MATRIX_ELEMENT_SCHEMA_VERSION = "1.1"
 const QE_PAW_ORACLE_PROVENANCE_SCHEMA = "WannierNLQG.qe_paw_oracle_provenance"
 const QE_PAW_ORACLE_PROVENANCE_SCHEMA_VERSION = "1.0"
 const QE_UPF_RECIPROCAL_GRID_STEP = 0.01
@@ -173,18 +173,23 @@ function _qe_select_nnkp_bands(native::NativeWavefunctionData, nnkp::WannierNNKP
     total_bands = size(first(native.kpoints).coefficients, 1)
     excluded = Set(nnkp.excluded_bands)
     selected = [band for band in 1:total_bands if !(band in excluded)]
-    points = PlaneWaveKPoint[]
-    for point in native.kpoints
-        push!(
-            points,
-            PlaneWaveKPoint(
-                point.k_fractional,
-                point.g_vectors,
-                point.coefficients[selected, :, :],
-                point.energies_ev[selected];
-                normalize_coefficients = false,
-            ),
+    function selected_point(index)
+        point = native.kpoints[index]
+        return PlaneWaveKPoint(
+            point.k_fractional,
+            point.g_vectors,
+            point.coefficients[selected, :, :],
+            point.energies_ev[selected];
+            normalize_coefficients = false,
         )
+    end
+    execution = get(task_local_storage(), :wannier_preparation_execution, nothing)
+    points = if isempty(excluded)
+        native.kpoints
+    elseif execution !== nothing && execution.mode == :dense_reference
+        [selected_point(index) for index in eachindex(native.kpoints)]
+    else
+        preparation_source_vector(selected_point, PlaneWaveKPoint, length(native.kpoints))
     end
     return NativeWavefunctionData(
         native.source_code,
@@ -313,9 +318,35 @@ function _qe_beta_overlaps(
     upf_data::Dict{String, QEUPFData},
     plan::QEProjectorPlan,
 )
+    if _qe_disk_bounded()
+        pair = preparation_source_vector(
+            Tuple{Array{ComplexF64, 3}, Matrix{ComplexF64}},
+            length(native.kpoints),
+        ) do k
+            _qe_beta_overlap(
+                native.kpoints[k],
+                native,
+                upf_data,
+                plan,
+                Dict{Tuple{String, Int, Int}, Float64}(),
+            )
+        end
+        overlaps = preparation_source_vector(
+            k -> first(pair[k]),
+            Array{ComplexF64, 3},
+            length(native.kpoints),
+        )
+        bases = preparation_source_vector(
+            k -> last(pair[k]),
+            Matrix{ComplexF64},
+            length(native.kpoints),
+        )
+        guard = _qe_provider_guard(native.kpoints)
+        return _qe_guarded(overlaps, guard), _qe_guarded(bases, guard)
+    end
     radial_cache = Dict{Tuple{String, Int, Int}, Float64}()
-    overlaps = Vector{Array{ComplexF64, 3}}(undef, length(native.kpoints))
-    bases = Vector{Matrix{ComplexF64}}(undef, length(native.kpoints))
+    overlaps = preparation_vector(Array{ComplexF64, 3}, "projectors", length(native.kpoints))
+    bases = preparation_vector(Matrix{ComplexF64}, "projector-bases", length(native.kpoints))
     for (kpoint, point) in enumerate(native.kpoints)
         values, basis = _qe_beta_overlap(point, native, upf_data, plan, radial_cache)
         bases[kpoint] = basis
@@ -344,6 +375,7 @@ function _qe_generalized_norm_residual_point(
     plan::QEProjectorPlan,
     spinorbit::Bool,
     cache,
+    selected = nothing,
 )
     bands = size(point.coefficients, 1)
     overlap = zeros(ComplexF64, bands, bands)
@@ -363,6 +395,7 @@ function _qe_generalized_norm_residual_point(
         cache,
     )
     _qe_require_positive_band_metric(overlap)
+    selected === nothing || return _paw_scoped_identity_residual(overlap, selected)
     overlap .-= Matrix{ComplexF64}(I, bands, bands)
     local_index = argmax(abs.(overlap))
     return abs(overlap[local_index]), local_index
@@ -592,16 +625,20 @@ end
 # First mandatory numerical gate: <psi|S(q=0)|psi> must be the identity.
 function _qe_generalized_norm_residual(
     native::NativeWavefunctionData,
-    overlaps::Vector{Array{ComplexF64, 3}},
+    overlaps::AbstractVector{Array{ComplexF64, 3}},
     upf_data::Dict{String, QEUPFData},
     plan::QEProjectorPlan,
     spinorbit::Bool,
+    outer_mask = nothing,
 )
     maximum_residual = 0.0
     worst = (0, 0, 0)
     zero_b = zeros(3)
     cache = Dict{Tuple{String, NTuple{3, Float64}, Int, Bool}, Array{ComplexF64, 4}}()
     for (kpoint, point) in enumerate(native.kpoints)
+        outer_mask === nothing ||
+            size(outer_mask) == (size(point.coefficients, 1), length(native.kpoints)) ||
+            throw(ArgumentError("QE_PAW_SCOPE_DIMENSION_MISMATCH"))
         value, local_index = _qe_generalized_norm_residual_point(
             point,
             overlaps[kpoint],
@@ -609,6 +646,7 @@ function _qe_generalized_norm_residual(
             plan,
             spinorbit,
             cache,
+            outer_mask === nothing ? nothing : BitVector(@view outer_mask[:, kpoint]),
         )
         if value > maximum_residual
             maximum_residual = value
@@ -622,7 +660,7 @@ end
 function _qe_generate_mmn(
     native::NativeWavefunctionData,
     nnkp::WannierNNKP,
-    overlaps::Vector{Array{ComplexF64, 3}},
+    overlaps::AbstractVector{Array{ComplexF64, 3}},
     upf_data::Dict{String, QEUPFData},
     plan::QEProjectorPlan,
     spinorbit::Bool,
@@ -831,8 +869,8 @@ end
 function _qe_generate_amn(
     native::NativeWavefunctionData,
     nnkp::WannierNNKP,
-    overlaps::Vector{Array{ComplexF64, 3}},
-    projector_bases::Vector{Matrix{ComplexF64}},
+    overlaps::AbstractVector{Array{ComplexF64, 3}},
+    projector_bases::AbstractVector{Matrix{ComplexF64}},
     upf_data::Dict{String, QEUPFData},
     plan::QEProjectorPlan,
     spinorbit::Bool,
@@ -974,7 +1012,12 @@ function _write_qe_paw_provenance(
     mmn_component_norms::Dict{String, Float64},
     amn_component_norms::Dict{String, Float64},
     oracle_provenance::Union{Nothing, AbstractString},
-    require_oracle::Bool,
+    require_oracle::Bool;
+    qualification_scope = nothing,
+    parent_generalized_norm_max_absolute::Real = result.generalized_norm_max_absolute,
+    parent_mmn_parity = result.mmn_parity,
+    parent_amn_parity = result.amn_parity,
+    target_contract_sha256::AbstractString = "LEGACY_NOT_RECORDED",
 )
     HDF5.enable_complex_support()
     return atomic_hdf5_write(filename) do temporary
@@ -993,6 +1036,18 @@ function _write_qe_paw_provenance(
             attributes["soc_formula"] = "independent fcoef contraction equivalent to transform_qq_so"
             attributes["trial_normalization"] = "none_per_k"
             attributes["generalized_norm_max_absolute"] = result.generalized_norm_max_absolute
+            attributes["target_generalized_norm_max_absolute"] =
+                result.generalized_norm_max_absolute
+            attributes["parent_generalized_norm_max_absolute"] =
+                Float64(parent_generalized_norm_max_absolute)
+            attributes["target_authority"] =
+                qualification_scope === nothing ? "full_parent" : "outer_window"
+            attributes["parent_audit_policy"] =
+                qualification_scope === nothing ? "legacy_hard_gate" : "audit_only"
+            attributes["parent_audit_status"] =
+                parent_generalized_norm_max_absolute <= thresholds.generalized_norm_max_absolute ?
+                "PASS" : "AUDIT_EXCEEDED"
+            attributes["operator_target_contract_sha256"] = String(target_contract_sha256)
             attributes["amn_max_principal_angle_rad"] = result.amn_max_principal_angle_rad
             attributes["amn_projector_max_absolute"] = result.amn_projector_max_absolute
             attributes["qe_convention_reference"] = "https://gitlab.com/QEF/q-e/-/blob/ca08e747430dca8f4bf4e83abfc4d1391ffcb642/PP/src/pw2wannier90.f90"
@@ -1027,6 +1082,31 @@ function _write_qe_paw_provenance(
                 true,
                 "Q_ZERO_GENERALIZED_ORTHONORMALITY",
             )
+            if qualification_scope !== nothing
+                scope_group = HDF5.create_group(handle, "qualification_scope")
+                scope_attributes = HDF5.attributes(scope_group)
+                scope_attributes["outer_mask_sha256"] = qualification_scope.outer_mask_sha256
+                scope_attributes["frozen_mask_sha256"] = qualification_scope.frozen_mask_sha256
+                scope_group["outer_mask"] = UInt8.(qualification_scope.outer_mask)
+                scope_group["frozen_mask"] = UInt8.(qualification_scope.frozen_mask)
+            end
+            parent_group = HDF5.create_group(handle, "parent_audit")
+            parent_attributes = HDF5.attributes(parent_group)
+            parent_attributes["generalized_norm_max_absolute"] =
+                Float64(parent_generalized_norm_max_absolute)
+            parent_attributes["status"] =
+                parent_generalized_norm_max_absolute <= thresholds.generalized_norm_max_absolute ?
+                "PASS" : "AUDIT_EXCEEDED"
+            for (name, metric) in (("mmn", parent_mmn_parity), ("amn", parent_amn_parity))
+                metric === nothing && continue
+                group = HDF5.create_group(parent_group, name)
+                metric_attributes = HDF5.attributes(group)
+                metric_attributes["max_absolute"] = metric.max_absolute
+                metric_attributes["root_mean_square"] = metric.root_mean_square
+                metric_attributes["relative_l2"] = metric.relative_l2
+                metric_attributes["finite"] = metric.finite
+                group["worst_index"] = metric.worst_index
+            end
             for (prefix, metric, maximum_threshold, rms_threshold, relative_threshold) in (
                 (
                     "mmn",
@@ -1136,7 +1216,7 @@ Generate deterministic, augmentation-aware QE MMN and AMN matrices.
 
 The NNKP file is the sole topology, band-exclusion, and projection authority.
 Oracle matrices enter only after native construction and write/readback. A
-missing or failed required oracle returns diagnostic artifacts with
+missing or failed required oracle returns standard artifacts with
 `passed=false`; it never exposes a physical overlap to SAWF.
 """
 function generate_qe_paw_matrix_elements(
@@ -1147,6 +1227,7 @@ function generate_qe_paw_matrix_elements(
     oracle_amn_file::Union{Nothing, AbstractString} = nothing,
     require_oracle::Bool = true,
     thresholds::QEPAWParityThresholds = QEPAWParityThresholds(),
+    target_contract = nothing,
 )
     source.band_range === nothing ||
         throw(ArgumentError("QE_NNKP_BAND_AUTHORITY_REQUIRED: source.band_range must be nothing"))
@@ -1172,8 +1253,32 @@ function generate_qe_paw_matrix_elements(
         throw(ArgumentError("QE_UPF_DATA_REQUIRED: spin-orbit calculation has scalar coefficients"))
 
     beta_overlaps, projector_bases = _qe_beta_overlaps(native, upf_data, plan)
-    generalized_norm, generalized_norm_worst =
+    parent_generalized_norm, parent_generalized_norm_worst =
         _qe_generalized_norm_residual(native, beta_overlaps, upf_data, plan, metadata.spinorbit)
+    qualification_scope =
+        target_contract === nothing ? nothing : target_contract.qualification_scope
+    if qualification_scope !== nothing
+        target_contract.target_authority == "outer_window" ||
+            throw(ArgumentError("QE_PAW_TARGET_AUTHORITY_MISMATCH"))
+        target_contract.parent_audit_policy == "audit_only" ||
+            throw(ArgumentError("QE_PAW_PARENT_AUDIT_POLICY_MISMATCH"))
+        _operator_qualification_mask_sha256(qualification_scope.outer_mask) ==
+        qualification_scope.outer_mask_sha256 ||
+            throw(ArgumentError("QE_PAW_OUTER_MASK_DIGEST_MISMATCH"))
+        _operator_qualification_mask_sha256(qualification_scope.frozen_mask) ==
+        qualification_scope.frozen_mask_sha256 ||
+            throw(ArgumentError("QE_PAW_FROZEN_MASK_DIGEST_MISMATCH"))
+    end
+    generalized_norm, generalized_norm_worst =
+        qualification_scope === nothing ? (parent_generalized_norm, parent_generalized_norm_worst) :
+        _qe_generalized_norm_residual(
+            native,
+            beta_overlaps,
+            upf_data,
+            plan,
+            metadata.spinorbit,
+            qualification_scope.outer_mask,
+        )
     amn, amn_components = _qe_generate_amn(
         native,
         nnkp,
@@ -1223,17 +1328,25 @@ function generate_qe_paw_matrix_elements(
     oracle_provenance = _qe_oracle_provenance_file(oracle_mmn_file, oracle_amn_file)
     provenance_pass, provenance_reason =
         _qe_validate_oracle_provenance(oracle_provenance, source_hashes)
+    parent_mmn_parity = nothing
     mmn_parity, mmn_oracle_reason = if oracle_mmn_file === nothing
         nothing, "NOT_PROVIDED"
     elseif !oracle_mmn_available
         nothing, "QE_ORACLE_MMN_MISSING"
     else
         try
-            _qe_mmn_streaming_parity(mmn, something(oracle_mmn_file)), "PASS"
+            restored_oracle = read_wannier_mmn(something(oracle_mmn_file))
+            parent_mmn_parity = _qe_array_parity(mmn.data, restored_oracle.data)
+            (
+                qualification_scope === nothing ? parent_mmn_parity :
+                _star_scoped_qe_mmn_parity(mmn, restored_oracle, qualification_scope.outer_mask)
+            ),
+            "PASS"
         catch error
             nothing, "QE_ORACLE_MMN_INVALID:$(sprint(showerror, error))"
         end
     end
+    parent_amn_parity = nothing
     oracle_amn, amn_parity, amn_oracle_reason = if oracle_amn_file === nothing
         nothing, nothing, "NOT_PROVIDED"
     elseif !oracle_amn_available
@@ -1241,13 +1354,21 @@ function generate_qe_paw_matrix_elements(
     else
         try
             restored_oracle = read_wannier_amn(something(oracle_amn_file))
-            restored_oracle, _qe_array_parity(amn.data, restored_oracle.data), "PASS"
+            parent_amn_parity = _qe_array_parity(amn.data, restored_oracle.data)
+            restored_oracle,
+            (
+                qualification_scope === nothing ? parent_amn_parity :
+                _star_scoped_qe_amn_parity(amn, restored_oracle, qualification_scope.outer_mask)
+            ),
+            "PASS"
         catch error
             nothing, nothing, "QE_ORACLE_AMN_INVALID:$(sprint(showerror, error))"
         end
     end
     maximum_angle, maximum_projector, minimum_rank, worst_condition =
-        oracle_amn === nothing ? (NaN, NaN, 0, NaN) : _paw_amn_subspace_metrics(amn, oracle_amn)
+        oracle_amn === nothing ? (NaN, NaN, 0, NaN) :
+        qualification_scope === nothing ? _paw_amn_subspace_metrics(amn, oracle_amn) :
+        _star_scoped_amn_subspace_metrics(amn, oracle_amn, qualification_scope.outer_mask)
 
     norm_pass = generalized_norm <= thresholds.generalized_norm_max_absolute
     mmn_pass =
@@ -1280,6 +1401,8 @@ function generate_qe_paw_matrix_elements(
 
     diagnostics = String[
         "generalized_norm_worst=$(generalized_norm_worst)",
+        "parent_generalized_norm_worst=$(parent_generalized_norm_worst)",
+        "parent_generalized_norm_max_absolute=$(parent_generalized_norm)",
         "amn_minimum_rank=$(minimum_rank)",
         "amn_worst_condition=$(worst_condition)",
         "oracle_provenance=$(provenance_reason)",
@@ -1329,6 +1452,12 @@ function generate_qe_paw_matrix_elements(
         amn_components,
         oracle_provenance,
         require_oracle,
+        qualification_scope = qualification_scope,
+        parent_generalized_norm_max_absolute = parent_generalized_norm,
+        parent_mmn_parity = parent_mmn_parity,
+        parent_amn_parity = parent_amn_parity,
+        target_contract_sha256 = target_contract === nothing ? "LEGACY_NOT_RECORDED" :
+                                 target_contract.contract_sha256,
     )
     return result
 end

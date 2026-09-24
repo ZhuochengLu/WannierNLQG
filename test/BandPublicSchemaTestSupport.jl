@@ -78,7 +78,7 @@ function prepare_public_band_fixture(
     projection_basis,
     eig_file = nothing,
     output_hdf5 = nothing,
-    construction_policy = :diagnostic,
+    construction_policy = :standard,
     sewing_backend = WannierNLQG.Wannierization.CoefficientMappingSewing(),
 )
     mkpath(directory)

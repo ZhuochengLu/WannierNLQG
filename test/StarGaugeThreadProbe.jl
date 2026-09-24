@@ -11,7 +11,8 @@ block_partition_policy =
     WannierNLQG.Wannierization.HamiltonianWeightedPAWBlockPartition() :
     error("unsupported policy $(policy_key)")
 correction =
-    policy_key == "target" ? WannierNLQG.Wannierization.FarBandCovarianceCorrection() :
+    policy_key == "target" ?
+    WannierNLQG.Wannierization.FarBandCovarianceCorrection(qualification_mode = :strict) :
     WannierNLQG.Wannierization.NoDiscreteHamiltonianCorrection()
 mkpath(output_directory)
 source = WannierNLQG.SymmetryFoundation.QuantumEspressoWavefunctionSource(

@@ -4,8 +4,10 @@ using LinearAlgebra
 using Mmap
 using Printf
 using SHA
+using Serialization
 using ..Core
 
+include("PreparationStorage.jl")
 include("WannierTB.jl")
 include("WannierTBWriter.jl")
 include("WannierWSVEC.jl")
@@ -19,6 +21,10 @@ include("WannierHamiltonianOperatorFiles.jl")
 include("SpinVelocityReaders.jl")
 include("WannierMMNWriter.jl")
 include("ResultWriters.jl")
+include("SecondHarmonicWriters.jl")
+include("SpectralResponseWriters.jl")
+export write_spectral_response_table, write_spectral_response_metadata
+export release_tree_sha256, read_linear_transport_result, read_orbital_magnetization_result
 include("BandStructureWriters.jl")
 include("ResponseSymmetryArtifacts.jl")
 
@@ -47,9 +53,17 @@ export PackedCartesianOperator
 export operator_storage_name, operator_kind_from_storage_name
 export canonical_operator_inventory, infer_operator_profile, validate_operator_profile
 export available_matrix_capabilities
+export OPERATOR_SELECTION_PROFILES, OperatorSelection
+export operator_selection_mode, resolved_operator_profile, resolved_operator_inventory
+export resolved_source_inventory, resolved_task_closure
+export operator_selection_registry_version, operator_selection_sha256
+export operator_inventory_source_closure, operator_task_token, operator_task_from_token
+export operator_tasks_from_tokens
+export resolve_operator_selection, validate_task_derived_operator_selection
 export write_real_space_operator_bundle, read_real_space_operator_bundle
 export read_real_space_operator_bundle_manifest, read_operator_bundle_payload
 export read_operator_bundle_components
+export write_second_harmonic
 export write_response_tensor, write_kslice, kslice_output_size
 export write_band_structure
 export RESPONSE_SYMMETRY_SCHEMA, ResponseSymmetryArtifact, ResponseSymmetryOperation

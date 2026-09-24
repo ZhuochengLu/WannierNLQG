@@ -8,6 +8,28 @@ function _run_kslice_bundle_fused!(
     shared_sources = nothing,
     mixed_memory_limit_bytes::Int = mixed_fourier_memory_limit(),
 )
+    if any(spec->spec.quantity in SPECTRAL_RESPONSE_QUANTITIES, specs)
+        return prepare_spectral_response(
+            cfg,
+            ctx,
+            specs;
+            prepare_only,
+            progress_owner,
+            shared_sources,
+            mixed_memory_limit_bytes,
+        )
+    end
+    if any(spec -> spec.quantity == :second_harmonic_generation, specs)
+        return prepare_second_harmonic(
+            cfg,
+            ctx,
+            specs;
+            prepare_only,
+            progress_owner,
+            shared_sources,
+            mixed_memory_limit_bytes,
+        )
+    end
     cleanup_workspaces = MatrixElementWorkspace[]
     loaded_sources_ref = Ref{Any}(nothing)
     cleaned = Ref(false)
@@ -110,6 +132,14 @@ function _run_kslice_bundle_owned!(
         debug_lock,
         "[read] end load_runtime_model_and_sources mode=$(loaded_sources.read_mode) elapsed=$(format_seconds(time() - read_t0))s",
     )
+    qualification = assess_response_qualification(
+        loaded_sources.manifest,
+        ctx,
+        cfg,
+        specs;
+        response_symmetry_plan,
+    )
+    progress_response_qualification!(qualification)
     progress_system_summary!(model)
 
     cell_volume = det(model.lattice)
@@ -1370,6 +1400,7 @@ function _run_kslice_bundle_owned!(
                 ),
                 NamedTuple(),
                 runtime_replica_summary(loaded_sources.replica_summary),
+                qualification,
             )
             return result
         finally

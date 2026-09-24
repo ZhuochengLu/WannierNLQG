@@ -107,6 +107,7 @@ required_files = [
     "src/Core/Constants.jl",
     "src/Core/Models.jl",
     "src/Core/RealSpaceOperators.jl",
+    "src/Core/OperatorTaskRequirements.jl",
     "src/Core/Coordinates.jl",
     "src/Core/CalculationUtils.jl",
     "src/IO/IO.jl",
@@ -416,19 +417,7 @@ for pattern in (r"\bfunction\b", r"\bstruct\b", r"\bmutable\s+struct\b", r"@enum
     occursin(pattern, response_composition) &&
         fail("Responses/Responses.jl must remain an include/export-only composition root")
 end
-included_response_files = Set{String}()
-for matched in eachmatch(r"include\(\"([^\"]+)\"\)", response_composition)
-    push!(included_response_files, matched.captures[1])
-end
-implemented_response_files = Set(
-    replace(relpath(path, responses_root), '\\' => '/') for
-    path in source_files(responses_root) if basename(path) != "Responses.jl"
-)
-included_response_files == implemented_response_files || fail(
-    "Responses/Responses.jl include set differs from implementation files: " *
-    "missing=$(sort!(collect(setdiff(implemented_response_files, included_response_files)))) " *
-    "extra=$(sort!(collect(setdiff(included_response_files, implemented_response_files))))",
-)
+# Recursively verify composition so physical submodules may own their kernels.
 assert_complete_composition(responses_root, joinpath(responses_root, "Responses.jl"))
 
 symmetry_foundation_root = joinpath(SRC, "SymmetryFoundation")
@@ -793,6 +782,10 @@ occursin("Responses.compute_geometric_loop_photon_drag_shift_current_kernel!", i
     fail("Runtime must use the non-exported photon-drag shift-current entry by qualification")
 
 allowed_response_directories = Set([
+    "LinearTransport",
+    "LinearOpticalResponse",
+    "OrbitalMagnetization",
+    "SecondHarmonicGeneration",
     "Shared",
     "ShiftCurrent",
     "PhotonDragShiftCurrent",
@@ -854,9 +847,17 @@ any(isnothing, positions) && fail("facade does not include every architectural s
 issorted(first.(positions)) ||
     fail("facade submodule include order does not follow the dependency DAG")
 Set(exported_symbols(facade)) == Set([
+    :SeparateRelaxation,
+    :FermiSurfaceBroadening,
+    :LinearTransportParameters,
+    :LinearOpticalResponseParameters,
+    :OrbitalMagnetizationParameters,
+    :LinearResponseNumerics,
+    :OrbitalNumerics,
     :TaskConfig,
     :TaskSpec,
     :RunResult,
+    :ResponseQualificationResult,
     :run,
     :ModelInput,
     :BZMesh,
@@ -865,6 +866,8 @@ Set(exported_symbols(facade)) == Set([
     :ExecutionOptions,
     :OutputOptions,
     :OpticalParameters,
+    :SHGParameters,
+    :SHGNumerics,
     :FiniteQOpticalParameters,
     :GeometryParameters,
     :BandParameters,
@@ -882,6 +885,8 @@ Set(exported_symbols(facade)) == Set([
     :TensorComponent,
     :FullTensor,
     :KSliceSelection,
+    :read_linear_transport_result,
+    :read_orbital_magnetization_result,
 ]) || fail("facade export set differs from the grouped response API contract")
 Set(exported_symbols(wannierization_composition)) == Set((
     :SymmetryAdaptedWannierizationConfig,
@@ -998,7 +1003,12 @@ for (layer, allowed) in allowed_dependencies
         text = read(path, String)
         for matched in eachmatch(r"\b(?:using|import)\s+\.\.([A-Za-z][A-Za-z0-9_]*)", text)
             dependency = matched.captures[1]
-            dependency in allowed ||
+            nested_response_parent =
+                layer == "Responses" &&
+                dependency == "Responses" &&
+                basename(path) in
+                ("LinearTransport.jl", "LinearOpticalResponse.jl", "OrbitalMagnetization.jl")
+            (dependency in allowed || nested_response_parent) ||
                 fail("$(relpath(path, ROOT)) has forbidden dependency $(dependency)")
         end
     end
@@ -1059,8 +1069,8 @@ for group in (
         push!(sawf_leaf_fields, Symbol(field.captures[1]))
     end
 end
-length(sawf_leaf_fields) == 73 ||
-    fail("Wannierization grouped configuration must retain 73 leaf fields")
+length(sawf_leaf_fields) == 75 ||
+    fail("Wannierization grouped configuration must contain 75 leaf fields")
 sawf_flat_reads = typed_sawf_flat_config_reads(boundary_sources, sawf_leaf_fields)
 expected_negative_sawf_flat_reads =
     Set(("test/wannierization_config_architecture_unit.jl: ordinary_default.win_file",))

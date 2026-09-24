@@ -1155,7 +1155,7 @@ end
         @test no_symmetry_result.input_summary["effective_symmetry_operation_count"] == "1"
         @test no_symmetry_result.input_summary["effective_antiunitary_operation_count"] == "0"
         @test no_symmetry_result.input_summary["effective_symmetrize_z"] == "false"
-        @test no_symmetry_result.input_summary["covariance_applicability"] == "DIAGNOSTIC_ONLY"
+        @test no_symmetry_result.input_summary["covariance_applicability"] == "STANDARD"
         @test parse(Float64, no_symmetry_result.input_summary["hard_gate_frozen"]) <= 1.0e-10
         @test all(entry -> iszero(entry.maximum_covariance_error), no_symmetry_result.history)
 
@@ -1354,8 +1354,8 @@ end
                   "AUDIT_MANIFEST_INVALID"
         end
 
-        # A deliberately covariance-incompatible representation must remain a
-        # diagnostic only under the explicit ordinary route, while the same
+        # A deliberately covariance-incompatible representation remains an
+        # accepted ordinary-route state with quality warnings, while the same
         # candidate is rejected by the symmetry-adapted route.
         fixture.representation.sewing_matrices[:, :, 1, 1] .= ComplexF64[0 1; 1 0]
         trial_frames = [ComplexF64[1; 0;;], ComplexF64[1; 0;;]]
@@ -1447,8 +1447,6 @@ end
             (
                 :disentanglement_convergence,
                 :z_seal_class,
-                :qualified_z_seal,
-                :route_selection_eligible,
                 :localization_convergence,
                 :localization_qualification,
                 :model_qualification,
@@ -1474,7 +1472,7 @@ end
         ),
     )
     safeguard = WANNIERIZATION.WannierizationAccelerationConfig()
-    @test safeguard.disentanglement_limit_policy == :diagnostic_continue
+    @test safeguard.disentanglement_limit_policy == :standard_continue
     @test safeguard.joint_z_backtracking_factor == 0.5
     @test safeguard.joint_z_backtracking_max_steps == 12
     @test safeguard.u_phase_branch_tolerance == 1.0e-6
@@ -1985,7 +1983,7 @@ end
     @test all(entry -> entry.diagnostics.rejected_steps == 0, adaptive_result.history)
     @test all(entry -> isnan(entry.diagnostics.z_boundary_gap), adaptive_result.history)
     @test adaptive_result.restart_state.optimizer_state.strategy == :adaptive
-    @test adaptive_result.input_summary["standard_tb_export_eligible"] == "false"
+    @test adaptive_result.input_summary["z_seal_class"] == "NONCONVERGED_RETAINED"
     @test adaptive_result.restart_state.optimizer_state.u_stability_count == 0
     @test all(
         entry -> entry.diagnostics.joint_acceptance_reason in
@@ -2276,7 +2274,7 @@ end
                 disentanglement_objective_tolerance = 0.0,
                 z_projector_tolerance = 1.0e-30,
                 localization_max_steps = 2,
-                disentanglement_limit_policy = :diagnostic_continue,
+                disentanglement_limit_policy = :standard_continue,
             ),
         ),
         fixture.representation,
@@ -2284,20 +2282,17 @@ end
         fixture.mmn,
         fixture.plan,
     )
-    @test diagnostic_limit.input_summary["z_seal_class"] == "DIAGNOSTIC_NONCONVERGED"
-    @test diagnostic_limit.input_summary["qualified_z_seal"] == "false"
-    @test diagnostic_limit.input_summary["route_selection_eligible"] == "false"
+    @test diagnostic_limit.input_summary["z_seal_class"] == "NONCONVERGED_RETAINED"
     @test diagnostic_limit.restart_state.fixed_subspace_projectors !== nothing
     @test length(diagnostic_limit.input_summary["disentanglement_state_sha256"]) == 64
     @test length(diagnostic_limit.input_summary["disentanglement_outer_mask_sha256"]) == 64
     @test length(diagnostic_limit.input_summary["disentanglement_frozen_mask_sha256"]) == 64
     @test diagnostic_limit.input_summary["disentanglement_state_converged"] == "false"
-    @test diagnostic_limit.input_summary["localization_qualification"] == "DIAGNOSTIC_ONLY"
-    @test diagnostic_limit.input_summary["model_qualification"] == "DIAGNOSTIC_ONLY/Z_NONCONVERGED"
-    @test diagnostic_limit.input_summary["standard_tb_export_eligible"] == "false"
+    @test diagnostic_limit.input_summary["localization_qualification"] == "STANDARD"
+    @test diagnostic_limit.input_summary["model_qualification"] == "AVAILABLE_WITH_QUALITY_WARNINGS"
     @test diagnostic_limit.restart_state.optimizer_state.u_steps > 0
     @test any(
-        diagnostic -> diagnostic.code == :DISENTANGLEMENT_MAX_STEPS_CONTINUED_DIAGNOSTIC,
+        diagnostic -> diagnostic.code == :DISENTANGLEMENT_MAX_STEPS_CONTINUED_STANDARD,
         diagnostic_limit.diagnostics,
     )
 
@@ -2335,10 +2330,8 @@ end
         fixture.mmn,
         fixture.plan,
     )
-    @test strict_limit.input_summary["z_seal_class"] == "DIAGNOSTIC_NONCONVERGED"
-    @test strict_limit.input_summary["qualified_z_seal"] == "false"
+    @test strict_limit.input_summary["z_seal_class"] == "NONCONVERGED_RETAINED"
     @test strict_limit.input_summary["localization_qualification"] == "NOT_RUN"
-    @test strict_limit.input_summary["standard_tb_export_eligible"] == "false"
     @test strict_limit.restart_state.fixed_subspace_projectors === nothing
     @test strict_limit.restart_state.optimizer_state.phase == :disentanglement
     @test any(
@@ -2352,7 +2345,7 @@ end
         WANNIERIZATION.COMPLETED_WITH_WARNINGS,
         WANNIERIZATION.MAX_ITERATIONS,
     )
-    if joint_no_u.input_summary["qualified_z_seal"] == "true"
+    if joint_no_u.input_summary["z_seal_class"] == "CONVERGED"
         @test joint_no_u.restart_state.optimizer_state.z_stability_count >=
               joint_no_u.restart_state.optimizer_state.u_stability_count
     end
@@ -2573,8 +2566,7 @@ end
         @test fixed_result.input_summary["u_acceptance"] == String(u_acceptance)
         @test fixed_result.input_summary["fixed_subspace_qualification"] ==
               "NONQUALIFIED_SOURCE_U_ONLY_DIAGNOSTIC"
-        @test fixed_result.input_summary["route_selection_eligible"] == "false"
-        @test fixed_result.input_summary["standard_tb_export_eligible"] == "false"
+        @test fixed_result.input_summary["fixed_subspace_source_z_seal_class"] == "NOT_RECORDED"
         @test fixed_result.restart_state !== nothing
         @test fixed_result.restart_state.optimizer_state.z_steps == 0
         @test !isempty(fixed_result.restart_state.optimizer_state.localization_objective_history)
@@ -2610,7 +2602,6 @@ end
           WANNIERIZATION_IMPLEMENTATION.SolverCheckpoint.SYMMETRY_PROJECTED_SMV_FR_CONTRACT
     @test fixed_smv_fr_result.input_summary["fixed_subspace_qualification"] ==
           "NONQUALIFIED_SOURCE_U_ONLY_DIAGNOSTIC"
-    @test fixed_smv_fr_result.input_summary["standard_tb_export_eligible"] == "false"
     @test fixed_smv_fr_result.restart_state.optimizer_state.z_steps == 0
     @test !isempty(fixed_smv_fr_result.restart_state.optimizer_state.localization_objective_history)
 
@@ -3202,12 +3193,12 @@ end
 
 @testset "Wannierization HDF5 and tight-binding boundaries" begin
     fixture = synthetic_wannierization_fixture()
-    # Keep the historical projected-gradient fixture for the production/export
-    # boundary assertions below.  The new symmetry-projected SMV--FR default
-    # has separate state-machine coverage and may legitimately end at a
-    # diagnostic nonconverged Z boundary on this eight-step synthetic case.
+    # Keep the projected-gradient fixture for the accepted-state export boundary
+    # assertions below. The symmetry-projected SMV--FR default has separate
+    # state-machine coverage and may end at a nonconverged Z boundary here.
     nonlocalizing_config = modified_wannierization_config(
         fixture.config;
+        construction_policy = :standard,
         localize = false,
         algorithm_profile = :custom,
     )
@@ -3255,10 +3246,8 @@ end
         @test periodic_source.restart_state !== nothing
         periodic_snapshot = (
             optimizer_phase = :localization,
-            z_seal_class = "DIAGNOSTIC_NONCONVERGED",
-            qualified_z_seal = "false",
-            disentanglement_convergence = "DIAGNOSTIC_NONCONVERGED",
-            route_selection_eligible = "false",
+            z_seal_class = "NONCONVERGED_RETAINED",
+            disentanglement_convergence = "NONCONVERGED_RETAINED",
             localization_convergence = "NOT_APPLICABLE",
             localization_qualification = "NOT_APPLICABLE",
             model_qualification = "NOT_AVAILABLE",
@@ -3287,16 +3276,19 @@ end
         @test periodic_result.input_summary["disentanglement_steps"] == "1500"
         @test periodic_result.input_summary["localization_steps"] == "10"
         @test periodic_result.input_summary["disentanglement_convergence"] ==
-              "DIAGNOSTIC_NONCONVERGED"
-        @test periodic_result.input_summary["z_seal_class"] == "DIAGNOSTIC_NONCONVERGED"
-        @test periodic_result.input_summary["qualified_z_seal"] == "false"
-        @test periodic_result.input_summary["route_selection_eligible"] == "false"
+              "NONCONVERGED_RETAINED"
+        @test periodic_result.input_summary["z_seal_class"] == "NONCONVERGED_RETAINED"
+        @test periodic_result.input_summary["wannierization_eligibility_strictly_converged_z_seal"] ==
+              "false"
+        @test periodic_result.input_summary["wannierization_eligibility_execution_eligible"] ==
+              "false"
         @test periodic_result.input_summary["localization_convergence"] == "NOT_APPLICABLE"
         @test periodic_result.input_summary["localization_qualification"] == "NOT_APPLICABLE"
         @test periodic_result.input_summary["model_qualification"] == "NOT_AVAILABLE"
-        @test periodic_result.input_summary["diagnostic_only"] == "true"
-        @test periodic_result.input_summary["diagnostic_tb_export_eligible"] == "false"
-        @test periodic_result.input_summary["standard_tb_export_eligible"] == "false"
+        @test periodic_result.input_summary["quality_review_recommended"] == "true"
+        @test periodic_result.input_summary["wannierization_eligibility_export_eligible"] == "false"
+        @test periodic_result.input_summary["wannierization_eligibility_production_eligible"] ==
+              "false"
         @test periodic_result.input_summary["global_production_eligible"] == "false"
         diagnostic_stage_summary = Base.invokelatest(
             extension.OperatorExport._periodic_stage_summary,
@@ -3304,14 +3296,14 @@ end
                 periodic_snapshot,
                 (
                     localization_convergence = "IN_PROGRESS",
-                    localization_qualification = "DIAGNOSTIC_ONLY",
-                    model_qualification = "DIAGNOSTIC_ONLY/Z_NONCONVERGED",
+                    localization_qualification = "STANDARD",
+                    model_qualification = "AVAILABLE_WITH_QUALITY_WARNINGS",
                 ),
             ),
         )
         @test diagnostic_stage_summary["localization_convergence"] == "IN_PROGRESS"
-        @test diagnostic_stage_summary["localization_qualification"] == "DIAGNOSTIC_ONLY"
-        @test diagnostic_stage_summary["model_qualification"] == "DIAGNOSTIC_ONLY/Z_NONCONVERGED"
+        @test diagnostic_stage_summary["localization_qualification"] == "STANDARD"
+        @test diagnostic_stage_summary["model_qualification"] == "AVAILABLE_WITH_QUALITY_WARNINGS"
         formal_stage_summary = Base.invokelatest(
             extension.OperatorExport._periodic_stage_summary,
             merge(
@@ -3319,8 +3311,6 @@ end
                 (
                     disentanglement_convergence = "CONVERGED",
                     z_seal_class = "CONVERGED",
-                    qualified_z_seal = "true",
-                    route_selection_eligible = "true",
                     localization_convergence = "IN_PROGRESS",
                     localization_qualification = "FORMAL_CANDIDATE",
                     model_qualification = "FORMAL_CANDIDATE",
@@ -3328,18 +3318,19 @@ end
             ),
         )
         @test formal_stage_summary["disentanglement_convergence"] == "CONVERGED"
-        @test formal_stage_summary["qualified_z_seal"] == "true"
-        @test formal_stage_summary["route_selection_eligible"] == "true"
+        @test formal_stage_summary["wannierization_eligibility_strictly_converged_z_seal"] == "true"
+        @test formal_stage_summary["wannierization_eligibility_qualification_status"] ==
+              "NOT_EVALUATED"
         @test formal_stage_summary["localization_qualification"] == "FORMAL_CANDIDATE"
         @test formal_stage_summary["model_qualification"] == "FORMAL_CANDIDATE"
-        @test formal_stage_summary["diagnostic_only"] == "true"
-        @test formal_stage_summary["standard_tb_export_eligible"] == "false"
+        @test formal_stage_summary["quality_review_recommended"] == "true"
+        @test formal_stage_summary["wannierization_eligibility_export_eligible"] == "false"
         structural_failure_stage_summary = Base.invokelatest(
             extension.OperatorExport._periodic_stage_summary,
             merge(
                 periodic_snapshot,
                 (
-                    disentanglement_convergence = "DIAGNOSTIC_NONCONVERGED_STRUCTURAL_GATE_FAILED",
+                    disentanglement_convergence = "NONCONVERGED_RETAINED_STRUCTURAL_GATE_FAILED",
                     localization_convergence = "NOT_RUN",
                     localization_qualification = "NOT_RUN",
                     model_qualification = "NOT_RUN/Z_STRUCTURAL_GATE_FAILED",
@@ -3348,33 +3339,37 @@ end
             ),
         )
         @test structural_failure_stage_summary["disentanglement_convergence"] ==
-              "DIAGNOSTIC_NONCONVERGED_STRUCTURAL_GATE_FAILED"
+              "NONCONVERGED_RETAINED_STRUCTURAL_GATE_FAILED"
         @test structural_failure_stage_summary["localization_convergence"] == "NOT_RUN"
         @test structural_failure_stage_summary["localization_qualification"] == "NOT_RUN"
         @test structural_failure_stage_summary["model_qualification"] ==
               "NOT_RUN/Z_STRUCTURAL_GATE_FAILED"
-        @test structural_failure_stage_summary["diagnostic_only"] == "true"
+        @test structural_failure_stage_summary["quality_review_recommended"] == "true"
         @test structural_failure_stage_summary["localization_steps"] == "0"
-        @test structural_failure_stage_summary["diagnostic_tb_export_eligible"] == "false"
+        @test structural_failure_stage_summary["wannierization_eligibility_export_eligible"] ==
+              "false"
         periodic_checkpoint = joinpath(directory, "periodic-profile-checkpoint.h5")
         WANNIERIZATION.write_wannierization_checkpoint_hdf5(periodic_checkpoint, periodic_result)
         restored_periodic = WANNIERIZATION.read_wannierization_checkpoint_hdf5(periodic_checkpoint)
         @test restored_periodic.input_summary["algorithm_profile"] == "auto"
         @test restored_periodic.input_summary["effective_algorithm_profile"] ==
               "symmetry_projected_smv_fletcher_reeves_two_stage"
-        @test restored_periodic.input_summary["z_seal_class"] == "DIAGNOSTIC_NONCONVERGED"
-        @test restored_periodic.input_summary["qualified_z_seal"] == "false"
-        @test restored_periodic.input_summary["route_selection_eligible"] == "false"
-        @test restored_periodic.input_summary["diagnostic_only"] == "true"
-        @test restored_periodic.input_summary["standard_tb_export_eligible"] == "false"
+        @test restored_periodic.input_summary["z_seal_class"] == "NONCONVERGED_RETAINED"
+        @test restored_periodic.input_summary["wannierization_eligibility_strictly_converged_z_seal"] ==
+              "false"
+        @test restored_periodic.input_summary["wannierization_eligibility_execution_eligible"] ==
+              "false"
+        @test restored_periodic.input_summary["quality_review_recommended"] == "true"
+        @test restored_periodic.input_summary["wannierization_eligibility_export_eligible"] ==
+              "false"
         @test restored_periodic.input_summary["global_production_eligible"] == "false"
         HDF5.h5open(periodic_checkpoint, "r") do handle
             attributes = HDF5.attributes(handle)
             @test String(read(attributes["algorithm_profile"])) == "auto"
             @test String(read(attributes["effective_algorithm_profile"])) ==
                   "symmetry_projected_smv_fletcher_reeves_two_stage"
-            @test String(read(attributes["z_seal_class"])) == "DIAGNOSTIC_NONCONVERGED"
-            @test !Bool(read(attributes["qualified_z_seal"]))
+            @test String(read(attributes["z_seal_class"])) == "NONCONVERGED_RETAINED"
+            @test !haskey(attributes, "qualified_z_seal")
             @test !Bool(read(attributes["global_production_eligible"]))
         end
         representation_metadata = Base.invokelatest(
@@ -3755,48 +3750,6 @@ end
                   result.input_summary["representation_sha256"]
             @test !Bool(read(checkpoint_attributes["production_eligible"]))
         end
-        legacy_220_file = joinpath(directory, "checkpoint-schema-2.20-read-only.h5")
-        cp(checkpoint_file, legacy_220_file)
-        legacy_220_digest = Base.invokelatest(
-            extension.SolverCheckpoint._wannierization_checkpoint_sha256_v2_20,
-            restored,
-        )
-        HDF5.h5open(legacy_220_file, "r+") do handle
-            HDF5.delete_attribute(handle, "schema_version")
-            HDF5.attributes(handle)["schema_version"] = "2.20"
-            HDF5.delete_attribute(handle, "checkpoint_sha256")
-            HDF5.attributes(handle)["checkpoint_sha256"] = legacy_220_digest
-        end
-        restored_220 = WANNIERIZATION.read_wannierization_checkpoint_hdf5(legacy_220_file)
-        @test restored_220.restart_state === nothing
-        @test restored_220.input_summary["restart_continuation_semantics"] ==
-              "LEGACY_DIAGNOSTIC_READ_ONLY"
-        @test any(
-            diagnostic -> diagnostic.code == :RESTART_SEMANTICS_INCOMPATIBLE,
-            restored_220.diagnostics,
-        )
-        legacy_221_file = joinpath(directory, "checkpoint-schema-2.21-read-only.h5")
-        cp(checkpoint_file, legacy_221_file)
-        persisted_for_221 = Base.invokelatest(
-            extension.SolverCheckpoint._checkpoint_persisted_result,
-            persisted_result,
-        )
-        legacy_221_digest = Base.invokelatest(
-            extension.SolverCheckpoint._wannierization_checkpoint_sha256_v2_21,
-            persisted_for_221,
-        )
-        HDF5.h5open(legacy_221_file, "r+") do handle
-            HDF5.delete_attribute(handle, "schema_version")
-            HDF5.attributes(handle)["schema_version"] = "2.21"
-            HDF5.delete_attribute(handle, "checkpoint_sha256")
-            HDF5.attributes(handle)["checkpoint_sha256"] = legacy_221_digest
-        end
-        restored_221 = WANNIERIZATION.read_wannierization_checkpoint_hdf5(legacy_221_file)
-        @test restored_221.restart_state === nothing
-        @test restored_221.input_summary["restart_eligible"] == "false"
-        @test restored_221.input_summary["restart_continuation_semantics"] ==
-              "LEGACY_DIAGNOSTIC_READ_ONLY"
-
         sealed_config = modified_wannierization_config(
             fixture.config;
             max_iterations = 4,
@@ -3827,7 +3780,7 @@ end
         sealed_checkpoint = joinpath(directory, "checkpoint-sealed-two-stage.h5")
         WANNIERIZATION.write_wannierization_checkpoint_hdf5(sealed_checkpoint, sealed_result)
         restored_sealed = WANNIERIZATION.read_wannierization_checkpoint_hdf5(sealed_checkpoint)
-        @test restored_sealed.input_summary["checkpoint_schema_version"] == "1.0"
+        @test restored_sealed.input_summary["checkpoint_schema_version"] == "1.2"
         @test restored_sealed.input_summary["localization_gradient_contract"] ==
               "mv_centered_residual_unwrapped_delta_v2"
         @test restored_sealed.input_summary["checkpoint_localization_gradient_contract"] ==
@@ -3860,180 +3813,6 @@ end
               sealed_result.restart_state.optimizer_state.u_lbfgs_y_history
         extension = Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt)
         @test extension !== nothing
-        legacy_phase_summary = Dict{String, String}(restored_sealed.input_summary)
-        legacy_phase_summary["localization_gradient_contract"] = "mv_q_unwrapped_center_v1"
-        legacy_phase_result = Base.invokelatest(
-            extension.WannierizationInternalSupport.updated_wannierization_result,
-            restored_sealed;
-            input_summary = legacy_phase_summary,
-        )
-        function set_legacy_phase_contract!(handle)
-            root_attributes = HDF5.attributes(handle)
-            HDF5.delete_attribute(handle, "localization_gradient_contract")
-            root_attributes["localization_gradient_contract"] = "mv_q_unwrapped_center_v1"
-            summary_group = handle["input_summary"]
-            HDF5.delete_attribute(summary_group, "localization_gradient_contract")
-            HDF5.attributes(summary_group)["localization_gradient_contract"] = "mv_q_unwrapped_center_v1"
-        end
-        schema29_checkpoint = joinpath(directory, "checkpoint-schema-2.9-phase-reset.h5")
-        cp(sealed_checkpoint, schema29_checkpoint)
-        schema29_digest = Base.invokelatest(
-            extension.SolverCheckpoint._wannierization_checkpoint_sha256_v2_9,
-            legacy_phase_result,
-        )
-        HDF5.h5open(schema29_checkpoint, "r+") do handle
-            attributes = HDF5.attributes(handle)
-            HDF5.delete_attribute(handle, "schema_version")
-            attributes["schema_version"] = "2.9"
-            set_legacy_phase_contract!(handle)
-            HDF5.delete_attribute(handle, "checkpoint_sha256")
-            attributes["checkpoint_sha256"] = schema29_digest
-        end
-        restored_schema29 = WANNIERIZATION.read_wannierization_checkpoint_hdf5(schema29_checkpoint)
-        @test restored_schema29.input_summary["optimizer_history_compatibility"] ==
-              "LEGACY_U_PHASE_CHART_RESET"
-        @test restored_schema29.restart_state.frames == restored_sealed.restart_state.frames
-        @test isempty(restored_schema29.restart_state.optimizer_state.previous_u_gradient)
-        @test isempty(restored_schema29.restart_state.optimizer_state.u_lbfgs_s_history)
-        @test restored_schema29.restart_state.optimizer_state.last_u_optimizer_restart_reason ==
-              :LEGACY_U_PHASE_CHART_RESET
-        schema28_checkpoint = joinpath(directory, "checkpoint-schema-2.8-default-full.h5")
-        cp(sealed_checkpoint, schema28_checkpoint)
-        schema28_digest = Base.invokelatest(
-            extension.SolverCheckpoint._wannierization_checkpoint_sha256_v2_8,
-            legacy_phase_result,
-        )
-        HDF5.h5open(schema28_checkpoint, "r+") do handle
-            attributes = HDF5.attributes(handle)
-            HDF5.delete_attribute(handle, "schema_version")
-            attributes["schema_version"] = "2.8"
-            set_legacy_phase_contract!(handle)
-            HDF5.delete_attribute(handle, "checkpoint_sha256")
-            attributes["checkpoint_sha256"] = schema28_digest
-        end
-        restored_schema28 = WANNIERIZATION.read_wannierization_checkpoint_hdf5(schema28_checkpoint)
-        @test restored_schema28.input_summary["checkpoint_schema_version"] == "2.8"
-        @test restored_schema28.input_summary["constraint_operation_scope"] == "full"
-        @test restored_schema28.input_summary["checkpoint_constraint_scope_compatibility"] ==
-              "LEGACY_DEFAULT_FULL"
-        schema26_checkpoint = joinpath(directory, "checkpoint-schema-2.6-gradient-reset.h5")
-        cp(sealed_checkpoint, schema26_checkpoint)
-        schema26_digest = Base.invokelatest(
-            extension.SolverCheckpoint._wannierization_checkpoint_sha256_v2_6,
-            restored_sealed,
-        )
-        HDF5.h5open(schema26_checkpoint, "r+") do handle
-            attributes = HDF5.attributes(handle)
-            HDF5.delete_attribute(handle, "schema_version")
-            attributes["schema_version"] = "2.6"
-            HDF5.delete_attribute(handle, "checkpoint_sha256")
-            attributes["checkpoint_sha256"] = schema26_digest
-        end
-        restored_schema26 = WANNIERIZATION.read_wannierization_checkpoint_hdf5(schema26_checkpoint)
-        @test restored_schema26.input_summary["checkpoint_schema_version"] == "2.6"
-        @test restored_schema26.input_summary["optimizer_history_compatibility"] ==
-              "LEGACY_U_PHASE_CHART_RESET"
-        @test restored_schema26.input_summary["restart_continuation_semantics"] ==
-              "STATE_PRESERVED_OPTIMIZER_HISTORY_RESET_NOT_BITWISE"
-        @test restored_schema26.restart_state.frames == restored_sealed.restart_state.frames
-        @test restored_schema26.restart_state.z_previous == restored_sealed.restart_state.z_previous
-        @test isempty(restored_schema26.restart_state.optimizer_state.previous_u_gradient)
-        @test isempty(restored_schema26.restart_state.optimizer_state.previous_u_direction)
-        @test restored_schema26.restart_state.optimizer_state.u_cg_iteration == 0
-        @test restored_schema26.restart_state.optimizer_state.last_cg_restart_reason ==
-              :LEGACY_U_PHASE_CHART_RESET
-        @test any(
-            diagnostic -> diagnostic.code == :LEGACY_U_PHASE_CHART_RESET,
-            restored_schema26.diagnostics,
-        )
-        schema25_checkpoint = joinpath(directory, "checkpoint-schema-2.5-compatibility.h5")
-        cp(sealed_checkpoint, schema25_checkpoint)
-        schema25_digest = Base.invokelatest(
-            extension.SolverCheckpoint._wannierization_checkpoint_sha256_v2_5,
-            restored_sealed,
-        )
-        HDF5.h5open(schema25_checkpoint, "r+") do handle
-            attributes = HDF5.attributes(handle)
-            HDF5.delete_attribute(handle, "schema_version")
-            attributes["schema_version"] = "2.5"
-            HDF5.delete_attribute(handle, "checkpoint_sha256")
-            attributes["checkpoint_sha256"] = schema25_digest
-        end
-        restored_schema25 = WANNIERIZATION.read_wannierization_checkpoint_hdf5(schema25_checkpoint)
-        @test restored_schema25.input_summary["checkpoint_schema_version"] == "2.5"
-        @test restored_schema25.input_summary["optimizer_history_compatibility"] ==
-              "LEGACY_U_PHASE_CHART_RESET"
-        @test isempty(restored_schema25.restart_state.optimizer_state.previous_u_gradient)
-        @test isempty(restored_schema25.restart_state.optimizer_state.previous_u_direction)
-        @test any(
-            diagnostic -> diagnostic.code == :LEGACY_U_PHASE_CHART_RESET,
-            restored_schema25.diagnostics,
-        )
-        legacy_state_source = something(persisted_result.restart_state)
-        legacy_config_digest =
-            something(WANNIERIZATION._restart_config_sha256_pre_v2_6(nonlocalizing_config))
-        legacy_state = WANNIERIZATION.WannierizationRestartState(
-            legacy_state_source.iteration,
-            legacy_state_source.frames,
-            legacy_state_source.z_previous,
-            legacy_state_source.centers_cartesian,
-            legacy_state_source.spreads_angstrom2,
-            legacy_state_source.convergence_values,
-            legacy_state_source.included_bands,
-            legacy_state_source.elapsed_seconds,
-            legacy_config_digest,
-            legacy_state_source.representation_sha256,
-            legacy_state_source.stencil,
-            legacy_state_source.projection_basis_sha256,
-            legacy_state_source.amn_sha256,
-            legacy_state_source.optimizer_state,
-            legacy_state_source.fixed_subspace_projectors,
-            legacy_state_source.fixed_subspace_frames,
-            legacy_state_source.localization_initial_frames,
-        )
-        legacy_summary = Dict{String, String}(persisted_result.input_summary)
-        legacy_summary["restart_config_sha256"] = legacy_config_digest
-        legacy_result = Base.invokelatest(
-            extension.WannierizationInternalSupport.updated_wannierization_result,
-            persisted_result;
-            restart_state = legacy_state,
-            input_summary = legacy_summary,
-        )
-        legacy_checkpoint = joinpath(directory, "checkpoint-real-schema-2.5-config-digest.h5")
-        WANNIERIZATION.write_wannierization_checkpoint_hdf5(legacy_checkpoint, legacy_result)
-        restored_legacy_current =
-            WANNIERIZATION.read_wannierization_checkpoint_hdf5(legacy_checkpoint)
-        legacy_checkpoint_digest = Base.invokelatest(
-            extension.SolverCheckpoint._wannierization_checkpoint_sha256_v2_5,
-            restored_legacy_current,
-        )
-        HDF5.h5open(legacy_checkpoint, "r+") do handle
-            HDF5.delete_attribute(handle, "schema_version")
-            HDF5.attributes(handle)["schema_version"] = "2.5"
-            HDF5.delete_attribute(handle, "checkpoint_sha256")
-            HDF5.attributes(handle)["checkpoint_sha256"] = legacy_checkpoint_digest
-        end
-        restored_legacy = WANNIERIZATION.read_wannierization_checkpoint_hdf5(legacy_checkpoint)
-        resume_config = modified_wannierization_config(
-            nonlocalizing_config;
-            max_iterations = legacy_state.iteration + 1,
-        )
-        resumed_legacy = WANNIERIZATION._solve_symmetry_adapted_wannierization(
-            resume_config,
-            fixture.representation,
-            fixture.eig,
-            fixture.mmn,
-            fixture.plan;
-            restart_state = restored_legacy.restart_state,
-            restart_history = restored_legacy.history,
-        )
-        @test resumed_legacy.status != WANNIERIZATION.INVALID_INPUT
-        @test resumed_legacy.input_summary["restart_config_compatibility"] ==
-              "PRE_V2_6_DEFAULT_RCG_CONTROLS_AND_PRE_V2_7_GRADIENT_RESET"
-        @test any(
-            diagnostic -> diagnostic.code == :RESTART_CONFIG_PRE_V2_6_COMPATIBILITY,
-            resumed_legacy.diagnostics,
-        )
         tampered_sealed_checkpoint = joinpath(directory, "checkpoint-sealed-two-stage-tampered.h5")
         cp(sealed_checkpoint, tampered_sealed_checkpoint)
         HDF5.h5open(tampered_sealed_checkpoint, "r+") do handle
@@ -4044,53 +3823,6 @@ end
         @test_throws ArgumentError WANNIERIZATION.read_wannierization_checkpoint_hdf5(
             tampered_sealed_checkpoint,
         )
-
-        schema_2_0_checkpoint = joinpath(directory, "checkpoint-schema-2.0.h5")
-        cp(checkpoint_file, schema_2_0_checkpoint)
-        schema_2_0_digest = Base.invokelatest(
-            extension.SolverCheckpoint._wannierization_checkpoint_sha256_v1_3,
-            persisted_result,
-        )
-        HDF5.h5open(schema_2_0_checkpoint, "r+") do handle
-            attrs = HDF5.attributes(handle)
-            HDF5.delete_attribute(handle, "schema_version")
-            attrs["schema_version"] = "2.0"
-            HDF5.delete_attribute(handle, "checkpoint_sha256")
-            attrs["checkpoint_sha256"] = schema_2_0_digest
-        end
-        restored_2_0 = WANNIERIZATION.read_wannierization_checkpoint_hdf5(schema_2_0_checkpoint)
-        @test restored_2_0.input_summary["legacy_terminal_semantics"] == "true"
-        @test restored_2_0.input_summary["last_attempted_iteration"] == "-1"
-        @test parse(Int, restored_2_0.input_summary["last_accepted_iteration"]) ==
-              result.restart_state.iteration
-        @test restored_2_0.v_matrix == result.restart_state.frames
-        for version in ("2.0", "2.1", "2.2", "2.3")
-            restored_2_0.input_summary["checkpoint_schema_version"] = version
-            restored_2_0.input_summary["restart_eligible"] = "false"
-            restart_error = try
-                Base.invokelatest(
-                    extension.WorkflowOrchestration._validate_restart_schema_for_continuation,
-                    restored_2_0,
-                )
-                nothing
-            catch exception
-                exception
-            end
-            @test restart_error isa ArgumentError
-            @test occursin("RESTART_SEMANTICS_INCOMPATIBLE", sprint(showerror, restart_error))
-        end
-        restored_2_0.input_summary["optimizer_schedule"] = "nested"
-        nested_restart_error = try
-            Base.invokelatest(
-                extension.WorkflowOrchestration._validate_restart_schema_for_continuation,
-                restored_2_0,
-            )
-            nothing
-        catch exception
-            exception
-        end
-        @test nested_restart_error isa ArgumentError
-        @test occursin("UNSUPPORTED_LEGACY_SCHEDULE", sprint(showerror, nested_restart_error))
 
         failed_trial_values = fill(ComplexF64(NaN), size(result.v_matrix))
         failed_trial = WANNIERIZATION.WannierizationResult(
@@ -4161,81 +3893,20 @@ end
                   string(result.restart_state.iteration)
         end
 
-        legacy_checkpoint = joinpath(directory, "checkpoint-schema-1.2.h5")
+        legacy_checkpoint = joinpath(directory, "checkpoint-schema-1.0-migration-required.h5")
         cp(checkpoint_file, legacy_checkpoint)
-        legacy_digest = Base.invokelatest(
-            extension.SolverCheckpoint._wannierization_checkpoint_sha256_v1_2,
-            persisted_result,
-        )
         HDF5.h5open(legacy_checkpoint, "r+") do handle
-            attrs = HDF5.attributes(handle)
             HDF5.delete_attribute(handle, "schema_version")
-            attrs["schema_version"] = "1.2"
-            HDF5.delete_attribute(handle, "checkpoint_sha256")
-            attrs["checkpoint_sha256"] = legacy_digest
+            HDF5.attributes(handle)["schema_version"] = "1.0"
         end
-        legacy_error = try
+        migration_error = try
             WANNIERIZATION.read_wannierization_checkpoint_hdf5(legacy_checkpoint)
             nothing
         catch exception
             exception
         end
-        @test legacy_error isa ArgumentError
-        @test occursin("RESTART_SEMANTICS_INCOMPATIBLE", sprint(showerror, legacy_error))
-
-        legacy_checkpoint_1_3 = joinpath(directory, "checkpoint-schema-1.3.h5")
-        cp(checkpoint_file, legacy_checkpoint_1_3)
-        HDF5.h5open(legacy_checkpoint_1_3, "r+") do handle
-            HDF5.delete_attribute(handle, "schema_version")
-            HDF5.attributes(handle)["schema_version"] = "1.3"
-        end
-        legacy_1_3_error = try
-            WANNIERIZATION.read_wannierization_checkpoint_hdf5(legacy_checkpoint_1_3)
-            nothing
-        catch exception
-            exception
-        end
-        @test legacy_1_3_error isa ArgumentError
-        @test occursin("RESTART_SEMANTICS_INCOMPATIBLE", sprint(showerror, legacy_1_3_error))
-
-        # The public writer is already 1.0; a same-number legacy-shaped capsule must
-        # actually lack a required current-contract field instead of only changing its label.
-        incomplete_v1_0_file = joinpath(directory, "checkpoint-incomplete-v1.0.h5")
-        cp(checkpoint_file, incomplete_v1_0_file)
-        HDF5.h5open(incomplete_v1_0_file, "r+") do handle
-            HDF5.delete_attribute(handle, "z_u_stage_semantics")
-        end
-        incomplete_v1_0_error = try
-            WANNIERIZATION.read_wannierization_checkpoint_hdf5(incomplete_v1_0_file)
-            nothing
-        catch exception
-            exception
-        end
-        @test incomplete_v1_0_error isa ArgumentError
-        @test occursin("z_u_stage_semantics", sprint(showerror, incomplete_v1_0_error))
-
-        legacy_v1_1_file = joinpath(directory, "checkpoint-v1.1.h5")
-        cp(checkpoint_file, legacy_v1_1_file)
-        HDF5.h5open(legacy_v1_1_file, "r+") do handle
-            HDF5.delete_attribute(handle, "schema_version")
-            HDF5.attributes(handle)["schema_version"] = "1.1"
-            HDF5.delete_attribute(handle, "checkpoint_sha256")
-            HDF5.attributes(handle)["checkpoint_sha256"] = Base.invokelatest(
-                extension.SolverCheckpoint._wannierization_checkpoint_sha256,
-                persisted_result,
-            )
-        end
-        @test_throws ArgumentError WANNIERIZATION.read_wannierization_checkpoint_hdf5(
-            legacy_v1_1_file,
-        )
-
-        future_file = joinpath(directory, "checkpoint-future.h5")
-        cp(checkpoint_file, future_file)
-        HDF5.h5open(future_file, "r+") do handle
-            HDF5.delete_attribute(handle, "schema_version")
-            HDF5.attributes(handle)["schema_version"] = "9.9"
-        end
-        @test_throws ArgumentError WANNIERIZATION.read_wannierization_checkpoint_hdf5(future_file)
+        @test migration_error isa ArgumentError
+        @test occursin("CHECKPOINT_MIGRATION_REQUIRED", sprint(showerror, migration_error))
 
         tampered_file = joinpath(directory, "checkpoint-tampered.h5")
         cp(checkpoint_file, tampered_file)
@@ -4277,9 +3948,9 @@ end
         @test getfield.(failed_restored.history, :diagnostics) ==
               getfield.(failed.history, :diagnostics)
         HDF5.h5open(checkpoint_file, "r") do handle
-            @test String(read(HDF5.attributes(handle)["schema_version"])) == "1.0"
+            @test String(read(HDF5.attributes(handle)["schema_version"])) == "1.2"
             @test !Bool(read(HDF5.attributes(handle)["converged"]))
-            @test Bool(read(HDF5.attributes(handle)["diagnostic_only"]))
+            @test Bool(read(HDF5.attributes(handle)["quality_review_recommended"]))
             @test Int(read(HDF5.attributes(handle)["last_accepted_iteration"])) ==
                   result.restart_state.iteration
             @test Int(read(HDF5.attributes(handle)["last_persisted_iteration"])) ==
@@ -4344,21 +4015,15 @@ end
             fixture.eig,
             incomplete_mmn,
         )
-        diagnostic_model =
+        accepted_state_model =
             WANNIERIZATION.build_wannier_tight_binding_model(failed, fixture.eig, fixture.mmn)
-        @test diagnostic_model.hamiltonian_r == model.hamiltonian_r
-        @test_throws ArgumentError WANNIERIZATION.build_wannier_tight_binding_model(
-            restored_221,
-            fixture.eig,
-            fixture.mmn,
-        )
-        legacy_diagnostic_model = WANNIERIZATION.build_wannier_tight_binding_model(
-            restored_221,
+        @test accepted_state_model.hamiltonian_r == model.hamiltonian_r
+        @test_throws MethodError WANNIERIZATION.build_wannier_tight_binding_model(
+            result,
             fixture.eig,
             fixture.mmn;
             allow_legacy_diagnostic_export = true,
         )
-        @test legacy_diagnostic_model.hamiltonian_r == model.hamiltonian_r
         @test Base.invokelatest(
             extension.OperatorExport._real_space_hermiticity_error,
             model.position_r,
@@ -4386,7 +4051,7 @@ end
         @test Base.invokelatest(extension.OperatorExport._tb_centers, perturbed_model) ≈
               result.wannier_centers_cartesian atol = 1.0e-14 rtol = 0.0
         output_config = WANNIERIZATION._replace_wannierization_config(
-            fixture.config;
+            nonlocalizing_config;
             checkpoint = (checkpoint_hdf5 = joinpath(directory, "synthetic.wannierization.h5"),),
             output = (tb_output_formats = (:packed_hdf5, :wannier90_tb), write_wannier90_tb = true),
         )
@@ -4419,13 +4084,13 @@ end
         )
         @test isfile(diagnostic_packed)
         @test isfile(diagnostic_exchange)
-        @test diagnostic_metadata["diagnostic_classification"] == "MAX_ITERATIONS_DIAGNOSTIC"
+        @test diagnostic_metadata["model_availability"] == "AVAILABLE_WITH_QUALITY_WARNINGS"
         @test parse(Float64, diagnostic_metadata["tb_hamiltonian_fourier_roundtrip_residual"]) <=
               1.0e-10
         @test parse(Float64, diagnostic_metadata["tb_position_fourier_roundtrip_residual"]) <=
               1.0e-10
         diagnostic_manifest = WANNIER_IO.read_real_space_operator_bundle_manifest(diagnostic_packed)
-        @test diagnostic_manifest.diagnostic_only
+        @test diagnostic_manifest.quality_review_recommended
         @test !something(diagnostic_manifest.production_eligible, true)
         hamiltonian_qualification =
             diagnostic_manifest.operator_qualification["operators"]["hamiltonian"]
@@ -4445,7 +4110,9 @@ end
         @test hamiltonian_qualification["authoritative_hamiltonian_digest"] ==
               diagnostic_manifest.authoritative_hamiltonian_sha256
         @test authority_contract_sha256 != diagnostic_manifest.authoritative_hamiltonian_sha256
-        packed, exchange, _ = Base.invokelatest(
+        # Independent accepted-state exports must not overwrite an earlier attempt.
+        diagnostic_digest = bytes2hex(open(SHA.sha256, diagnostic_packed))
+        @test_throws ArgumentError Base.invokelatest(
             extension.OperatorExport._export_wannierization_tb,
             result,
             fixture.eig,
@@ -4454,6 +4121,56 @@ end
             paths,
             nothing,
         )
+        accepted_config = WANNIERIZATION._replace_wannierization_config(
+            output_config;
+            checkpoint = (checkpoint_hdf5 = joinpath(directory, "accepted.wannierization.h5"),),
+        )
+        accepted_paths = Base.invokelatest(
+            extension.OperatorExport._wannierization_output_paths,
+            accepted_config.checkpoint.checkpoint_hdf5,
+        )
+        packed, exchange, _ = Base.invokelatest(
+            extension.OperatorExport._export_wannierization_tb,
+            result,
+            fixture.eig,
+            fixture.mmn,
+            accepted_config,
+            accepted_paths,
+            nothing,
+        )
+        @test bytes2hex(open(SHA.sha256, diagnostic_packed)) == diagnostic_digest
+        strict_config = WANNIERIZATION._replace_wannierization_config(
+            accepted_config;
+            input = (construction_policy = :strict,),
+            checkpoint = (checkpoint_hdf5 = joinpath(directory, "strict.wannierization.h5"),),
+        )
+        strict_paths = Base.invokelatest(
+            extension.OperatorExport._wannierization_output_paths,
+            strict_config.checkpoint.checkpoint_hdf5,
+        )
+        strict_packed, _, _ = Base.invokelatest(
+            extension.OperatorExport._export_wannierization_tb,
+            result,
+            fixture.eig,
+            fixture.mmn,
+            strict_config,
+            strict_paths,
+            nothing,
+        )
+        strict_before = WANNIER_IO.read_real_space_operator_bundle_manifest(strict_packed)
+        strict_repeated, _, strict_metadata = Base.invokelatest(
+            extension.OperatorExport._export_wannierization_tb,
+            result,
+            fixture.eig,
+            fixture.mmn,
+            strict_config,
+            strict_paths,
+            nothing,
+        )
+        @test strict_repeated == strict_packed
+        @test WANNIER_IO.read_real_space_operator_bundle_manifest(strict_repeated).scientific_content_sha256 ==
+              strict_before.scientific_content_sha256
+        @test strict_metadata["numerical_quality"] != "NUMERICAL_WARNING"
         manifest = WANNIER_IO.read_real_space_operator_bundle_manifest(packed)
         @test manifest.input_sha256 == result.input_summary["input_sha256"]
         @test something(manifest.solver_validation_ready, false)
@@ -4468,7 +4185,7 @@ end
             "source_bundle_sha256" => source_digest,
             "band_validation_summary_sha256" => repeat("1", 64),
             "response_validation_summary_sha256" => repeat("2", 64),
-            "final_tb_usability" => "DIAGNOSTIC_MODEL_AVAILABLE",
+            "final_tb_usability" => "MODEL_AVAILABLE_WITH_QUALITY_WARNINGS",
             "final_physics_qualification" => "PHYSICS_HOLD",
             "final_production_eligible" => false,
         )
@@ -4486,7 +4203,7 @@ end
         end
         validated_manifest = WANNIER_IO.read_real_space_operator_bundle_manifest(validated)
         @test validated_manifest.post_validation_present
-        @test validated_manifest.final_tb_usability == "DIAGNOSTIC_MODEL_AVAILABLE"
+        @test validated_manifest.final_tb_usability == "MODEL_AVAILABLE_WITH_QUALITY_WARNINGS"
         @test validated_manifest.final_physics_qualification == "PHYSICS_HOLD"
         @test validated_manifest.final_production_eligible == false
         @test validated_manifest.post_validation_source_sha256 == source_digest
@@ -4530,7 +4247,7 @@ end
         @test bytes2hex(SHA.sha256(read(historical_suffix))) == historical_sha256
         HDF5.h5open(checkpoint_file, "r") do handle
             @test !Bool(read(HDF5.attributes(handle)["production_eligible"]))
-            @test Bool(read(HDF5.attributes(handle)["diagnostic_only"]))
+            @test Bool(read(HDF5.attributes(handle)["quality_review_recommended"]))
         end
         band_qualified = Base.invokelatest(
             extension.WannierizationInternalSupport.updated_wannierization_result,
@@ -4538,14 +4255,15 @@ end
             input_summary = merge(
                 eligible_result.input_summary,
                 Dict(
+                    "construction_policy" => "strict",
                     "optimizer_schedule" => "two_stage",
                     "u_acceptance" => "armijo",
                     "representation_compatible" => "true",
                     "physics_qualification" => "QUALIFIED",
                     "band_validation_pass" => "true",
                     "z_seal_class" => "CONVERGED",
-                    "qualified_z_seal" => "true",
-                    "standard_tb_export_eligible" => "true",
+                    "wannierization_eligibility_strictly_converged_z_seal" => "true",
+                    "wannierization_eligibility_export_eligible" => "true",
                 ),
             ),
             tb_symmetry_qualification = WANNIERIZATION.TBSymmetryQualification(
@@ -4586,7 +4304,7 @@ end
         )
         converged_manifest = WANNIER_IO.read_real_space_operator_bundle_manifest(converged_packed)
         @test !converged_manifest.production_eligible
-        @test converged_manifest.tb_usability == "DIAGNOSTIC_MODEL_AVAILABLE"
+        @test converged_manifest.tb_usability == "MODEL_AVAILABLE"
         @test converged_manifest.physics_qualification == "PENDING_DOWNSTREAM_VALIDATION"
         @test model.num_orbitals == 1
         for kpoint in ([0.0, 0.0, 0.0], [0.173, 0.0, 0.0], [0.5, 0.0, 0.0])
@@ -4629,6 +4347,76 @@ end
             checkpoint_file,
             output_config,
         )
+        @test output_config.solver.acceleration.schedule == :two_stage
+        disentanglement_snapshot = merge(
+            snapshot,
+            (
+                optimizer_phase = :localization,
+                completed_stage = :disentanglement,
+                omega_i = 0.75,
+                delta_omega_i = 0.01,
+                z_stability_count = 2,
+            ),
+        )
+        disentanglement_io = IOBuffer()
+        Base.invokelatest(
+            extension.OperatorExport._write_wannierization_progress,
+            disentanglement_io,
+            disentanglement_snapshot,
+            nothing,
+            output_config,
+            fixture.representation;
+            heading = "DISENTANGLEMENT FINAL",
+        )
+        disentanglement_text = String(take!(disentanglement_io))
+        @test occursin("[DISENTANGLEMENT FINAL]", disentanglement_text)
+        @test occursin("omega_i", disentanglement_text)
+        @test occursin("delta_omega_i", disentanglement_text)
+        @test occursin("delta_omega_i_definition", disentanglement_text)
+        @test occursin("z_stability_window", disentanglement_text)
+        @test occursin(r"total_spreading\s+=\s+NOT_EVALUATED", disentanglement_text)
+        @test !occursin("Per-Wannier-state spreading", disentanglement_text)
+
+        boundary_io = IOBuffer()
+        boundary_observer = Base.invokelatest(
+            extension.OperatorExport._wannierization_observer,
+            output_config,
+            fixture.representation,
+            paths,
+            boundary_io,
+        )
+        Base.invokelatest(boundary_observer, disentanglement_snapshot, nothing, [], [])
+        boundary_text = String(take!(boundary_io))
+        @test length(findall("[DISENTANGLEMENT FINAL]", boundary_text)) == 1
+        @test !occursin("[ITERATION", boundary_text)
+
+        localization_io = IOBuffer()
+        localization_snapshot = merge(
+            snapshot,
+            (
+                optimizer_phase = :localization,
+                completed_stage = :localization,
+                omega_i = 0.75,
+                spread_total = 0.75,
+                convergence_metric = 0.0,
+                spreads = zero.(result.spreads_angstrom2),
+                u_stability_count = 3,
+            ),
+        )
+        Base.invokelatest(
+            extension.OperatorExport._write_wannierization_progress,
+            localization_io,
+            localization_snapshot,
+            nothing,
+            output_config,
+            fixture.representation,
+        )
+        localization_text = String(take!(localization_io))
+        @test occursin(r"omega_tilde\s+=\s+0\.0 angstrom\^2", localization_text)
+        @test occursin(r"convergence_metric\s+=\s+0\.0", localization_text)
+        @test occursin("Per-Wannier-state spreading", localization_text)
+        @test occursin("0.0000000000", localization_text)
+
         Base.invokelatest(
             extension.OperatorExport._write_wannierization_final,
             log_io,
@@ -4668,10 +4456,12 @@ end
         @test occursin("convergence_metric              = 0.5", log_text)
         @test occursin("metric_to_tolerance_ratio", log_text)
         @test occursin("Per-Wannier-state spreading", log_text)
-        @test occursin("CONSTRUCTION GATE AND DIAGNOSTIC SUMMARY", log_text)
+        @test occursin("CONSTRUCTION GATE AND QUALITY SUMMARY", log_text)
         @test occursin("FINAL SPREADING", log_text)
-        @test occursin("FINAL TB SYMMETRY QUALIFICATION (diagnostic model)", log_text)
+        @test occursin("FINAL TB SYMMETRY QUALIFICATION (standard model)", log_text)
         @test occursin("FINAL STATUS", log_text)
+        @test occursin("model_availability", log_text)
+        @test !occursin("diagnostic_only", log_text)
         @test occursin(r"wannierization_log\s+=\s+", log_text)
         @test !occursin(log_file, log_text)
         @test occursin(basename(log_file), log_text)
@@ -4696,7 +4486,7 @@ end
         )
         close(ordinary_io)
         @test !occursin(
-            "FINAL TB SYMMETRY QUALIFICATION (diagnostic model)",
+            "FINAL TB SYMMETRY QUALIFICATION (standard model)",
             read(ordinary_log, String),
         )
         ordinary_forced = WANNIERIZATION._replace_wannierization_config(
@@ -4717,10 +4507,31 @@ end
         )
         close(forced_io)
         forced_text = read(forced_log, String)
-        @test occursin("FINAL TB SYMMETRY QUALIFICATION (diagnostic model)", forced_text)
+        @test occursin("FINAL TB SYMMETRY QUALIFICATION (standard model)", forced_text)
         @test occursin(r"overall\s+=\s+NOT_RUN", forced_text)
         @test occursin(r"source\s+=\s+qualification_not_run", forced_text)
         @test !occursin("final_exported_and_read_back_tb", forced_text)
+
+        no_localization = Base.invokelatest(
+            extension.WannierizationInternalSupport.updated_wannierization_result,
+            failed;
+            input_summary = merge(failed.input_summary, Dict("localization_steps" => "0")),
+        )
+        no_localization_io = IOBuffer()
+        Base.invokelatest(
+            extension.OperatorExport._write_wannierization_final,
+            no_localization_io,
+            no_localization,
+            output_config,
+            WANNIERIZATION.WannierizationArtifacts();
+            wall_time = 0.0,
+            allocated_bytes = 0,
+            gc_time = 0.0,
+        )
+        no_localization_text = String(take!(no_localization_io))
+        @test occursin(r"final_total_spreading\s+=\s+NOT_RUN", no_localization_text)
+        @test occursin(r"per_wannier_state_spreading\s+=\s+NOT_EVALUATED", no_localization_text)
+        @test !occursin("Per-Wannier-state final spreading", no_localization_text)
 
         ordinary_qualification = Base.invokelatest(
             extension.OperatorExport.qualify_exported_wannierization_tb,
@@ -4757,7 +4568,9 @@ end
         close(ordinary_incomplete_io)
         ordinary_incomplete_text = read(ordinary_incomplete_log, String)
         @test occursin(r"overall\s+=\s+INCOMPLETE", ordinary_incomplete_text)
-        @test occursin("NOT_APPLICABLE", ordinary_incomplete_text)
+        @test !occursin("NOT_APPLICABLE", ordinary_incomplete_text)
+        @test occursin("MISSING_REQUIRED_METRICS:", ordinary_incomplete_text)
+        @test occursin("Hermiticity", ordinary_incomplete_text)
         @test occursin(r"source\s+=\s+final_exported_and_read_back_tb", ordinary_incomplete_text)
 
         symmetry_disabled = WANNIERIZATION._replace_wannierization_config(
@@ -4778,7 +4591,7 @@ end
         )
         close(symmetry_disabled_io)
         @test !occursin(
-            "FINAL TB SYMMETRY QUALIFICATION (diagnostic model)",
+            "FINAL TB SYMMETRY QUALIFICATION (standard model)",
             read(symmetry_disabled_log, String),
         )
 

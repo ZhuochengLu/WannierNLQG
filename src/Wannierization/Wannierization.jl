@@ -15,6 +15,7 @@ const WANNIERIZATION_JSON3_PKG_ID =
 
 include("models/ConfigurationsContracts.jl")
 include("models/OptimizerStates.jl")
+include("models/WannierizationEligibility.jl")
 include("models/DiagnosticsQualification.jl")
 include("models/ResultsArtifacts.jl")
 include("ProjectionRepresentationSearchModels.jl")

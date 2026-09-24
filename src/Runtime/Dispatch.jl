@@ -31,6 +31,7 @@ function run(cfg::EffectiveTaskConfig)
                 response_symmetry_summary = bundle_result.response_symmetry_summary,
                 band_summary = bundle_result.band_summary,
                 replica_summary = bundle_result.replica_summary,
+                qualification_summary = response_qualification_summary(bundle_result.qualification),
             ) : ""
         progress_run_done!(
             outputs,
@@ -40,6 +41,7 @@ function run(cfg::EffectiveTaskConfig)
             response_symmetry_summary = bundle_result.response_symmetry_summary,
             band_summary = bundle_result.band_summary,
             replica_summary = bundle_result.replica_summary,
+            qualification_summary = response_qualification_summary(bundle_result.qualification),
         )
 
         return RunResult(
@@ -50,6 +52,7 @@ function run(cfg::EffectiveTaskConfig)
             metadata_path,
             ctx.progress_out_path,
             ctx.progress_jsonl_path,
+            bundle_result.qualification,
         )
     catch err
         progress_run_failed!(err)
@@ -134,7 +137,14 @@ function context_with_demand(contexts::Vector{RunContext}, demand::OperatorDeman
 end
 
 """Persist the task-ID index and measured sharing counters alongside task metadata."""
-function write_task_run_index(path::String, ids::Vector{String}, results, sharing)
+function write_task_run_index(
+    path::String,
+    ids::Vector{String},
+    results,
+    sharing,
+    qualification::ResponseQualificationResult,
+)
+    qualification_summary = response_qualification_summary(qualification)
     open(path, "w") do io
         metadata_section(
             io,
@@ -152,9 +162,19 @@ function write_task_run_index(path::String, ids::Vector{String}, results, sharin
                     "id" => id,
                     "metadata" => relpath(result.metadata_path, dirname(path)),
                     "outputs" => metadata_value(relpath.(result.outputs, dirname(path))),
+                    "qualification_status" => result.qualification.qualification_status,
+                    "production_eligible" => string(result.qualification.production_eligible),
                 ],
             )
         end
+        metadata_section(
+            io,
+            "Qualification",
+            Pair{String, String}[
+                string(key) => metadata_value(value) for
+                (key, value) in pairs(qualification_summary)
+            ],
+        )
         metadata_section(
             io,
             "SharedInterpolation",
@@ -249,6 +269,7 @@ function run(config::TaskConfig)
                         fourier_summary = value.fourier_summary,
                         band_summary = value.band_summary,
                         replica_summary = value.replica_summary,
+                        qualification_summary = response_qualification_summary(value.qualification),
                     ) : ""
                 push!(
                     results,
@@ -260,6 +281,7 @@ function run(config::TaskConfig)
                         metadata,
                         first(contexts).progress_out_path,
                         first(contexts).progress_jsonl_path,
+                        value.qualification,
                     ),
                 )
             end
@@ -324,6 +346,7 @@ function run(config::TaskConfig)
                         fourier_summary = value.fourier_summary,
                         response_symmetry_summary = value.response_symmetry_summary,
                         replica_summary = value.replica_summary,
+                        qualification_summary = response_qualification_summary(value.qualification),
                     ) : ""
                 push!(
                     results,
@@ -335,6 +358,7 @@ function run(config::TaskConfig)
                         metadata,
                         first(contexts).progress_out_path,
                         first(contexts).progress_jsonl_path,
+                        value.qualification,
                     ),
                 )
             end
@@ -354,12 +378,17 @@ function run(config::TaskConfig)
             end
         end
         outputs = reduce(vcat, [result.outputs for result in results]; init = String[])
+        qualification = aggregate_response_qualifications(
+            ResponseQualificationResult[result.qualification for result in results],
+        )
         metadata =
-            mpi_is_root_process() ? write_task_run_index(index_path, ids, results, sharing) : ""
+            mpi_is_root_process() ?
+            write_task_run_index(index_path, ids, results, sharing, qualification) : ""
         progress_run_done!(
             outputs,
             metadata;
             response_symmetry_summaries = response_symmetry_summaries,
+            qualification_summary = response_qualification_summary(qualification),
         )
         return RunResult(
             reduce(vcat, [cfg.tasks for cfg in configs]),
@@ -372,6 +401,7 @@ function run(config::TaskConfig)
             ids,
             results,
             sharing,
+            qualification,
         )
     catch err
         progress_run_failed!(err)

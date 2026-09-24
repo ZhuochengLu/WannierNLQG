@@ -193,6 +193,11 @@ end
 # Build and audit one deterministic PAW-S SCDM frame at a completed k point.
 function _paw_scdm_frame_at_kpoint(point, metric, kpoint, coordinates, selected_spin)
     overlap, lowdin = _paw_scdm_lowdin(metric, kpoint, point)
+    return _paw_scdm_frame_from_metric(point, overlap, lowdin, kpoint, coordinates, selected_spin)
+end
+
+# Apply the unchanged SCDM algebra to coordinator-prepared metric matrices.
+function _paw_scdm_frame_from_metric(point, overlap, lowdin, kpoint, coordinates, selected_spin)
     phases = exp.(2im * pi .* (point.g_vectors * coordinates))
     values = zeros(ComplexF64, size(point.coefficients, 1), size(coordinates, 2))
     for column in axes(coordinates, 2)
@@ -272,7 +277,40 @@ function prepare_paw_scdm_input_artifact(
     representation_hdf5::AbstractString,
     output_hdf5::AbstractString;
     num_wannier::Int,
-    construction_policy::Symbol = :diagnostic,
+    construction_policy::Symbol = :standard,
+    execution = nothing,
+)
+    run =
+        () -> _prepare_paw_scdm_input_artifact(
+            gauge_hdf5,
+            representation_hdf5,
+            output_hdf5;
+            num_wannier,
+            construction_policy,
+        )
+    if execution === nothing
+        return mktempdir() do workspace
+            with_preparation_storage(run, workspace)
+        end
+    end
+    return task_local_storage(:wannier_preparation_execution, execution) do
+        execution.mode == :dense_reference && return run()
+        if execution.checkpoint_directory === nothing
+            return mktempdir() do workspace
+                with_preparation_storage(run, workspace)
+            end
+        end
+        with_preparation_storage(run, joinpath(execution.checkpoint_directory, "scdm-workspace"))
+    end
+end
+
+# Build the durable SCDM artifact inside the caller-owned bounded storage scope.
+function _prepare_paw_scdm_input_artifact(
+    gauge_hdf5,
+    representation_hdf5,
+    output_hdf5;
+    num_wannier,
+    construction_policy,
 )
     isfile(gauge_hdf5) || throw(ArgumentError("SCDM_INPUT_PRECONDITION: gauge HDF5 does not exist"))
     isfile(representation_hdf5) ||
@@ -293,11 +331,12 @@ function prepare_paw_scdm_input_artifact(
         throw(ArgumentError("SCDM_INPUT_PRECONDITION: spinor identity differs"))
     representation.mp_grid == native.mp_grid ||
         throw(ArgumentError("SCDM_INPUT_PRECONDITION: MP grid identity differs"))
-    maximum(
-        abs,
-        representation.kpoints_fractional -
-        reduce(vcat, transpose.(getfield.(native.kpoints, :k_fractional))),
-    ) <= 1.0e-10 || throw(ArgumentError("SCDM_INPUT_PRECONDITION: k-point identity differs"))
+    kpoints = Matrix{Float64}(undef, nkpoints, 3)
+    for k in 1:nkpoints
+        kpoints[k, :] .= native.kpoints[k].k_fractional
+    end
+    maximum(abs, representation.kpoints_fractional - kpoints) <= 1.0e-10 ||
+        throw(ArgumentError("SCDM_INPUT_PRECONDITION: k-point identity differs"))
     get(representation.conventions, "wavefunction_gauge_hdf5_sha256", "MISSING") == gauge_sha256 ||
         throw(ArgumentError("SCDM_INPUT_PRECONDITION: gauge digest differs"))
     authority = get(payload.source_metadata, "authoritative_hamiltonian", "native_dft")
@@ -329,14 +368,7 @@ function prepare_paw_scdm_input_artifact(
     paw_s_residuals = zeros(Float64, nkpoints)
     euclidean_residuals = zeros(Float64, nkpoints)
     selected_spin = vec(selected_grid_indices[4, :])
-    for kpoint in eachindex(native.kpoints)
-        result = _paw_scdm_frame_at_kpoint(
-            native.kpoints[kpoint],
-            payload.metric,
-            kpoint,
-            coordinates,
-            selected_spin,
-        )
+    function consume_frame(kpoint, result)
         frames[:, :, kpoint] .= result.frame
         projectors[:, :, kpoint] .= result.frame * result.frame'
         singular_values[:, kpoint] .= result.singular_values
@@ -346,7 +378,34 @@ function prepare_paw_scdm_input_artifact(
         paw_s_residuals[kpoint] = result.paw_s_residual
         euclidean_residuals[kpoint] = result.euclidean_residual
     end
-    kpoints = reduce(vcat, transpose.(getfield.(native.kpoints, :k_fractional)))
+    function load_metric(kpoint)
+        point = native.kpoints[kpoint]
+        overlap, lowdin = _paw_scdm_lowdin(payload.metric, kpoint, point)
+        return (point, overlap, lowdin)
+    end
+    contract = bytes2hex(
+        sha256(
+            join(
+                (
+                    "ordinary-paw-scdm-v1",
+                    string(VERSION),
+                    gauge_sha256,
+                    representation_sha256,
+                    string(num_wannier),
+                    sha256_file(@__FILE__),
+                ),
+                ":",
+            ),
+        ),
+    )
+    foreach_preparation_block(
+        (k, inputs) -> _paw_scdm_frame_from_metric(inputs..., k, coordinates, selected_spin),
+        load_metric,
+        consume_frame,
+        nkpoints;
+        contract,
+        label = "paw-scdm",
+    )
     digest = _paw_scdm_payload_sha256(
         frames,
         projectors,

@@ -9,17 +9,21 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
         stored_version = String(required_attribute(handle, "schema_version"))
         stored_version in WANNIERIZATION_CHECKPOINT_READABLE_SCHEMA_VERSIONS || throw(
             ArgumentError(
-                "RESTART_SEMANTICS_INCOMPATIBLE: checkpoint schema $(stored_version) predates the fixed-subspace U semantics",
+                "CHECKPOINT_MIGRATION_REQUIRED: checkpoint schema $(stored_version) is not readable by schema 1.2",
             ),
         )
-        # Public 1.0 preserves the complete 2.28 layout; stored_version binds its digest.
-        contract_version = stored_version == "1.0" ? "2.28" : stored_version
+        # Public 1.1 preserves the complete 2.28 numerical layout while binding
+        # the new Standard construction names and wire identity; public 1.2
+        # additionally binds the typed WannierizationEligibility block.
+        contract_version =
+            stored_version == "1.1" ? "2.28" : stored_version == "1.2" ? "2.29" : stored_version
         # Schema 2.21 is a strict semantic extension of the 2.20 payload.  Reuse
         # the mature 2.20 field decoder, then validate the new scientific hash
         # and Z/U contract independently below.
         version =
-            contract_version in ("2.21", "2.22", "2.23", "2.24", "2.25", "2.26", "2.27", "2.28") ?
-            "2.20" : contract_version
+            contract_version in
+            ("2.21", "2.22", "2.23", "2.24", "2.25", "2.26", "2.27", "2.28", "2.29") ? "2.20" :
+            contract_version
         status = _wannierization_status(String(required_attribute(handle, "status")))
         v_matrix = read(handle["solution/v_matrix"])
         centers = read(handle["solution/wannier_centers_cartesian"])
@@ -750,7 +754,8 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                         ),
                     )
                 end
-                if contract_version in ("2.22", "2.23", "2.24", "2.25", "2.26", "2.27", "2.28") &&
+                if contract_version in
+                   ("2.22", "2.23", "2.24", "2.25", "2.26", "2.27", "2.28", "2.29") &&
                    haskey(optimizer_group, "wannier90_reference_overlaps") &&
                    haskey(optimizer_group, "wannier90_reference_unitaries") &&
                    haskey(HDF5.attributes(optimizer_group), "wannier90_reference_omega_i")
@@ -834,15 +839,15 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
             end
         input_summary = read_string_dictionary(handle["input_summary"])
         get!(input_summary, "construction_policy", "strict")
-        input_summary["construction_policy"] in ("strict", "diagnostic") ||
+        input_summary["construction_policy"] in ("strict", "standard") ||
             throw(ArgumentError("CONSTRUCTION_POLICY_INVALID: unsupported persisted policy"))
         if haskey(input_summary, "construction_policy_contract")
-            input_summary["construction_policy_contract"] == "diagnostic_construction_v1" ||
+            input_summary["construction_policy_contract"] == "standard_construction_v1" ||
                 throw(ArgumentError("CONSTRUCTION_POLICY_CONTRACT_UNSUPPORTED"))
         elseif input_summary["construction_policy"] != "strict"
             throw(
                 ArgumentError(
-                    "CONSTRUCTION_POLICY_CONTRACT_MISSING: diagnostic policy requires a sealed contract",
+                    "CONSTRUCTION_POLICY_CONTRACT_MISSING: standard policy requires a sealed contract",
                 ),
             )
         end
@@ -869,7 +874,7 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                     throw(ArgumentError("schema-2.25 checkpoint is missing $(key)"))
             end
         end
-        if contract_version in ("2.26", "2.27", "2.28")
+        if contract_version in ("2.26", "2.27", "2.28", "2.29")
             for key in (
                 "requested_wannierization_mode",
                 "effective_wannierization_mode",
@@ -891,7 +896,7 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                 ),
             )
         end
-        if contract_version == "2.28"
+        if contract_version in ("2.28", "2.29")
             for key in (
                 "authoritative_hamiltonian",
                 "authoritative_hamiltonian_sha256",
@@ -930,7 +935,7 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
         get!(input_summary, "block_partition_policy_sha256", "NOT_APPLICABLE")
         get!(input_summary, "authoritative_hamiltonian", "native_dft")
         validate_persisted_authority_key(input_summary["authoritative_hamiltonian"])
-        contract_version != "2.28" &&
+        !(contract_version in ("2.28", "2.29")) &&
             input_summary["authoritative_hamiltonian"] == "symmetrized_dft_hamiltonian" &&
             throw(
                 ArgumentError(
@@ -961,9 +966,10 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
         get!(input_summary, "auxiliary_parent_audit_status", "NOT_APPLICABLE")
         get!(input_summary, "target_scope_production_eligible", "false")
         target_leakage_semantics_default =
-            contract_version == "2.28" ? "NOT_APPLICABLE" : "LEGACY_AMPLITUDE_LEAKAGE_CONTRACT"
+            contract_version in ("2.28", "2.29") ? "NOT_APPLICABLE" :
+            "LEGACY_AMPLITUDE_LEAKAGE_CONTRACT"
         target_leakage_threshold_default =
-            contract_version == "2.28" ? "NOT_APPLICABLE" : "NOT_RECORDED"
+            contract_version in ("2.28", "2.29") ? "NOT_APPLICABLE" : "NOT_RECORDED"
         get!(input_summary, "target_leakage_semantics", target_leakage_semantics_default)
         get!(input_summary, "target_leakage_formula_sha256", "NOT_RECORDED")
         get!(input_summary, "target_leakage_threshold", target_leakage_threshold_default)
@@ -1000,8 +1006,8 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
         get!(input_summary, "global_production_eligible", "false")
         input_summary["checkpoint_schema_version"] = stored_version
         # Public 1.0 and legacy 2.28 carry the same leakage-weight restart contract.
-        input_summary["restart_eligible"] = string(contract_version == "2.28")
-        contract_version == "2.28" ||
+        input_summary["restart_eligible"] = string(contract_version in ("2.28", "2.29"))
+        contract_version in ("2.28", "2.29") ||
             (input_summary["restart_rejection_code"] = "RESTART_SEMANTICS_INCOMPATIBLE")
         version in (
             "2.7",
@@ -1180,8 +1186,10 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
         )
             attributes = HDF5.attributes(handle)
             stored_checkpoint_sha256 = String(required_attribute(handle, "checkpoint_sha256"))
-            computed_checkpoint_sha256 = if stored_version == "1.0"
-                _wannierization_checkpoint_sha256_v1_0(result)
+            computed_checkpoint_sha256 = if stored_version == "1.2"
+                _wannierization_checkpoint_sha256_v2_29(result)
+            elseif stored_version == "1.1"
+                _wannierization_checkpoint_sha256_v1_1(result)
             elseif stored_version == "2.28"
                 _wannierization_checkpoint_sha256_v2_28(result)
             elseif stored_version == "2.27"
@@ -1252,7 +1260,20 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                     ),
                 )
             end
-            if contract_version in ("2.21", "2.22", "2.23", "2.24", "2.25", "2.26", "2.27", "2.28")
+            if stored_version == "1.2"
+                # Wire 1.2 mirrors the typed eligibility block as root
+                # attributes; they must agree with the summary group verbatim.
+                for key in WANNIERIZATION_ELIGIBILITY_SUMMARY_KEYS
+                    String(required_attribute(handle, key)) == get(result.input_summary, key, "") ||
+                        throw(
+                            ArgumentError(
+                                "wannierization checkpoint eligibility attribute mismatch: $(key)",
+                            ),
+                        )
+                end
+            end
+            if contract_version in
+               ("2.21", "2.22", "2.23", "2.24", "2.25", "2.26", "2.27", "2.28", "2.29")
                 String(required_attribute(handle, "z_u_stage_semantics")) ==
                 get(result.input_summary, "z_u_stage_semantics", "") || throw(
                     ArgumentError(
@@ -1277,7 +1298,7 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                     )
                 end
             end
-            if contract_version in ("2.26", "2.27", "2.28")
+            if contract_version in ("2.26", "2.27", "2.28", "2.29")
                 for key in (
                     "algorithm_profile",
                     "effective_algorithm_profile",
@@ -1290,7 +1311,7 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                     )
                 end
             end
-            if contract_version == "2.28"
+            if contract_version in ("2.28", "2.29")
                 for key in (
                     "authoritative_hamiltonian",
                     "authoritative_hamiltonian_sha256",
@@ -1524,9 +1545,6 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                 String(read(attributes["z_seal_class"])) ==
                 get(result.input_summary, "z_seal_class", "") ||
                     throw(ArgumentError("wannierization checkpoint Z-seal attribute mismatch"))
-                Bool(read(attributes["qualified_z_seal"])) ==
-                (get(result.input_summary, "qualified_z_seal", "false") == "true") ||
-                    throw(ArgumentError("wannierization checkpoint qualified-Z attribute mismatch"))
             end
             if version in (
                 "2.9",
@@ -1610,7 +1628,7 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
         if stored_version in ("2.20", "2.21", "2.22", "2.23")
             summary = Dict{String, String}(result.input_summary)
             summary["checkpoint_schema_version"] = stored_version
-            summary["restart_continuation_semantics"] = "LEGACY_DIAGNOSTIC_READ_ONLY"
+            summary["restart_continuation_semantics"] = "EXTERNAL_MIGRATION_REQUIRED"
             summary["restart_eligible"] = "false"
             summary["restart_rejection_code"] = "RESTART_SEMANTICS_INCOMPATIBLE"
             diagnostics = copy(result.diagnostics)

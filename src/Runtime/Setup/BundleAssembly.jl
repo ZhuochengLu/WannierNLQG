@@ -232,6 +232,40 @@ function bundle_matrix_element_plan(
         policy = definition.matrix_policy
         if policy == MATRIX_SPECTRUM
             nothing
+        elseif policy in (
+            MATRIX_LINEAR_TRANSPORT,
+            MATRIX_LINEAR_OPTICAL_RESPONSE,
+            MATRIX_ORBITAL_MAGNETIZATION,
+        )
+            for kind in (HAMILTONIAN_DERIVATIVES, INTERNAL_CONNECTION, WANNIER_CURVATURE)
+                push_unique_capability!(kind)
+            end
+            for kind in (HAMILTONIAN_DERIVATIVES, INTERNAL_CONNECTION, WANNIER_POSITION)
+                directions=require_matrix_element_axes(directions, kind, (1, 2, 3))
+            end
+            for kind in (WANNIER_CURVATURE, INTERNAL_CONNECTION_DERIVATIVES)
+                directions=require_matrix_element_pairs(
+                    directions,
+                    kind,
+                    [(a, b) for a in 1:3 for b in 1:3],
+                )
+            end
+        elseif policy == MATRIX_SECOND_HARMONIC
+            for kind in
+                (BERRY_CONNECTION, INTERNAL_CONNECTION_DERIVATIVES, HAMILTONIAN_SECOND_DERIVATIVES)
+                push_unique_capability!(kind)
+            end
+            for kind in
+                (BERRY_CONNECTION, INTERNAL_CONNECTION, HAMILTONIAN_DERIVATIVES, GAUGE_CORRECTION)
+                directions = require_matrix_element_axes(directions, kind, (1, 2, 3))
+            end
+            for kind in (INTERNAL_CONNECTION_DERIVATIVES, HAMILTONIAN_SECOND_DERIVATIVES)
+                directions = require_matrix_element_pairs(
+                    directions,
+                    kind,
+                    [(a, b) for a in 1:3 for b in 1:3],
+                )
+            end
         elseif policy in (MATRIX_CONVENTIONAL_Q0_CURRENT, MATRIX_CONVENTIONAL_QHC)
             push_unique_capability!(BERRY_CONNECTION)
             push_unique_capability!(INTERNAL_CONNECTION_DERIVATIVES)

@@ -25,6 +25,8 @@ const MATRIX_ELEMENTS_INTEGRATION_API = (
     :materialize_replica_component,
     :minimum_distance_real_space_replica_map,
     :mp_residue_grid,
+    :projector_block_velocity,
+    :projector_block_curvature,
     :real_space_replica_map_from_wsvec,
     :require_matrix_element_axes,
     :require_matrix_element_pairs,

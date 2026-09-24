@@ -878,12 +878,16 @@ struct WannierizationFixedSubspace
         ibz = Int.(irreducible_indices)
         all(index -> 1 <= index <= size(frame_values, 3), ibz) ||
             throw(ArgumentError("fixed-subspace IBZ index is out of range"))
+        # The FixedSubspace capsule no longer carries the superseded
+        # qualified_z_seal provenance key; Z evidence is read from z_seal_class.
+        hashes = Dict{String, String}(source_sha256)
+        delete!(hashes, "qualified_z_seal")
         return new(
             projector_values,
             frame_values,
             ibz,
             mask,
-            Dict{String, String}(source_sha256),
+            hashes,
             Dict{String, Float64}(invariant_residuals),
         )
     end

@@ -213,7 +213,7 @@ function _legacy_restart_config_sha256_pre_v2_8(
 )::Union{Nothing, String}
     config.input.construction_policy == :strict || return nothing
     acceleration = config.solver.acceleration
-    acceleration.disentanglement_limit_policy == :diagnostic_continue || return nothing
+    acceleration.disentanglement_limit_policy == :standard_continue || return nothing
     acceleration.joint_z_backtracking_factor == 0.5 || return nothing
     acceleration.joint_z_backtracking_max_steps == 12 || return nothing
     acceleration.constraint_operation_scope == :full || return nothing
@@ -229,7 +229,7 @@ function _legacy_restart_config_sha256_pre_v2_7(
 )::Union{Nothing, String}
     config.input.construction_policy == :strict || return nothing
     acceleration = config.solver.acceleration
-    acceleration.disentanglement_limit_policy == :diagnostic_continue || return nothing
+    acceleration.disentanglement_limit_policy == :standard_continue || return nothing
     acceleration.joint_z_backtracking_factor == 0.5 || return nothing
     acceleration.joint_z_backtracking_max_steps == 12 || return nothing
     acceleration.constraint_operation_scope == :full || return nothing
@@ -248,7 +248,7 @@ function _legacy_restart_config_sha256_pre_v2_6(
     acceleration.u_cg_restart_interval == 20 || return nothing
     acceleration.u_cg_beta_cap == 10.0 || return nothing
     acceleration.u_cg_minimum_descent_cosine == 1.0e-3 || return nothing
-    acceleration.disentanglement_limit_policy == :diagnostic_continue || return nothing
+    acceleration.disentanglement_limit_policy == :standard_continue || return nothing
     acceleration.joint_z_backtracking_factor == 0.5 || return nothing
     acceleration.joint_z_backtracking_max_steps == 12 || return nothing
     acceleration.constraint_operation_scope == :full || return nothing

@@ -1,5 +1,5 @@
 const OPERATOR_BUNDLE_SCHEMA = "wanniernlqg.real-space-operators"
-const OPERATOR_BUNDLE_SCHEMA_VERSION = "1.0"
+const OPERATOR_BUNDLE_SCHEMA_VERSION = "1.1"
 const FULL_DERIVATIVE_OVERLAP_ALGORITHM_VERSION = "wannier90-get_FF_R-v1"
 const OPERATOR_BUNDLE_EXTENSION_NAME = :WannierNLQGOperatorBundleExt
 const OPERATOR_BUNDLE_EXTENSION_LOCK = ReentrantLock()
@@ -66,7 +66,7 @@ struct OperatorBundleManifest
     numerical_quality::Union{Nothing, String}
     tb_export_status::Union{Nothing, String}
     converged::Union{Nothing, Bool}
-    diagnostic_only::Bool
+    quality_review_recommended::Bool
     physics_qualification::Union{Nothing, String}
     tb_usability::Union{Nothing, String}
     stopping_reason::Union{Nothing, String}
@@ -156,6 +156,15 @@ struct OperatorBundleManifest
     band_frame_euclidean_nonunitarity_maximum::Union{Nothing, Float64}
     band_frame_minimum_singular_value::Union{Nothing, Float64}
     band_frame_maximum_condition_number::Union{Nothing, Float64}
+    operator_selection_mode::String
+    requested_tasks::Vector{String}
+    normalized_tasks::String
+    task_dependency_closure::String
+    resolved_operator_inventory::String
+    resolved_source_inventory::String
+    operator_requirement_registry_version::String
+    operator_selection_sha256::Union{Nothing, String}
+    operator_target_contract_sha256::Union{Nothing, String}
 end
 
 """
@@ -327,6 +336,212 @@ function available_matrix_capabilities(inventory)
     return capabilities
 end
 
+"""Fixed operator profiles accepted by the public Wannierization output selection."""
+const OPERATOR_SELECTION_PROFILES = (:hamiltonian_position, :full)
+
+"""Resolved operator selection shared by the Wannierization export and Runtime paths."""
+struct OperatorSelection
+    mode::Symbol
+    profile::Symbol
+    inventory::Vector{RealSpaceOperatorKind}
+    sources::Vector{Symbol}
+    requested_tasks::Tuple
+    normalized_tasks::Tuple
+    closure::Tuple
+    registry_version::String
+    selection_sha256::Union{Nothing, String}
+end
+
+"""Return `:profile` or `:tasks` for one resolved operator selection."""
+operator_selection_mode(selection::OperatorSelection) = selection.mode
+
+"""Return the stored profile label of one resolved operator selection."""
+resolved_operator_profile(selection::OperatorSelection) = selection.profile
+
+"""Return the resolved real-space operator inventory in canonical registry order."""
+resolved_operator_inventory(selection::OperatorSelection) = selection.inventory
+
+"""Return the resolved upstream source closure in canonical source-registry order."""
+resolved_source_inventory(selection::OperatorSelection) = selection.sources
+
+"""Return the per-task dependency closure recorded for one resolved selection."""
+resolved_task_closure(selection::OperatorSelection) = selection.closure
+
+"""Return the operator-requirement registry version bound into one selection."""
+operator_selection_registry_version(selection::OperatorSelection) = selection.registry_version
+
+"""Return the stable selection digest, or `nothing` for a fixed profile."""
+operator_selection_sha256(selection::OperatorSelection) = selection.selection_sha256
+
+"""
+Return the union of upstream source closures of one complete operator inventory.
+
+The result follows the canonical `OPERATOR_TASK_SOURCE_REGISTRY` order so that a
+profile selection and an equivalent task-derived selection bind the same sources.
+"""
+function operator_inventory_source_closure(inventory)
+    canonical = canonical_operator_inventory(inventory)
+    requested = Set{Symbol}()
+    for kind in canonical, source in OPERATOR_SOURCE_CLOSURES[kind]
+        push!(requested, source)
+    end
+    return Symbol[source for source in OPERATOR_TASK_SOURCE_REGISTRY if source in requested]
+end
+
+"""Encode one requested operator task as a stable `quantity:method` token."""
+operator_task_token(task::OperatorTask) = string(task.quantity, ":", task.method)
+
+"""Decode one `quantity:method` token back into an `OperatorTask`."""
+function operator_task_from_token(token::AbstractString)
+    parts = split(String(token), ':')
+    length(parts) == 2 || throw(ArgumentError("malformed operator task token $(token)"))
+    return OperatorTask(quantity = Symbol(parts[1]), method = Symbol(parts[2]))
+end
+
+"""
+Decode a persisted vector of `quantity:method` tokens back into requested tasks.
+
+The fresh reader must re-derive one task-derived closure from the recorded
+`requested_tasks` tokens, not from their already-normalized expansion: the requested
+tokens carry the caller's original `method=:all` form that the selection digest binds.
+"""
+function operator_tasks_from_tokens(tokens)
+    return OperatorTask[operator_task_from_token(token) for token in tokens]
+end
+
+"""
+Resolve one mutually exclusive operator selection into its canonical inventory,
+source closure, and per-task dependency closure.
+
+`profile` selects a fixed complete inventory; `operator_tasks` selects a
+task-derived inventory.  Exactly one must be supplied.  Task-derived selections are
+re-derived from the shared `Core` requirement registry, so the Wannierization
+generation path and the Runtime consumption path cannot disagree about a task.
+"""
+function resolve_operator_selection(profile::Union{Nothing, Symbol}, operator_tasks = ())
+    tasks = Tuple(operator_tasks)
+    if profile !== nothing
+        isempty(tasks) || throw(
+            OperatorSelectionError(
+                "AMBIGUOUS_OPERATOR_SELECTION",
+                "profile=$(profile) and $(length(tasks)) operator_tasks were both supplied; " *
+                "select exactly one of a fixed profile or operator_tasks",
+            ),
+        )
+        profile == :spin && throw(
+            OperatorSelectionError(
+                "UNSUPPORTED_OPERATOR_PROFILE",
+                "operator profile :spin was removed; select operator_tasks or profile=:full",
+            ),
+        )
+        profile in OPERATOR_SELECTION_PROFILES || throw(
+            OperatorSelectionError(
+                "UNSUPPORTED_OPERATOR_PROFILE",
+                "profile=$(profile) is not a supported fixed operator profile; supported " *
+                "profiles: $(join(String.(OPERATOR_SELECTION_PROFILES), ", "))",
+            ),
+        )
+        inventory = collect(OPERATOR_PROFILE_INVENTORIES[profile])
+        return OperatorSelection(
+            :profile,
+            profile,
+            inventory,
+            operator_inventory_source_closure(inventory),
+            (),
+            (),
+            (),
+            OPERATOR_REQUIREMENT_REGISTRY_VERSION,
+            nothing,
+        )
+    end
+    isempty(tasks) && throw(
+        OperatorSelectionError(
+            "EMPTY_OPERATOR_TASK_SELECTION",
+            "profile=nothing requires at least one OperatorTask",
+        ),
+    )
+    resolution = resolve_operator_requirements(tasks)
+    inventory = collect(resolution.required_operators)
+    # A task-derived selection always stores the `:task_derived` label, even when its
+    # inventory happens to coincide with a fixed profile.  The persisted profile is a
+    # provenance identity, not an inferred inventory class: relabelling a task selection
+    # as a fixed profile would silently upgrade an artifact that never passed the fixed
+    # profile qualification path.
+    stored = :task_derived
+    return OperatorSelection(
+        :tasks,
+        stored,
+        inventory,
+        collect(resolution.required_sources),
+        tasks,
+        resolution.tasks,
+        resolution.closure,
+        resolution.registry_version,
+        resolution.selection_sha256,
+    )
+end
+
+"""
+Re-derive one stored task-derived selection and reject any tampering with the
+requested tasks, the resolved inventory or source closure, their canonical order,
+the registry version, or the selection digest.
+"""
+function validate_task_derived_operator_selection(
+    requested_tasks,
+    inventory,
+    sources,
+    selection_sha256,
+    registry_version,
+)
+    tokens = String[String(token) for token in requested_tasks]
+    isempty(tokens) && throw(
+        ArgumentError("TASK_DERIVED_OPERATOR_SELECTION_INVALID: requested_tasks must not be empty"),
+    )
+    String(registry_version) == OPERATOR_REQUIREMENT_REGISTRY_VERSION || throw(
+        ArgumentError(
+            "TASK_DERIVED_OPERATOR_SELECTION_INVALID: unsupported operator requirement " *
+            "registry version $(registry_version)",
+        ),
+    )
+    resolution = try
+        resolve_operator_requirements(operator_tasks_from_tokens(tokens))
+    catch error
+        error isa Union{OperatorSelectionError, ArgumentError} || rethrow()
+        throw(ArgumentError("TASK_DERIVED_OPERATOR_SELECTION_INVALID: $(sprint(showerror, error))"))
+    end
+    expected_inventory = canonical_operator_inventory(resolution.required_operators)
+    stored_inventory = canonical_operator_inventory(inventory)
+    RealSpaceOperatorKind[inventory...] == stored_inventory || throw(
+        ArgumentError(
+            "TASK_DERIVED_OPERATOR_SELECTION_INVALID: stored operator inventory is not in " *
+            "canonical registry order",
+        ),
+    )
+    stored_inventory == expected_inventory || throw(
+        ArgumentError(
+            "TASK_DERIVED_OPERATOR_SELECTION_INVALID: stored operator inventory " *
+            "$(join(real_space_operator_name.(stored_inventory), ", ")) disagrees with the " *
+            "re-derived inventory $(join(real_space_operator_name.(expected_inventory), ", "))",
+        ),
+    )
+    stored_sources = Symbol[Symbol(source) for source in sources]
+    expected_sources = collect(resolution.required_sources)
+    stored_sources == expected_sources || throw(
+        ArgumentError(
+            "TASK_DERIVED_OPERATOR_SELECTION_INVALID: stored source inventory " *
+            "$(join(String.(stored_sources), ", ")) disagrees with the re-derived source " *
+            "inventory $(join(String.(expected_sources), ", "))",
+        ),
+    )
+    String(selection_sha256) == resolution.selection_sha256 || throw(
+        ArgumentError(
+            "TASK_DERIVED_OPERATOR_SELECTION_INVALID: stored operator selection SHA-256 " *
+            "differs from the re-derived digest",
+        ),
+    )
+    return resolution
+end
+
 # Return the active HDF5-only model-package extension, if loaded.
 function _active_operator_bundle_extension()
     return Base.get_extension(parentmodule(@__MODULE__), OPERATOR_BUNDLE_EXTENSION_NAME)
@@ -360,13 +575,20 @@ function _call_operator_bundle_extension(function_name::Symbol, arguments...; ke
     return Base.invokelatest(implementation, arguments...; keywords...)
 end
 
-"""Write one strict Packed HDF5 schema-1.0 model bundle with explicit provenance."""
+"""
+Write one strict Packed HDF5 model bundle with explicit provenance.
+
+`profile` selects a fixed complete inventory. Pass `profile = nothing` together with a
+non-empty `operator_tasks` tuple to persist a task-derived selection whose resolved
+inventory, source closure, per-task closure, and selection digest are re-derived on read.
+"""
 function write_real_space_operator_bundle(
     filename::AbstractString,
     lattice,
     degeneracies,
     operators::AbstractDict;
     profile = infer_operator_profile(keys(operators)),
+    operator_tasks = (),
     overwrite::Bool = false,
     paired_tb_sha256::Union{Nothing, AbstractString} = nothing,
     provenance = Dict{String, Any}(),
@@ -381,7 +603,8 @@ function write_real_space_operator_bundle(
         lattice,
         degeneracies,
         operators;
-        profile = Symbol(profile),
+        profile = profile === nothing ? nothing : Symbol(profile),
+        operator_tasks,
         overwrite,
         paired_tb_sha256,
         provenance,

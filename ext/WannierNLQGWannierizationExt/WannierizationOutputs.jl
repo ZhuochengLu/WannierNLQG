@@ -47,27 +47,32 @@ end
 # accepted iteration.  Terminal-only export gates remain fail closed.
 function _periodic_stage_summary(snapshot)
     z_seal_class = String(snapshot.z_seal_class)
-    qualified_z_seal = lowercase(string(snapshot.qualified_z_seal)) == "true"
     optimizer_phase = Symbol(snapshot.optimizer_phase)
-    return Dict(
+    summary = Dict{String, String}(
         "optimizer_phase" => String(optimizer_phase),
         "disentanglement_steps" => string(snapshot.z_steps),
         "localization_steps" => string(snapshot.u_steps),
         "disentanglement_convergence" => String(snapshot.disentanglement_convergence),
         "z_seal_class" => z_seal_class,
-        "qualified_z_seal" => string(qualified_z_seal),
-        "route_selection_eligible" => string(snapshot.route_selection_eligible),
         "localization_convergence" => String(snapshot.localization_convergence),
         "localization_qualification" => String(snapshot.localization_qualification),
         "model_qualification" => String(snapshot.model_qualification),
         # Every periodic checkpoint is an accepted but still in-progress state.
         # A formally sealed Z subspace does not make an unfinished U state a
         # production model.
-        "diagnostic_only" => "true",
-        "diagnostic_tb_export_eligible" => "false",
-        "standard_tb_export_eligible" => "false",
+        "quality_review_recommended" => "true",
         "global_production_eligible" => "false",
     )
+    # A periodic boundary has an accepted state but no terminal structural gate
+    # yet, so publish the honest not-evaluated typed block.  The only evidence
+    # available from the snapshot is the Z-stability seal.
+    merge!(
+        summary,
+        wannierization_eligibility_summary(
+            not_evaluated_wannierization_eligibility(z_seal_class == "CONVERGED"),
+        ),
+    )
+    return summary
 end
 
 # Create a checkpoint view of a complete iteration boundary.
@@ -98,10 +103,9 @@ function _periodic_result(
     )
     input_summary = Dict(
         "construction_policy" => String(config.input.construction_policy),
-        "manual_review_required" => string(config.input.construction_policy == :diagnostic),
-        "manual_review_status" =>
-            config.input.construction_policy == :diagnostic ? "REQUIRED" : "NOT_REQUESTED",
-        "production_eligible" => "false",
+        "quality_review_recommended" => string(config.input.construction_policy == :standard),
+        "quality_review_status" =>
+            config.input.construction_policy == :standard ? "RECOMMENDED" : "NOT_REQUESTED",
         "requested_wannierization_mode" => String(config.input.wannierization_mode),
         "effective_wannierization_mode" => String(effective_wannierization_mode(config)),
         "representation_source" => String(representation_source(config)),
@@ -169,8 +173,8 @@ function _periodic_result(
     merge!(input_summary, persisted_input_summary)
     any(d -> get(d.context, "gate_result", get(d.context, "result", "")) == "FAIL", diagnostics) &&
         (input_summary["construction_quality_failed"] = "true")
-    config.input.construction_policy == :diagnostic &&
-        (input_summary["model_qualification"] = "DIAGNOSTIC_ONLY")
+    config.input.construction_policy == :standard &&
+        (input_summary["model_qualification"] = "STANDARD")
     return WannierizationResult(
         IN_PROGRESS_CHECKPOINT,
         state.frames,
@@ -291,7 +295,7 @@ _metric_ratio(metric) =
     metric.value === nothing || metric.threshold === nothing || metric.threshold == 0 ? nothing :
     metric.value / metric.threshold
 # Report recorded qualification boundaries without inferring full-space eligibility.
-function _write_tb_scope(io, summary)
+function _write_tb_scope(io, summary; omit_unavailable::Bool = false)
     for key in (
         "qualification_scope",
         "target_anchor",
@@ -299,14 +303,19 @@ function _write_tb_scope(io, summary)
         "scoped_production_eligible",
         "global_production_eligible",
     )
-        println(io, key, " = ", get(summary, key, "NOT_RECORDED"))
+        value = get(summary, key, "NOT_RECORDED")
+        omit_unavailable && value in ("NOT_APPLICABLE", "NOT_RECORDED", "NOT_RUN") && continue
+        println(io, key, " = ", value)
     end
 end
 
 # Render typed TB qualification metrics without changing their scientific status or precision.
-function _write_tb_report(io, qualification)
+function _write_tb_report(io, qualification; measured_only::Bool = false)
     metrics = sort!(
-        collect(qualification.metrics);
+        [
+            metric for metric in qualification.metrics if
+            !measured_only || (metric.value !== nothing && isfinite(metric.value))
+        ];
         by = m -> begin
             category, label, _ = get(_TB_REPORT_LABELS, m.name, ("Other", m.name, "?"))
             (
@@ -478,14 +487,24 @@ function _open_wannierization_log(
     )
     _write_report_field(io, "spread_definition", "full_3d")
     _write_report_field(io, "spread_unit", "angstrom^2")
-    _write_report_field(io, "output_operator_profile", config.output.profile)
-    _write_report_field(io, "parallel", config.solver.parallel)
-    _write_report_field(io, "threads", Threads.nthreads())
+    # Report the resolved selection label so a task-derived run never renders `nothing`.
     _write_report_field(
         io,
-        "representation_compatible",
-        symmetry_applied ? compatibility.passed : "NOT_APPLICABLE",
+        "output_operator_profile",
+        IO.resolved_operator_profile(_resolved_operator_selection(config)),
     )
+    _write_report_field(io, "parallel", config.solver.parallel)
+    _write_report_field(io, "threads", Threads.nthreads())
+    if symmetry_applied
+        _write_report_field(io, "representation_compatible", compatibility.passed)
+    elseif isfinite(compatibility.maximum_required_block_unitarity_residual)
+        _write_report_field(
+            io,
+            "identity_sewing_unitarity_residual",
+            compatibility.maximum_required_block_unitarity_residual,
+        )
+        _write_report_field(io, "sewing_diagnostic_scope", "IDENTITY_BOOKKEEPING_ONLY")
+    end
     _write_report_field(io, "representation_sha256", compatibility.representation_sha256)
     input_entries = [
         "$(key)\0$(representation.input_sha256[key])" for
@@ -532,7 +551,8 @@ function _open_wannierization_log(
     covariance_tolerance =
         !symmetry_constraints_applied(config, representation) ? "NOT_APPLICABLE" :
         string(projector_covariance_tolerance(config, compatibility))
-    _write_report_field(io, "projector_covariance_tolerance", covariance_tolerance)
+    symmetry_applied &&
+        _write_report_field(io, "projector_covariance_tolerance", covariance_tolerance)
     _write_report_field(
         io,
         "target_center_matching_tolerance",
@@ -551,30 +571,69 @@ function _write_wannierization_progress(
     checkpoint_path,
     config::SymmetryAdaptedWannierizationConfig,
     representation = nothing,
+    ;
+    heading::Union{Nothing, AbstractString} = nothing,
 )
     snapshot_value(name, default) =
         hasproperty(snapshot, name) ? getproperty(snapshot, name) : default
     symmetry_applied =
         representation === nothing ? symmetry_constraints_applied(config) :
         symmetry_constraints_applied(config, representation)
-    println(io, "[ITERATION $(snapshot.iteration)]\n")
-    _write_report_field(io, "stage", snapshot_value(:optimizer_phase, :NOT_RECORDED))
+    optimizer_phase = Symbol(snapshot_value(:optimizer_phase, :NOT_RECORDED))
+    completed_stage = Symbol(snapshot_value(:completed_stage, optimizer_phase))
+    report_stage = completed_stage == :disentanglement ? :disentanglement : optimizer_phase
+    println(io, heading === nothing ? "[ITERATION $(snapshot.iteration)]\n" : "[$(heading)]\n")
+    _write_report_field(io, "stage", report_stage)
     _write_report_field(io, "accepted_iteration", snapshot.iteration)
     _write_report_field(io, "elapsed_seconds", snapshot.elapsed_seconds)
     println(io)
-    _write_report_field(io, "total_spreading", "$(snapshot.spread_total) angstrom^2")
-    _write_report_field(io, "convergence_metric", snapshot.convergence_metric)
-    _write_report_field(io, "convergence_tolerance", config.solver.convergence_tolerance)
-    println(
-        io,
-        "metric_to_tolerance_ratio = $(snapshot.convergence_metric / config.solver.convergence_tolerance)",
-    )
-    println(
-        io,
-        "projector_covariance_error = $(symmetry_applied ? string(snapshot.maximum_covariance_error) : "NOT_APPLICABLE")",
-    )
-    println(io, "little_group_iterations = $(snapshot.little_group_iterations)")
-    println(io, "little_group_residual = $(snapshot.little_group_residual)")
+    if report_stage == :disentanglement && config.solver.acceleration.schedule == :two_stage
+        omega_i = snapshot_value(:omega_i, NaN)
+        delta_omega_i = snapshot_value(:delta_omega_i, NaN)
+        fractional_delta =
+            representation === nothing ?
+            config.solver.algorithm_profile == :smv_fletcher_reeves_two_stage :
+            effective_wannierization_algorithms(config, representation).disentanglement ==
+            :smv_fletcher_reeves_two_stage
+        delta_definition = fractional_delta ? "fractional_change" : "absolute_change"
+        tolerance = config.solver.acceleration.disentanglement_objective_tolerance
+        _write_report_field(io, "omega_i", "$(omega_i) angstrom^2")
+        _write_report_field(io, "delta_omega_i", delta_omega_i)
+        _write_report_field(io, "delta_omega_i_definition", delta_definition)
+        _write_report_field(io, "disentanglement_tolerance", tolerance)
+        _write_report_field(io, "z_stability_count", snapshot_value(:z_stability_count, 0))
+        _write_report_field(io, "z_stability_window", config.solver.acceleration.z_stability_window)
+        _write_report_field(
+            io,
+            "metric_to_tolerance_ratio",
+            tolerance > 0 && isfinite(delta_omega_i) ? abs(delta_omega_i) / tolerance :
+            "NOT_AVAILABLE",
+        )
+        _write_report_field(io, "total_spreading", "NOT_EVALUATED")
+        _write_report_field(io, "per_wannier_state_spreading", "NOT_EVALUATED")
+    else
+        omega_i = snapshot_value(:omega_i, NaN)
+        if report_stage == :localization
+            _write_report_field(io, "omega_i", "$(omega_i) angstrom^2")
+            _write_report_field(io, "omega_tilde", "$(snapshot.spread_total - omega_i) angstrom^2")
+            _write_report_field(io, "u_stability_count", snapshot_value(:u_stability_count, 0))
+            _write_report_field(io, "u_stability_window", config.solver.convergence_window)
+        end
+        _write_report_field(io, "total_spreading", "$(snapshot.spread_total) angstrom^2")
+        _write_report_field(io, "convergence_metric", snapshot.convergence_metric)
+        _write_report_field(io, "convergence_tolerance", config.solver.convergence_tolerance)
+        _write_report_field(
+            io,
+            "metric_to_tolerance_ratio",
+            config.solver.convergence_tolerance > 0 ?
+            snapshot.convergence_metric / config.solver.convergence_tolerance : "NOT_AVAILABLE",
+        )
+    end
+    if symmetry_applied
+        println(io, "projector_covariance_error = $(snapshot.maximum_covariance_error)")
+        println(io, "little_group_iterations = $(snapshot.little_group_iterations)")
+        println(io, "little_group_residual = $(snapshot.little_group_residual)")
+    end
     println(io, "projector_residual = $(snapshot_value(:projector_residual, NaN))")
     println(io, "z_residual = $(snapshot_value(:z_residual, NaN))")
     println(io, "u_residual = $(snapshot_value(:u_residual, NaN))")
@@ -598,13 +657,15 @@ function _write_wannierization_progress(
     checkpoint_path === nothing ||
         println(io, "checkpoint = $(_report_path(checkpoint_path, dirname(checkpoint_path)))")
     println(io)
-    _write_spreading_table(io, snapshot.spreads)
-    _write_report_field(io, "sum_of_state_spreadings", "$(sum(snapshot.spreads)) angstrom^2")
-    _write_report_field(
-        io,
-        "total_minus_state_sum",
-        "$(snapshot.spread_total - sum(snapshot.spreads)) angstrom^2",
-    )
+    if !(report_stage == :disentanglement && config.solver.acceleration.schedule == :two_stage)
+        _write_spreading_table(io, snapshot.spreads)
+        _write_report_field(io, "sum_of_state_spreadings", "$(sum(snapshot.spreads)) angstrom^2")
+        _write_report_field(
+            io,
+            "total_minus_state_sum",
+            "$(snapshot.spread_total - sum(snapshot.spreads)) angstrom^2",
+        )
+    end
     flush(io)
     return nothing
 end
@@ -634,8 +695,22 @@ function _wannierization_observer(
                 ),
             )
         end
-        if config.runtime.progress_interval > 0 &&
-           snapshot.iteration % config.runtime.progress_interval == 0
+        stage_boundary =
+            hasproperty(snapshot, :completed_stage) &&
+            hasproperty(snapshot, :optimizer_phase) &&
+            Symbol(snapshot.completed_stage) == :disentanglement &&
+            Symbol(snapshot.optimizer_phase) == :localization
+        if stage_boundary
+            _write_wannierization_progress(
+                io,
+                snapshot,
+                checkpoint_path,
+                config,
+                representation;
+                heading = "DISENTANGLEMENT FINAL",
+            )
+        elseif config.runtime.progress_interval > 0 &&
+               snapshot.iteration % config.runtime.progress_interval == 0
             _write_wannierization_progress(io, snapshot, checkpoint_path, config, representation)
         end
         return nothing
@@ -715,7 +790,7 @@ function _real_space_hermiticity_error(values, r_vectors)
     return maximum_error
 end
 
-# Prepare one accepted state for diagnostic export without changing its Bloch
+# Prepare one accepted state for standard export without changing its Bloch
 # subspace. Ordinary no-symmetry frames may receive a right polar repair;
 # independently repaired magnetic SAWF frames are rejected because that could
 # break target-gauge covariance.
@@ -738,7 +813,12 @@ function _prepare_wannierization_tb_state(result, config::SymmetryAdaptedWannier
         fixed_projector_tolerance =
             get(result.input_summary, "effective_algorithm_profile", "") ==
             "smv_fletcher_reeves_two_stage" ? 1.0e-10 : 1.0e-12
-        projector_drift <= fixed_projector_tolerance || throw(
+        isfinite(projector_drift) ||
+            throw(ArgumentError("FATAL_INTEGRITY: nonfinite fixed projector drift"))
+        (
+            config.input.construction_policy == :standard ||
+            projector_drift <= fixed_projector_tolerance
+        ) || throw(
             ArgumentError(
                 "accepted frame changed the sealed localization projector: drift=$(projector_drift)",
             ),
@@ -753,6 +833,15 @@ function _prepare_wannierization_tb_state(result, config::SymmetryAdaptedWannier
             init = 0.0,
         ) for kpoint in axes(result.v_matrix, 3)
     )
+    if config.input.construction_policy == :standard
+        frozen = _summary_residual(result.input_summary, "hard_gate_frozen")
+        isfinite(isometry_before) && isfinite(frozen) ||
+            throw(ArgumentError("FATAL_INTEGRITY: nonfinite accepted-state residual"))
+        quality =
+            max(isometry_before, frozen) > config.input.representation_tolerance ?
+            "NUMERICAL_WARNING" : "PASS"
+        return result, quality, isometry_before, isometry_before, false
+    end
     repaired = false
     prepared = result
     isometry_after = isometry_before
@@ -812,7 +901,7 @@ function _prepare_wannierization_tb_state(result, config::SymmetryAdaptedWannier
     numerical_quality = if !isfinite(isometry_after)
         "NO_VALID_STATE"
     elseif frozen_residual > 1.0e-4
-        "INVALID_DIAGNOSTIC"
+        "INVALID_ACCEPTED_STATE"
     elseif isometry_before > 1.0e-8 || frozen_residual > 1.0e-6
         "WARNING"
     else
@@ -821,7 +910,7 @@ function _prepare_wannierization_tb_state(result, config::SymmetryAdaptedWannier
     return prepared, numerical_quality, isometry_before, isometry_after, repaired
 end
 
-const _DIAGNOSTIC_LINE_SEARCH_CODES = (
+const _STANDARD_LINE_SEARCH_CODES = (
     :SPREAD_INCREASE_BACKTRACKING_EXHAUSTED,
     :SPREAD_GRADIENT_LINE_SEARCH_FAILED,
     :LOCALIZATION_BACKTRACKING_EXHAUSTED,
@@ -830,41 +919,135 @@ const _DIAGNOSTIC_LINE_SEARCH_CODES = (
     :NONFINITE_LOCALIZATION_DIRECTION,
 )
 
+# Error codes that keep a standard model non-exportable: identity, provenance,
+# and contract-inconsistency failures.  Every other error code is a numerical or
+# measured-quality failure of a structurally valid retained accepted boundary;
+# those are demoted to warnings so the exported TB can be judged downstream.
+const _STANDARD_EXPORT_BLOCKING_CODES = (
+    :IO_FAILURE,
+    :TB_EXPORT_FAILED,
+    :TB_SYMMETRY_QUALIFICATION_FAILED,
+    :TB_SYMMETRY_QUALIFICATION_PERSISTENCE_FAILED,
+    :ITERATION_OBSERVER_PERSISTENCE_FAILED,
+    :RESTART_CONFIG_MISMATCH,
+    :RESTART_EFFECTIVE_PROFILE_MISMATCH,
+    :RESTART_CONSTRUCTION_POLICY_MISMATCH,
+    :RESTART_SEMANTICS_INCOMPATIBLE,
+    :RESTART_REPRESENTATION_MISMATCH,
+    :RESTART_STENCIL_MISMATCH,
+    :RESTART_PROJECTION_BASIS_MISMATCH,
+    :RESTART_AMN_MISMATCH,
+    :RESTART_ITERATION_LIMIT,
+    :RESTART_STATE_DIMENSION_MISMATCH,
+    :TARGET_SUBSPACE_CONTRACT_MISMATCH,
+    :FROZEN_MASK_IDENTITY_MISMATCH,
+    :CHECKPOINT_SHA256_MISMATCH,
+    :FROZEN_SUBSPACE_INVALID,
+    :FIXED_SUBSPACE_INPUT_MISMATCH,
+    :FIXED_SUBSPACE_IBZ_MISMATCH,
+    :FIXED_SUBSPACE_DIMENSION_MISMATCH,
+    :FIXED_SUBSPACE_FROZEN_MASK_MISMATCH,
+    :EIG_DIMENSION_MISMATCH,
+    :MMN_DIMENSION_MISMATCH,
+    :OPERATION_COUNT_MISMATCH,
+    :REPRESENTATION_INCOMPATIBLE,
+    :REPRESENTATION_BLOCK_RANK_INSUFFICIENT,
+    :RECIPROCAL_ACTION_INCONSISTENT,
+    :REQUIRED_BLOCK_UNITARITY_FAILED,
+    :ANTIUNITARY_GROUP_LAW_FAILED,
+    :TARGET_REPRESENTATION_GROUP_LAW_FAILED,
+    :TARGET_COREPRESENTATION_MULTIPLICITY_MISMATCH,
+    :KRAMERS_BLOCK_NOT_CLOSED,
+    :COREPRESENTATION_BLOCK_NOT_CLOSED,
+    :THETA_SQUARED_FAILED,
+    :EMPIRICAL_COVARIANCE_BUDGET_VACUOUS,
+    :ANTIUNITARY_PROJECTOR_COVARIANCE_FAILED,
+)
+
 """Read one finite-gate residual from a string-valued solver summary."""
 function _summary_residual(summary, key)
     value = tryparse(Float64, get(summary, key, ""))
     return value === nothing ? Inf : something(value)
 end
 
+# Recognize measured construction-quality failures, not names containing error keywords.
+function _standard_construction_quality_error(diagnostic::WannierizationDiagnostic)
+    context = diagnostic.context
+    code = diagnostic.code
+    key =
+        if code in (
+            :MMN_STENCIL_COMPLETENESS_FAILED,
+            :TARGET_SYMMETRY_TANGENT_RESIDUAL_FAILED,
+            :SOLVER_TRIAL_COVARIANCE_FAILED,
+            :SOLVER_TRIAL_TARGET_SYMMETRY_FAILED,
+        )
+            "value"
+        elseif code == :EMPIRICAL_COVARIANCE_BUDGET_VACUOUS
+            "maximum_group_law_residual"
+        elseif code in (
+            :REQUIRED_BLOCK_UNITARITY_FAILED,
+            :ANTIUNITARY_GROUP_LAW_FAILED,
+            :TARGET_REPRESENTATION_GROUP_LAW_FAILED,
+            :THETA_SQUARED_FAILED,
+            :ANTIUNITARY_PROJECTOR_COVARIANCE_FAILED,
+            :KRAMERS_BLOCK_NOT_CLOSED,
+            :COREPRESENTATION_BLOCK_NOT_CLOSED,
+        )
+            "maximum_error"
+        else
+            return false
+        end
+    residual = tryparse(Float64, get(context, key, ""))
+    residual !== nothing && isfinite(residual) && residual >= 0.0 || return false
+    # Non-finite numeric context never qualifies as a finite quality warning.
+    for key in ("threshold", "tolerance", "strict_upper_bound")
+        haskey(context, key) || continue
+        number = tryparse(Float64, context[key])
+        number !== nothing && isfinite(number) || return false
+    end
+    if code in (:KRAMERS_BLOCK_NOT_CLOSED, :COREPRESENTATION_BLOCK_NOT_CLOSED)
+        source_rank = tryparse(Int, get(context, "source_rank", ""))
+        target_rank = tryparse(Int, get(context, "target_rank", ""))
+        source_rank !== nothing && source_rank >= 0 && source_rank == target_rank || return false
+        if code == :KRAMERS_BLOCK_NOT_CLOSED &&
+           get(context, "source_kpoint", "") == get(context, "target_kpoint", "")
+            iseven(source_rank) || return false
+        end
+    end
+    return true
+end
+
 # Qualify only the last accepted solver boundary.  A rejected line-search trial
 # never enters result.v_matrix/restart_state, so this gate cannot publish it.
-function _diagnostic_nonconverged_tb_export_gate(
-    result,
-    config::SymmetryAdaptedWannierizationConfig,
-)
+function _accepted_state_tb_export_gate(result, config::SymmetryAdaptedWannierizationConfig)
     schedule = get(result.input_summary, "optimizer_schedule", "")
     schedule == String(config.solver.acceleration.schedule) || return (
         allowed = false,
-        classification = "STRUCTURAL_FAILURE_UNAVAILABLE",
-        reason = "SOLVER_SCHEDULE_IDENTITY_MISMATCH",
+        classification = "UNAVAILABLE",
+        # An absent schedule means the solver never reached the preparation
+        # boundary that stamps it; only a present-but-different schedule is a
+        # genuine identity mismatch.
+        reason = isempty(schedule) ? "SOLVER_NOT_REACHED" : "SOLVER_SCHEDULE_IDENTITY_MISMATCH",
         minimum_rank = 0,
         required_rank = size(result.v_matrix, 2),
         isometry_residual = Inf,
     )
-    diagnostic_construction = config.input.construction_policy == :diagnostic
-    classification = if diagnostic_construction
-        "ACCEPTED_STATE_DIAGNOSTIC"
+    standard_construction = config.input.construction_policy == :standard
+    classification = if standard_construction
+        result.status in (COMPLETED, COMPLETED_WITH_WARNINGS) &&
+            get(result.input_summary, "construction_quality_failed", "false") != "true" ?
+        "AVAILABLE" : "AVAILABLE_WITH_QUALITY_WARNINGS"
     elseif result.status == MAX_ITERATIONS && schedule in ("two_stage", "joint")
-        "MAX_ITERATIONS_DIAGNOSTIC"
+        "AVAILABLE_WITH_QUALITY_WARNINGS"
     elseif result.status == LOCALIZATION_FAILED &&
            schedule in ("two_stage", "joint") &&
            get(result.input_summary, "solver_convergence", "") == "LINE_SEARCH_EXHAUSTED"
-        "LINE_SEARCH_FAILED_DIAGNOSTIC"
+        "AVAILABLE_WITH_QUALITY_WARNINGS"
     else
         return (
             allowed = false,
-            classification = "STRUCTURAL_FAILURE_UNAVAILABLE",
-            reason = "STATUS_NOT_DIAGNOSTIC_EXPORTABLE",
+            classification = "UNAVAILABLE",
+            reason = "STATUS_NOT_STANDARD_EXPORTABLE",
             minimum_rank = 0,
             required_rank = 0,
             isometry_residual = Inf,
@@ -874,7 +1057,7 @@ function _diagnostic_nonconverged_tb_export_gate(
     result.wannier_chk !== nothing &&
     get(result.input_summary, "has_accepted_state", "false") == "true" || return (
         allowed = false,
-        classification = "STRUCTURAL_FAILURE_UNAVAILABLE",
+        classification = "UNAVAILABLE",
         reason = "NO_VALID_ACCEPTED_STATE",
         minimum_rank = 0,
         required_rank = size(result.v_matrix, 2),
@@ -891,7 +1074,7 @@ function _diagnostic_nonconverged_tb_export_gate(
     chk.v_matrix == result.v_matrix &&
     chk.wannier_centers_cart == result.wannier_centers_cartesian || return (
         allowed = false,
-        classification = "STRUCTURAL_FAILURE_UNAVAILABLE",
+        classification = "UNAVAILABLE",
         reason = "ACCEPTED_STATE_CHECKPOINT_MISMATCH",
         minimum_rank = 0,
         required_rank = size(result.v_matrix, 2),
@@ -899,7 +1082,7 @@ function _diagnostic_nonconverged_tb_export_gate(
     )
     wannierization_result_is_finite(result) || return (
         allowed = false,
-        classification = "STRUCTURAL_FAILURE_UNAVAILABLE",
+        classification = "UNAVAILABLE",
         reason = "NONFINITE_ACCEPTED_STATE",
         minimum_rank = 0,
         required_rank = size(result.v_matrix, 2),
@@ -908,7 +1091,7 @@ function _diagnostic_nonconverged_tb_export_gate(
     nb, nw, nk = size(result.v_matrix)
     nb >= nw > 0 && nk > 0 || return (
         allowed = false,
-        classification = "STRUCTURAL_FAILURE_UNAVAILABLE",
+        classification = "UNAVAILABLE",
         reason = "INVALID_ACCEPTED_STATE_DIMENSIONS",
         minimum_rank = 0,
         required_rank = nw,
@@ -931,15 +1114,18 @@ function _diagnostic_nonconverged_tb_export_gate(
     end
     minimum_rank == nw || return (
         allowed = false,
-        classification = "STRUCTURAL_FAILURE_UNAVAILABLE",
+        classification = "UNAVAILABLE",
         reason = "RANK_DEFICIENT_ACCEPTED_FRAME",
         minimum_rank,
         required_rank = nw,
         isometry_residual,
     )
-    isometry_residual <= config.input.representation_tolerance || return (
+    (
+        isfinite(isometry_residual) &&
+        (standard_construction || isometry_residual <= config.input.representation_tolerance)
+    ) || return (
         allowed = false,
-        classification = "STRUCTURAL_FAILURE_UNAVAILABLE",
+        classification = "UNAVAILABLE",
         reason = "ACCEPTED_FRAME_ORTHOGONALITY_FAILED",
         minimum_rank,
         required_rank = nw,
@@ -949,7 +1135,7 @@ function _diagnostic_nonconverged_tb_export_gate(
         restart.fixed_subspace_projectors !== nothing &&
         restart.fixed_subspace_frames !== nothing || return (
             allowed = false,
-            classification = "STRUCTURAL_FAILURE_UNAVAILABLE",
+            classification = "UNAVAILABLE",
             reason = "INCOMPLETE_FIXED_SUBSPACE_STATE",
             minimum_rank,
             required_rank = nw,
@@ -964,9 +1150,12 @@ function _diagnostic_nonconverged_tb_export_gate(
         fixed_projector_tolerance =
             get(result.input_summary, "effective_algorithm_profile", "") ==
             "smv_fletcher_reeves_two_stage" ? 1.0e-10 : 1.0e-12
-        fixed_projector_drift <= fixed_projector_tolerance || return (
+        (
+            isfinite(fixed_projector_drift) &&
+            (standard_construction || fixed_projector_drift <= fixed_projector_tolerance)
+        ) || return (
             allowed = false,
-            classification = "STRUCTURAL_FAILURE_UNAVAILABLE",
+            classification = "UNAVAILABLE",
             reason = "FIXED_SUBSPACE_PROJECTOR_DRIFT",
             minimum_rank,
             required_rank = nw,
@@ -974,19 +1163,38 @@ function _diagnostic_nonconverged_tb_export_gate(
         )
     end
     frozen_residual = _summary_residual(result.input_summary, "hard_gate_frozen")
-    frozen_residual <= config.input.representation_tolerance || return (
+    (
+        isfinite(frozen_residual) &&
+        (standard_construction || frozen_residual <= config.input.representation_tolerance)
+    ) || return (
         allowed = false,
-        classification = "STRUCTURAL_FAILURE_UNAVAILABLE",
+        classification = "UNAVAILABLE",
         reason = "FROZEN_EMBEDDING_FAILED",
         minimum_rank,
         required_rank = nw,
         isometry_residual,
     )
-    if !diagnostic_construction &&
+    if standard_construction
+        for key in ("hard_gate_isometry", "hard_gate_covariance", "hard_gate_target_symmetry")
+            haskey(result.input_summary, key) || continue
+            key == "hard_gate_target_symmetry" &&
+                get(result.input_summary, "symmetry_constraints_applied", "true") != "true" &&
+                continue
+            isfinite(_summary_residual(result.input_summary, key)) || return (
+                allowed = false,
+                classification = "UNAVAILABLE",
+                reason = "NONFINITE_REQUIRED_RESIDUAL: $(key)",
+                minimum_rank,
+                required_rank = nw,
+                isometry_residual,
+            )
+        end
+    end
+    if !standard_construction &&
        get(result.input_summary, "symmetry_constraints_applied", "true") == "true"
         get(result.input_summary, "representation_compatible", "false") == "true" || return (
             allowed = false,
-            classification = "STRUCTURAL_FAILURE_UNAVAILABLE",
+            classification = "UNAVAILABLE",
             reason = "REPRESENTATION_NOT_COMPATIBLE",
             minimum_rank,
             required_rank = nw,
@@ -1000,7 +1208,7 @@ function _diagnostic_nonconverged_tb_export_gate(
         covariance_residual <= covariance_tolerance &&
         target_residual <= covariance_tolerance || return (
             allowed = false,
-            classification = "STRUCTURAL_FAILURE_UNAVAILABLE",
+            classification = "UNAVAILABLE",
             reason = "SYMMETRY_INVARIANT_FAILED",
             minimum_rank,
             required_rank = nw,
@@ -1009,33 +1217,24 @@ function _diagnostic_nonconverged_tb_export_gate(
     end
     error_codes =
         [diagnostic.code for diagnostic in result.diagnostics if diagnostic.severity == :error]
-    # Numerical/quality failures of later trials do not invalidate a retained
-    # accepted boundary. Identity/integrity failures still prevent consumption.
-    integrity_failure = any(error_codes) do code
-        name = String(code)
-        any(
-            token -> occursin(token, name),
-            (
-                "SHA256",
-                "CHECKSUM",
-                "IDENTITY_MISMATCH",
-                "GAUGE_MISMATCH",
-                "PROVENANCE",
-                "RESTART_SEMANTICS",
-                "CHECKPOINT",
-                "REFERENCE_MISMATCH",
-            ),
-        )
+    # Numerical and measured-quality failures of later trials do not invalidate a
+    # retained accepted boundary. Only identity/provenance/contract-inconsistency
+    # error codes still prevent consumption; everything else is a warning that
+    # the consumer judges from the exported TB.
+    hard_error = any(result.diagnostics) do diagnostic
+        diagnostic.severity == :error &&
+            diagnostic.code in _STANDARD_EXPORT_BLOCKING_CODES &&
+            !_standard_construction_quality_error(diagnostic)
     end
     errors_allowed =
-        diagnostic_construction ? !integrity_failure :
-        classification == "LINE_SEARCH_FAILED_DIAGNOSTIC" ?
-        !isempty(error_codes) && all(code -> code in _DIAGNOSTIC_LINE_SEARCH_CODES, error_codes) :
+        standard_construction ? !hard_error :
+        classification == "AVAILABLE_WITH_QUALITY_WARNINGS" ?
+        !isempty(error_codes) && all(code -> code in _STANDARD_LINE_SEARCH_CODES, error_codes) :
         isempty(error_codes)
     errors_allowed || return (
         allowed = false,
-        classification = "STRUCTURAL_FAILURE_UNAVAILABLE",
-        reason = "NON_LINE_SEARCH_ERROR_DIAGNOSTIC_PRESENT",
+        classification = "UNAVAILABLE",
+        reason = "HARD_ERROR_PRESENT",
         minimum_rank,
         required_rank = nw,
         isometry_residual,
@@ -1050,12 +1249,9 @@ function _diagnostic_nonconverged_tb_export_gate(
     )
 end
 
-"""Return whether a nonconverged result passes the diagnostic TB structural gate."""
-function _diagnostic_nonconverged_tb_export_allowed(
-    result,
-    config::SymmetryAdaptedWannierizationConfig,
-)
-    return _diagnostic_nonconverged_tb_export_gate(result, config).allowed
+"""Return whether a result passes the accepted-state TB structural gate."""
+function _accepted_state_tb_export_allowed(result, config::SymmetryAdaptedWannierizationConfig)
+    return _accepted_state_tb_export_gate(result, config).allowed
 end
 
 # Construct a narrowly scoped pre-export view for an export-only retry after the
@@ -1079,24 +1275,24 @@ function _schema_5_5_tb_export_retry_view(result, config::SymmetryAdaptedWannier
     occursin(expected_message, failure.message) ||
         throw(ArgumentError("TB_EXPORT_RETRY_REJECTED: failed-export fingerprint differs"))
     summary = Dict{String, String}(result.input_summary)
-    get(summary, "diagnostic_classification", "") == "STRUCTURAL_FAILURE_UNAVAILABLE" ||
+    get(summary, "model_availability", "") == "UNAVAILABLE" ||
         throw(ArgumentError("TB_EXPORT_RETRY_REJECTED: failure classification differs"))
-    occursin(expected_message, get(summary, "diagnostic_export_gate_reason", "")) ||
+    occursin(expected_message, get(summary, "accepted_state_export_gate_reason", "")) ||
         throw(ArgumentError("TB_EXPORT_RETRY_REJECTED: failure reason differs"))
     get(summary, "tb_export_status", "") == "NOT_EXPORTED" ||
         throw(ArgumentError("TB_EXPORT_RETRY_REJECTED: failed result already records an export"))
     retained = WannierizationDiagnostic[
         diagnostic for diagnostic in result.diagnostics if diagnostic !== failure
     ]
-    summary["diagnostic_classification"] =
-        result.status in (COMPLETED, COMPLETED_WITH_WARNINGS) ? "CONVERGED" :
-        "MAX_ITERATIONS_DIAGNOSTIC"
-    summary["diagnostic_export_gate_reason"] = "EXPORT_ONLY_SCHEMA_5_5_METADATA_RETRY"
+    summary["model_availability"] =
+        result.status in (COMPLETED, COMPLETED_WITH_WARNINGS) ? "AVAILABLE" :
+        "AVAILABLE_WITH_QUALITY_WARNINGS"
+    summary["accepted_state_export_gate_reason"] = "EXPORT_ONLY_SCHEMA_5_5_METADATA_RETRY"
     summary["tb_export_status"] = "NOT_EXPORTED"
     summary["numerical_quality"] = "PENDING_EXPORT_VALIDATION"
     retry_view =
         updated_wannierization_result(result; diagnostics = retained, input_summary = summary)
-    gate = _diagnostic_nonconverged_tb_export_gate(retry_view, config)
+    gate = _accepted_state_tb_export_gate(retry_view, config)
     gate.allowed ||
         throw(ArgumentError("TB_EXPORT_RETRY_REJECTED: accepted-state gate failed: $(gate.reason)"))
     return retry_view
@@ -1131,25 +1327,26 @@ function _pair_wigner_seitz_spin_tb_export_retry_view(
     something(residual) > PROFILE_PAIR_WIGNER_SEITZ_ROUNDTRIP_TOLERANCE ||
         throw(ArgumentError("TB_EXPORT_RETRY_REJECTED: failed-export residual is invalid"))
     summary = Dict{String, String}(result.input_summary)
-    get(summary, "diagnostic_classification", "") == "STRUCTURAL_FAILURE_UNAVAILABLE" ||
+    get(summary, "model_availability", "") == "UNAVAILABLE" ||
         throw(ArgumentError("TB_EXPORT_RETRY_REJECTED: failure classification differs"))
-    get(summary, "diagnostic_export_gate_reason", "") == "TB_EXPORT_FAILED: $(failure.message)" ||
+    get(summary, "accepted_state_export_gate_reason", "") ==
+    "TB_EXPORT_FAILED: $(failure.message)" ||
         throw(ArgumentError("TB_EXPORT_RETRY_REJECTED: failure reason differs"))
     get(summary, "tb_export_status", "") == "NOT_EXPORTED" ||
         throw(ArgumentError("TB_EXPORT_RETRY_REJECTED: failed result already records an export"))
     retained = WannierizationDiagnostic[
         diagnostic for diagnostic in result.diagnostics if diagnostic !== failure
     ]
-    summary["diagnostic_classification"] =
+    summary["model_availability"] =
         result.status in (COMPLETED, COMPLETED_WITH_WARNINGS) ? "CONVERGED" :
-        "MAX_ITERATIONS_DIAGNOSTIC"
-    summary["diagnostic_export_gate_reason"] = "EXPORT_ONLY_PAIR_WIGNER_SEITZ_SPIN_TRANSFORM_RETRY"
+        "AVAILABLE_WITH_QUALITY_WARNINGS"
+    summary["accepted_state_export_gate_reason"] = "EXPORT_ONLY_PAIR_WIGNER_SEITZ_SPIN_TRANSFORM_RETRY"
     summary["tb_export_status"] = "NOT_EXPORTED"
     summary["numerical_quality"] = "PENDING_EXPORT_VALIDATION"
     summary["export_retry_superseded_roundtrip_residual"] = string(something(residual))
     retry_view =
         updated_wannierization_result(result; diagnostics = retained, input_summary = summary)
-    gate = _diagnostic_nonconverged_tb_export_gate(retry_view, config)
+    gate = _accepted_state_tb_export_gate(retry_view, config)
     gate.allowed ||
         throw(ArgumentError("TB_EXPORT_RETRY_REJECTED: accepted-state gate failed: $(gate.reason)"))
     return retry_view
@@ -1157,7 +1354,7 @@ end
 
 # Bind human-review diagnostics to the exact text TB exported beside them.
 function _write_construction_metadata_sidecar(path, packed, metadata)
-    sidecar = path * ".diagnostics.json"
+    sidecar = path * ".quality.json"
     payload = merge(
         metadata,
         Dict(
@@ -1173,7 +1370,7 @@ function _write_construction_metadata_sidecar(path, packed, metadata)
         close(io)
         parsed = JSON3.read(read(temporary, String))
         String(parsed.wannier90_tb_sha256) == payload["wannier90_tb_sha256"] ||
-            error("diagnostic TB metadata sidecar failed readback")
+            error("standard TB metadata sidecar failed readback")
         mv(temporary, sidecar; force = true)
         completed = true
     finally
@@ -1181,6 +1378,62 @@ function _write_construction_metadata_sidecar(path, packed, metadata)
         !completed && isfile(temporary) && rm(temporary; force = true)
     end
     return sidecar
+end
+
+# Numerical thresholds qualify quality; they are not Standard integrity gates.
+function _export_numerical_check!(records, policy, code, value, threshold)
+    isfinite(value) || throw(ArgumentError("FATAL_INTEGRITY: $(code) is nonfinite"))
+    failed = value > threshold
+    push!(
+        records,
+        Dict{String, Any}(
+            "code" => code,
+            "severity" => failed ? "warning" : "info",
+            "message" => failed ? "NUMERICAL_WARNING" : "WITHIN_REFERENCE_THRESHOLD",
+            "context" => Dict(
+                "value" => value,
+                "threshold" => threshold,
+                "gate_result" => failed ? "FAIL" : "PASS",
+                "classification" => failed ? "NUMERICAL_WARNING" : "PASS",
+            ),
+        ),
+    )
+    failed && policy != :standard && throw(ArgumentError("$(code): $(value) exceeds $(threshold)"))
+    return failed
+end
+
+# Inspect only declared numerical audit pairs; provenance/identity errors are never demoted.
+function _profile_export_numerical_checks!(records, policy, metadata, prefix = "FULL")
+    metadata isa AbstractDict || return false
+    warning = false
+    for (value_key, tolerance_key) in (
+        ("exchange_hermiticity_max_absolute_ev", "exchange_hermiticity_tolerance_ev"),
+        ("pair_wigner_seitz_roundtrip_residual", "pair_wigner_seitz_roundtrip_tolerance"),
+    )
+        if haskey(metadata, value_key) && haskey(metadata, tolerance_key)
+            value, tolerance = metadata[value_key], metadata[tolerance_key]
+            # Explicit non-applicability uses null/NaN in the existing profile schema.
+            applicable =
+                value_key == "exchange_hermiticity_max_absolute_ev" ? value !== nothing :
+                get(metadata, "pair_wigner_seitz_roundtrip_status", "NOT_APPLICABLE") !=
+                "NOT_APPLICABLE"
+            if applicable
+                warning |= _export_numerical_check!(
+                    records,
+                    policy,
+                    prefix * ":" * value_key,
+                    value,
+                    tolerance,
+                )
+            end
+        end
+    end
+    for (key, value) in metadata
+        value isa AbstractDict || continue
+        warning |=
+            _profile_export_numerical_checks!(records, policy, value, prefix * ":" * String(key))
+    end
+    return warning
 end
 
 # Export one authoritative Packed HDF5 model through the formal TB reader.
@@ -1195,21 +1448,27 @@ function _export_wannierization_tb(
 )
     converged = result.status in (COMPLETED, COMPLETED_WITH_WARNINGS)
     symmetry_applied = get(result.input_summary, "symmetry_constraints_applied", "true") == "true"
-    diagnostic_gate = _diagnostic_nonconverged_tb_export_gate(result, config)
-    diagnostic_nonconverged = diagnostic_gate.allowed
+    accepted_state_gate = _accepted_state_tb_export_gate(result, config)
+    accepted_state_exportable = accepted_state_gate.allowed
     (
-        config.input.construction_policy == :diagnostic ? diagnostic_nonconverged :
-        converged || diagnostic_nonconverged
+        config.input.construction_policy == :standard ? accepted_state_exportable :
+        converged || accepted_state_exportable
     ) || throw(
         ArgumentError(
-            "tight-binding export rejected status=$(result.status): $(diagnostic_gate.reason)",
+            "FATAL_INTEGRITY: tight-binding export rejected status=$(result.status): $(accepted_state_gate.reason)",
         ),
     )
     wannierization_result_is_finite(result) ||
         throw(ArgumentError("tight-binding construction rejects non-finite SAWF arrays"))
-    if config.output.profile == :full
-        operator_target_contract === nothing &&
-            throw(ArgumentError("OPERATOR_TARGET_CONTRACT_REQUIRED: full operator profile export"))
+    # Resolve the mutually exclusive selection once; every downstream gate below is
+    # driven by the resolved inventory/source closure, not by the raw profile label.
+    operator_selection = _resolved_operator_selection(config)
+    if _operator_selection_requires_target_contract(operator_selection)
+        operator_target_contract === nothing && throw(
+            ArgumentError(
+                "OPERATOR_TARGET_CONTRACT_REQUIRED: qualified-source operator selection export",
+            ),
+        )
         recorded_contract = get(
             result.input_summary,
             "operator_profile_preflight_operator_target_contract_sha256",
@@ -1236,26 +1495,131 @@ function _export_wannierization_tb(
                 "HAMILTONIAN_REFERENCE_MISMATCH: result declares $(declared_authority) but export data authority is $(band_hamiltonian.authority)",
             ),
         )
-    model =
-        build_wannier_tight_binding_model(prepared, band_hamiltonian, mmn; construction_diagnostics)
+    model = build_wannier_tight_binding_model(
+        prepared,
+        band_hamiltonian,
+        mmn;
+        construction_diagnostics,
+        construction_policy = config.input.construction_policy,
+    )
     all(isfinite, model.lattice) &&
     all(isfinite, model.hamiltonian_r) &&
     all(isfinite, model.position_r) || error("constructed TB contains non-finite arrays")
     hamiltonian_hermiticity = _real_space_hermiticity_error(model.hamiltonian_r, model.r_vectors)
     position_hermiticity = _real_space_hermiticity_error(model.position_r, model.r_vectors)
-    hamiltonian_hermiticity <= 1.0e-8 ||
-        error("constructed TB Hamiltonian violates R/-R Hermiticity")
-    position_hermiticity <= 1.0e-8 || error("constructed TB position violates R/-R Hermiticity")
-    hermiticity_warning = max(hamiltonian_hermiticity, position_hermiticity) > 1.0e-10
-    hermiticity_warning && numerical_quality == "PASS" && (numerical_quality = "WARNING")
-    keep_tb = config.output.write_wannier90_tb || :wannier90_tb in config.output.tb_output_formats
-    exchange = if keep_tb
-        paths.wannier90
-    else
-        temporary_exchange, temporary_io = mktemp(dirname(paths.packed); cleanup = false)
-        close(temporary_io)
-        temporary_exchange
+    export_checks = Dict{String, Any}[]
+    policy = config.input.construction_policy
+    numerical_warning = false
+    if policy == :standard
+        for diagnostic in result.diagnostics
+            _standard_construction_quality_error(diagnostic) || continue
+            numerical_warning = true
+            push!(
+                export_checks,
+                Dict(
+                    "code" => String(diagnostic.code),
+                    "severity" => "warning",
+                    "message" => "NUMERICAL_WARNING",
+                    "context" => merge(
+                        copy(diagnostic.context),
+                        Dict("classification" => "NUMERICAL_WARNING"),
+                    ),
+                ),
+            )
+        end
+        numerical_warning |= _export_numerical_check!(
+            export_checks,
+            policy,
+            "ACCEPTED_FRAME_ISOMETRY",
+            isometry_before,
+            config.input.representation_tolerance,
+        )
+        numerical_warning |= _export_numerical_check!(
+            export_checks,
+            policy,
+            "FROZEN_EMBEDDING",
+            _summary_residual(result.input_summary, "hard_gate_frozen"),
+            config.input.representation_tolerance,
+        )
+        restart = something(result.restart_state)
+        if restart.fixed_subspace_projectors !== nothing
+            drift = maximum(
+                norm(
+                    @view(result.v_matrix[:, :, k]) * @view(result.v_matrix[:, :, k])' -
+                    @view(something(restart.fixed_subspace_projectors)[:, :, k])
+                ) for k in axes(result.v_matrix, 3)
+            )
+            threshold =
+                get(result.input_summary, "effective_algorithm_profile", "") ==
+                "smv_fletcher_reeves_two_stage" ? 1.0e-10 : 1.0e-12
+            numerical_warning |= _export_numerical_check!(
+                export_checks,
+                policy,
+                "FIXED_SUBSPACE_PROJECTOR_DRIFT",
+                drift,
+                threshold,
+            )
+        end
+        if !converged
+            numerical_warning = true
+            push!(
+                export_checks,
+                Dict(
+                    "code" => "SOLVER_NOT_CONVERGED",
+                    "severity" => "warning",
+                    "message" => "NUMERICAL_WARNING",
+                    "context" => Dict(
+                        "status" => string(result.status),
+                        "convergence_tolerance" => config.solver.convergence_tolerance,
+                    ),
+                ),
+            )
+        end
     end
+    for (code, value, threshold) in (
+        (
+            "HAMILTONIAN_HERMITICITY",
+            hamiltonian_hermiticity,
+            policy == :standard ? 1.0e-10 : 1.0e-8,
+        ),
+        ("POSITION_HERMITICITY", position_hermiticity, policy == :standard ? 1.0e-10 : 1.0e-8),
+        (
+            "HAMILTONIAN_FOURIER_ROUNDTRIP",
+            construction_diagnostics["hamiltonian_fourier_roundtrip_residual"],
+            1.0e-10,
+        ),
+        (
+            "POSITION_FOURIER_ROUNDTRIP",
+            construction_diagnostics["position_fourier_roundtrip_residual"],
+            1.0e-10,
+        ),
+    )
+        numerical_warning |= _export_numerical_check!(export_checks, policy, code, value, threshold)
+    end
+    hermiticity_warning = max(hamiltonian_hermiticity, position_hermiticity) > 1.0e-10
+    if policy == :standard
+        (numerical_warning || hermiticity_warning) && (numerical_quality = "NUMERICAL_WARNING")
+    elseif hermiticity_warning && numerical_quality == "PASS"
+        numerical_quality = "WARNING"
+    end
+    keep_tb = config.output.write_wannier90_tb || :wannier90_tb in config.output.tb_output_formats
+    policy == :standard &&
+        isfile(paths.packed) &&
+        throw(
+            ArgumentError(
+                "FATAL_INTEGRITY: export requires a new attempt; existing Packed TB is immutable",
+            ),
+        )
+    policy == :standard &&
+        keep_tb &&
+        isfile(paths.wannier90) &&
+        throw(
+            ArgumentError(
+                "FATAL_INTEGRITY: export requires a new attempt; existing text TB is immutable",
+            ),
+        )
+    exchange, exchange_io = mktemp(dirname(paths.packed); cleanup = false)
+    close(exchange_io)
     mode_label =
         effective_wannierization_mode(config) == :ordinary ? "ordinary full-BZ MLWF" : "SAWF"
     quality_failed =
@@ -1275,30 +1639,60 @@ function _export_wannierization_tb(
             ) for diagnostic in result.diagnostics
         ]),
     )
-    diagnostic_classification =
-        config.input.construction_policy == :diagnostic && quality_failed ?
-        "DIAGNOSTIC_ONLY_QUALITY_FAILED" : converged ? "CONVERGED" : diagnostic_gate.classification
+    model_availability =
+        quality_failed || !converged ? "AVAILABLE_WITH_QUALITY_WARNINGS" : "AVAILABLE"
     comment =
         "Created by WannierNLQG $(mode_label); status=$(result.status); " *
-        "classification=$(diagnostic_classification); converged=$(converged)"
+        "classification=$(model_availability); converged=$(converged)"
     tb_path = _atomic_wannier_tb(exchange, model; comment)
     roundtrip = IO.read_wannier_tb(tb_path)
-    maximum(abs, roundtrip.lattice - model.lattice; init = 0.0) <= 1.0e-12 ||
-        error("written TB lattice failed round-trip validation")
+    size(roundtrip.lattice) == size(model.lattice) &&
+    size(roundtrip.hamiltonian_r) == size(model.hamiltonian_r) &&
+    size(roundtrip.position_r) == size(model.position_r) ||
+        error("FATAL_INTEGRITY: text TB dimensions changed")
+    numerical_warning |= _export_numerical_check!(
+        export_checks,
+        policy,
+        "TEXT_LATTICE_ROUNDTRIP",
+        maximum(abs, roundtrip.lattice - model.lattice; init = 0.0),
+        1.0e-12,
+    )
     roundtrip.r_vectors == model.r_vectors ||
         error("written TB R vectors failed round-trip validation")
     roundtrip.r_degeneracies == model.r_degeneracies ||
         error("written TB degeneracies failed round-trip validation")
-    maximum(abs, roundtrip.hamiltonian_r - model.hamiltonian_r; init = 0.0) <= 1.0e-12 ||
-        error("written TB Hamiltonian failed round-trip validation")
-    maximum(abs, roundtrip.position_r - model.position_r; init = 0.0) <= 1.0e-12 ||
-        error("written TB position failed round-trip validation")
+    numerical_warning |= _export_numerical_check!(
+        export_checks,
+        policy,
+        "TEXT_HAMILTONIAN_ROUNDTRIP",
+        maximum(abs, roundtrip.hamiltonian_r - model.hamiltonian_r; init = 0.0),
+        1.0e-12,
+    )
+    numerical_warning |= _export_numerical_check!(
+        export_checks,
+        policy,
+        "TEXT_POSITION_ROUNDTRIP",
+        maximum(abs, roundtrip.position_r - model.position_r; init = 0.0),
+        1.0e-12,
+    )
     centers = _tb_centers(roundtrip)
     center_delta_fractional =
         (centers - prepared.wannier_centers_cartesian) * inv(roundtrip.lattice)
     center_delta_fractional .-= round.(center_delta_fractional)
-    maximum(abs, center_delta_fractional * roundtrip.lattice; init = 0.0) <= 1.0e-8 ||
-        error("written TB Wannier centers failed modulo-lattice validation")
+    numerical_warning |= _export_numerical_check!(
+        export_checks,
+        policy,
+        "WANNIER_CENTER_ROUNDTRIP",
+        maximum(abs, center_delta_fractional * roundtrip.lattice; init = 0.0),
+        1.0e-8,
+    )
+    numerical_warning && (numerical_quality = "NUMERICAL_WARNING")
+    quality_failed |= numerical_warning || numerical_quality != "PASS"
+    model_availability =
+        quality_failed || !converged ? "AVAILABLE_WITH_QUALITY_WARNINGS" : "AVAILABLE"
+    existing_records = JSON3.read(construction_gate_records, Vector{Dict{String, Any}})
+    append!(existing_records, export_checks)
+    construction_gate_records = String(JSON3.write(existing_records))
     fractional = centers * inv(roundtrip.lattice)
     export_status =
         converged && numerical_quality == "PASS" && !hermiticity_warning ? "EXPORTED" :
@@ -1329,10 +1723,10 @@ function _export_wannierization_tb(
     hard_gate_frozen = tryparse(Float64, get(result.input_summary, "hard_gate_frozen", "Inf"))
     numerical_validity = if numerical_quality == "NO_VALID_STATE"
         "NO_VALID_STATE"
-    elseif numerical_quality == "INVALID_DIAGNOSTIC"
+    elseif numerical_quality == "INVALID_ACCEPTED_STATE"
         "INVALID_FROZEN"
     elseif isometry_before > 1.0e-8
-        "WARNING_ISOMETRY_REPAIRED"
+        polar_repaired ? "WARNING_ISOMETRY_REPAIRED" : "WARNING_ISOMETRY"
     elseif something(hard_gate_frozen, Inf) > 1.0e-6
         "WARNING_FROZEN"
     else
@@ -1364,7 +1758,7 @@ function _export_wannierization_tb(
             bytes2hex(SHA.sha256(reinterpret(UInt8, vec(roundtrip.r_vectors)))),
     )
     status_metadata = Dict(
-        "operator_profile" => String(config.output.profile),
+        "operator_profile" => String(IO.resolved_operator_profile(operator_selection)),
         "requested_wannierization_mode" => String(config.input.wannierization_mode),
         "effective_wannierization_mode" => String(effective_wannierization_mode(config)),
         "representation_source" => String(representation_source(config)),
@@ -1397,10 +1791,10 @@ function _export_wannierization_tb(
         ),
         "converged" => converged,
         "convergence_class" => converged ? "CONVERGED" : "NONCONVERGED",
-        "diagnostic_classification" => diagnostic_classification,
+        "model_availability" => model_availability,
         "construction_policy" => String(config.input.construction_policy),
         "construction_gate_records_json" => construction_gate_records,
-        "manual_review_required" => true,
+        "quality_review_recommended" => quality_failed || !production_eligible,
         "construction_quality_failed" => quality_failed,
         "numerical_validity" => numerical_validity,
         "numerical_quality" => numerical_quality,
@@ -1474,12 +1868,14 @@ function _export_wannierization_tb(
             get(result.input_summary, "auxiliary_parent_audit_status", "NOT_APPLICABLE"),
         "target_scope_production_eligible" =>
             get(result.input_summary, "target_scope_production_eligible", "false") == "true",
-        "artifact_class" => converged ? "DIAGNOSTIC" : "NONCONVERGED_DIAGNOSTIC",
+        "artifact_class" => converged ? "STANDARD" : "NONCONVERGED_STANDARD",
         "production_eligible" => production_eligible,
-        "diagnostic_only" => !production_eligible,
+        "quality_review_recommended" => !production_eligible,
         "physics_qualification" =>
             solver_eligible ? "PENDING_DOWNSTREAM_VALIDATION" : "PHYSICS_HOLD",
-        "tb_usability" => "DIAGNOSTIC_MODEL_AVAILABLE",
+        "tb_usability" =>
+            model_availability == "AVAILABLE" ? "MODEL_AVAILABLE" :
+            "MODEL_AVAILABLE_WITH_QUALITY_WARNINGS",
         "solver_validation_ready" => solver_validation_ready,
         "stopping_reason" => checkpoint_stopping_reason(result),
         "iterations_completed" => isempty(result.history) ? 0 : last(result.history).iteration,
@@ -1523,6 +1919,8 @@ function _export_wannierization_tb(
         "fourier_roundtrip_gate_tolerance" =>
             construction_diagnostics["fourier_roundtrip_gate_tolerance"],
     )
+    ordinary_report = _ordinary_accepted_state_report(result, config)
+    merge!(status_metadata, ordinary_report)
     temporary, io = mktemp(dirname(paths.packed); cleanup = false)
     close(io)
     completed = false
@@ -1536,14 +1934,55 @@ function _export_wannierization_tb(
             operator_symmetry_plan,
             target_contract = operator_target_contract,
         )
+        if _profile_export_numerical_checks!(export_checks, policy, profile_provenance)
+            numerical_quality = "NUMERICAL_WARNING"
+            export_status = "EXPORTED_WITH_WARNING"
+            quality_failed = true
+            model_availability = "AVAILABLE_WITH_QUALITY_WARNINGS"
+            status_metadata["numerical_quality"] = numerical_quality
+            status_metadata["tb_export_status"] = export_status
+            status_metadata["model_availability"] = model_availability
+            status_metadata["construction_quality_failed"] = true
+            status_metadata["physics_qualification"] = "PHYSICS_HOLD"
+        end
+        # Include Full audits once, after assembly, in both persisted and returned records.
+        construction_gate_records = String(
+            JSON3.write(
+                vcat(
+                    [
+                        Dict(
+                            "code" => String(d.code),
+                            "severity" => String(d.severity),
+                            "message" => d.message,
+                            "context" => d.context,
+                        ) for d in result.diagnostics
+                    ],
+                    export_checks,
+                ),
+            ),
+        )
+        status_metadata["construction_gate_records_json"] = construction_gate_records
         bundle_geometry = geometry
         bundle_status_metadata = status_metadata
-        if config.output.profile in (:hamiltonian_position_spin, :full)
+        if Core.REAL_SPACE_SPIN in IO.resolved_operator_inventory(operator_selection)
             qualification = profile_provenance["operator_qualification"]
             families = qualification["families"]
             spin_family = families["spin"]
             spin_status = String(spin_family["overall"])
             spin_reason = String(spin_family["reason"])
+            if get(spin_family, "pair_wigner_seitz_roundtrip_status", "NOT_APPLICABLE") ==
+               "NUMERICAL_WARNING" ||
+               get(profile_provenance, "uiu_generation_status", "PASS") == "EXPORTED_WITH_WARNING"
+                numerical_quality = "NUMERICAL_WARNING"
+                export_status = "EXPORTED_WITH_WARNING"
+                quality_failed = true
+                model_availability = "AVAILABLE_WITH_QUALITY_WARNINGS"
+                status_metadata["numerical_quality"] = numerical_quality
+                status_metadata["tb_export_status"] = export_status
+                status_metadata["model_availability"] = model_availability
+                status_metadata["construction_quality_failed"] = true
+                status_metadata["physics_qualification"] = "PHYSICS_HOLD"
+            end
             if spin_status != "PASS"
                 bundle_geometry = copy(geometry)
                 bundle_geometry["production_eligible"] = false
@@ -1551,7 +1990,7 @@ function _export_wannierization_tb(
                 bundle_status_metadata = copy(status_metadata)
                 bundle_status_metadata["production_eligible"] = false
                 bundle_status_metadata["scoped_production_eligible"] = false
-                bundle_status_metadata["diagnostic_only"] = true
+                bundle_status_metadata["quality_review_recommended"] = true
                 bundle_status_metadata["physics_qualification"] = "PHYSICS_HOLD_SPIN_FAMILY"
                 bundle_status_metadata["spin_family_qualification"] = spin_status
                 bundle_status_metadata["spin_family_qualification_reason"] = spin_reason
@@ -1562,7 +2001,11 @@ function _export_wannierization_tb(
             roundtrip.lattice,
             roundtrip.r_degeneracies,
             profile_operators;
-            profile = config.output.profile,
+            # Task-derived selections persist their re-derivable identity instead of a
+            # fixed profile label; fixed selections keep forwarding the profile.
+            profile = IO.operator_selection_mode(operator_selection) == :tasks ? nothing :
+                      config.output.profile,
+            operator_tasks = config.output.operator_tasks,
             overwrite = true,
             paired_tb_sha256 = sha256_file(tb_path),
             provenance = merge(
@@ -1574,6 +2017,15 @@ function _export_wannierization_tb(
                     "authoritative_hamiltonian_digest" => band_hamiltonian.digest,
                     "authoritative_hamiltonian_algorithm_version" =>
                         band_hamiltonian.algorithm_version,
+                    "authoritative_hamiltonian_input_sha256" => merge(
+                        band_hamiltonian.input_sha256,
+                        Dict(
+                            "AUTHORITATIVE_HAMILTONIAN_SHA256" =>
+                                star_authoritative_hamiltonian_sha256(
+                                    config.input.authoritative_hamiltonian,
+                                ),
+                        ),
+                    ),
                 ),
                 profile_provenance,
             ),
@@ -1582,15 +2034,36 @@ function _export_wannierization_tb(
             eligibility = bundle_status_metadata,
         )
         loaded = IO.read_real_space_operator_bundle(temporary)
+        if policy == :standard && loaded.manifest.numerical_quality == "NUMERICAL_WARNING"
+            numerical_quality = "NUMERICAL_WARNING"
+            export_status = "EXPORTED_WITH_WARNING"
+            quality_failed = true
+            model_availability = "AVAILABLE_WITH_QUALITY_WARNINGS"
+            for metadata in (status_metadata, bundle_status_metadata)
+                merge!(
+                    metadata,
+                    Dict(
+                        "numerical_quality"=>numerical_quality,
+                        "tb_export_status"=>export_status,
+                        "construction_quality_failed"=>true,
+                        "model_availability"=>model_availability,
+                        "production_eligible"=>false,
+                        "physics_qualification"=>"PHYSICS_HOLD",
+                    ),
+                )
+            end
+        end
         loaded.lattice == roundtrip.lattice || error("Packed HDF5 lattice round-trip failed")
         loaded.degeneracies == roundtrip.r_degeneracies ||
             error("Packed HDF5 degeneracy round-trip failed")
         loaded.manifest.r_vectors == roundtrip.r_vectors ||
             error("Packed HDF5 R-vector round-trip failed")
-        loaded.manifest.profile == config.output.profile ||
+        # Compare against the resolved selection rather than the raw configuration:
+        # a task-derived selection stores `:task_derived` and its own inventory, while
+        # `config.output.profile` is `nothing` in that mode.
+        loaded.manifest.profile == IO.resolved_operator_profile(operator_selection) ||
             error("Packed HDF5 operator profile round-trip failed")
-        loaded.manifest.inventory ==
-        collect(IO.OPERATOR_PROFILE_INVENTORIES[config.output.profile]) ||
+        loaded.manifest.inventory == IO.resolved_operator_inventory(operator_selection) ||
             error("Packed HDF5 operator inventory round-trip failed")
         loaded.operators[Core.REAL_SPACE_HAMILTONIAN].data == roundtrip.hamiltonian_r ||
             error("Packed HDF5 Hamiltonian round-trip failed")
@@ -1602,11 +2075,13 @@ function _export_wannierization_tb(
         end
         length(loaded.manifest.scientific_content_sha256) == 64 ||
             error("Packed HDF5 scientific digest is invalid")
-        mv(temporary, paths.packed; force = true)
+        # Both payloads have passed readback; no existing successful attempt is overwritten.
+        keep_tb && mv(tb_path, paths.wannier90; force = policy != :standard)
+        mv(temporary, paths.packed; force = policy != :standard)
         completed = true
     finally
-        !completed && isfile(temporary) && rm(temporary; force = true)
-        !keep_tb && isfile(tb_path) && rm(tb_path; force = true)
+        # Failed temporary payloads remain evidence, never recognized as published outputs.
+        completed && !keep_tb && isfile(tb_path) && rm(tb_path; force = true)
     end
     IO.read_real_space_operator_bundle(paths.packed)
     text_metadata =
@@ -1616,9 +2091,9 @@ function _export_wannierization_tb(
             paths.packed,
             Dict(
                 "construction_policy" => String(config.input.construction_policy),
-                "classification" => diagnostic_classification,
+                "classification" => model_availability,
                 "production_eligible" => false,
-                "manual_review_required" => true,
+                "quality_review_recommended" => quality_failed || !production_eligible,
                 "solver_status" => string(result.status),
                 "gate_records" => JSON3.read(construction_gate_records),
             ),
@@ -1640,12 +2115,13 @@ function _export_wannierization_tb(
             string(construction_diagnostics["position_fourier_roundtrip_residual"]),
         "tb_fourier_roundtrip_gate_tolerance" =>
             string(construction_diagnostics["fourier_roundtrip_gate_tolerance"]),
-        "diagnostic_classification" => diagnostic_classification,
+        "model_availability" => model_availability,
         "construction_policy" => String(config.input.construction_policy),
         "construction_gate_records_json" => construction_gate_records,
-        "wannier90_diagnostic_metadata" => text_metadata,
-        "manual_review_required" => "true",
+        "wannierization_quality_metadata" => text_metadata,
+        "quality_review_recommended" => string(quality_failed || !production_eligible),
         "construction_quality_failed" => string(quality_failed),
+        ordinary_report...,
     )
 end
 
@@ -1703,6 +2179,49 @@ function _bind_packed_checkpoint_sha256!(packed_path, checkpoint_path)
     return checkpoint_digest
 end
 
+# Recompute diagnostics from an accepted frame, including export-only legacy checkpoints.
+# No physical sewing information is inferred from identity bookkeeping or WIN target actions.
+function _ordinary_accepted_state_report(result, config; representation = nothing)
+    effective_wannierization_mode(config) == :ordinary || return Dict{String, String}()
+    isempty(result.v_matrix) && return Dict(
+        "ordinary_accepted_frame_diagnostic_status" => "NOT_RUN",
+        "ordinary_accepted_frame_diagnostic_reason" => "accepted V matrix is unavailable",
+        "ordinary_physical_band_sewing_status" => "NOT_RUN",
+        "ordinary_physical_band_sewing_reason" => "nontrivial physical band sewing overlaps are unavailable",
+    )
+    isometry = 0.0
+    idempotence = 0.0
+    for kpoint in axes(result.v_matrix, 3)
+        frame = @view result.v_matrix[:, :, kpoint]
+        isometry = max(isometry, maximum(abs, frame' * frame - I; init = 0.0))
+        projector = frame * frame'
+        idempotence = max(idempotence, maximum(abs, projector * projector - projector; init = 0.0))
+    end
+    all(isfinite, (isometry, idempotence)) || throw(
+        ArgumentError("ordinary accepted-frame report contains nonfinite scientific residuals"),
+    )
+    report = Dict(
+        "ordinary_accepted_frame_isometry_residual" => string(isometry),
+        "ordinary_accepted_projector_idempotence_residual" => string(idempotence),
+        "ordinary_accepted_frame_diagnostic_source" => "ACCEPTED_V_MATRIX_RECOMPUTED",
+        "ordinary_accepted_frame_diagnostic_status" => "MEASURED",
+        "ordinary_physical_band_sewing_status" => "NOT_RUN",
+        "ordinary_physical_band_sewing_reason" => "nontrivial physical band sewing overlaps are unavailable; accepted frames and WIN target actions do not determine band-representation covariance",
+    )
+    if representation !== nothing &&
+       get(representation.conventions, "sewing_role", "") == "identity_only_no_symmetry"
+        residual = 0.0
+        for kpoint in axes(representation.sewing_matrices, 4)
+            sewing = @view representation.sewing_matrices[:, :, 1, kpoint]
+            residual = max(residual, maximum(abs, sewing' * sewing - I; init = 0.0))
+        end
+        isfinite(residual) || throw(ArgumentError("ordinary identity sewing report is nonfinite"))
+        report["ordinary_identity_sewing_unitarity_residual"] = string(residual)
+        report["ordinary_identity_sewing_measurement_scope"] = "IDENTITY_BOOKKEEPING_ONLY"
+    end
+    return report
+end
+
 # Append the terminal summary after every output decision is known.
 function _write_wannierization_final(
     io,
@@ -1716,78 +2235,114 @@ function _write_wannierization_final(
 )
     converged = result.status in (COMPLETED, COMPLETED_WITH_WARNINGS)
     production_eligible = wannierization_production_eligible(result)
-    _write_report_section(io, "CONSTRUCTION GATE AND DIAGNOSTIC SUMMARY")
-    println(io, "[SOLVER PROJECTOR COVARIANCE]\n")
-    println(
-        io,
-        "applicability = $(get(result.input_summary, "covariance_applicability", "UNKNOWN"))",
-    )
-    println(
-        io,
-        "maximum_covariance_error = $(isempty(result.history) ? "NOT_RUN" : string(last(result.history).maximum_covariance_error))",
-    )
-    println(
-        io,
-        "threshold = $(get(result.input_summary, "projector_covariance_tolerance", "NOT_RECORDED"))",
-    )
-    println(io, "source = solver_iteration_history")
-    println(io, "\n[REPRESENTATION AND GROUP-LAW DIAGNOSTICS]\n")
-    for key in (
-        "representation_compatible",
-        "representation_assessment_status",
-        "gate_definition_status",
-        "maximum_group_law_residual",
-        "maximum_kramers_residual",
-        "representation_sha256",
-    )
-        println(io, "$(key) = $(get(result.input_summary, key, "NOT_RECORDED"))")
+    _write_report_section(io, "CONSTRUCTION GATE AND QUALITY SUMMARY")
+    if effective_wannierization_mode(config) != :ordinary
+        println(io, "[SOLVER PROJECTOR COVARIANCE]\n")
+        println(
+            io,
+            "applicability = $(get(result.input_summary, "covariance_applicability", "UNKNOWN"))",
+        )
+        println(
+            io,
+            "maximum_covariance_error = $(isempty(result.history) ? "NOT_RUN" : string(last(result.history).maximum_covariance_error))",
+        )
+        println(
+            io,
+            "threshold = $(get(result.input_summary, "projector_covariance_tolerance", "NOT_RECORDED"))",
+        )
+        println(io, "source = solver_iteration_history")
+        println(io, "\n[REPRESENTATION AND GROUP-LAW DIAGNOSTICS]\n")
+        for key in (
+            "representation_compatible",
+            "representation_assessment_status",
+            "gate_definition_status",
+            "maximum_group_law_residual",
+            "maximum_kramers_residual",
+            "representation_sha256",
+        )
+            println(io, "$(key) = $(get(result.input_summary, key, "NOT_RECORDED"))")
+        end
+        println(io, "source = band_representation_preflight")
     end
-    println(io, "source = band_representation_preflight")
+    if effective_wannierization_mode(config) == :ordinary
+        report = merge(result.input_summary, _ordinary_accepted_state_report(result, config))
+        if report["ordinary_accepted_frame_diagnostic_status"] == "MEASURED"
+            println(io, "[ACCEPTED FRAME DIAGNOSTICS]\n")
+        end
+        for key in (
+            "ordinary_accepted_frame_isometry_residual",
+            "ordinary_accepted_projector_idempotence_residual",
+            "ordinary_accepted_frame_diagnostic_source",
+            "ordinary_accepted_frame_diagnostic_status",
+            "ordinary_identity_sewing_unitarity_residual",
+            "ordinary_identity_sewing_measurement_scope",
+        )
+            report["ordinary_accepted_frame_diagnostic_status"] == "MEASURED" || continue
+            haskey(report, key) && _write_report_field(io, key, report[key])
+        end
+    end
     diagnostic_groups = _diagnostic_groups(result.diagnostics)
-    println(io, "\nIMPORTANT DIAGNOSTICS\n")
+    println(io, "\nIMPORTANT QUALITY RECORDS\n")
     _write_diagnostic_summary(io, diagnostic_groups)
 
     _write_report_section(io, "FINAL SPREADING")
     final_total =
         isempty(result.history) ? sum(result.spreads_angstrom2) : last(result.history).spread_total
     final_sum = sum(result.spreads_angstrom2)
+    localization_steps =
+        something(tryparse(Int, get(result.input_summary, "localization_steps", "0")), 0)
+    localization_evaluated =
+        config.solver.acceleration.schedule != :two_stage || localization_steps > 0
     _write_report_field(
         io,
         "accepted_iteration",
         isempty(result.history) ? 0 : last(result.history).iteration,
     )
-    _write_report_field(io, "final_total_spreading", "$(final_total) angstrom^2")
+    _write_report_field(
+        io,
+        "final_total_spreading",
+        localization_evaluated ? "$(final_total) angstrom^2" : "NOT_RUN",
+    )
     _write_report_field(
         io,
         "final_mean_state_spreading",
-        "$(isempty(result.spreads_angstrom2) ? 0.0 : final_sum / length(result.spreads_angstrom2)) angstrom^2",
+        localization_evaluated ?
+        "$(isempty(result.spreads_angstrom2) ? 0.0 : final_sum / length(result.spreads_angstrom2)) angstrom^2" :
+        "NOT_RUN",
     )
     _write_report_field(
         io,
         "final_minimum_state_spreading",
-        isempty(result.spreads_angstrom2) ? "NOT_RUN" :
+        !localization_evaluated || isempty(result.spreads_angstrom2) ? "NOT_RUN" :
         "$(minimum(result.spreads_angstrom2)) angstrom^2",
     )
     _write_report_field(
         io,
         "final_maximum_state_spreading",
-        isempty(result.spreads_angstrom2) ? "NOT_RUN" :
+        !localization_evaluated || isempty(result.spreads_angstrom2) ? "NOT_RUN" :
         "$(maximum(result.spreads_angstrom2)) angstrom^2",
     )
     _write_report_field(
         io,
         "final_convergence_metric",
-        isempty(result.history) ? "NOT_RUN" : last(result.history).spread_standard_deviation,
+        !localization_evaluated || isempty(result.history) ? "NOT_RUN" :
+        last(result.history).spread_standard_deviation,
     )
     _write_report_field(io, "convergence_tolerance", config.solver.convergence_tolerance)
     println(io)
-    _write_spreading_table(
-        io,
-        result.spreads_angstrom2;
-        heading = "Per-Wannier-state final spreading (angstrom^2)",
-    )
-    _write_report_field(io, "sum_of_final_state_spreadings", "$(final_sum) angstrom^2")
-    _write_report_field(io, "total_minus_state_sum", "$(final_total - final_sum) angstrom^2")
+    if localization_evaluated
+        _write_spreading_table(
+            io,
+            result.spreads_angstrom2;
+            heading = "Per-Wannier-state final spreading (angstrom^2)",
+        )
+        _write_report_field(io, "sum_of_final_state_spreadings", "$(final_sum) angstrom^2")
+        _write_report_field(io, "total_minus_state_sum", "$(final_total - final_sum) angstrom^2")
+    else
+        _write_report_field(io, "per_wannier_state_spreading", "NOT_EVALUATED")
+        _write_report_field(io, "sum_of_final_state_spreadings", "NOT_RUN")
+        _write_report_field(io, "total_minus_state_sum", "NOT_RUN")
+    end
 
     qualification = result.tb_symmetry_qualification
     show_tb_symmetry = something(
@@ -1798,7 +2353,7 @@ function _write_wannierization_final(
         _write_report_section(
             io,
             production_eligible ? "FINAL TB SYMMETRY QUALIFICATION (production eligible model)" :
-            "FINAL TB SYMMETRY QUALIFICATION (diagnostic model)",
+            "FINAL TB SYMMETRY QUALIFICATION (standard model)",
         )
         _write_report_field(io, "overall", qualification.overall)
         _write_report_field(io, "reason", qualification.reason)
@@ -1810,8 +2365,16 @@ function _write_wannierization_final(
             artifacts.packed_hdf5 === nothing ? "qualification_payload_without_exported_tb" :
             "final_exported_and_read_back_tb"
         _write_report_field(io, "source", qualification_source)
-        _write_tb_scope(io, result.input_summary)
-        _write_tb_report(io, qualification)
+        _write_tb_scope(
+            io,
+            result.input_summary;
+            omit_unavailable = effective_wannierization_mode(config) == :ordinary,
+        )
+        _write_tb_report(
+            io,
+            qualification;
+            measured_only = effective_wannierization_mode(config) == :ordinary,
+        )
     end
 
     _write_report_section(io, "FINAL STATUS")
@@ -1835,7 +2398,14 @@ function _write_wannierization_final(
     println(io, "stopping_reason = $(checkpoint_stopping_reason(result))")
     println(io, "converged = $(converged)")
     println(io, "production_eligible = $(production_eligible)")
-    println(io, "diagnostic_only = $(!production_eligible)")
+    quality_failed = get(result.input_summary, "construction_quality_failed", "false") == "true"
+    model_availability = get(
+        result.input_summary,
+        "model_availability",
+        production_eligible ? "AVAILABLE" : "AVAILABLE_WITH_QUALITY_WARNINGS",
+    )
+    println(io, "model_availability = $(model_availability)")
+    println(io, "quality_review_recommended = $(quality_failed || !production_eligible)")
     println(io, "tb_symmetry = $(qualification.overall)")
     println(
         io,
@@ -1869,10 +2439,10 @@ function _write_wannierization_final(
         end
     end
     println(io, "construction_policy = $(config.input.construction_policy)")
-    metadata = get(result.input_summary, "wannier90_diagnostic_metadata", "")
+    metadata = get(result.input_summary, "wannierization_quality_metadata", "")
     println(
         io,
-        "wannier90_diagnostic_metadata = ",
+        "wannierization_quality_metadata = ",
         _report_path(isempty(metadata) ? nothing : metadata, root),
     )
     if artifacts.wannierization_log !== nothing

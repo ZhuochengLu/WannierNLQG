@@ -9,6 +9,12 @@ import SHA
 import SHA: sha256
 import WannierNLQG.Core: reciprocal_lattice
 import WannierNLQG.IO:
+    preparation_source_vector,
+    foreach_preparation_block,
+    operator_selection_mode,
+    resolved_operator_profile,
+    resolved_source_inventory,
+    resolve_operator_selection,
     WannierAMN,
     WannierMMN,
     read_fortran_record,
@@ -136,6 +142,7 @@ const validate_wannierization_config = _validate_wannierization_config
 const wannier_gauge_link_diagnostics = _wannier_gauge_link_diagnostics
 
 const REPRESENTATION_PREPARATION_INTEGRATION_API = (
+    :native_vasp_point_provider,
     :QEProjectorAtomPlan,
     :QEProjectorChannel,
     :QEProjectorPlan,

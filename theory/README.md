@@ -102,3 +102,5 @@ The release also retains the complete ordered band-pair sum. Prefactors are effe
 ## Scope
 
 The K-slice formulas in this directory define local geometric textures. They do not automatically include Fermi occupations, an energy shell, or a Brillouin-zone integral. The Berry-curvature family includes the external non-Abelian curvature terms available within the finite window of the release. The quantum-metric family contains the internal contribution of that finite window and omits the symmetric external contribution that requires additional $uIu/FF_R$-type information. Each document states this physical boundary without discussing how the quantity is computed.
+
+- [Second-harmonic generation](SecondHarmonicGeneration.md): distinct numerical kernels, corrected BCD contraction, and normalization.

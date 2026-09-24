@@ -223,11 +223,25 @@ function _no_symmetry_compatibility_contract(representation::BandRepresentation,
         representation.spinor;
         tolerance,
     )
+    # Measure the supplied bookkeeping matrices; this is not a physical sewing audit.
+    identity_unitarity = 0.0
+    for kpoint in axes(representation.sewing_matrices, 4)
+        sewing = @view representation.sewing_matrices[:, :, 1, kpoint]
+        identity_unitarity = max(identity_unitarity, maximum(abs, sewing' * sewing - I))
+    end
+    isfinite(identity_unitarity) ||
+        throw(ArgumentError("ordinary identity sewing unitarity is nonfinite"))
     diagnostics = [
         WannierizationDiagnostic(
             :SYMMETRY_CONSTRAINTS_DISABLED,
             :info,
-            "space-group, magnetic-group, and antiunitary constraints are not applied",
+            "space-group, magnetic-group, and antiunitary constraints are not applied";
+            context = Dict(
+                "identity_sewing_unitarity_residual" => string(identity_unitarity),
+                "measurement_scope" => "IDENTITY_BOOKKEEPING_ONLY",
+                "physical_representation_status" => "NOT_RUN",
+                "physical_representation_reason" => "nontrivial physical band sewing overlaps are unavailable on the ordinary matrix route; WIN target actions alone do not supply them",
+            ),
         ),
     ]
     zeros4 = (0.0, 0.0, 0.0, 0.0)
@@ -250,7 +264,7 @@ function _no_symmetry_compatibility_contract(representation::BandRepresentation,
         :not_applicable,
         GATE_NOT_EVALUATED,
         REPRESENTATION_UNDETERMINED,
-        NaN,
+        identity_unitarity,
         nothing,
         nothing,
         :analytic,

@@ -10,6 +10,7 @@ using .QEPAWMatrixElementsTestSupport: write_qe_paw_fixture
 const TARGET_SCOPE_W = WannierNLQG.Wannierization
 const TARGET_SCOPE_EXTENSION = first(TARGET_SCOPE_W._load_wannierization_extension!())
 const TARGET_SCOPE_PAW = TARGET_SCOPE_EXTENSION.PAWMatrixElements
+const TARGET_SCOPE_OPERATOR = TARGET_SCOPE_EXTENSION.OperatorExport
 const TARGET_SCOPE_WORKFLOW = TARGET_SCOPE_EXTENSION.WorkflowOrchestration
 
 function target_scope_solution(; overrides = Dict{String, Float64}())
@@ -332,6 +333,77 @@ end
         false,
     )
     @test Set(getfield.(full_parent_violations, :name)) == Set(keys(parent_only_defects))
+end
+
+@testset "operator generators hard-gate the target and audit the parent" begin
+    outer = BitMatrix(reshape([true, true, false], 3, 1))
+    frozen = BitMatrix(reshape([true, false, false], 3, 1))
+    scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(outer, frozen)
+    target = (
+        qualification_scope = scope,
+        target_authority = "outer_window",
+        parent_audit_policy = "audit_only",
+        contract_sha256 = repeat("a", 64),
+    )
+
+    generated = zeros(ComplexF64, 3, 3, 3, 1)
+    oracle = copy(generated)
+    generated[3, 3, 1, 1] = 1.0e-3
+    scoped =
+        Base.invokelatest(TARGET_SCOPE_PAW._vasp_paw_spn_scoped_parity, generated, oracle, outer)
+    parent = Base.invokelatest(TARGET_SCOPE_PAW._paw_array_parity, generated, oracle)
+    @test scoped.max_absolute == 0.0
+    @test parent.max_absolute == 1.0e-3
+
+    overlap = Matrix{ComplexF64}(I, 3, 3)
+    overlap[3, 3] += 1.0e-3
+    state = (
+        topology = (num_bands = 3, num_kpts = 1),
+        overlap = (_, _, _, _) -> overlap,
+        generalized_norm = 1.0e-3,
+        diagnostics = String[],
+    )
+    qualified =
+        Base.invokelatest(TARGET_SCOPE_PAW._uiu_state_with_qualification_scope, state, target)
+    @test qualified.generalized_norm == 0.0
+    @test qualified.parent_generalized_norm == 1.0e-3
+    @test qualified.target_authority == "outer_window"
+    @test qualified.parent_audit_policy == "audit_only"
+
+    gauge = (
+        gauge_artifact_sha256 = nothing,
+        transforms = nothing,
+        status = "PASS",
+        contract_sha256 = repeat("b", 64),
+    )
+    topology = (num_bands = 3, num_kpts = 1, num_neighbors = 1, source_sha256 = repeat("c", 64))
+    closure = Base.invokelatest(
+        TARGET_SCOPE_OPERATOR._hamiltonian_operator_native_identity_scope,
+        gauge,
+        topology,
+        target,
+    )
+    @test closure.authority == "outer_window"
+    @test closure.parent_audit_policy == "audit_only"
+    @test closure.outer_rank_minimum == 2
+    @test closure.outer_rank_maximum == 2
+    @test closure.outer_mask_sha256 == scope.outer_mask_sha256
+
+    tampered = (
+        qualification_scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
+            trues(3, 1),
+            frozen;
+            outer_mask_sha256 = scope.outer_mask_sha256,
+        ),
+        target_authority = "outer_window",
+        parent_audit_policy = "audit_only",
+        contract_sha256 = repeat("a", 64),
+    )
+    @test_throws ArgumentError Base.invokelatest(
+        TARGET_SCOPE_PAW._uiu_state_with_qualification_scope,
+        state,
+        tampered,
+    )
 end
 
 @testset "target Hamiltonian covariance and projected eigen residual remain hard" begin

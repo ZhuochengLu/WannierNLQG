@@ -172,7 +172,7 @@ function _write_symmetry_completed_qe_paw_provenance(
             attributes["passed"] = result.passed
             attributes["qualification_mode"] = String(qualification_mode)
             attributes["production_eligible"] = qualification_mode == :strict && result.passed
-            attributes["diagnostic_only"] = qualification_mode == :diagnostic_only
+            attributes["quality_review_recommended"] = qualification_mode == :standard
             attributes["physical_overlap_available"] = result.physical_overlap_available
             attributes["gauge_hdf5"] = abspath(gauge_hdf5)
             attributes["gauge_hdf5_sha256"] = sha256_file(gauge_hdf5)
@@ -241,22 +241,22 @@ function _star_completed_parent_native(
         throw(ArgumentError("PAW_PROPAGATION_IMPLEMENTATION_HOLD: parent rotation shape differs"))
     size(audit.symmetrized_energies_ev) == (parent_count, nk) ||
         throw(ArgumentError("PAW_PROPAGATION_IMPLEMENTATION_HOLD: parent energy shape differs"))
-    points = PlaneWaveKPoint[]
-    for kpoint in 1:nk
+    make_point = function (kpoint)
         native_point = parent_native.kpoints[kpoint]
         rotation = @view audit.native_to_symmetrized_rotations[:, :, kpoint]
         coefficients = _star_rotate_rows(native_point.coefficients, rotation)
-        push!(
-            points,
-            PlaneWaveKPoint(
-                native_point.k_fractional,
-                native_point.g_vectors,
-                coefficients,
-                @view(audit.symmetrized_energies_ev[:, kpoint]);
-                normalize_coefficients = false,
-            ),
+        PlaneWaveKPoint(
+            native_point.k_fractional,
+            native_point.g_vectors,
+            coefficients,
+            @view(audit.symmetrized_energies_ev[:, kpoint]);
+            normalize_coefficients = false,
         )
     end
+    points =
+        _qe_disk_bounded() ? preparation_source_vector(make_point, PlaneWaveKPoint, nk) :
+        [make_point(k) for k in 1:nk]
+    _qe_disk_bounded() && (points = _qe_guarded(points, _qe_provider_guard(parent_native.kpoints)))
     return NativeWavefunctionData(
         parent_native.source_code,
         parent_native.structure,
@@ -283,29 +283,47 @@ function generate_symmetry_completed_qe_paw_matrix_elements(
     source::QuantumEspressoWavefunctionSource,
     gauge_hdf5::AbstractString,
     nnkp_file::AbstractString;
+    kwargs...,
+)
+    bounded = _qe_bounded_contract(gauge_hdf5)
+    return task_local_storage(:qe_disk_bounded_gauge, bounded) do
+        _generate_symmetry_completed_qe_paw_matrix_elements_impl(
+            source,
+            gauge_hdf5,
+            nnkp_file;
+            kwargs...,
+        )
+    end
+end
+
+"""Execute the unchanged matrix qualification workflow in the selected storage scope."""
+function _generate_symmetry_completed_qe_paw_matrix_elements_impl(
+    source::QuantumEspressoWavefunctionSource,
+    gauge_hdf5::AbstractString,
+    nnkp_file::AbstractString;
     artifact_dir::AbstractString,
     thresholds::QEPAWParityThresholds = QEPAWParityThresholds(),
-    qualification_mode::Symbol = :strict,
+    qualification_mode::Symbol = :standard,
 )
-    qualification_mode in (:strict, :diagnostic_only) ||
-        throw(ArgumentError("qualification_mode must be :strict or :diagnostic_only"))
+    qualification_mode in (:strict, :standard) ||
+        throw(ArgumentError("qualification_mode must be :strict or :standard"))
     source.representation_cutoff_ev === nothing ||
         throw(ArgumentError("QE_PAW_RAW_COEFFICIENTS_REQUIRED: full cutoff is mandatory"))
     source.band_range === nothing &&
         throw(ArgumentError("PAW_GAUGE_TARGET_BANDS_REQUIRED: source.band_range is mandatory"))
     restored = _read_star_covariant_paw_gauge_hdf5(
         gauge_hdf5;
-        construction_policy = qualification_mode == :strict ? :strict : :diagnostic,
+        construction_policy = qualification_mode == :strict ? :strict : :standard,
         source,
     )
     qualification_mode == :strict &&
         restored.status != :PASS &&
         throw(ArgumentError("PAW_SEWING_HOLD: strict matrix propagation requires PASS gauge"))
-    qualification_mode == :diagnostic_only &&
-        !(restored.status in (:PASS, :DIAGNOSTIC_ONLY)) &&
+    qualification_mode == :standard &&
+        !(restored.status in (:PASS, :STANDARD)) &&
         throw(
             ArgumentError(
-                "WAVEFUNCTION_GAUGE_BACKEND_MISMATCH: diagnostic matrices require PASS or DIAGNOSTIC_ONLY gauge",
+                "WAVEFUNCTION_GAUGE_BACKEND_MISMATCH: standard matrices require PASS or STANDARD gauge",
             ),
         )
     payload = restored.payload
@@ -502,19 +520,18 @@ function generate_symmetry_completed_qe_paw_matrix_elements(
     mkpath(artifact_dir)
     file_prefix =
         qualification_mode == :strict ? "symmetry_completed_qe_paw" :
-        "DIAGNOSTIC_ONLY_symmetry_completed_qe_paw"
+        "STANDARD_symmetry_completed_qe_paw"
     oracle_prefix =
-        qualification_mode == :strict ? "rotation_oracle_qe_paw" :
-        "DIAGNOSTIC_ONLY_rotation_oracle_qe_paw"
+        qualification_mode == :strict ? "rotation_oracle_qe_paw" : "STANDARD_rotation_oracle_qe_paw"
     direct_mmn_file = write_wannier_mmn(
         joinpath(artifact_dir, file_prefix * ".mmn"),
         direct_mmn;
-        comment = "WannierNLQG $(qualification_mode == :strict ? "production" : "DIAGNOSTIC_ONLY") symmetry-completed QE PAW direct path",
+        comment = "WannierNLQG $(qualification_mode == :strict ? "production" : "STANDARD") symmetry-completed QE PAW direct path",
     )
     direct_amn_file = write_wannier_amn(
         joinpath(artifact_dir, file_prefix * ".amn"),
         direct_amn;
-        comment = "WannierNLQG $(qualification_mode == :strict ? "production" : "DIAGNOSTIC_ONLY") symmetry-completed QE PAW direct path",
+        comment = "WannierNLQG $(qualification_mode == :strict ? "production" : "STANDARD") symmetry-completed QE PAW direct path",
     )
     oracle_mmn_file = write_wannier_mmn(
         joinpath(artifact_dir, oracle_prefix * ".mmn"),

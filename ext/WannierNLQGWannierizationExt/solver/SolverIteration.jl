@@ -13,7 +13,7 @@ function _continue_failed_disentanglement(
     iteration::Int,
 )
     config = state.config
-    config.input.construction_policy == :diagnostic &&
+    config.input.construction_policy == :standard &&
     config.solver.acceleration.schedule == :two_stage &&
     config.solver.localize &&
     state.optimizer_phase == :disentanglement &&
@@ -58,7 +58,7 @@ function _continue_failed_disentanglement(
         config.input.representation_tolerance,
         state.projector_covariance_tolerance,
         state.apply_symmetry;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
     )
     qualification.qualified || return failure
     diagnostics = WannierizationDiagnostic[state.diagnostics...]
@@ -68,13 +68,13 @@ function _continue_failed_disentanglement(
     push!(
         diagnostics,
         WannierizationDiagnostic(
-            :DISENTANGLEMENT_FAILED_TRIAL_CONTINUED_DIAGNOSTIC,
+            :DISENTANGLEMENT_FAILED_TRIAL_CONTINUED_STANDARD,
             :warning,
             "failed Z trial retained the last accepted subspace for diagnostic U optimization";
             context = Dict(
                 "stage" => "Z_to_U",
                 "gate_result" => "FAIL",
-                "action" => "CONTINUE_DIAGNOSTIC",
+                "action" => "CONTINUE_STANDARD",
                 "failed_status" => string(failure.status),
                 "last_accepted_iteration" => string(retained.iteration),
             ),
@@ -84,13 +84,10 @@ function _continue_failed_disentanglement(
     merge!(
         input_summary,
         Dict(
-            "disentanglement_convergence" => "DIAGNOSTIC_NONCONVERGED",
-            "z_seal_class" => "DIAGNOSTIC_NONCONVERGED",
-            "qualified_z_seal" => "false",
-            "route_selection_eligible" => "false",
-            "standard_tb_export_eligible" => "false",
-            "localization_qualification" => "DIAGNOSTIC_ONLY",
-            "model_qualification" => "DIAGNOSTIC_ONLY/Z_NONCONVERGED",
+            "disentanglement_convergence" => "NONCONVERGED_RETAINED",
+            "z_seal_class" => "NONCONVERGED_RETAINED",
+            "localization_qualification" => "STANDARD",
+            "model_qualification" => "AVAILABLE_WITH_QUALITY_WARNINGS",
             "construction_quality_failed" => "true",
         ),
     )
@@ -104,14 +101,14 @@ function _continue_failed_disentanglement(
             diagnostics,
             input_summary,
             iteration,
-            diagnostic_transition = true,
+            standard_transition = true,
             projector_residual = 0.0,
             omega_i = _gauge_invariant_spread(frames, state.mmn, state.weights),
         ),
     )
     seal = _seal_solver_disentanglement_state(boundary)
     seal isa WannierizationResult && return seal
-    next = merge(boundary, seal, (; diagnostic_disentanglement_nonconverged = true))
+    next = merge(boundary, seal, (; retained_disentanglement_nonconverged = true))
     invariant_failure = _candidate_invariant_failure(
         next.frames,
         next.centers,
@@ -122,7 +119,7 @@ function _continue_failed_disentanglement(
         config.input.representation_tolerance,
         next.projector_covariance_tolerance,
         next.apply_symmetry;
-        construction_policy = :diagnostic,
+        construction_policy = :standard,
     )
     invariant_failure === nothing || return failure
     # Persist the sealed boundary before a U trial can fail. This is a gauge
@@ -140,7 +137,7 @@ function _continue_failed_disentanglement(
                                        next.wannier90_reference_overlaps,
         wannier90_reference_unitaries = next.wannier90_reference_unitaries === nothing ?
                                         zeros(ComplexF64, 0, 0, 0) :
-                                        cat(next.wannier90_reference_unitaries...; dims = 3),
+                                        _pack_matrix_field(next.wannier90_reference_unitaries),
         wannier90_reference_omega_i = something(next.wannier90_reference_omega_i, NaN),
     )
     old_optimizer = retained.optimizer_state

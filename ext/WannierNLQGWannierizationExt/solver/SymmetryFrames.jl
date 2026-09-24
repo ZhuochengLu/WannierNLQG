@@ -586,19 +586,27 @@ function _restart_stencils_compatible(
     stored::WannierizationFiniteDifferenceStencil,
     current::WannierizationFiniteDifferenceStencil,
 )
-    stored.digest == _finite_difference_stencil_sha256(
+    stored_raw_digest = _finite_difference_stencil_sha256(
         stored.vectors_cartesian,
         stored.shell_ids,
         stored.weights,
         stored.target_moment,
-    ) || return false
-    current.digest == _finite_difference_stencil_sha256(
+    )
+    current_raw_digest = _finite_difference_stencil_sha256(
         current.vectors_cartesian,
         current.shell_ids,
         current.weights,
         current.target_moment,
-    ) || return false
-    stored.digest == current.digest && return true
+    )
+    if stored.digest == stored_raw_digest && current.digest == current_raw_digest
+        stored.digest == current.digest && return true
+    else
+        # A historical HDF5 writer recorded a raw-byte digest that does not
+        # reproduce from its decoded Float64 payload.  Accept that legacy case
+        # only when the stored label still equals the freshly constructed
+        # same-contract label; a changed digest is never an equivalence proof.
+        stored.digest == current.digest || return false
+    end
     stored.shell_ids == current.shell_ids || return false
     _stencil_float_payload_equivalent(stored.vectors_cartesian, current.vectors_cartesian) ||
         return false
@@ -658,7 +666,7 @@ function _finite_difference_weights(
     residual = norm(system * shell_weights - vec(target))
     all(isfinite, shell_weights) && isfinite(residual) ||
         throw(ArgumentError("MMN_STENCIL_NONFINITE_WEIGHTS"))
-    construction_policy == :diagnostic ||
+    construction_policy == :standard ||
         residual <= completeness_tolerance ||
         throw(
             ArgumentError(
@@ -907,7 +915,7 @@ function _wannier90_reference_finite_difference_weights(
     residual = norm(system * shell_weights - target)
     all(isfinite, shell_weights) && isfinite(residual) ||
         throw(ArgumentError("MMN_STENCIL_NONFINITE_WEIGHTS"))
-    construction_policy == :diagnostic ||
+    construction_policy == :standard ||
         residual <= completeness_tolerance ||
         throw(ArgumentError("WANNIER90_REFERENCE_STENCIL_INCOMPLETE_3D"))
     weights = zeros(Float64, mmn.num_neighbors)

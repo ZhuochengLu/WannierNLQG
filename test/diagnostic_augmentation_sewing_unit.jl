@@ -2,7 +2,7 @@ using Test, WannierNLQG, HDF5, JSON3, EzXML, Spglib, LinearAlgebra
 isdefined(Main, :QEPAWMatrixElementsTestSupport) || include("QEPAWMatrixElementsTestSupport.jl")
 isdefined(Main, :BandPublicSchemaTestSupport) || include("BandPublicSchemaTestSupport.jl")
 
-@testset "Diagnostic augmentation sewing quality and hard boundaries" begin
+@testset "Standard augmentation sewing quality and hard boundaries" begin
     w = WannierNLQG.Wannierization
     foundation = WannierNLQG.SymmetryFoundation
     extension = first(w._load_wannierization_extension!())
@@ -18,7 +18,7 @@ isdefined(Main, :BandPublicSchemaTestSupport) || include("BandPublicSchemaTestSu
         )
         native = Base.invokelatest(paw._read_augmentation_aware_native_source, source)
         energies = reshape(copy(only(native.kpoints).energies_ev), 1, 1)
-        build(native; policy = :diagnostic, energies = energies) = Base.invokelatest(
+        build(native; policy = :standard, energies = energies) = Base.invokelatest(
             preparation._build_band_representation,
             native,
             energies,
@@ -54,7 +54,7 @@ isdefined(Main, :BandPublicSchemaTestSupport) || include("BandPublicSchemaTestSu
         @test any(row -> row["context"]["metric"]=="generalized_norm", failed)
         @test any(row -> row["context"]["metric"]=="raw_unitarity", failed)
         @test any(row -> row["context"]["metric"]=="normalized_polar_correction", failed)
-        @test all(row -> row["context"]["action"]=="CONTINUE_DIAGNOSTIC", failed)
+        @test all(row -> row["context"]["action"]=="CONTINUE_STANDARD", failed)
         @test all(
             row -> all(
                 haskey(row["context"], name) for
@@ -80,7 +80,7 @@ isdefined(Main, :BandPublicSchemaTestSupport) || include("BandPublicSchemaTestSu
             d -> d.code==:PAW_SEWING_QUALITY_CHECK && get(d.context, "gate_result", "")=="FAIL",
             prepared.diagnostics,
         )
-        # Source/EIG disagreement remains an identity failure under diagnostic policy.
+        # Source/EIG disagreement remains an identity failure under standard policy.
         @test_throws ArgumentError build(perturbed; energies = energies .+ 1.0)
         singular = deepcopy(perturbed);
         only(singular.kpoints).coefficients .= 0

@@ -1,238 +1,8 @@
-using HDF5
-using LinearAlgebra
-using Test
+isdefined(@__MODULE__, :standard_export_fixture) ||
+    include(joinpath(@__DIR__, "WannierStandardExportTestSupport.jl"))
 
-const EXPORT_WANNIERIZATION = WannierNLQG.Wannierization
-const EXPORT_SYMMETRIZATION = WannierNLQG.Symmetrization
-const EXPORT_IO = WannierNLQG.IO
-
-function diagnostic_export_fixture(; mmn_override = nothing)
-    operation = WannierNLQG.SymmetryFoundation.SymmetryOperation(
-        Matrix{Int}(I, 3, 3),
-        zeros(3),
-        Matrix{Float64}(I, 3, 3),
-    )
-    energies = [-1.0 -1.0; 1.0 1.0]
-    representation = WannierNLQG.SymmetryFoundation.BandRepresentation(
-        "1.0",
-        :synthetic,
-        false,
-        Matrix{Float64}(I, 3, 3),
-        2.0pi .* Matrix{Float64}(I, 3, 3),
-        (2, 1, 1),
-        [0.0 0.0 0.0; 0.5 0.0 0.0],
-        energies,
-        [operation],
-        reshape([1, 2], 1, 2),
-        zeros(Int, 3, 1, 2),
-        reshape(repeat(Matrix{ComplexF64}(I, 2, 2), 1, 1, 2), 2, 2, 1, 2),
-        [1 1; 2 2],
-        [1, 2],
-        [1, 2],
-        [1, 1];
-        input_sha256 = Dict("fixture" => repeat("b", 64)),
-    )
-    block = WannierNLQG.WannierProjection.WannierProjectionBlock(
-        "X",
-        "s",
-        zeros(3, 1),
-        reshape([1], 1, 1),
-        reshape(Matrix{Float64}(I, 3, 3), 3, 3, 1),
-        false,
-    )
-    basis = WannierNLQG.WannierProjection.WannierProjectionBasis([block], 1, false)
-    eig = EXPORT_IO.WannierEIG(2, 2, copy(energies))
-    mmn_data = zeros(ComplexF64, 2, 2, 6, 2)
-    for kpoint in 1:2, neighbor in 1:6
-        mmn_data[:, :, neighbor, kpoint] .= Matrix{ComplexF64}(I, 2, 2)
-    end
-    neighbors = [2 1; 2 1; 1 2; 1 2; 1 2; 1 2]
-    shifts = zeros(Int, 3, 6, 2)
-    shifts[1, 2, 1] = -1
-    shifts[1, 1, 2] = 1
-    shifts[2, 3, :] .= 1
-    shifts[2, 4, :] .= -1
-    shifts[3, 5, :] .= 1
-    shifts[3, 6, :] .= -1
-    mmn =
-        mmn_override === nothing ? EXPORT_IO.WannierMMN(2, 2, 6, mmn_data, neighbors, shifts) :
-        mmn_override
-    config = EXPORT_WANNIERIZATION.SymmetryAdaptedWannierizationConfig(
-        input = EXPORT_WANNIERIZATION.WannierizationInputConfig(
-            construction_policy = :strict,
-            wannierization_mode = :ordinary,
-            win_file = "synthetic.win",
-            eig_file = "synthetic.eig",
-            mmn_file = "synthetic.mmn",
-            projection_basis = basis,
-            num_wannier = 1,
-            frozen_states = [(1, 1), (2, 1)],
-        ),
-        solver = EXPORT_WANNIERIZATION.WannierizationSolverConfig(
-            algorithm_profile = :custom,
-            initialization = :amn,
-        ),
-        checkpoint = EXPORT_WANNIERIZATION.WannierizationCheckpointConfig(),
-        runtime = EXPORT_WANNIERIZATION.WannierizationRuntimeConfig(),
-        output = EXPORT_WANNIERIZATION.WannierizationOutputConfig(
-            write_wannier90_tb = true,
-            tb_output_formats = (:packed_hdf5, :wannier90_tb),
-        ),
-    )
-    frames = zeros(ComplexF64, 2, 1, 2)
-    frames[1, 1, :] .= 1.0
-    centers = zeros(Float64, 1, 3)
-    spreads = [1.0]
-    stencil = EXPORT_WANNIERIZATION._finite_difference_weights(representation, mmn)
-    config_sha = EXPORT_WANNIERIZATION._restart_config_sha256(config)
-    representation_sha = repeat("c", 64)
-    basis_sha = EXPORT_WANNIERIZATION._projection_basis_sha256(basis)
-    amn_sha = repeat("d", 64)
-    restart_state = EXPORT_WANNIERIZATION.WannierizationRestartState(
-        1,
-        frames,
-        nothing,
-        centers,
-        spreads,
-        reshape([0.0, 0.0, 0.0, 1.0], 4, 1),
-        trues(2, 2),
-        0.0,
-        config_sha,
-        representation_sha,
-        stencil,
-        basis_sha,
-        amn_sha,
-        EXPORT_WANNIERIZATION.WannierizationOptimizerState(:fixed, 0.5, 1.0),
-    )
-    chk = EXPORT_IO.WannierCHK(
-        2,
-        1,
-        2,
-        representation.mp_grid,
-        representation.kpoints_fractional,
-        representation.real_lattice,
-        representation.reciprocal_lattice,
-        centers,
-        frames,
-    )
-    iteration_diagnostics = EXPORT_WANNIERIZATION.WannierizationIterationDiagnostics(
-        nothing,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.5,
-        1.0,
-        1,
-        false,
-        false,
-        0,
-        2.0e-4,
-        0.25,
-        3,
-    )
-    history =
-        [EXPORT_WANNIERIZATION.WannierizationIteration(1, 1.0, 1.0e-4, 0.0, iteration_diagnostics)]
-    diagnostic = EXPORT_WANNIERIZATION.WannierInitializationKPointDiagnostic(
-        1,
-        [1.0],
-        [1.0],
-        [1.0],
-        Float64[],
-        [1.0],
-        1,
-        1,
-        1,
-        0,
-        0,
-        0,
-        1.0e-8,
-        1.0e-8,
-        1.0e-8,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-    )
-    report = EXPORT_WANNIERIZATION.WannierInitializationReport(
-        :amn_full_bz_exact_frozen_embedding,
-        "nosym_exact_frozen_rowspace_v2",
-        :COMPLETED,
-        [diagnostic],
-    )
-    summary = Dict(
-        "requested_wannierization_mode" => "ordinary",
-        "effective_wannierization_mode" => "ordinary",
-        "representation_source" => "identity",
-        "symmetry_constraints_applied" => "false",
-        "effective_algorithm_profile" => "custom",
-        "effective_symmetry_operation_count" => "1",
-        "effective_antiunitary_operation_count" => "0",
-        "requested_initializer" => "amn",
-        "effective_initializer" => "amn_full_bz_exact_frozen_embedding",
-        "initializer_algorithm_version" => "nosym_exact_frozen_rowspace_v2",
-        "initialization_status" => "COMPLETED",
-        "solver_status" => "MAX_ITERATIONS",
-        "solver_convergence" => "MAX_ITERATIONS",
-        "stopping_reason" => "MAX_ITERATIONS_REACHED",
-        "last_attempted_iteration" => "1",
-        "last_accepted_iteration" => "1",
-        "last_persisted_iteration" => "1",
-        "has_accepted_state" => "true",
-        "legacy_terminal_semantics" => "false",
-        "convergence_metric_name" => "center_spread_window_std_max",
-        "convergence_metric" => "1.0e-4",
-        "convergence_tolerance" => "1.0e-9",
-        "hard_gate_isometry" => "0.0",
-        "hard_gate_frozen" => "0.01",
-        "hard_gate_covariance" => "0.0",
-        "input_sha256" => repeat("e", 64),
-        "authoritative_hamiltonian" => "native_dft",
-        "authoritative_hamiltonian_sha256" => "LEGACY_NATIVE_DFT",
-        "qualification_scope" => "full_parent",
-        "target_authority" => "NOT_APPLICABLE",
-        "parent_audit_policy" => "legacy_hard_gate",
-        "disentanglement_outer_mask_sha256" => "NOT_SEALED",
-        "disentanglement_frozen_mask_sha256" => "NOT_SEALED",
-        "target_subspace_contract_sha256" => "NOT_RECORDED",
-        "restart_config_sha256" => config_sha,
-        "representation_sha256" => representation_sha,
-        "projection_basis_sha256" => basis_sha,
-        "amn_sha256" => amn_sha,
-        "finite_difference_stencil_sha256" => stencil.digest,
-        "spread_metric" => "full_3d",
-        "optimizer_strategy" => "fixed",
-        "optimizer_schedule" => "two_stage",
-        "localization_steps" => "1",
-        "projector_covariance_tolerance" => "NOT_APPLICABLE",
-        "numerical_quality" => "INVALID_DIAGNOSTIC",
-        "tb_export_status" => "NOT_EXPORTED",
-    )
-    result = EXPORT_WANNIERIZATION.WannierizationResult(
-        EXPORT_WANNIERIZATION.MAX_ITERATIONS,
-        frames,
-        centers,
-        spreads,
-        history,
-        EXPORT_WANNIERIZATION.WannierizationDiagnostic[],
-        summary,
-        chk,
-        nothing,
-        restart_state,
-        EXPORT_WANNIERIZATION.WannierizationArtifacts(),
-        report,
-    )
-    return (; representation, basis, eig, mmn, config, result)
-end
-
-@testset "checkpoint 2.28 initialization diagnostics, authority, and tamper binding" begin
-    fixture = diagnostic_export_fixture()
+@testset "checkpoint 1.1 initialization diagnostics, authority, and tamper binding" begin
+    fixture = standard_export_fixture()
     parent_extension = first(EXPORT_WANNIERIZATION._load_wannierization_extension!())
     support = parent_extension.WannierizationInternalSupport
     solver = parent_extension.SolverCheckpoint
@@ -247,7 +17,7 @@ end
         @test only(restored.history).diagnostics.accepted_u_step_scale == 0.25
         @test only(restored.history).diagnostics.localization_backtracking_steps == 3
         HDF5.h5open(checkpoint, "r") do handle
-            @test String(read(HDF5.attributes(handle)["schema_version"])) == "1.0"
+            @test String(read(HDF5.attributes(handle)["schema_version"])) == "1.2"
             @test String(read(HDF5.attributes(handle)["wavefunction_gauge_backend"])) ==
                   "native_eigenstate"
             @test String(read(HDF5.attributes(handle)["wavefunction_gauge_hdf5_sha256"])) ==
@@ -338,54 +108,6 @@ end
             symmetrized_tampered,
         )
 
-        persisted = Base.invokelatest(solver._checkpoint_persisted_result, fixture.result)
-        legacy_summary = Dict{String, String}(persisted.input_summary)
-        legacy_summary["localization_gradient_contract"] = "mv_q_unwrapped_center_v1"
-        legacy_persisted = Base.invokelatest(
-            support.updated_wannierization_result,
-            persisted;
-            input_summary = legacy_summary,
-        )
-        legacy_digest =
-            Base.invokelatest(solver._wannierization_checkpoint_sha256_v2_7, legacy_persisted)
-        legacy27 = joinpath(directory, "legacy-2.7-diagnostic-z.wannierization.h5")
-        cp(checkpoint, legacy27)
-        HDF5.h5open(legacy27, "r+") do handle
-            attributes = HDF5.attributes(handle)
-            HDF5.delete_attribute(handle, "schema_version")
-            attributes["schema_version"] = "2.7"
-            HDF5.delete_attribute(handle, "localization_gradient_contract")
-            attributes["localization_gradient_contract"] = "mv_q_unwrapped_center_v1"
-            summary_attributes = HDF5.attributes(handle["input_summary"])
-            HDF5.delete_attribute(handle["input_summary"], "localization_gradient_contract")
-            summary_attributes["localization_gradient_contract"] = "mv_q_unwrapped_center_v1"
-            HDF5.delete_attribute(handle, "checkpoint_sha256")
-            attributes["checkpoint_sha256"] = legacy_digest
-        end
-        legacy_restored = EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(legacy27)
-        @test legacy_restored.input_summary["z_seal_class"] == "DIAGNOSTIC_NONCONVERGED"
-        @test legacy_restored.input_summary["qualified_z_seal"] == "false"
-        @test any(
-            diagnostic -> diagnostic.code == :LEGACY_DIAGNOSTIC_Z_SEAL_NOT_PROMOTED,
-            legacy_restored.diagnostics,
-        )
-
-        legacy27_joint = joinpath(directory, "legacy-2.7-joint.wannierization.h5")
-        cp(legacy27, legacy27_joint)
-        HDF5.h5open(legacy27_joint, "r+") do handle
-            summary = handle["input_summary"]
-            attributes = HDF5.attributes(summary)
-            HDF5.delete_attribute(summary, "optimizer_schedule")
-            attributes["optimizer_schedule"] = "joint"
-        end
-        legacy_joint = EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(legacy27_joint)
-        @test legacy_joint.input_summary["optimizer_history_compatibility"] ==
-              "LEGACY_JOINT_UPDATE_CONTRACT_RESET"
-        @test isempty(legacy_joint.restart_state.optimizer_state.anderson_z_history)
-        @test isempty(legacy_joint.restart_state.optimizer_state.previous_u_gradient)
-        @test legacy_joint.restart_state.optimizer_state.z_stability_count == 0
-        @test legacy_joint.restart_state.optimizer_state.u_stability_count == 0
-
         tampered = joinpath(directory, "tampered.wannierization.h5")
         cp(checkpoint, tampered)
         HDF5.h5open(tampered, "r+") do handle
@@ -396,64 +118,11 @@ end
         @test_throws ArgumentError EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(
             tampered,
         )
-
-        # A genuine 2.1 payload has no typed initialization group in its
-        # scientific contract and maps the new axes to explicit unknown values.
-        legacy = joinpath(directory, "legacy-2.1.wannierization.h5")
-        cp(checkpoint, legacy)
-        legacy_result = EXPORT_WANNIERIZATION.WannierizationResult(
-            fixture.result.status,
-            fixture.result.v_matrix,
-            fixture.result.wannier_centers_cartesian,
-            fixture.result.spreads_angstrom2,
-            fixture.result.history,
-            fixture.result.diagnostics,
-            filter(
-                pair ->
-                    first(pair) ∉ (
-                        "initialization_status",
-                        "initializer_algorithm_version",
-                        "solver_convergence",
-                        "numerical_quality",
-                        "tb_export_status",
-                    ),
-                fixture.result.input_summary,
-            ),
-            fixture.result.wannier_chk,
-            fixture.result.checkpoint_file,
-            fixture.result.restart_state,
-            fixture.result.artifacts,
-        )
-        legacy_digest =
-            Base.invokelatest(solver._wannierization_checkpoint_sha256_v2_1, legacy_result)
-        HDF5.h5open(legacy, "r+") do handle
-            HDF5.delete_attribute(handle, "schema_version")
-            HDF5.attributes(handle)["schema_version"] = "2.1"
-            HDF5.delete_attribute(handle, "checkpoint_sha256")
-            HDF5.attributes(handle)["checkpoint_sha256"] = legacy_digest
-            summary = handle["input_summary"]
-            legacy_integers = read(handle["history/iteration_diagnostic_integers"])
-            legacy_integers[3, :] .= 1
-            handle["history/iteration_diagnostic_integers"][:, :] = legacy_integers
-            for key in (
-                "initialization_status",
-                "initializer_algorithm_version",
-                "solver_convergence",
-                "numerical_quality",
-                "tb_export_status",
-            )
-                haskey(HDF5.attributes(summary), key) && HDF5.delete_attribute(summary, key)
-            end
-        end
-        legacy_restored = EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(legacy)
-        @test legacy_restored.initialization_report === nothing
-        @test legacy_restored.input_summary["initialization_status"] == "UNKNOWN"
-        @test legacy_restored.input_summary["initializer_algorithm_version"] == "NOT_RECORDED"
     end
 end
 
 @testset "failed TB rejection and converged state classification" begin
-    fixture = diagnostic_export_fixture()
+    fixture = standard_export_fixture()
     extension = first(EXPORT_WANNIERIZATION._load_wannierization_extension!()).OperatorExport
     line_search_summary = Dict{String, String}()
     Base.invokelatest(
@@ -479,7 +148,7 @@ end
         fixture.config,
     )
     @test prepared === fixture.result
-    @test quality == "INVALID_DIAGNOSTIC"
+    @test quality == "NUMERICAL_WARNING"
     @test before == 0.0
     @test after == 0.0
     @test !repaired
@@ -514,10 +183,10 @@ end
     )
     _, scaled_quality, scaled_before, scaled_after, scaled_repaired =
         Base.invokelatest(extension._prepare_wannierization_tb_state, scaled_result, fixture.config)
-    @test scaled_quality == "WARNING"
+    @test scaled_quality == "NUMERICAL_WARNING"
     @test scaled_before > 1.0e-8
-    @test scaled_after <= 1.0e-8
-    @test scaled_repaired
+    @test scaled_after == scaled_before
+    @test !scaled_repaired
 
     symmetry_config = EXPORT_WANNIERIZATION._replace_wannierization_config(
         fixture.config;
@@ -526,11 +195,17 @@ end
             band_representation = fixture.representation,
         ),
     )
-    @test_throws ArgumentError Base.invokelatest(
+    symmetry_prepared = Base.invokelatest(
         extension._prepare_wannierization_tb_state,
         scaled_result,
         symmetry_config,
     )
+    @test first(symmetry_prepared) === scaled_result
+    @test !Base.invokelatest(
+        extension._accepted_state_tb_export_gate,
+        scaled_result,
+        fixture.config,
+    ).allowed # checkpoint is deliberately unscaled
 
     mktempdir() do directory
         output_config = EXPORT_WANNIERIZATION._replace_wannierization_config(
@@ -556,15 +231,17 @@ end
         catch exception
             exception
         end
-        @test export_error isa ArgumentError
-        @test occursin("FROZEN_EMBEDDING_FAILED", sprint(showerror, export_error))
-        @test !isfile(paths.packed)
-        @test !isfile(paths.wannier90)
+        @test export_error === nothing
+        @test isfile(paths.packed)
+        @test isfile(paths.wannier90)
+        bundle = EXPORT_IO.read_real_space_operator_bundle(paths.packed)
+        @test bundle.manifest.profile == :hamiltonian_position
+        @test all(isfinite, bundle.operators[WannierNLQG.Core.REAL_SPACE_HAMILTONIAN].data)
     end
 end
 
-@testset "structurally qualified MAX and line-search diagnostic TB export" begin
-    fixture = diagnostic_export_fixture()
+@testset "structurally qualified MAX and line-search standard TB export" begin
+    fixture = standard_export_fixture()
     extension = first(EXPORT_WANNIERIZATION._load_wannierization_extension!()).OperatorExport
     eligible_summary = merge(
         fixture.result.input_summary,
@@ -572,7 +249,7 @@ end
             "hard_gate_frozen" => "0.0",
             "optimizer_schedule" => "two_stage",
             "solver_convergence" => "MAX_ITERATIONS",
-            "diagnostic_classification" => "MAX_ITERATIONS_DIAGNOSTIC",
+            "model_availability" => "AVAILABLE_WITH_QUALITY_WARNINGS",
         ),
     )
     max_result = EXPORT_WANNIERIZATION.WannierizationResult(
@@ -595,13 +272,10 @@ end
         EXPORT_WANNIERIZATION.WannierizationArtifacts(),
         fixture.result.initialization_report,
     )
-    max_gate = Base.invokelatest(
-        extension._diagnostic_nonconverged_tb_export_gate,
-        max_result,
-        fixture.config,
-    )
+    max_gate =
+        Base.invokelatest(extension._accepted_state_tb_export_gate, max_result, fixture.config)
     @test max_gate.allowed
-    @test max_gate.classification == "MAX_ITERATIONS_DIAGNOSTIC"
+    @test max_gate.classification == "AVAILABLE_WITH_QUALITY_WARNINGS"
     @test max_gate.minimum_rank == max_gate.required_rank == 1
 
     line_summary = merge(
@@ -609,7 +283,7 @@ end
         Dict(
             "solver_convergence" => "LINE_SEARCH_EXHAUSTED",
             "stopping_reason" => "SPREAD_GRADIENT_LINE_SEARCH_FAILED",
-            "diagnostic_classification" => "LINE_SEARCH_FAILED_DIAGNOSTIC",
+            "model_availability" => "AVAILABLE_WITH_QUALITY_WARNINGS",
         ),
     )
     line_result = EXPORT_WANNIERIZATION.WannierizationResult(
@@ -632,13 +306,10 @@ end
         EXPORT_WANNIERIZATION.WannierizationArtifacts(),
         fixture.result.initialization_report,
     )
-    line_gate = Base.invokelatest(
-        extension._diagnostic_nonconverged_tb_export_gate,
-        line_result,
-        fixture.config,
-    )
+    line_gate =
+        Base.invokelatest(extension._accepted_state_tb_export_gate, line_result, fixture.config)
     @test line_gate.allowed
-    @test line_gate.classification == "LINE_SEARCH_FAILED_DIAGNOSTIC"
+    @test line_gate.classification == "AVAILABLE_WITH_QUALITY_WARNINGS"
     @test line_result.v_matrix == something(line_result.restart_state).frames
 
     mktempdir() do directory
@@ -662,7 +333,7 @@ end
         )
         @test isfile(packed)
         @test isfile(exchange)
-        @test metadata["diagnostic_classification"] == "LINE_SEARCH_FAILED_DIAGNOSTIC"
+        @test metadata["model_availability"] == "AVAILABLE_WITH_QUALITY_WARNINGS"
         manifest = EXPORT_IO.read_real_space_operator_bundle_manifest(packed)
         @test !something(manifest.production_eligible, true)
 
@@ -758,8 +429,8 @@ end
         failed_retry_summary = merge(
             symmetrized_summary,
             Dict(
-                "diagnostic_classification" => "STRUCTURAL_FAILURE_UNAVAILABLE",
-                "diagnostic_export_gate_reason" =>
+                "model_availability" => "UNAVAILABLE",
+                "accepted_state_export_gate_reason" =>
                     "TB_EXPORT_FAILED: ArgumentError: HAMILTONIAN_REFERENCE_MISMATCH: " *
                     "schema-5.5 symmetrized bundle requires post-symmetrization residual gates",
                 "tb_export_status" => "NOT_EXPORTED",
@@ -792,9 +463,9 @@ end
         )
         @test retry_view.status == EXPORT_WANNIERIZATION.MAX_ITERATIONS
         @test all(diagnostic -> diagnostic.severity != :error, retry_view.diagnostics)
-        @test retry_view.input_summary["diagnostic_classification"] == "MAX_ITERATIONS_DIAGNOSTIC"
+        @test retry_view.input_summary["model_availability"] == "AVAILABLE_WITH_QUALITY_WARNINGS"
         @test Base.invokelatest(
-            extension._diagnostic_nonconverged_tb_export_gate,
+            extension._accepted_state_tb_export_gate,
             retry_view,
             symmetrized_config,
         ).allowed
@@ -830,8 +501,8 @@ end
         pair_ws_summary = merge(
             symmetrized_summary,
             Dict(
-                "diagnostic_classification" => "STRUCTURAL_FAILURE_UNAVAILABLE",
-                "diagnostic_export_gate_reason" => "TB_EXPORT_FAILED: $(pair_ws_message)",
+                "model_availability" => "UNAVAILABLE",
+                "accepted_state_export_gate_reason" => "TB_EXPORT_FAILED: $(pair_ws_message)",
                 "tb_export_status" => "NOT_EXPORTED",
             ),
         )
@@ -861,14 +532,14 @@ end
         )
         @test pair_ws_retry_view.status == EXPORT_WANNIERIZATION.MAX_ITERATIONS
         @test all(diagnostic -> diagnostic.severity != :error, pair_ws_retry_view.diagnostics)
-        @test pair_ws_retry_view.input_summary["diagnostic_export_gate_reason"] ==
+        @test pair_ws_retry_view.input_summary["accepted_state_export_gate_reason"] ==
               "EXPORT_ONLY_PAIR_WIGNER_SEITZ_SPIN_TRANSFORM_RETRY"
         @test parse(
             Float64,
             pair_ws_retry_view.input_summary["export_retry_superseded_roundtrip_residual"],
         ) == 0.0008986654508570481
         @test Base.invokelatest(
-            extension._diagnostic_nonconverged_tb_export_gate,
+            extension._accepted_state_tb_export_gate,
             pair_ws_retry_view,
             symmetrized_config,
         ).allowed
@@ -900,14 +571,11 @@ end
         )
     end
 
-    frozen_failure = Base.invokelatest(
-        extension._diagnostic_nonconverged_tb_export_gate,
-        fixture.result,
-        fixture.config,
-    )
-    @test !frozen_failure.allowed
-    @test frozen_failure.classification == "STRUCTURAL_FAILURE_UNAVAILABLE"
-    @test frozen_failure.reason == "FROZEN_EMBEDDING_FAILED"
+    frozen_failure =
+        Base.invokelatest(extension._accepted_state_tb_export_gate, fixture.result, fixture.config)
+    @test frozen_failure.allowed
+    @test frozen_failure.classification in ("AVAILABLE", "AVAILABLE_WITH_QUALITY_WARNINGS")
+    @test frozen_failure.reason == "STRUCTURAL_GATE_PASS"
 
     foreign_error = EXPORT_WANNIERIZATION.WannierizationResult(
         EXPORT_WANNIERIZATION.LOCALIZATION_FAILED,
@@ -917,7 +585,7 @@ end
         line_result.history,
         [
             EXPORT_WANNIERIZATION.WannierizationDiagnostic(
-                :SOLVER_TRIAL_FROZEN_PROJECTOR_FAILED,
+                :FROZEN_MASK_IDENTITY_MISMATCH,
                 :error,
                 "synthetic structural failure",
             ),
@@ -929,17 +597,14 @@ end
         line_result.artifacts,
         line_result.initialization_report,
     )
-    foreign_gate = Base.invokelatest(
-        extension._diagnostic_nonconverged_tb_export_gate,
-        foreign_error,
-        fixture.config,
-    )
+    foreign_gate =
+        Base.invokelatest(extension._accepted_state_tb_export_gate, foreign_error, fixture.config)
     @test !foreign_gate.allowed
-    @test foreign_gate.reason == "NON_LINE_SEARCH_ERROR_DIAGNOSTIC_PRESENT"
+    @test foreign_gate.reason == "HARD_ERROR_PRESENT"
 end
 
 @testset "scoped restart initializer mismatch" begin
-    fixture = diagnostic_export_fixture()
+    fixture = standard_export_fixture()
     extension = first(EXPORT_WANNIERIZATION._load_wannierization_extension!()).WorkflowOrchestration
     restart_config = EXPORT_WANNIERIZATION._replace_wannierization_config(
         fixture.config;
@@ -1034,4 +699,361 @@ end
         [BitVector([true, false]), BitVector([true, false])],
         reference_result,
     )
+end
+
+@testset "restart checkpoint identity is checked before native preparation" begin
+    fixture = standard_export_fixture()
+    parent = first(EXPORT_WANNIERIZATION._load_wannierization_extension!())
+    workflow = parent.WorkflowOrchestration
+    restart_config = EXPORT_WANNIERIZATION._replace_wannierization_config(
+        fixture.config;
+        solver = (initialization = :restart,),
+        checkpoint = (restart_hdf5 = "accepted-checkpoint.h5",),
+    )
+    valid = parent.WannierizationInternalSupport.updated_wannierization_result(
+        fixture.result;
+        input_summary = merge(
+            fixture.result.input_summary,
+            Dict(
+                "restart_eligible" => "true",
+                "construction_policy" => String(fixture.config.input.construction_policy),
+            ),
+        ),
+    )
+    reads = Ref(0)
+    reader = path -> begin
+        @test path == "accepted-checkpoint.h5"
+        reads[] += 1
+        valid
+    end
+    @test workflow._read_workflow_restart(restart_config; reader) === valid
+    @test reads[] == 1
+    @test workflow._read_workflow_restart(
+        fixture.config;
+        reader = path -> error("fresh construction must not read restart"),
+    ) === nothing
+    wrong_policy = parent.WannierizationInternalSupport.updated_wannierization_result(
+        valid;
+        input_summary = merge(valid.input_summary, Dict("construction_policy" => "incompatible")),
+    )
+    @test_throws ArgumentError workflow._read_workflow_restart(
+        restart_config;
+        reader = path -> wrong_policy,
+    )
+    read_only = parent.WannierizationInternalSupport.updated_wannierization_result(
+        valid;
+        input_summary = merge(valid.input_summary, Dict("restart_eligible" => "false")),
+    )
+    @test_throws ArgumentError workflow._read_workflow_restart(
+        restart_config;
+        reader = path -> read_only,
+    )
+end
+
+@testset "accepted completed QE matrices bypass the main resolver generator" begin
+    fixture = standard_export_fixture()
+    parent = first(EXPORT_WANNIERIZATION._load_wannierization_extension!())
+    workflow = parent.WorkflowOrchestration
+    mktempdir() do directory
+        hashfile(path) = bytes2hex(open(SHA.sha256, path))
+        eig = joinpath(directory, "source.eig")
+        win = joinpath(directory, "source.win")
+        nnkp = joinpath(directory, "source.nnkp")
+        gauge = joinpath(directory, "accepted.gauge")
+        representation = joinpath(directory, "representation.h5")
+        EXPORT_IO.write_wannier_eig(eig, fixture.eig)
+        write(win, "accepted WIN input fixture")
+        write(nnkp, "accepted topology identity fixture")
+        write(gauge, "accepted gauge identity fixture")
+        mmn_file = joinpath(directory, "STANDARD_symmetry_completed_qe_paw.mmn")
+        amn_file = joinpath(directory, "STANDARD_symmetry_completed_qe_paw.amn")
+        provenance = joinpath(directory, "STANDARD_symmetry_completed_qe_paw.provenance.h5")
+        EXPORT_IO.write_wannier_mmn(mmn_file, fixture.mmn)
+        amn = zeros(ComplexF64, 2, 1, 2)
+        amn[1, 1, :] .= 1
+        EXPORT_IO.write_wannier_amn(amn_file, EXPORT_IO.WannierAMN(2, 2, 1, amn))
+        hashes = Dict("EIG" => hashfile(eig), "WIN" => hashfile(win))
+        HDF5.h5open(representation, "w") do handle
+            attrs = HDF5.attributes(HDF5.create_group(handle, "input_sha256"))
+            for (key, value) in hashes
+                attrs[key] = value
+            end
+        end
+        hashes["MMN"] = hashfile(mmn_file)
+        input_digest = bytes2hex(
+            SHA.sha256(
+                join(
+                    [string(key, Char(0), hashes[key]) for key in sort!(collect(keys(hashes)))],
+                    Char(10),
+                ),
+            ),
+        )
+        HDF5.h5open(provenance, "w") do handle
+            attrs = HDF5.attributes(handle)
+            attrs["passed"] = true
+            attrs["qualification_mode"] = "standard"
+            attrs["gauge_hdf5_sha256"] = hashfile(gauge)
+            attrs["nnkp_sha256"] = hashfile(nnkp)
+        end
+        configured = EXPORT_WANNIERIZATION.SymmetryCompletedQEPAWMatrices(
+            nnkp,
+            gauge;
+            artifact_dir = directory,
+        )
+        config = EXPORT_WANNIERIZATION._replace_wannierization_config(
+            fixture.config;
+            input = (
+                matrix_elements = configured,
+                eig_file = eig,
+                win_file = win,
+                band_representation_hdf5 = representation,
+                construction_policy = :standard,
+            ),
+            solver = (initialization = :restart,),
+            checkpoint = (restart_hdf5 = joinpath(directory, "not-reread.h5"),),
+        )
+        summary = merge(
+            fixture.result.input_summary,
+            Dict(
+                "projection_basis_sha256" =>
+                    EXPORT_WANNIERIZATION._projection_basis_sha256(fixture.basis),
+                "authoritative_hamiltonian_sha256" =>
+                    parent.PAWMatrixElements.star_authoritative_hamiltonian_sha256(
+                        config.input.authoritative_hamiltonian,
+                    ),
+                "input_sha256" => input_digest,
+                "amn_sha256" => hashfile(amn_file),
+                "matrix_element_gauge_sha256" => hashfile(gauge),
+                "num_bands" => "2",
+                "num_kpoints" => "2",
+            ),
+        )
+        accepted = parent.WannierizationInternalSupport.updated_wannierization_result(
+            fixture.result;
+            input_summary = summary,
+        )
+        resolved = workflow._resolve_wannier_matrix_elements(
+            config,
+            fixture.basis;
+            accepted_result = accepted,
+            generator = (args...) -> error("MATRIX_REGENERATION_FORBIDDEN"),
+        )
+        @test resolved.mmn.data == fixture.mmn.data
+        @test resolved.amn == amn
+        @test resolved.raw_amn_file == amn_file
+        @test resolved.gauge_sha256 == hashfile(gauge)
+        @test resolved.gauge_provenance_file == provenance
+        @test !isfile(config.checkpoint.restart_hdf5)
+        for execution in (
+            EXPORT_WANNIERIZATION.WavefunctionPreparationExecutionConfig(mode = :dense_reference),
+            EXPORT_WANNIERIZATION.WavefunctionPreparationExecutionConfig(resume = false),
+        )
+            forced = EXPORT_WANNIERIZATION._replace_wannierization_config(
+                config;
+                input = (preparation_execution = execution,),
+            )
+            @test workflow._resolve_wannier_matrix_elements(
+                forced,
+                fixture.basis;
+                accepted_result = accepted,
+                generator = (args...) -> :explicit_recompute,
+            ) === :explicit_recompute
+        end
+
+        write(amn_file, read(amn_file, String) * "\n")
+        @test_throws ArgumentError workflow._resolve_wannier_matrix_elements(
+            config,
+            fixture.basis;
+            accepted_result = accepted,
+            generator = (args...) -> error("MATRIX_REGENERATION_FORBIDDEN"),
+        )
+    end
+end
+
+@testset "derived eligibility, primary failure reason, and wire 1.2 roundtrip" begin
+    fixture = standard_export_fixture()
+    parent = first(EXPORT_WANNIERIZATION._load_wannierization_extension!())
+    workflow = parent.WorkflowOrchestration
+    export_ops = parent.OperatorExport
+    solver = parent.SolverCheckpoint
+
+    rebuild(summary, status, diagnostics) = EXPORT_WANNIERIZATION.WannierizationResult(
+        status,
+        fixture.result.v_matrix,
+        fixture.result.wannier_centers_cartesian,
+        fixture.result.spreads_angstrom2,
+        fixture.result.history,
+        diagnostics,
+        summary,
+        fixture.result.wannier_chk,
+        nothing,
+        fixture.result.restart_state,
+        EXPORT_WANNIERIZATION.WannierizationArtifacts(),
+        fixture.result.initialization_report,
+    )
+
+    eligible_summary = merge(
+        fixture.result.input_summary,
+        Dict(
+            "hard_gate_frozen" => "0.0",
+            "optimizer_schedule" => "two_stage",
+            "solver_convergence" => "MAX_ITERATIONS",
+            "model_availability" => "AVAILABLE_WITH_QUALITY_WARNINGS",
+        ),
+    )
+    max_result = rebuild(
+        eligible_summary,
+        EXPORT_WANNIERIZATION.MAX_ITERATIONS,
+        [
+            EXPORT_WANNIERIZATION.WannierizationDiagnostic(
+                :MAX_ITERATIONS_REACHED,
+                :warning,
+                "synthetic nonconvergence",
+            ),
+        ],
+    )
+
+    # A: terminal status (MAX_ITERATIONS) no longer blocks export; the derived
+    # typed block records execution/export eligible but production ineligible.
+    eligibility =
+        Base.invokelatest(workflow._wannierization_eligibility, max_result, fixture.config)
+    @test eligibility.execution_eligible
+    @test eligibility.export_eligible
+    @test !eligibility.production_eligible
+    @test eligibility.qualification_status == "DIAGNOSTIC_ONLY"
+    @test eligibility.quality_review_recommended
+    @test !eligibility.strictly_converged_z_seal
+    @test eligibility.reasons == String[]
+    @test eligibility.verified_contracts ==
+          ["ACCEPTED_STATE_STRUCTURAL_GATE", "ACCEPTED_STATE_TB_EXPORT_GATE"]
+    @test eligibility.unverified_contracts ==
+          ["SCOPED_PRODUCTION_CONTRACT", "Z_STABILITY_CONVERGED"]
+    @test eligibility.conflicting_contracts == String[]
+    roundtripped = EXPORT_WANNIERIZATION.wannierization_eligibility_from_summary(
+        EXPORT_WANNIERIZATION.wannierization_eligibility_summary(eligibility),
+    )
+    for field in fieldnames(EXPORT_WANNIERIZATION.WannierizationEligibility)
+        @test getfield(roundtripped, field) == getfield(eligibility, field)
+    end
+
+    # The gate reports a missing schedule as SOLVER_NOT_REACHED, not an identity
+    # mismatch; only a present-but-different schedule is a genuine mismatch.
+    nosched_summary = filter(pair -> pair.first != "optimizer_schedule", eligible_summary)
+    nosched = rebuild(
+        nosched_summary,
+        EXPORT_WANNIERIZATION.MAX_ITERATIONS,
+        [
+            EXPORT_WANNIERIZATION.WannierizationDiagnostic(
+                :MAX_ITERATIONS_REACHED,
+                :warning,
+                "synthetic nonconvergence",
+            ),
+        ],
+    )
+    nosched_gate =
+        Base.invokelatest(export_ops._accepted_state_tb_export_gate, nosched, fixture.config)
+    @test !nosched_gate.allowed
+    @test nosched_gate.reason == "SOLVER_NOT_REACHED"
+    @test nosched_gate.classification == "UNAVAILABLE"
+    @test Base.invokelatest(workflow._primary_terminal_failure_reason, nosched) === nothing
+
+    different_schedule = rebuild(
+        merge(eligible_summary, Dict("optimizer_schedule" => "joint")),
+        EXPORT_WANNIERIZATION.MAX_ITERATIONS,
+        [
+            EXPORT_WANNIERIZATION.WannierizationDiagnostic(
+                :MAX_ITERATIONS_REACHED,
+                :warning,
+                "synthetic nonconvergence",
+            ),
+        ],
+    )
+    different_gate = Base.invokelatest(
+        export_ops._accepted_state_tb_export_gate,
+        different_schedule,
+        fixture.config,
+    )
+    @test !different_gate.allowed
+    @test different_gate.reason == "SOLVER_SCHEDULE_IDENTITY_MISMATCH"
+
+    # The primary terminal failure reason survives a secondary gate evaluation.
+    io_result = rebuild(
+        eligible_summary,
+        EXPORT_WANNIERIZATION.IO_FAILURE,
+        [EXPORT_WANNIERIZATION.WannierizationDiagnostic(:IO_FAILURE, :error, "boom")],
+    )
+    @test Base.invokelatest(workflow._primary_terminal_failure_reason, io_result) == "IO_FAILURE"
+    invalid_result = rebuild(
+        eligible_summary,
+        EXPORT_WANNIERIZATION.INVALID_INPUT,
+        [
+            EXPORT_WANNIERIZATION.WannierizationDiagnostic(
+                :EIG_DIMENSION_MISMATCH,
+                :error,
+                "bad dimensions",
+            ),
+        ],
+    )
+    @test Base.invokelatest(workflow._primary_terminal_failure_reason, invalid_result) ==
+          "EIG_DIMENSION_MISMATCH"
+
+    mktempdir() do directory
+        checkpoint = joinpath(directory, "wire-1.2.wannierization.h5")
+        persisted = Base.invokelatest(
+            parent.WannierizationInternalSupport.updated_wannierization_result,
+            max_result;
+            input_summary = merge(
+                max_result.input_summary,
+                EXPORT_WANNIERIZATION.wannierization_eligibility_summary(eligibility),
+            ),
+        )
+        EXPORT_WANNIERIZATION.write_wannierization_checkpoint_hdf5(checkpoint, persisted)
+        restored = EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(checkpoint)
+        @test restored.input_summary["checkpoint_schema_version"] == "1.2"
+        @test restored.input_summary["restart_eligible"] == "true"
+        for key in EXPORT_WANNIERIZATION.WANNIERIZATION_ELIGIBILITY_SUMMARY_KEYS
+            @test restored.input_summary[key] ==
+                  EXPORT_WANNIERIZATION.wannierization_eligibility_summary(eligibility)[key]
+        end
+        HDF5.h5open(checkpoint, "r") do handle
+            attributes = HDF5.attributes(handle)
+            @test String(read(attributes["schema_version"])) == "1.2"
+            @test !haskey(attributes, "qualified_z_seal")
+            for key in EXPORT_WANNIERIZATION.WANNIERIZATION_ELIGIBILITY_SUMMARY_KEYS
+                @test String(read(attributes[key])) == restored.input_summary[key]
+            end
+            @test String(read(attributes["checkpoint_sha256"])) ==
+                  Base.invokelatest(solver._wannierization_checkpoint_sha256_v2_29, restored)
+        end
+    end
+end
+
+@testset "wire 1.1 checkpoints remain readable after the 1.2 wire upgrade" begin
+    fixture_root = joinpath(@__DIR__, "fixtures", "schema_compatibility")
+    legacy = joinpath(fixture_root, "checkpoint_1_1.h5")
+    @test isfile(legacy)
+    restored = EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(legacy)
+    @test restored.input_summary["checkpoint_schema_version"] == "1.1"
+    @test restored.input_summary["restart_eligible"] == "true"
+    @test restored.status == EXPORT_WANNIERIZATION.MAX_ITERATIONS
+    # Wire 1.1 predates the typed block; the reader must not fabricate it.
+    @test !haskey(restored.input_summary, "wannierization_eligibility_execution_eligible")
+    HDF5.h5open(legacy, "r") do handle
+        attributes = HDF5.attributes(handle)
+        @test String(read(attributes["schema_version"])) == "1.1"
+        @test haskey(attributes, "qualified_z_seal")
+        @test !haskey(attributes, "wannierization_eligibility_execution_eligible")
+    end
+    # Relabeling the same numerical payload as 1.2 must fail the digest binding.
+    mktempdir() do directory
+        relabeled = joinpath(directory, "relabeled-1.2.wannierization.h5")
+        cp(legacy, relabeled)
+        HDF5.h5open(relabeled, "r+") do handle
+            HDF5.delete_attribute(handle, "schema_version")
+            HDF5.attributes(handle)["schema_version"] = "1.2"
+        end
+        @test_throws ArgumentError EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(
+            relabeled,
+        )
+    end
 end

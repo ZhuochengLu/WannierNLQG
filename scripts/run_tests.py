@@ -71,7 +71,7 @@ def julia_command(julia: str, task: Task) -> list[str]:
     return [julia, "--startup-file=no", "--threads=1", f"--project={ROOT}", "-e", expression]
 
 
-def task_environment(task: Task, directory: Path, readiness_jobs: int = 1) -> dict[str, str]:
+def task_environment(task: Task, directory: Path, temporary_directory: Path, readiness_jobs: int = 1) -> dict[str, str]:
     """Keep child temp/output paths private and numerical workers bounded."""
     env = dict(os.environ)
     for key in (
@@ -88,7 +88,7 @@ def task_environment(task: Task, directory: Path, readiness_jobs: int = 1) -> di
             "WANNIERNLQG_TEST_TASK_ID": task.name,
             "WANNIERNLQG_READINESS_JOBS": str(readiness_jobs if task.mode == "fast" else 1),
             "WANNIERNLQG_TEST_OUTPUT_ROOT": str(directory / "output"),
-            "TMPDIR": str(directory / "tmp"),
+            "TMPDIR": str(temporary_directory),
             "JULIA_NUM_THREADS": "1",
             "JULIA_NUM_PRECOMPILE_TASKS": "1",
             "OMP_NUM_THREADS": "1",
@@ -189,15 +189,21 @@ def _run_suite(tasks: list[Task], julia: str, output: Path, jobs: int, cpu_budge
                     break
                 pending.pop(eligible)
                 directory = output / task.name
-                (directory / "tmp").mkdir(parents=True)
+                directory.mkdir(parents=True)
                 (directory / "output").mkdir()
+                # Julia's artifact downloader treats an unescaped TMPDIR as a
+                # file URL in some child MPI initializations.  The requested
+                # evidence directory may legitimately contain spaces, so keep
+                # ephemeral child paths in the system temporary root instead.
+                temporary_directory = Path(tempfile.mkdtemp(prefix=f"wanniernlqg-{task.name}-"))
                 log_path = directory / "test.log"
                 handle = log_path.open("wb")
                 command = julia_command(julia, task)
                 launch_started = time.monotonic()
                 try:
                     process = subprocess.Popen(
-                        command, cwd=ROOT, env=task_environment(task, directory, 1 if jobs == 1 else 2),
+                        command, cwd=ROOT,
+                        env=task_environment(task, directory, temporary_directory, 1 if jobs == 1 else 2),
                         stdout=handle, stderr=subprocess.STDOUT, start_new_session=True,
                     )
                 except OSError as error:

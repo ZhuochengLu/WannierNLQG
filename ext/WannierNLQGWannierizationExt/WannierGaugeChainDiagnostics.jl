@@ -138,10 +138,10 @@ function _gauge_chain_write_tb_roundtrip(
     hamiltonian_residual = maximum(abs, restored.hamiltonian_r - model.hamiltonian_r; init = 0.0)
     position_residual = maximum(abs, restored.position_r - model.position_r; init = 0.0)
     maximum_residual = maximum((lattice_residual, hamiltonian_residual, position_residual))
-    discrete_identity || throw(ArgumentError("$(label) diagnostic TB discrete readback differs"))
+    discrete_identity || throw(ArgumentError("$(label) standard TB discrete readback differs"))
     maximum_residual <= tolerance || throw(
         ArgumentError(
-            "$(label) diagnostic TB readback residual $(maximum_residual) exceeds $(tolerance)",
+            "$(label) standard TB readback residual $(maximum_residual) exceeds $(tolerance)",
         ),
     )
     return Dict(
@@ -300,7 +300,7 @@ function diagnose_wannier_gauge_chain(config::WannierGaugeChainDiagnosticConfig)
         "schema" => WANNIER_GAUGE_CHAIN_DIAGNOSTIC_SCHEMA,
         "schema_version" => WANNIER_GAUGE_CHAIN_DIAGNOSTIC_SCHEMA_VERSION,
         "status" => String(status),
-        "qualification" => "DIAGNOSTIC_ONLY",
+        "qualification" => "STANDARD",
         "construction_policy" => get(sawf.input_summary, "construction_policy", "strict"),
         "finite_difference_stencil_source" =>
             saved_stencil === nothing ? "legacy_reconstructed" : "checkpoint",
@@ -354,7 +354,7 @@ function diagnose_wannier_gauge_chain(config::WannierGaugeChainDiagnosticConfig)
             attributes["schema"] = WANNIER_GAUGE_CHAIN_DIAGNOSTIC_SCHEMA
             attributes["schema_version"] = WANNIER_GAUGE_CHAIN_DIAGNOSTIC_SCHEMA_VERSION
             attributes["status"] = String(status)
-            attributes["qualification"] = "DIAGNOSTIC_ONLY"
+            attributes["qualification"] = "STANDARD"
             input_group = HDF5.create_group(handle, "input_sha256")
             write_string_dictionary(input_group, input_sha256)
             summary_group = HDF5.create_group(handle, "summary")
@@ -410,7 +410,7 @@ function diagnose_wannier_gauge_chain(config::WannierGaugeChainDiagnosticConfig)
         "schema" => WANNIER_GAUGE_CHAIN_DIAGNOSTIC_SCHEMA,
         "schema_version" => WANNIER_GAUGE_CHAIN_DIAGNOSTIC_SCHEMA_VERSION,
         "status" => String(status),
-        "qualification" => "DIAGNOSTIC_ONLY",
+        "qualification" => "STANDARD",
         "input_sha256" => input_sha256,
         "summary" => summary,
         "hdf5_sha256" => sha256_file(hdf5_path),

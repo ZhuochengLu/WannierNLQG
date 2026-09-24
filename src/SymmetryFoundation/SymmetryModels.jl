@@ -169,8 +169,8 @@ struct WannierSymmetryPlan
         construction_policy::Symbol = :strict,
         diagnostics = nothing,
     )
-        construction_policy in (:strict, :diagnostic) ||
-            throw(ArgumentError("construction_policy must be :strict or :diagnostic"))
+        construction_policy in (:strict, :standard) ||
+            throw(ArgumentError("construction_policy must be :strict or :standard"))
         operation_values = SymmetryOperation[operations...]
         representation_matrix_values = Array{ComplexF64, 3}(representation_matrices)
         wannier_shift_values = Array{Int, 3}(wannier_shifts)
@@ -212,7 +212,7 @@ struct WannierSymmetryPlan
             residual =
                 norm(representation_matrix' * representation_matrix - identity_representation)
             threshold = 10tolerance_value
-            construction_policy == :diagnostic ||
+            construction_policy == :standard ||
                 residual <= threshold ||
                 throw(ArgumentError("Wannier representation $(operation_index) is not unitary"))
             diagnostics === nothing || push!(
@@ -224,7 +224,7 @@ struct WannierSymmetryPlan
                     value = residual,
                     threshold = threshold,
                     result = residual <= threshold ? "PASS" : "FAIL",
-                    action = residual <= threshold ? "CONTINUE" : "CONTINUE_DIAGNOSTIC",
+                    action = residual <= threshold ? "CONTINUE" : "CONTINUE_STANDARD",
                 ),
             )
         end

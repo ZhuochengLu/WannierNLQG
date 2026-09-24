@@ -99,7 +99,7 @@ end
             nothing,
             1,
             3;
-            construction_policy = :diagnostic,
+            construction_policy = :standard,
         )
         target = UIU_WANNIERIZATION.WannierOperatorTargetContract(
             oracle,
@@ -285,7 +285,7 @@ end
         @test symlink_collision isa ArgumentError
         @test occursin("GENERATOR_PROTECTED_INPUT_COLLISION", sprint(showerror, symlink_collision))
         @test !ispath(joinpath(fixture.save_directory, basename(symlink_output)))
-        @test config.construction_policy == :diagnostic
+        @test config.construction_policy == :standard
         @test_throws ArgumentError UIU_WANNIERIZATION.generate_wannier_uiu(
             UIU_WANNIERIZATION.WannierUIUGenerationConfig(
                 construction_policy = :invalid,
@@ -331,6 +331,24 @@ end
         result = UIU_WANNIERIZATION.generate_wannier_uiu(config)
         @test result.passed
         @test result.source_code == :qe
+        execution = UIU_WANNIERIZATION.WavefunctionPreparationExecutionConfig(
+            checkpoint_directory = joinpath(directory, "qe-explicit-preparation"),
+        )
+        explicit_config = UIU_WANNIERIZATION.WannierUIUGenerationConfig(
+            source = source,
+            topology_file = fixture.nnkp_file,
+            output_file = joinpath(directory, "explicit.uIu"),
+            oracle_mmn_file = oracle,
+            max_cached_wavefunction_kpoints = 2,
+            execution = execution,
+            overwrite = true,
+        )
+        explicit_result = UIU_WANNIERIZATION.generate_wannier_uiu(explicit_config)
+        @test explicit_result.passed
+        @test explicit_result.artifacts["uiu_sha256"] == result.artifacts["uiu_sha256"]
+        @test isdir(joinpath(execution.checkpoint_directory, "shared-qe-native"))
+        resumed_explicit = UIU_WANNIERIZATION.generate_wannier_uiu(explicit_config)
+        @test resumed_explicit.artifacts["uiu_sha256"] == result.artifacts["uiu_sha256"]
         @test result.generalized_norm_max_absolute <= 1.0e-12
         @test result.mmn_parity.max_absolute <= 1.0e-12
         @test result.diagonal_identity_max_absolute <= 1.0e-12
@@ -338,10 +356,10 @@ end
         @test isfile(output)
         @test isfile(provenance)
         sidecar = JSON3.read(read(provenance, String))
-        @test sidecar.schema_version == "1.0"
-        @test sidecar.construction_policy == "diagnostic"
-        @test sidecar.model_qualification == "DIAGNOSTIC_ONLY"
-        @test sidecar.manual_review_required
+        @test sidecar.schema_version == "1.1"
+        @test sidecar.construction_policy == "standard"
+        @test sidecar.model_qualification == "STANDARD"
+        @test sidecar.quality_review_recommended
         @test !sidecar.production_eligible
         @test sidecar.source_band_gauge == "native_dft_eigenstate"
         @test sidecar.target_band_gauge == "native_dft_eigenstate"
@@ -352,9 +370,10 @@ end
         @test sidecar.relative_reciprocal_shift == "G2-G1"
         @test sidecar.output_sha256 == result.artifacts["uiu_sha256"]
         @test sidecar.wavefunction_cache.max_cached_wavefunction_kpoints == 2
-        @test sidecar.wavefunction_cache.peak_cached_kpoints == 2
-        @test sidecar.wavefunction_cache.evictions > 0
-        @test sidecar.wavefunction_cache.reloads > 0
+        # Earlier stages have sealed all native overlap blocks for this input.
+        @test sidecar.wavefunction_cache.peak_cached_kpoints == 0
+        @test sidecar.wavefunction_cache.evictions == 0
+        @test sidecar.wavefunction_cache.reloads == 0
         blocks = Matrix{ComplexF64}[]
         WannierNLQG.IO.foreach_wannier_uiu_block(output) do block, _, _, _, _
             push!(blocks, block)
@@ -453,7 +472,72 @@ end
         @test result_eight.passed
         @test read(output_eight) == read(output)
         @test sidecar.wavefunction_cache.block_evaluation_order == "directed_euler_cache_aware"
-        @test_throws ArgumentError UIU_WANNIERIZATION.generate_wannier_uiu(config)
+        before_reuse = stat(output)
+        restored = UIU_WANNIERIZATION.generate_wannier_uiu(config)
+        after_reuse = stat(output)
+        # ctime can change from filesystem metadata; content digests below, inode,
+        # mtime and size establish the publication invariants.
+        @test (before_reuse.inode, before_reuse.mtime, before_reuse.size) ==
+              (after_reuse.inode, after_reuse.mtime, after_reuse.size)
+        @test restored.artifacts["uiu_sha256"] == result.artifacts["uiu_sha256"]
+        completed_code = """
+        using WannierNLQG,HDF5,JSON3,EzXML,Spglib,LinearAlgebra
+        W=WannierNLQG.Wannierization
+        E=first(W._load_wannierization_extension!()).PAWMatrixElements
+        @eval E _uiu_source_state(source::QuantumEspressoWavefunctionSource, topology, cache_size) = error("COMPLETED_QE_UIU_PREPARATION_FORBIDDEN")
+        source=WannierNLQG.SymmetryFoundation.QuantumEspressoWavefunctionSource(ARGS[1];include_time_reversal=false)
+        result=W.generate_wannier_uiu(W.WannierUIUGenerationConfig(source=source,
+            topology_file=ARGS[2],output_file=ARGS[3],oracle_mmn_file=ARGS[4],max_cached_wavefunction_kpoints=2))
+        @assert result.passed
+        println("FRESH_QE_UIU_COMPLETE_REUSE_PASS")
+        """
+        completed_child =
+            `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(Base.active_project())) --threads=$(Threads.nthreads()) -e $completed_code $(fixture.save_directory) $(fixture.nnkp_file) $output $oracle`
+        @test occursin("FRESH_QE_UIU_COMPLETE_REUSE_PASS", read(completed_child, String))
+        original = read(output)
+        try
+            write(output, vcat(original, UInt8[0]))
+            @test_throws ArgumentError UIU_WANNIERIZATION.generate_wannier_uiu(config)
+        finally
+            write(output, original)
+        end
+        # Recreate the exact crash state after final data rename but before
+        # provenance commit; the child forbids any center recomputation.
+        recovery_state = paw_extension._uiu_qe_state(source, fixture.nnkp_file, 2)
+        recovery_paths = paw_extension._uiu_partial_paths(config)
+        completed, checksums, _, _ =
+            paw_extension._uiu_scan_partial(output, recovery_state.topology)
+        paw_extension._uiu_atomic_json(
+            recovery_paths.checkpoint,
+            paw_extension._uiu_checkpoint_payload(
+                String(sidecar.input_fingerprint_sha256),
+                recovery_state.topology,
+                completed,
+                checksums,
+                paw_extension._uiu_execution_contract(recovery_state),
+            ),
+        )
+        original_digest = uiu_test_file_sha256(output)
+        mv(provenance, provenance * ".before-interruption")
+        recovery_code = """
+        using WannierNLQG,HDF5,JSON3,EzXML,Spglib,LinearAlgebra
+        BLAS.set_num_threads(1)
+        W=WannierNLQG.Wannierization
+        E=first(W._load_wannierization_extension!()).PAWMatrixElements
+        @eval E _uiu_compute_center_blocks(state, center::Int, gauge_contract=nothing) = error("CENTER_RECOMPUTATION_FORBIDDEN")
+        source=WannierNLQG.SymmetryFoundation.QuantumEspressoWavefunctionSource(ARGS[1];include_time_reversal=false)
+        result=W.generate_wannier_uiu(W.WannierUIUGenerationConfig(source=source,
+            topology_file=ARGS[2],output_file=ARGS[3],oracle_mmn_file=ARGS[4],max_cached_wavefunction_kpoints=2))
+        @assert result.passed
+        @assert JSON3.read(read(ARGS[3]*".provenance.json",String)).resumed_from_kpoint == 3
+        println("FRESH_UIU_PUBLICATION_RECOVERY_PASS")
+        """
+        child =
+            `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(Base.active_project())) --threads=$(Threads.nthreads()) -e $recovery_code $(fixture.save_directory) $(fixture.nnkp_file) $output $oracle`
+        @test occursin("FRESH_UIU_PUBLICATION_RECOVERY_PASS", read(child, String))
+        @test uiu_test_file_sha256(output) == original_digest
+        @test !isfile(recovery_paths.checkpoint)
+        @test !isfile(recovery_paths.partial)
         @test_throws ArgumentError UIU_WANNIERIZATION.generate_wannier_uiu(
             UIU_WANNIERIZATION.WannierUIUGenerationConfig(
                 source = source,
@@ -680,22 +764,21 @@ end
             ),
         )
         output_bundle = joinpath(directory, "synthetic-exact-bundle.h5")
-        result = UIU_WANNIERIZATION.prepare_exact_wannier_operator_bundle(
-            UIU_WANNIERIZATION.ExactWannierOperatorBundleConfig(
-                tb_file = tb_file,
-                chk_file = chk_file,
-                eig_file = eig_file,
-                mmn_file = mmn_file,
-                uiu_file = uiu_file,
-                uiu_provenance_json = provenance_file,
-                output_bundle_file = output_bundle,
-            ),
+        config = UIU_WANNIERIZATION.ExactWannierOperatorBundleConfig(
+            tb_file = tb_file,
+            chk_file = chk_file,
+            eig_file = eig_file,
+            mmn_file = mmn_file,
+            uiu_file = uiu_file,
+            uiu_provenance_json = provenance_file,
+            output_bundle_file = output_bundle,
         )
+        result = UIU_WANNIERIZATION.prepare_exact_wannier_operator_bundle(config)
         @test result.passed
         @test result.operator_bundle_file == output_bundle
         @test result.operator_bundle_sha256 == uiu_test_file_sha256(output_bundle)
         bundle = WannierNLQG.IO.read_real_space_operator_bundle(output_bundle)
-        @test bundle.manifest.schema_version == "1.0"
+        @test bundle.manifest.schema_version == "1.1"
         @test bundle.manifest.band_frame_contract_status == "NOT_APPLICABLE"
         @test bundle.manifest.profile == :derivative
         @test bundle.manifest.derivative_overlap_completeness == "full_hilbert_space"
@@ -709,5 +792,499 @@ end
             WannierNLQG.Core.REAL_SPACE_SYMMETRIC_DERIVATIVE_OVERLAP,
         ),)
         @test !(:uiu_file in fieldnames(WannierNLQG.Symmetrization.SymmetrizationConfig))
+        exporter = Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).OperatorExport
+        values = NamedTuple{fieldnames(typeof(config))}(
+            Tuple(getfield(config, name) for name in fieldnames(typeof(config))),
+        )
+        baseline_config = UIU_WANNIERIZATION.ExactWannierOperatorBundleConfig(;
+            merge(values, (output_bundle_file = joinpath(directory, "unscoped-reference.h5"),))...,
+        )
+        baseline = exporter._prepare_exact_wannier_operator_bundle(
+            baseline_config,
+            exporter._exact_bundle_paths(baseline_config),
+        )
+        baseline_bundle =
+            WannierNLQG.IO.read_real_space_operator_bundle(baseline.operator_bundle_file)
+        @test result.input_sha256 == baseline.input_sha256
+        @test result.scientific_content_sha256 == baseline.scientific_content_sha256
+        @test all(
+            bundle.operators[kind].data == baseline_bundle.operators[kind].data for
+            kind in keys(bundle.operators)
+        )
+    end
+end
+
+@testset "VASP native overlap cache survives a fresh process without coefficient reads" begin
+    isdefined(@__MODULE__, :write_bounded_vasp_fixture) ||
+        include(joinpath(@__DIR__, "VASPNativeTestSupport.jl"))
+    for use_incar in (true, false)
+        mktempdir() do directory
+            poscar, wavecar, _ = write_bounded_vasp_fixture(directory, 2, ComplexF64)
+            potcar = joinpath(directory, "POTCAR")
+            # Zero augmentation and identical radial waves define an exactly orthonormal
+            # PAW fixture; numerical-quality gates remain at their production thresholds.
+            write(
+                potcar,
+                replace(
+                    synthetic_potcar_block("X"; q0 = 0.0),
+                    "0.12 0.22 0.32" => "0.10 0.20 0.30",
+                ),
+            )
+            open(wavecar, "r+") do stream
+                for kpoint in 1:2, band in 1:2
+                    coefficients = zeros(ComplexF64, 2kpoint)
+                    coefficients[1 + (band - 1) * kpoint] = 1
+                    seek(stream, 512*(2 + (kpoint - 1)*3 + band))
+                    write(stream, coefficients)
+                end
+            end
+            incar = joinpath(directory, "INCAR")
+            use_incar && write(incar, "LNONCOLLINEAR = .TRUE.\nSAXIS = 0 0 1\n")
+            source = WannierNLQG.SymmetryFoundation.VASPWavefunctionSource(
+                poscar,
+                wavecar;
+                potcar_file = potcar,
+                incar_file = use_incar ? incar : nothing,
+                band_range = 1:2,
+                spinor = true,
+                spin_basis_saxis = (0.0, 0.0, 1.0),
+                include_time_reversal = false,
+            )
+            topology = joinpath(directory, "topology.mmn")
+            WannierNLQG.IO.write_wannier_mmn(
+                topology,
+                WannierNLQG.IO.WannierMMN(
+                    2,
+                    2,
+                    1,
+                    zeros(ComplexF64, 2, 2, 1, 2),
+                    reshape([1, 2], 1, 2),
+                    zeros(Int, 3, 1, 2),
+                ),
+            )
+            extension = UIU_PAW_EXTENSION
+            evaluate = () -> begin
+                state = extension._uiu_vasp_state(source, topology)
+                [state.overlap(k, k, (0, 0, 0), zeros(3)) for k in 1:2]
+            end
+            dense = evaluate()
+            cold = extension._with_vasp_operator_artifacts(
+                evaluate,
+                source,
+                directory;
+                additional_inputs = [topology],
+            )
+            @test all(maximum(abs.(a .- b)) == 0.0 for (a, b) in zip(dense, cold))
+            oracle = joinpath(directory, "oracle.mmn")
+            data = zeros(ComplexF64, 2, 2, 1, 2)
+            for k in 1:2
+                data[:, :, 1, k] = cold[k]
+            end
+            WannierNLQG.IO.write_wannier_mmn(
+                oracle,
+                WannierNLQG.IO.WannierMMN(
+                    2,
+                    2,
+                    1,
+                    data,
+                    reshape([1, 2], 1, 2),
+                    zeros(Int, 3, 1, 2),
+                ),
+            )
+            output = joinpath(directory, "native.uIu")
+            config = UIU_WANNIERIZATION.WannierUIUGenerationConfig(
+                source = source,
+                topology_file = oracle,
+                output_file = output,
+                oracle_mmn_file = oracle,
+                max_cached_wavefunction_kpoints = 2,
+                overwrite = true,
+            )
+            legacy_args = ntuple(i -> getfield(config, i), 16)
+            legacy = UIU_WANNIERIZATION.WannierUIUGenerationConfig(legacy_args...)
+            @test legacy.execution === nothing
+            @test all(getfield(legacy, i) == getfield(config, i) for i in 1:16)
+            result = UIU_WANNIERIZATION.generate_wannier_uiu(config)
+            @test isfile(output)
+            digest = uiu_test_file_sha256(output)
+            execution = UIU_WANNIERIZATION.WavefunctionPreparationExecutionConfig(
+                checkpoint_directory = joinpath(directory, "explicit-preparation"),
+            )
+            explicit = UIU_WANNIERIZATION.WannierUIUGenerationConfig(legacy_args..., execution)
+            UIU_WANNIERIZATION.generate_wannier_uiu(explicit)
+            @test isdir(joinpath(execution.checkpoint_directory, "shared-native"))
+            @test uiu_test_file_sha256(output) == digest
+            eig = joinpath(directory, "native.eig")
+            WannierNLQG.IO.write_wannier_eig(
+                eig,
+                WannierNLQG.IO.WannierEIG(2, 2, [-1.0 -1.0; 1.0 1.0]),
+            )
+            spin = joinpath(directory, "native.spn")
+            spin_provenance = spin * ".h5"
+            UIU_WANNIERIZATION.generate_vasp_paw_spn(
+                source;
+                output_spn_file = spin,
+                provenance_hdf5 = spin_provenance,
+                spin_channel = 1,
+            )
+            validations = Ref(0)
+            validate =
+                () -> extension._read_and_validate_spn_provenance(
+                    spin_provenance,
+                    spin;
+                    expected_num_bands = 2,
+                    expected_num_kpoints = 2,
+                    target_authority = UIU_WANNIERIZATION.NativeDFTHamiltonian(),
+                    reader = (args...; kwargs...) -> begin
+                        validations[] += 1
+                        extension._read_and_validate_spn_provenance_uncached(args...; kwargs...)
+                    end,
+                )
+            extension._with_vasp_operator_artifacts(
+                source,
+                directory;
+                additional_inputs = String[],
+            ) do
+                first = validate()
+                expected = first.spn_sha256
+                first.artifacts["spn_sha256"] = "caller-mutated-copy"
+                second = extension._with_spn_provenance_reuse(validate)
+                @test second.artifacts["spn_sha256"] == expected
+                @test validations[] == 1
+                chmod(spin, 0o400)
+                chmod(spin_provenance, 0o400)
+                refreshed = validate()
+                @test refreshed.spn_sha256 == expected
+                @test refreshed.artifacts["spn_sha256"] == expected
+                @test validations[] == 1
+                chmod(spin, 0o600)
+                chmod(spin_provenance, 0o600)
+                @test_throws ArgumentError extension._read_and_validate_spn_provenance(
+                    spin_provenance,
+                    spin;
+                    expected_num_bands = 3,
+                    expected_num_kpoints = 2,
+                    target_authority = UIU_WANNIERIZATION.NativeDFTHamiltonian(),
+                )
+                validate()
+                original = read(spin_provenance)
+                try
+                    write(spin_provenance, vcat(original, UInt8[0]))
+                    @test_throws ArgumentError validate()
+                finally
+                    write(spin_provenance, original)
+                end
+            end
+            count_after_scope = validations[]
+            validate()
+            @test validations[] == count_after_scope + 1
+            @test !haskey(task_local_storage(), :wannier_spn_provenance_reuse) ||
+                  task_local_storage(:wannier_spn_provenance_reuse) === nothing
+            operator_digests = String[]
+            for operator in (:uhu, :siu, :shu)
+                operator_output = joinpath(directory, "native.$operator")
+                operator_config = UIU_WANNIERIZATION.WannierHamiltonianOperatorGenerationConfig(
+                    source = source,
+                    topology_file = oracle,
+                    eig_file = eig,
+                    output_file = operator_output,
+                    spn_file = spin,
+                    spn_provenance_file = spin_provenance,
+                    overwrite = true,
+                    max_cached_wavefunction_kpoints = 2,
+                )
+                generated = getproperty(UIU_WANNIERIZATION, Symbol("generate_wannier_$operator"))(
+                    operator_config,
+                )
+                @test generated.artifact_published
+                push!(operator_digests, uiu_test_file_sha256(operator_output))
+                before = stat(operator_output)
+                resumed_operator =
+                    getproperty(UIU_WANNIERIZATION, Symbol("generate_wannier_$operator"))(
+                        operator_config,
+                    )
+                after = stat(operator_output)
+                @test (before.inode, before.mtime, before.size) ==
+                      (after.inode, after.mtime, after.size)
+                @test resumed_operator.input_sha256 == generated.input_sha256
+                if operator == :uhu
+                    original = read(operator_output)
+                    try
+                        write(operator_output, vcat(original, UInt8[0]))
+                        @test_throws ArgumentError UIU_WANNIERIZATION.generate_wannier_uhu(
+                            operator_config,
+                        )
+                    finally
+                        write(operator_output, original)
+                    end
+                end
+            end
+            script = joinpath(directory, "resume-uiu.jl")
+            write(
+                script,
+                """
+    using WannierNLQG, SHA
+    W = WannierNLQG.Wannierization
+    W._load_wannierization_extension!()
+    @eval WannierNLQG.SymmetryFoundation function _read_vasp_coefficient_record(path, header, bands, record, spin_transform; normalize_coefficients::Bool)
+        error("VASP_UIU_RESTORE_COEFFICIENT_READ_FORBIDDEN")
+    end
+    paw = Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).PAWMatrixElements
+    @eval paw _uiu_source_state(source::VASPWavefunctionSource, topology, cache_size) = error("COMPLETED_VASP_UIU_PREPARATION_FORBIDDEN")
+    source = WannierNLQG.SymmetryFoundation.VASPWavefunctionSource(ARGS[1], ARGS[2];
+        potcar_file=ARGS[3], incar_file=isfile(joinpath(dirname(ARGS[3]),"INCAR")) ? joinpath(dirname(ARGS[3]),"INCAR") : nothing, band_range=1:2, spinor=true,
+        spin_basis_saxis=(0.0,0.0,1.0), include_time_reversal=false)
+    config = W.WannierUIUGenerationConfig(source=source, topology_file=ARGS[4],
+        output_file=ARGS[5], oracle_mmn_file=ARGS[6], max_cached_wavefunction_kpoints=2, overwrite=false,
+        execution=W.WavefunctionPreparationExecutionConfig(checkpoint_directory=joinpath(dirname(ARGS[5]),"explicit-preparation")))
+    W.generate_wannier_uiu(config)
+    @assert bytes2hex(open(SHA.sha256, ARGS[5])) == ARGS[7]
+    println("VASP_PUBLIC_UIU_FRESH_REUSE_PASS ", ARGS[7])
+    root = dirname(ARGS[5])
+    spin = joinpath(root, "native.spn")
+    spin_provenance = spin * ".h5"
+    export_extension = Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).OperatorExport
+    @eval export_extension function _hamiltonian_operator_overlap_state(config::WannierHamiltonianOperatorGenerationConfig)
+        error("COMPLETED_OPERATOR_PREPARATION_FORBIDDEN")
+    end
+    for (index, operator) in enumerate((:uhu, :siu, :shu))
+        output = joinpath(root, "native." * string(operator))
+        cfg = W.WannierHamiltonianOperatorGenerationConfig(source=source,
+            topology_file=ARGS[6], eig_file=joinpath(root,"native.eig"), output_file=output,
+            spn_file=spin, spn_provenance_file=spin_provenance, overwrite=false,
+            max_cached_wavefunction_kpoints=2)
+        result = getproperty(W, Symbol("generate_wannier_" * string(operator)))(cfg)
+        @assert result.artifact_published
+        @assert bytes2hex(open(SHA.sha256, output)) == ARGS[7+index]
+    end
+    @eval paw function _generate_vasp_paw_spn_prepared(source::VASPWavefunctionSource; kwargs...)
+        error("COMPLETED_VASP_SPN_PREPARATION_FORBIDDEN")
+    end
+    W.generate_vasp_paw_spn(source; output_spn_file=spin,
+        provenance_hdf5=spin_provenance, spin_channel=1)
+    println("VASP_ALL_OPERATORS_FRESH_REUSE_PASS")
+    println("VASP_COMPLETED_OPERATORS_NO_PREPARATION_PASS")
+    """,
+            )
+            # Publication receipts bind the environment: preserve Pkg.test's active
+            # project in the child instead of switching to the source project.
+            resumed = read(
+                `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(Base.active_project())) $script $poscar $wavecar $potcar $oracle $output $oracle $digest $operator_digests`,
+                String,
+            )
+            print(resumed)
+            @test occursin("VASP_PUBLIC_UIU_FRESH_REUSE_PASS", resumed)
+            @test occursin("VASP_ALL_OPERATORS_FRESH_REUSE_PASS", resumed)
+            @test uiu_test_file_sha256(output) == digest
+        end
+    end
+end
+
+@testset "Standard uIu publishes finite warnings but retains integrity failures" begin
+    mktempdir() do directory
+        poscar, wavecar, _ = write_bounded_vasp_fixture(directory, 2, ComplexF64)
+        potcar = joinpath(directory, "POTCAR")
+        write(potcar, synthetic_potcar_block("X"; q0 = 0.02))
+        source = WannierNLQG.SymmetryFoundation.VASPWavefunctionSource(
+            poscar,
+            wavecar;
+            potcar_file = potcar,
+            band_range = 1:2,
+            spinor = true,
+            spin_basis_saxis = (0.0, 0.0, 1.0),
+            include_time_reversal = false,
+        )
+        topology = joinpath(directory, "source.mmn")
+        WannierNLQG.IO.write_wannier_mmn(
+            topology,
+            WannierNLQG.IO.WannierMMN(
+                2,
+                2,
+                1,
+                zeros(ComplexF64, 2, 2, 1, 2),
+                reshape([1, 2], 1, 2),
+                zeros(Int, 3, 1, 2),
+            ),
+        )
+        make_config =
+            (policy, filename) -> UIU_WANNIERIZATION.WannierUIUGenerationConfig(
+                construction_policy = policy,
+                source = source,
+                topology_file = topology,
+                output_file = joinpath(directory, filename),
+                oracle_mmn_file = topology,
+                max_cached_wavefunction_kpoints = 2,
+            )
+        standard = make_config(:standard, "warning.uIu")
+        result = UIU_WANNIERIZATION.generate_wannier_uiu(standard)
+        @test !result.passed
+        @test isfile(standard.output_file)
+        @test result.generalized_norm_max_absolute >
+              standard.thresholds.generalized_norm_max_absolute
+        payload = JSON3.read(read(result.artifacts["provenance_json"], String))
+        @test payload.status == "EXPORTED_WITH_WARNING"
+        @test !payload.passed && payload.physical_overlap_available
+        @test !payload.production_eligible
+        @test payload.diagonal_identity_max_absolute >
+              standard.thresholds.diagonal_identity_max_absolute
+        @test "NUMERICAL_WARNING:UIU_PREFLIGHT_GATE_FAILED" in payload.diagnostics
+        @test "NUMERICAL_WARNING:UIU_OUTPUT_GATE_FAILED" in payload.diagnostics
+        before_reuse = stat(standard.output_file)
+        reused_warning = UIU_WANNIERIZATION.generate_wannier_uiu(standard)
+        after_reuse = stat(standard.output_file)
+        @test !reused_warning.passed
+        @test reused_warning.diagonal_identity_max_absolute == result.diagonal_identity_max_absolute
+        @test reused_warning.artifacts == result.artifacts
+        @test (before_reuse.inode, before_reuse.mtime, before_reuse.size) ==
+              (after_reuse.inode, after_reuse.mtime, after_reuse.size)
+        export_extension =
+            Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).OperatorExport
+        gauge = UIU_PAW_EXTENSION.generation_band_gauge_contract(
+            source,
+            UIU_WANNIERIZATION.NativeDFTHamiltonian(),
+            nothing,
+            2,
+            2;
+            construction_policy = :standard,
+        )
+        accepted = export_extension._qualified_uiu_sidecar(
+            result.artifacts["provenance_json"],
+            standard.output_file,
+            topology,
+            gauge;
+            construction_policy = :standard,
+        )
+        @test !accepted.passed && accepted.status == "EXPORTED_WITH_WARNING"
+        @test_throws ArgumentError export_extension._qualified_uiu_sidecar(
+            result.artifacts["provenance_json"],
+            standard.output_file,
+            topology,
+            gauge,
+        )
+        tampered = Dict{Symbol, Any}(Symbol(key) => value for (key, value) in pairs(payload))
+        tampered[:production_eligible] = true
+        @test !export_extension._uiu_sidecar_quality_available(
+            JSON3.read(JSON3.write(tampered)),
+            :standard,
+        )
+        tampered[:production_eligible] = false
+        tampered[:generalized_normalization_max_absolute] = nothing
+        @test !export_extension._uiu_sidecar_quality_available(
+            JSON3.read(JSON3.write(tampered)),
+            :standard,
+        )
+        strict = make_config(:strict, "strict.uIu")
+        rejected = UIU_WANNIERIZATION.generate_wannier_uiu(strict)
+        @test !rejected.passed
+        @test !isfile(strict.output_file)
+        @test rejected.generalized_norm_max_absolute == result.generalized_norm_max_absolute
+        open(wavecar, "r+") do stream
+            seek(stream, 512*3)
+            write(stream, ComplexF64(NaN, 0))
+        end
+        nonfinite = make_config(:standard, "nonfinite.uIu")
+        @test_throws ArgumentError UIU_WANNIERIZATION.generate_wannier_uiu(nonfinite)
+        @test !isfile(nonfinite.output_file)
+    end
+end
+
+@testset "single-k-point QE operator preparation retains matrix coordinates" begin
+    mktempdir() do directory
+        fixture = write_qe_paw_fixture(
+            directory;
+            metric_kind = :paw,
+            spinor = true,
+            spinorbit = true,
+            num_kpoints = 1,
+        )
+        source = WannierNLQG.SymmetryFoundation.QuantumEspressoWavefunctionSource(
+            fixture.save_directory;
+            include_time_reversal = false,
+        )
+        state = UIU_PAW_EXTENSION._uiu_qe_state(source, fixture.nnkp_file, 2)
+        @test state.native.kpoints_fractional == zeros(1, 3)
+        @test state.native.mp_grid == (1, 1, 1)
+        @test state.generalized_norm == 0.0
+    end
+end
+
+struct UIUCanonicalFrameAuthority end
+const UIU_CANONICAL_FRAME_BUILDS = Ref(0)
+@eval UIU_PAW_EXTENSION begin
+    function _build_generation_band_gauge_contract(
+        source,
+        ::$(UIUCanonicalFrameAuthority),
+        gauge,
+        bands::Int,
+        points::Int;
+        construction_policy::Symbol = :strict,
+    )
+        $(UIU_CANONICAL_FRAME_BUILDS)[] += 1
+        source.band_range == 1:bands || error("unresolved full native frame")
+        return reshape(ComplexF64.(1:(bands * points)), bands, points)
+    end
+end
+
+@testset "Implicit full native source shares the sealed gauge frame" begin
+    mktempdir() do directory
+        gauge = joinpath(directory, "gauge.h5")
+        function write_header(target, parent)
+            HDF5.h5open(gauge, "w") do handle
+                attrs = HDF5.attributes(handle)
+                attrs["target_band_start"] = first(target)
+                attrs["target_band_stop"] = last(target)
+                attrs["parent_band_start"] = first(parent)
+                attrs["parent_band_stop"] = last(parent)
+            end
+        end
+        write_header(1:2, 1:2)
+        sources = (
+            WannierNLQG.SymmetryFoundation.QuantumEspressoWavefunctionSource(directory),
+            WannierNLQG.SymmetryFoundation.VASPWavefunctionSource(
+                joinpath(directory, "POSCAR"),
+                joinpath(directory, "WAVECAR"),
+            ),
+        )
+        for (index, source) in enumerate(sources)
+            explicit = UIU_PAW_EXTENSION._generation_gauge_source(source, gauge)
+            @test source.band_range === nothing
+            @test explicit.band_range == 1:2
+            for field in fieldnames(typeof(source))
+                field == :band_range && continue
+                @test isequal(getfield(source, field), getfield(explicit, field))
+            end
+            @test UIU_PAW_EXTENSION._generation_gauge_source(source, nothing) === source
+            @test UIU_PAW_EXTENSION._generation_gauge_source(explicit, gauge) === explicit
+            UIU_CANONICAL_FRAME_BUILDS[] = 0
+            cache = joinpath(directory, "cache-$(index)")
+            load_frame = function (selected)
+                UIU_PAW_EXTENSION._generation_band_gauge_contract(
+                    selected,
+                    UIUCanonicalFrameAuthority(),
+                    gauge,
+                    2,
+                    3;
+                    construction_policy = :standard,
+                )
+            end
+            expected = WannierNLQG.IO.with_preparation_artifact_cache(cache, "full-frame-test") do
+                first_result = load_frame(source)
+                second_result = load_frame(explicit)
+                @test first_result == second_result
+                @test UIU_CANONICAL_FRAME_BUILDS[] == 1
+                first_result
+            end
+            restored = WannierNLQG.IO.with_preparation_artifact_cache(cache, "full-frame-test") do
+                load_frame(source)
+            end
+            @test restored == expected
+            @test UIU_CANONICAL_FRAME_BUILDS[] == 1
+        end
+        for (target, parent) in ((2:2, 1:2), (1:1, 1:2), (2:3, 2:3))
+            write_header(target, parent)
+            for source in sources
+                @test_throws ArgumentError UIU_PAW_EXTENSION._generation_gauge_source(source, gauge)
+            end
+        end
     end
 end

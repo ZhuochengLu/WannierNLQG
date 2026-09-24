@@ -280,3 +280,70 @@ end
     end
     @test occursin("docs/MIGRATION_1.0.0.md", sprint(showerror, migration_error))
 end
+@testset "response qualification result invariants and legacy constructor" begin
+    diagnostic=ResponseQualificationResult(
+        true,
+        "DIAGNOSTIC_ONLY",
+        false,
+        true,
+        ["MISSING_EVIDENCE", "MISSING_EVIDENCE"],
+        ["input.structure"],
+        ["material.convergence"],
+        String[],
+        Dict("production_eligible"=>false),
+    )
+    @test diagnostic.reasons==["MISSING_EVIDENCE"]
+    @test_throws ArgumentError ResponseQualificationResult(
+        true,
+        "PASS",
+        true,
+        false,
+        String[],
+        String[],
+        String[],
+        ["frame.hash"],
+        Dict{String, Any}(),
+    )
+    legacy=WannierNLQG.Runtime.RunResult(
+        Tuple[],
+        WannierNLQG.Runtime.NormalizedTaskSpec[],
+        "run",
+        String[],
+        "metadata",
+        "progress",
+        "progress.jsonl",
+    )
+    @test legacy.qualification.qualification_status=="NOT_EVALUATED"
+    @test !legacy.qualification.production_eligible
+    @test legacy.qualification.reasons==["LEGACY_CONSTRUCTOR_NO_QUALIFICATION"]
+
+    missing=WannierNLQG.Runtime._finalize_response_qualification(
+        true,
+        false,
+        ["input.structure"],
+        ["material.convergence"],
+        String[],
+        ["MATERIAL_CONVERGENCE_NOT_RECORDED"],
+        Dict{String, Any}(),
+    )
+    @test missing.execution_eligible
+    @test missing.qualification_status=="DIAGNOSTIC_ONLY"
+    @test !missing.production_eligible
+    conflict=try
+        WannierNLQG.Runtime._finalize_response_qualification(
+            true,
+            false,
+            ["input.structure"],
+            String[],
+            ["band_frame.hash"],
+            String[],
+            Dict{String, Any}(),
+        )
+        nothing
+    catch err
+        err
+    end
+    @test conflict isa WannierNLQG.Runtime.ResponseQualificationError
+    @test conflict.code=="RESPONSE_QUALIFICATION_CONFLICT"
+    @test conflict.qualification.conflicting_contracts==["band_frame.hash"]
+end

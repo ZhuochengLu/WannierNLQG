@@ -428,8 +428,8 @@ function _base_orbital_rotation(
     mapping_diagnostics = nothing,
     operation_index::Int = 0,
 )
-    construction_policy in (:strict, :diagnostic) ||
-        throw(ArgumentError("construction_policy must be :strict or :diagnostic"))
+    construction_policy in (:strict, :standard) ||
+        throw(ArgumentError("construction_policy must be :strict or :standard"))
     all(isfinite, rotation) || throw(ArgumentError("orbital rotation contains nonfinite values"))
     degree = findfirst(==(shell), BASE_SHELLS) - 1
     labels = ORBITAL_LABELS[shell]
@@ -453,7 +453,7 @@ function _base_orbital_rotation(
     singular_values = svdvals(representation)
     minimum(singular_values) > eps(Float64) * max(1.0, maximum(singular_values)) ||
         throw(ArgumentError("orbital representation is rank deficient"))
-    construction_policy == :diagnostic ||
+    construction_policy == :standard ||
         residual <= 1.0e-8 ||
         throw(ArgumentError("rotated $(shell) orbitals leave their harmonic subspace"))
     mapping_diagnostics === nothing || push!(
@@ -466,7 +466,7 @@ function _base_orbital_rotation(
             value = residual,
             threshold = 1.0e-8,
             result = residual <= 1.0e-8 ? "PASS" : "FAIL",
-            action = residual <= 1.0e-8 ? "CONTINUE" : "CONTINUE_DIAGNOSTIC",
+            action = residual <= 1.0e-8 ? "CONTINUE" : "CONTINUE_STANDARD",
         ),
     )
     representation[abs.(representation) .< 1.0e-12] .= 0.0
@@ -560,7 +560,7 @@ function _orbital_rotation(
     minimum(singular_values) > eps(Float64) * max(1.0, maximum(singular_values)) ||
         throw(ArgumentError("orbital representation is rank deficient"))
     residual = norm(result' * result - Matrix{Float64}(I, size(result, 1), size(result, 1)))
-    construction_policy == :diagnostic ||
+    construction_policy == :standard ||
         residual <= 1.0e-8 ||
         throw(ArgumentError("orbital subspace $(orbital_set) is not closed by this operation"))
     mapping_diagnostics === nothing || push!(
@@ -573,7 +573,7 @@ function _orbital_rotation(
             value = residual,
             threshold = 1.0e-8,
             result = residual <= 1.0e-8 ? "PASS" : "FAIL",
-            action = residual <= 1.0e-8 ? "CONTINUE" : "CONTINUE_DIAGNOSTIC",
+            action = residual <= 1.0e-8 ? "CONTINUE" : "CONTINUE_STANDARD",
         ),
     )
     return result
@@ -853,8 +853,8 @@ function _map_projection_centers(
     construction_policy::Symbol = :strict,
     mapping_diagnostics = nothing,
 )
-    construction_policy in (:diagnostic, :strict) ||
-        throw(ArgumentError("construction_policy must be :diagnostic or :strict"))
+    construction_policy in (:standard, :strict) ||
+        throw(ArgumentError("construction_policy must be :standard or :strict"))
     all(isfinite, projection_centers_fractional) ||
         throw(ArgumentError("projection centers contain nonfinite values"))
     projection_center_count = size(projection_centers_fractional, 2)
@@ -882,7 +882,7 @@ function _map_projection_centers(
                 push!(matching_target_center_indices, target_center_candidate_index)
                 push!(matching_lattice_shifts, lattice_shift)
             end
-            if construction_policy == :diagnostic
+            if construction_policy == :standard
                 order = sortperm(distances)
                 isempty(order) && throw(ArgumentError("projection center set is empty"))
                 nearest = first(order)
@@ -915,7 +915,7 @@ function _map_projection_centers(
                         threshold = tolerance,
                         margin = isfinite(margin) ? margin : nothing,
                         result = distance <= tolerance ? "PASS" : "FAIL",
-                        action = distance <= tolerance ? "CONTINUE" : "CONTINUE_DIAGNOSTIC",
+                        action = distance <= tolerance ? "CONTINUE" : "CONTINUE_STANDARD",
                     ),
                 )
             end
@@ -932,7 +932,7 @@ function _map_projection_centers(
         sort(target_center_indices[:, operation_index]) == collect(1:projection_center_count) ||
             throw(ArgumentError("center mapping is not a permutation"))
     end
-    if construction_policy == :diagnostic
+    if construction_policy == :standard
         _validate_projection_center_group_mapping(
             operations,
             target_center_indices,

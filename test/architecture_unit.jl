@@ -17,6 +17,7 @@ const WannierizationModule = WannierNLQG.Wannierization
         :TaskConfig,
         :TaskSpec,
         :RunResult,
+        :ResponseQualificationResult,
         :run,
         :ModelInput,
         :BZMesh,
@@ -25,6 +26,15 @@ const WannierizationModule = WannierNLQG.Wannierization
         :ExecutionOptions,
         :OutputOptions,
         :OpticalParameters,
+        :SHGParameters,
+        :SHGNumerics,
+        :SeparateRelaxation,
+        :FermiSurfaceBroadening,
+        :LinearTransportParameters,
+        :LinearOpticalResponseParameters,
+        :OrbitalMagnetizationParameters,
+        :LinearResponseNumerics,
+        :OrbitalNumerics,
         :FiniteQOpticalParameters,
         :GeometryParameters,
         :BandParameters,
@@ -42,6 +52,8 @@ const WannierizationModule = WannierNLQG.Wannierization
         :TensorComponent,
         :FullTensor,
         :KSliceSelection,
+        :read_linear_transport_result,
+        :read_orbital_magnetization_result,
     ])
     @test isdefined(WannierNLQG, :Core)
     @test isdefined(WannierNLQG, :SymmetryFoundation)

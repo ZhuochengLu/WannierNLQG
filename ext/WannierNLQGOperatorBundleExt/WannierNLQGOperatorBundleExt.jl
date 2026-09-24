@@ -17,9 +17,211 @@ const HOST_IS_LITTLE_ENDIAN = Base.ENDIAN_BOM == 0x04030201
 const POST_EXPORT_VALIDATION_SCHEMA = "wanniernlqg.post-export-validation"
 const POST_EXPORT_VALIDATION_SCHEMA_VERSION = "1.0"
 const OPERATOR_QUALIFICATION_SCHEMA = "wanniernlqg.operator-qualification"
-const OPERATOR_QUALIFICATION_SCHEMA_VERSION = "1.2"
+const OPERATOR_QUALIFICATION_SCHEMA_VERSION = "1.3"
 const PAIR_WIGNER_SEITZ_TRANSFORM_ALGORITHM = "WannierNLQG.PairWignerSeitzSpinQToRTransform"
 const PAIR_WIGNER_SEITZ_TRANSFORM_POLICY = "PAIR_DEPENDENT_MINIMUM_DISTANCE_UNIT_DEGENERACY"
+
+const OPERATOR_SELECTION_MODE_PROFILE = "profile"
+const OPERATOR_SELECTION_MODE_TASKS = "tasks"
+
+# Return true when one persisted inventory carries the spin operator family.
+_inventory_has_spin_family(inventory) = REAL_SPACE_SPIN in inventory
+
+# Return true when one persisted inventory is the complete registered operator family.
+function _inventory_is_complete_family(inventory)
+    return canonical_operator_inventory(inventory) == collect(OPERATOR_PROFILE_INVENTORIES[:full])
+end
+
+# Serialize one task-derived selection identity for persistence and digest binding.
+function _task_derived_selection_summary(selection)
+    closure = String[]
+    for entry in resolved_task_closure(selection)
+        push!(
+            closure,
+            string(
+                entry.quantity,
+                ":",
+                entry.method,
+                ">",
+                join(String.(entry.expanded_methods), "+"),
+                ">",
+                join(real_space_operator_name.(entry.required_operators), "+"),
+                ">",
+                join(String.(entry.required_sources), "+"),
+            ),
+        )
+    end
+    return (
+        mode = String(operator_selection_mode(selection)),
+        requested_tasks = join(operator_task_token.(selection.requested_tasks), ","),
+        normalized_tasks = join(
+            (string(quantity, ":", method) for (quantity, method) in selection.normalized_tasks),
+            ",",
+        ),
+        task_dependency_closure = join(closure, ";"),
+        resolved_operator_inventory = join(
+            real_space_operator_name.(resolved_operator_inventory(selection)),
+            ",",
+        ),
+        resolved_source_inventory = join(String.(resolved_source_inventory(selection)), ","),
+        registry_version = String(operator_selection_registry_version(selection)),
+        selection_sha256 = something(operator_selection_sha256(selection), "NOT_APPLICABLE"),
+    )
+end
+
+# New task-derived artifacts require one authority across every dependent operator.
+# Fixed-profile historical artifacts intentionally retain their versioned reader rules.
+function _validate_task_authority(selection, qualification, provenance, backend, digest, target)
+    text(value) = value isa AbstractString ? String(value) : ""
+    entry(values, name) =
+        values isa AbstractDict ? get(values, name, get(values, Symbol(name), nothing)) : nothing
+    WannierNLQG.SymmetryFoundation.validate_authoritative_hamiltonian_key(backend)
+    occursin(r"^[0-9a-f]{64}$", digest) ||
+        throw(ArgumentError("HAMILTONIAN_REFERENCE_MISMATCH: task authority requires a SHA-256"))
+    text(entry(provenance, "authoritative_hamiltonian")) == backend ||
+        throw(ArgumentError("HAMILTONIAN_REFERENCE_MISMATCH: provenance backend differs"))
+    text(entry(provenance, "authoritative_hamiltonian_digest")) == digest ||
+        throw(ArgumentError("HAMILTONIAN_REFERENCE_MISMATCH: provenance digest differs"))
+    hashes = entry(provenance, "authoritative_hamiltonian_input_sha256")
+    hashes isa AbstractDict && !isempty(hashes) ||
+        throw(ArgumentError("HAMILTONIAN_REFERENCE_MISMATCH: authority input hashes required"))
+    for (key, value) in pairs(hashes)
+        !isempty(text(key)) && occursin(r"^[0-9a-f]{64}$", text(value)) ||
+            throw(ArgumentError("HAMILTONIAN_REFERENCE_MISMATCH: invalid authority input SHA"))
+    end
+    haskey(hashes, "AUTHORITATIVE_HAMILTONIAN_SHA256") ||
+        throw(ArgumentError("HAMILTONIAN_REFERENCE_MISMATCH: authority contract SHA required"))
+    sources = resolved_source_inventory(selection)
+    needs_target = :operator_target_contract in sources
+    if needs_target
+        occursin(r"^[0-9a-f]{64}$", target) ||
+            throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: target SHA required"))
+        text(entry(provenance, "operator_target_contract_sha256")) == target ||
+            throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: provenance target differs"))
+    else
+        target == "NOT_APPLICABLE" ||
+            throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: unexpected target"))
+    end
+    records = entry(qualification, "operators")
+    for kind in resolved_operator_inventory(selection)
+        record = entry(records, real_space_operator_name(kind))
+        if kind in (
+            REAL_SPACE_HAMILTONIAN,
+            REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION,
+            REAL_SPACE_HAMILTONIAN_WEIGHTED_AXIAL_DERIVATIVE_OVERLAP,
+            REAL_SPACE_SPIN_TIMES_HAMILTONIAN,
+            REAL_SPACE_SPIN_TIMES_HAMILTONIAN_POSITION,
+        )
+            text(entry(record, "authoritative_hamiltonian")) == backend &&
+            text(entry(record, "authoritative_hamiltonian_digest")) == digest &&
+            entry(record, "authoritative_hamiltonian_input_sha256") == hashes ||
+                throw(ArgumentError("HAMILTONIAN_REFERENCE_MISMATCH: operator authority differs"))
+        end
+        for field in ("target_band_gauge", "delivery_target_band_gauge")
+            text(entry(record, field)) == "final_wannier_gauge" || throw(
+                ArgumentError("OPERATOR_DELIVERY_GAUGE_MISMATCH: final Wannier gauge required"),
+            )
+        end
+        if needs_target
+            text(entry(record, "operator_target_contract_sha256")) == target ||
+                throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: operator target differs"))
+        end
+        source_name =
+            if kind in (
+                REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR,
+                REAL_SPACE_AXIAL_DERIVATIVE_OVERLAP,
+                REAL_SPACE_SYMMETRIC_DERIVATIVE_OVERLAP,
+            )
+                "uIu"
+            elseif kind == REAL_SPACE_HAMILTONIAN_WEIGHTED_AXIAL_DERIVATIVE_OVERLAP
+                "uHu"
+            elseif kind == REAL_SPACE_SPIN_TIMES_POSITION
+                "sIu"
+            elseif kind == REAL_SPACE_SPIN_TIMES_HAMILTONIAN_POSITION
+                "sHu"
+            else
+                nothing
+            end
+        if source_name !== nothing
+            for (record_field, provenance_field) in (
+                ("source_artifact_sha256", "$(source_name)_sha256"),
+                ("source_provenance_sha256", "$(source_name)_provenance_sha256"),
+                ("source_input_sha256", "$(source_name)_input_sha256"),
+            )
+                entry(record, record_field) !== nothing &&
+                entry(record, record_field) == entry(provenance, provenance_field) || throw(
+                    ArgumentError(
+                        "OPERATOR_SOURCE_INPUT_MISMATCH: persisted $(source_name) source differs",
+                    ),
+                )
+            end
+            source_hashes = entry(record, "source_input_sha256")
+            text(entry(source_hashes, "OPERATOR_TARGET_CONTRACT")) == target ||
+                throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: source target differs"))
+        end
+    end
+    return nothing
+end
+
+# Additive reconstruction evidence: legacy absence is readable and never auto-upgraded.
+function _validate_streamed_neighbor_evidence(qualification, entries)
+    records = get(qualification, "operators", Dict{String, Any}())
+    marked = any(record -> haskey(record, "source_neighbor_order_contract"), values(records))
+    shared = get(qualification, "source_neighbor_order_contract", nothing)
+    !marked && shared === nothing && return nothing
+    fail(detail) = throw(ArgumentError("OPERATOR_NEIGHBOR_ORDER_CONTRACT_MISMATCH: $(detail)"))
+    marked && shared isa AbstractDict || fail("shared map and operator evidence required together")
+    algorithm = "source-to-internal-per-k-both-indices-v1"
+    get(shared, "algorithm", nothing) == algorithm || fail("unsupported algorithm")
+    get(shared, "axis_order", nothing) == "source_neighbor,kpoint;column_major" || fail("map axes")
+    count = get(shared, "num_neighbors", nothing)
+    nk = get(shared, "num_kpoints", nothing)
+    count isa Integer && !(count isa Bool) && count > 0 || fail("neighbor count")
+    nk isa Integer && !(nk isa Bool) && nk > 0 || fail("kpoint count")
+    flat = get(shared, "source_to_internal", nothing)
+    flat isa AbstractVector && length(flat) == count * nk || fail("map dimensions")
+    all(v -> v isa Integer && !(v isa Bool), flat) || fail("map integer entries")
+    inverse = reshape(collect(flat), count, nk)
+    for k in 1:nk
+        sort(inverse[:, k]) == collect(1:count) || fail("map is not a permutation")
+    end
+    serialized = string(count, ",", nk, ";", join(flat, ","))
+    digest = bytes2hex(SHA.sha256(serialized))
+    get(shared, "source_to_internal_sha256", nothing) == digest || fail("map digest")
+    for (name, record) in pairs(records)
+        haskey(record, "source_neighbor_order_contract") || continue
+        evidence = record["source_neighbor_order_contract"]
+        evidence isa AbstractDict || fail("operator evidence must be a dictionary")
+        get(evidence, "algorithm", nothing) == algorithm || fail("operator algorithm")
+        get(evidence, "source_to_internal_sha256", nothing) == digest ||
+            fail("operator map reference")
+        get(evidence, "operator_kind", nothing) == String(name) || fail("operator differs")
+        get(evidence, "status", nothing) == "REBUILT_SOURCE_TO_INTERNAL" || fail("status")
+        for field in (
+            "source_artifact_sha256",
+            "source_input_sha256",
+            "operator_target_contract_sha256",
+            "delivery_payload_sha256",
+        )
+            haskey(evidence, field) && haskey(record, field) && evidence[field] == record[field] ||
+                fail("$(field) binding")
+        end
+        selected = filter(entry -> real_space_operator_name(entry.kind) == String(name), entries)
+        isempty(selected) && fail("operator has no components")
+        get(evidence, "delivery_component_sha256", nothing) ==
+        join(getfield.(selected, :component_sha256), ",") || fail("operator component bytes differ")
+    end
+    return nothing
+end
+
+# Only a validated construction receipt can attest corrected neighbor-order semantics.
+function _streamed_neighbor_order_status(qualification, entries, kind)
+    _validate_streamed_neighbor_evidence(qualification, entries)
+    records = get(qualification, "operators", Dict{String, Any}())
+    record = get(records, real_space_operator_name(kind), Dict{String, Any}())
+    return haskey(record, "source_neighbor_order_contract") ? "REBUILT_SOURCE_TO_INTERNAL" :
+           "LEGACY_UNVERIFIED"
+end
 
 # Seal downstream validation metadata without including timestamps or HDF5 layout details.
 function _post_export_validation_digest(values)
@@ -45,10 +247,9 @@ const CONSTRUCTION_EVIDENCE_VERSION = "1.0"
 const CONSTRUCTION_EVIDENCE_FIELDS = (
     "construction_policy",
     "construction_gate_records_json",
-    "manual_review_required",
+    "quality_review_recommended",
     "construction_quality_failed",
-    "diagnostic_classification",
-    "diagnostic_only",
+    "model_availability",
     "production_eligible",
 )
 
@@ -59,7 +260,7 @@ function _validated_construction_evidence(values)
     String(_dictionary_entry(values, "schema_version")) == CONSTRUCTION_EVIDENCE_VERSION ||
         throw(ArgumentError("construction-evidence version differs"))
     policy = String(_dictionary_entry(values, "construction_policy"))
-    policy in ("strict", "diagnostic") || throw(ArgumentError("invalid construction policy"))
+    policy in ("strict", "standard") || throw(ArgumentError("invalid construction policy"))
     records = try
         JSON3.read(String(_dictionary_entry(values, "construction_gate_records_json")))
     catch
@@ -81,12 +282,7 @@ function _validated_construction_evidence(values)
         failed |=
             record["severity"] == "error" || get(record["context"], "gate_result", "") == "FAIL"
     end
-    for name in (
-        "manual_review_required",
-        "construction_quality_failed",
-        "diagnostic_only",
-        "production_eligible",
-    )
+    for name in ("quality_review_recommended", "construction_quality_failed", "production_eligible")
         _dictionary_entry(values, name) isa Bool ||
             throw(ArgumentError("construction-evidence $(name) must be Boolean"))
     end
@@ -94,13 +290,14 @@ function _validated_construction_evidence(values)
     failed &&
         !quality_failed &&
         throw(ArgumentError("original construction FAIL evidence was cleared"))
-    isempty(String(_dictionary_entry(values, "diagnostic_classification"))) &&
-        throw(ArgumentError("construction diagnostic classification is empty"))
-    if policy == "diagnostic" || quality_failed
-        _dictionary_entry(values, "diagnostic_only") &&
-        !_dictionary_entry(values, "production_eligible") &&
-        _dictionary_entry(values, "manual_review_required") ||
-            throw(ArgumentError("diagnostic construction qualification flags disagree"))
+    availability = String(_dictionary_entry(values, "model_availability"))
+    availability in ("AVAILABLE", "AVAILABLE_WITH_QUALITY_WARNINGS", "UNAVAILABLE") ||
+        throw(ArgumentError("invalid construction model availability"))
+    if policy == "standard" || quality_failed
+        (
+            _dictionary_entry(values, "quality_review_recommended") &&
+            !_dictionary_entry(values, "production_eligible")
+        ) || throw(ArgumentError("standard construction qualification flags disagree"))
     end
     return values
 end
@@ -206,7 +403,8 @@ function _write_metadata_value(parent, name::String, value)
             _write_metadata_value(subgroup, key, value[source_key])
         end
     elseif value isa AbstractArray && !(value isa AbstractVector{<:AbstractString})
-        parent[name] = value
+        # JSON and other lazy metadata arrays need a dense HDF5-compatible buffer.
+        parent[name] = value isa Array ? value : collect(value)
     elseif value isa Tuple
         parent[name] = collect(value)
     elseif value isa AbstractVector{<:AbstractString}
@@ -304,7 +502,38 @@ function _required_provenance_entry(provenance, name::String)
     throw(ArgumentError("SPIN_PAIR_WIGNER_SEITZ_CONTRACT_NOT_RECORDED: $(name) is missing"))
 end
 
-"""Bind the hard-gated pair-dependent WS transform evidence into qualification."""
+# Legacy records without an explicit policy retain strict numerical validation.
+function _standard_operator_qualification(values)
+    values === nothing && return false
+    key =
+        values isa NamedTuple ? :construction_policy :
+        haskey(values, "construction_policy") ? "construction_policy" : :construction_policy
+    return haskey(values, key) && String(values[key]) == "standard"
+end
+
+# Finite frame-quality excess is distinct from malformed or nonfinite evidence.
+function _frame_numerical_warning(physical, physical_tolerance, replay, replay_tolerance)
+    all(
+        value -> value isa Real && isfinite(value),
+        (physical, physical_tolerance, replay, replay_tolerance),
+    ) || throw(ArgumentError("band-frame qualification residuals are not finite"))
+    physical >= 0 && replay >= 0 && physical_tolerance >= 0 && replay_tolerance >= 0 ||
+        throw(ArgumentError("band-frame qualification residuals or thresholds are invalid"))
+    return physical > physical_tolerance || replay > replay_tolerance
+end
+
+# Inspect only frame contracts that carry actual numerical qualification.
+function _frame_numerical_warning(contract)
+    String(_dictionary_entry(contract, "status")) == "PASS" || return false
+    return _frame_numerical_warning(
+        _dictionary_entry(contract, "physical_isometry_maximum"),
+        _dictionary_entry(contract, "physical_isometry_tolerance"),
+        _dictionary_entry(contract, "replay_maximum"),
+        _dictionary_entry(contract, "replay_tolerance"),
+    )
+end
+
+"""Bind pair-dependent WS integrity and policy-specific numerical evidence."""
 function _bind_pair_wigner_seitz_qualification(raw, provenance, profile::Symbol, inventory)
     qualification = _mutable_qualification_tree(
         raw === nothing ? _default_operator_qualification(profile, inventory) : raw,
@@ -342,6 +571,7 @@ function _bind_pair_wigner_seitz_qualification(raw, provenance, profile::Symbol,
     Set(keys(residuals)) == Set(required_names) ||
         throw(ArgumentError("SPIN_PAIR_WIGNER_SEITZ_CONTRACT_INVALID: residual inventory differs"))
 
+    standard = _standard_operator_qualification(qualification)
     records = qualification["operators"]
     maximum_residual = -Inf
     worst_operator = first(required_names)
@@ -350,7 +580,7 @@ function _bind_pair_wigner_seitz_qualification(raw, provenance, profile::Symbol,
         isfinite(residual) && residual >= 0.0 || throw(
             ArgumentError("SPIN_PAIR_WIGNER_SEITZ_CONTRACT_INVALID: $(name) residual is invalid"),
         )
-        residual <= tolerance || throw(
+        (standard || residual <= tolerance) || throw(
             ArgumentError(
                 "SPIN_PAIR_WIGNER_SEITZ_ROUNDTRIP_FAILED: " *
                 "$(name) residual $(residual) exceeds $(tolerance)",
@@ -362,9 +592,15 @@ function _bind_pair_wigner_seitz_qualification(raw, provenance, profile::Symbol,
             "policy" => policy,
             "residual" => residual,
             "tolerance" => tolerance,
-            "status" => "PASS",
+            "status" => residual <= tolerance ? "PASS" : "NUMERICAL_WARNING",
         )
         record = records[name]
+        incoming_payload = Dict{String, Any}(
+            String(key)=>value for (key, value) in pairs(record) if String(key) != "payload_sha256"
+        )
+        String(_dictionary_entry(record, "payload_sha256")) ==
+        _operator_qualification_digest(incoming_payload) ||
+            throw(ArgumentError("OPERATOR_QUALIFICATION_INPUT_DIGEST_MISMATCH: $(name)"))
         record["pair_wigner_seitz_transform"] = contract
         digest_payload = Dict{String, Any}(
             String(key) => value for
@@ -377,6 +613,12 @@ function _bind_pair_wigner_seitz_qualification(raw, provenance, profile::Symbol,
         end
     end
     spin = qualification["families"]["spin"]
+    frame_warning =
+        any(record -> _frame_numerical_warning(record["band_frame_contract"]), values(records))
+    if standard && (maximum_residual > tolerance || frame_warning)
+        spin["production_eligible"] = false
+        qualification["production_eligible"] = false
+    end
     spin["pair_wigner_seitz_transform"] = Dict{String, Any}(
         "algorithm" => PAIR_WIGNER_SEITZ_TRANSFORM_ALGORITHM,
         "algorithm_version" => algorithm_version,
@@ -384,13 +626,16 @@ function _bind_pair_wigner_seitz_qualification(raw, provenance, profile::Symbol,
         "maximum_residual" => maximum_residual,
         "tolerance" => tolerance,
         "worst_operator" => worst_operator,
-        "status" => "PASS",
+        "status" => maximum_residual <= tolerance ? "PASS" : "NUMERICAL_WARNING",
     )
     return qualification
 end
 
 # Construct explicit unqualified records; missing spin or finite-band evidence never implies PASS.
 function _default_operator_qualification(profile::Symbol, inventory)
+    # The complete-family decision is inventory-driven so task-derived selections that
+    # happen to carry every registered operator are gated exactly like :full.
+    complete_family = _inventory_is_complete_family(inventory)
     spin_kinds = RealSpaceOperatorKind[
         kind for kind in (
             REAL_SPACE_SPIN,
@@ -444,7 +689,7 @@ function _default_operator_qualification(profile::Symbol, inventory)
             "covariance_tolerance" => NaN,
             "idempotence_residual" => NaN,
             "idempotence_tolerance" => NaN,
-            "finite_band_galerkin_status" => profile == :full ? "FAIL" : "NOT_APPLICABLE",
+            "finite_band_galerkin_status" => complete_family ? "FAIL" : "NOT_APPLICABLE",
             "finite_band_risk_audit" => Dict{String, Any}("status" => "NOT_RECORDED"),
             "qualification" => spin_kind ? "FAIL" : "NOT_RECORDED",
             "reason" => "QUALIFICATION_NOT_PROVIDED",
@@ -466,17 +711,17 @@ function _default_operator_qualification(profile::Symbol, inventory)
                 "production_eligible" => false,
             ),
             "finite_band_galerkin" => Dict(
-                "route" => profile == :full ? "unqualified" : "not_applicable",
-                "overall" => profile == :full ? "FAIL" : "NOT_APPLICABLE",
+                "route" => complete_family ? "unqualified" : "not_applicable",
+                "overall" => complete_family ? "FAIL" : "NOT_APPLICABLE",
                 "reason" =>
-                    profile == :full ? "QUALIFICATION_NOT_PROVIDED" :
+                    complete_family ? "QUALIFICATION_NOT_PROVIDED" :
                     "PROFILE_HAS_NO_COMPLETE_FINITE_BAND_OPERATOR_FAMILY",
                 "production_eligible" => false,
-                "qualification_stage" => profile == :full ? "NOT_RECORDED" : "NOT_APPLICABLE",
+                "qualification_stage" => complete_family ? "NOT_RECORDED" : "NOT_APPLICABLE",
                 "actual_operator_error_status" =>
-                    profile == :full ? "NOT_RECORDED" : "NOT_APPLICABLE",
+                    complete_family ? "NOT_RECORDED" : "NOT_APPLICABLE",
                 "nbands_convergence_status" =>
-                    profile == :full ? "NOT_RECORDED" : "NOT_APPLICABLE",
+                    complete_family ? "NOT_RECORDED" : "NOT_APPLICABLE",
             ),
         ),
     )
@@ -490,13 +735,26 @@ function _dictionary_entry(values, name::String)
     throw(ArgumentError("operator qualification is missing $(name)"))
 end
 
-"""Normalize the physical-frame contract shared by public 1.0 and legacy 6.2/6.3."""
-function _bundle_band_frame_contract(provenance, profile::Symbol)
+"""
+Normalize the physical-frame contract shared by public 1.0 and legacy 6.2/6.3.
+
+The spin-family gate is driven by the persisted inventory when one is supplied; the
+profile label is only a fallback for legacy callers that have no inventory at hand.
+"""
+function _bundle_band_frame_contract(
+    provenance,
+    profile::Symbol;
+    standard::Bool = false,
+    inventory = nothing,
+)
+    has_spin_family =
+        inventory === nothing ? profile in (:hamiltonian_position_spin, :full) :
+        _inventory_has_spin_family(inventory)
     key =
         haskey(provenance, "band_frame_contract") ? "band_frame_contract" :
         haskey(provenance, :band_frame_contract) ? :band_frame_contract : nothing
     if key === nothing
-        status = profile in (:hamiltonian_position_spin, :full) ? "NOT_RECORDED" : "NOT_APPLICABLE"
+        status = has_spin_family ? "NOT_RECORDED" : "NOT_APPLICABLE"
         return Dict{String, Any}(
             "schema" => status,
             "schema_version" => status,
@@ -553,11 +811,10 @@ function _bundle_band_frame_contract(provenance, profile::Symbol)
         physical_tolerance = Float64(values["physical_isometry_tolerance"])
         replay = Float64(values["replay_maximum"])
         replay_tolerance = Float64(values["replay_tolerance"])
-        all(isfinite, (physical, physical_tolerance, replay, replay_tolerance)) ||
-            throw(ArgumentError("band-frame qualification residuals are not finite"))
-        physical <= physical_tolerance ||
+        _frame_numerical_warning(physical, physical_tolerance, replay, replay_tolerance)
+        (standard || physical <= physical_tolerance) ||
             throw(ArgumentError("BAND_FRAME_PHYSICAL_ISOMETRY_FAILED"))
-        replay <= replay_tolerance || throw(ArgumentError("BAND_FRAME_REPLAY_FAILED"))
+        (standard || replay <= replay_tolerance) || throw(ArgumentError("BAND_FRAME_REPLAY_FAILED"))
     end
     return values
 end
@@ -570,9 +827,10 @@ function _validated_operator_qualification(raw, profile::Symbol, inventory)
         throw(ArgumentError("operator_qualification must be a dictionary"))
     String(_dictionary_entry(qualification, "schema")) == OPERATOR_QUALIFICATION_SCHEMA ||
         throw(ArgumentError("operator qualification schema differs"))
-    String(_dictionary_entry(qualification, "schema_version")) ==
-    OPERATOR_QUALIFICATION_SCHEMA_VERSION ||
+    qualification_version = String(_dictionary_entry(qualification, "schema_version"))
+    qualification_version in ("1.2", OPERATOR_QUALIFICATION_SCHEMA_VERSION) ||
         throw(ArgumentError("operator qualification version differs"))
+    standard = _standard_operator_qualification(qualification)
     operators = _dictionary_entry(qualification, "operators")
     families = _dictionary_entry(qualification, "families")
     spin = _dictionary_entry(families, "spin")
@@ -580,7 +838,7 @@ function _validated_operator_qualification(raw, profile::Symbol, inventory)
     overall in ("PASS", "FAIL", "NOT_APPLICABLE", "LEGACY_NOT_RECORDED") ||
         throw(ArgumentError("invalid spin-family qualification status"))
     eligible = Bool(_dictionary_entry(spin, "production_eligible"))
-    eligible == (overall == "PASS") ||
+    (standard ? (!eligible || overall == "PASS") : eligible == (overall == "PASS")) ||
         throw(ArgumentError("spin-family production eligibility disagrees with status"))
     finite_band = _dictionary_entry(families, "finite_band_galerkin")
     finite_band_overall = String(_dictionary_entry(finite_band, "overall"))
@@ -590,12 +848,18 @@ function _validated_operator_qualification(raw, profile::Symbol, inventory)
     finite_band_eligible = Bool(_dictionary_entry(finite_band, "production_eligible"))
     finite_band_eligible == (finite_band_overall == "PASS") ||
         throw(ArgumentError("finite-band Galerkin production eligibility disagrees with status"))
-    if profile == :full
-        finite_band_overall == "NOT_APPLICABLE" &&
-            throw(ArgumentError("finite-band Galerkin qualification is required for full profile"))
+    if _inventory_is_complete_family(inventory)
+        finite_band_overall == "NOT_APPLICABLE" && throw(
+            ArgumentError(
+                "finite-band Galerkin qualification is required for the complete operator family",
+            ),
+        )
     else
-        finite_band_overall == "NOT_APPLICABLE" ||
-            throw(ArgumentError("finite-band Galerkin qualification must be NOT_APPLICABLE"))
+        finite_band_overall == "NOT_APPLICABLE" || throw(
+            ArgumentError(
+                "finite-band Galerkin qualification must be NOT_APPLICABLE without the complete operator family",
+            ),
+        )
     end
     if finite_band_overall == "RISK_RECORDED_NOT_CONVERGED"
         String(_dictionary_entry(finite_band, "actual_operator_error_status")) ==
@@ -625,7 +889,7 @@ function _validated_operator_qualification(raw, profile::Symbol, inventory)
         throw(ArgumentError("spin-family qualification must be NOT_APPLICABLE without spin"))
     !isempty(required_spin) &&
         overall == "NOT_APPLICABLE" &&
-        throw(ArgumentError("spin-family qualification is required for a spin profile"))
+        throw(ArgumentError("spin-family qualification is required for a spin-bearing inventory"))
     statuses = String[]
     pair_wigner_seitz_residuals = Dict{String, Float64}()
     pair_wigner_seitz_algorithm_version = nothing
@@ -710,10 +974,11 @@ function _validated_operator_qualification(raw, profile::Symbol, inventory)
             tolerance = Float64(_dictionary_entry(transform, "tolerance"))
             all(isfinite, (residual, tolerance)) && residual >= 0.0 && tolerance > 0.0 ||
                 throw(ArgumentError("operator $(name) pair-WS transform residual is invalid"))
-            residual <= tolerance ||
+            (standard || residual <= tolerance) ||
                 throw(ArgumentError("operator $(name) pair-WS transform roundtrip failed"))
-            String(_dictionary_entry(transform, "status")) == "PASS" ||
-                throw(ArgumentError("operator $(name) pair-WS transform is not qualified"))
+            expected_status = residual <= tolerance ? "PASS" : "NUMERICAL_WARNING"
+            String(_dictionary_entry(transform, "status")) == expected_status ||
+                throw(ArgumentError("operator $(name) pair-WS status disagrees with its residual"))
             pair_wigner_seitz_algorithm_version === nothing ||
                 something(pair_wigner_seitz_algorithm_version) == algorithm_version ||
                 throw(ArgumentError("spin-family pair-WS transform algorithm versions differ"))
@@ -805,10 +1070,15 @@ function _validated_operator_qualification(raw, profile::Symbol, inventory)
                     Float64(_dictionary_entry(frame_contract, "physical_isometry_tolerance"))
                 replay = Float64(_dictionary_entry(frame_contract, "replay_maximum"))
                 replay_tolerance = Float64(_dictionary_entry(frame_contract, "replay_tolerance"))
-                physical <= physical_tolerance ||
+                frame_warning =
+                    _frame_numerical_warning(physical, physical_tolerance, replay, replay_tolerance)
+                (standard || physical <= physical_tolerance) ||
                     throw(ArgumentError("operator $(name) physical-isometry contract failed"))
-                replay <= replay_tolerance ||
+                (standard || replay <= replay_tolerance) ||
                     throw(ArgumentError("operator $(name) frame-replay contract failed"))
+                frame_warning &&
+                    eligible &&
+                    throw(ArgumentError("spin-family frame warning cannot be production eligible"))
             end
         end
         requires_hamiltonian = kind in (
@@ -871,8 +1141,12 @@ function _validated_operator_qualification(raw, profile::Symbol, inventory)
         end
         String(_dictionary_entry(transform, "worst_operator")) == expected_worst ||
             throw(ArgumentError("spin-family pair-WS worst operator disagrees"))
-        String(_dictionary_entry(transform, "status")) == "PASS" ||
-            throw(ArgumentError("spin-family pair-WS transform is not qualified"))
+        expected_status = maximum_residual <= tolerance ? "PASS" : "NUMERICAL_WARNING"
+        String(_dictionary_entry(transform, "status")) == expected_status ||
+            throw(ArgumentError("spin-family pair-WS status disagrees with its residual"))
+        maximum_residual > tolerance &&
+            eligible &&
+            throw(ArgumentError("spin-family numerical warning cannot be production eligible"))
     end
     return qualification
 end
@@ -943,9 +1217,11 @@ function _scientific_content_digest(
     operator_qualification_sha256::AbstractString = "LEGACY_NOT_RECORDED",
     band_frame_contract_sha256::AbstractString = "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED",
     construction_evidence_sha256::Union{Nothing, AbstractString} = nothing,
+    ;
+    task_selection::Union{Nothing, NamedTuple} = nothing,
 )
     # Field gates follow the complete legacy layout; the digest retains the wire label.
-    contract_version = schema_version == "1.0" ? "6.3" : schema_version
+    contract_version = schema_version == "1.1" ? "6.3" : schema_version
     buffer = IOBuffer()
     write(buffer, OPERATOR_BUNDLE_SCHEMA, '\n', String(schema_version), '\n')
     write(buffer, String(profile), '\n')
@@ -1049,6 +1325,29 @@ function _scientific_content_digest(
         CONSTRUCTION_EVIDENCE_VERSION,
         '\n',
         String(construction_evidence_sha256),
+    )
+    task_selection === nothing || write(
+        buffer,
+        '\n',
+        OPERATOR_SELECTION_MODE_TASKS,
+        '\n',
+        String(task_selection.mode),
+        '\n',
+        String(task_selection.requested_tasks),
+        '\n',
+        String(task_selection.normalized_tasks),
+        '\n',
+        String(task_selection.task_dependency_closure),
+        '\n',
+        String(task_selection.resolved_operator_inventory),
+        '\n',
+        String(task_selection.resolved_source_inventory),
+        '\n',
+        String(task_selection.registry_version),
+        '\n',
+        String(task_selection.selection_sha256),
+        '\n',
+        String(task_selection.operator_target_contract_sha256),
     )
     return bytes2hex(SHA.sha256(take!(buffer)))
 end
@@ -1197,7 +1496,13 @@ function _validated_geometry_metadata(
 end
 
 # Extract real position diagonals in Angstrom from the unique home-cell block after degeneracy division.
-function _bundle_wannier_centers(operators, r_vectors, degeneracies)
+function _bundle_wannier_centers(
+    operators,
+    r_vectors,
+    degeneracies;
+    standard::Bool = false,
+    numerical_audit = nothing,
+)
     position = get(operators, REAL_SPACE_POSITION, nothing)
     position === nothing && error("operator bundle requires a position operator")
     home_indices = findall(index -> all(iszero, @view(r_vectors[:, index])), axes(r_vectors, 2))
@@ -1208,7 +1513,10 @@ function _bundle_wannier_centers(operators, r_vectors, degeneracies)
         value = position.data[orbital, orbital, direction, home] / degeneracies[home]
         isfinite(real(value)) && isfinite(imag(value)) ||
             error("operator-bundle Wannier centers contain non-finite values")
-        abs(imag(value)) <= 1.0e-10 ||
+        imaginary_residual = abs(imag(value))
+        numerical_audit === nothing ||
+            (numerical_audit[] = max(numerical_audit[], imaginary_residual))
+        (standard || imaginary_residual <= 1.0e-10) ||
             error("operator-bundle Wannier centers have a non-negligible imaginary part")
         centers[orbital, direction] = real(value)
     end
@@ -1223,13 +1531,14 @@ function _unit_contract(kind::RealSpaceOperatorKind)
     return "WannierNLQG native operator convention"
 end
 
-# Validate the complete profile and provenance, then pack little-endian components with their integrity seals.
+# Validate the complete selection and provenance, then pack little-endian components with their integrity seals.
 function write_real_space_operator_bundle(
     filename::AbstractString,
     lattice,
     degeneracies,
     operators::AbstractDict;
-    profile::Symbol,
+    profile::Union{Nothing, Symbol},
+    operator_tasks = (),
     overwrite::Bool = false,
     paired_tb_sha256 = nothing,
     provenance = Dict{String, Any}(),
@@ -1249,7 +1558,31 @@ function write_real_space_operator_bundle(
     lattice_matrix = Matrix{Float64}(lattice)
     size(lattice_matrix) == (3, 3) || throw(ArgumentError("lattice must have size (3, 3)"))
     all(isfinite, lattice_matrix) || throw(ArgumentError("lattice contains non-finite values"))
-    inventory = validate_operator_profile(profile, keys(operators))
+    profile === nothing ||
+        isempty(operator_tasks) ||
+        throw(
+            ArgumentError(
+                "TASK_DERIVED_OPERATOR_SELECTION_INVALID: profile and operator_tasks are mutually exclusive",
+            ),
+        )
+    selection = profile === nothing ? resolve_operator_selection(nothing, operator_tasks) : nothing
+    if selection === nothing
+        inventory = validate_operator_profile(profile, keys(operators))
+    else
+        expected_inventory = collect(resolved_operator_inventory(selection))
+        supplied_inventory = canonical_operator_inventory(keys(operators))
+        supplied_inventory == expected_inventory || throw(
+            ArgumentError(
+                "TASK_DERIVED_OPERATOR_SELECTION_INVALID: supplied operator inventory " *
+                "$(join(real_space_operator_name.(supplied_inventory), ", ")) disagrees with the " *
+                "task-derived inventory $(join(real_space_operator_name.(expected_inventory), ", "))",
+            ),
+        )
+        inventory = supplied_inventory
+        profile = resolved_operator_profile(selection)
+    end
+    has_spin_family = REAL_SPACE_SPIN in inventory
+    complete_family = inventory == collect(OPERATOR_PROFILE_INVENTORIES[:full])
     r_vectors = _operator_bundle_r_vectors(operators)
     degeneracy_values = Int.(degeneracies)
     length(degeneracy_values) == size(r_vectors, 2) ||
@@ -1258,7 +1591,21 @@ function write_real_space_operator_bundle(
         throw(ArgumentError("operator-bundle degeneracies must be positive"))
     num_wannier = size(first(values(operators)).data, 1)
     num_r_vectors = size(r_vectors, 2)
-    centers = _bundle_wannier_centers(operators, r_vectors, degeneracy_values)
+    requested_qualification =
+        haskey(provenance, "operator_qualification") ? provenance["operator_qualification"] :
+        haskey(provenance, :operator_qualification) ? provenance[:operator_qualification] :
+        Dict{String, Any}()
+    standard_request =
+        _standard_operator_qualification(eligibility) ||
+        _standard_operator_qualification(requested_qualification)
+    center_imaginary_residual = Ref(0.0)
+    centers = _bundle_wannier_centers(
+        operators,
+        r_vectors,
+        degeneracy_values;
+        standard = standard_request,
+        numerical_audit = center_imaginary_residual,
+    )
     centers_fractional = Matrix{Float64}(undef, num_wannier, 3)
     for orbital in 1:num_wannier
         centers_fractional[orbital, :] .=
@@ -1382,17 +1729,18 @@ function write_real_space_operator_bundle(
     )
     derivative_overlap_source = provenance_string(
         "derivative_overlap_source",
-        profile in (:derivative, :full) ? "mmn_product" : "not_applicable",
+        REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR in inventory ? "mmn_product" : "not_applicable",
     )
     derivative_overlap_completeness = provenance_string(
         "derivative_overlap_completeness",
-        profile in (:derivative, :full) ? "finite_window_internal" : "not_applicable",
+        REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR in inventory ? "finite_window_internal" :
+        "not_applicable",
     )
     derivative_overlap_source_sha256 =
         provenance_string("derivative_overlap_source_sha256", "not_provided")
     derivative_overlap_algorithm_version = provenance_string(
         "derivative_overlap_algorithm_version",
-        profile in (:derivative, :full) ? "mmn-product-v1" : "not_applicable",
+        REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR in inventory ? "mmn-product-v1" : "not_applicable",
     )
     derivative_overlap_completeness in
     ("not_applicable", "finite_window_internal", "full_hilbert_space") ||
@@ -1413,7 +1761,7 @@ function write_real_space_operator_bundle(
             ),
         )
     end
-    if profile == :full
+    if complete_family
         required_digests = (
             "SPN_sha256",
             "uIu_sha256",
@@ -1558,6 +1906,7 @@ function write_real_space_operator_bundle(
         _bind_pair_wigner_seitz_qualification(raw_qualification, provenance, profile, inventory)
     operator_qualification =
         _validated_operator_qualification(bound_qualification, profile, inventory)
+    _validate_streamed_neighbor_evidence(operator_qualification, entries)
     operator_qualification_sha256 = _operator_qualification_digest(operator_qualification)
     spin_family = _dictionary_entry(_dictionary_entry(operator_qualification, "families"), "spin")
     spin_family_qualification = String(_dictionary_entry(spin_family, "overall"))
@@ -1572,12 +1921,95 @@ function write_real_space_operator_bundle(
         String(_dictionary_entry(finite_band_family, "reason"))
     finite_band_galerkin_production_eligible =
         Bool(_dictionary_entry(finite_band_family, "production_eligible"))
-    band_frame_contract = _bundle_band_frame_contract(provenance, profile)
+    standard = standard_request || _standard_operator_qualification(operator_qualification)
+    band_frame_contract =
+        _bundle_band_frame_contract(provenance, profile; standard, inventory = inventory)
+    records = _dictionary_entry(operator_qualification, "operators")
+    frame_warning =
+        _frame_numerical_warning(band_frame_contract) || any(
+            record -> _frame_numerical_warning(_dictionary_entry(record, "band_frame_contract")),
+            values(records),
+        )
+    spin_transform = get(spin_family, "pair_wigner_seitz_transform", Dict{String, Any}())
+    pair_warning = get(spin_transform, "status", "NOT_APPLICABLE") == "NUMERICAL_WARNING"
+    center_warning = center_imaginary_residual[] > 1.0e-10
+    if standard && (frame_warning || pair_warning || center_warning)
+        geometry = merge(
+            Dict{String, Any}(String(k)=>v for (k, v) in pairs(geometry)),
+            Dict("production_eligible"=>false),
+        )
+        normalized_geometry = _validated_geometry_metadata(
+            geometry,
+            num_wannier,
+            lattice_matrix,
+            centers,
+            centers_fractional,
+            degeneracy_values,
+        )
+        eligibility = merge(
+            Dict{String, Any}(String(k)=>v for (k, v) in pairs(eligibility)),
+            Dict{String, Any}(
+                "production_eligible"=>false,
+                "scoped_production_eligible"=>false,
+                "quality_review_recommended"=>true,
+                "construction_quality_failed"=>true,
+                "numerical_quality"=>"NUMERICAL_WARNING",
+                "tb_export_status"=>"EXPORTED_WITH_WARNING",
+                "model_availability"=>"AVAILABLE_WITH_QUALITY_WARNINGS",
+                "physics_qualification"=>"PHYSICS_HOLD",
+            ),
+        )
+        diagnostics = merge(
+            Dict{String, Any}(String(k)=>v for (k, v) in pairs(diagnostics)),
+            Dict(
+                name=>eligibility[name] for name in (
+                    "production_eligible",
+                    "scoped_production_eligible",
+                    "quality_review_recommended",
+                    "construction_quality_failed",
+                    "numerical_quality",
+                    "tb_export_status",
+                    "model_availability",
+                    "physics_qualification",
+                )
+            ),
+        )
+    end
+    if standard && center_warning
+        diagnostics["wannier_center_imaginary_maximum_angstrom"] = center_imaginary_residual[]
+        diagnostics["wannier_center_imaginary_tolerance_angstrom"] = 1.0e-10
+    end
     band_frame_contract_sha256 = String(band_frame_contract["contract_sha256"])
     construction_evidence = _construction_evidence_for_write(diagnostics, eligibility)
+    if standard && construction_evidence !== nothing
+        String(_dictionary_entry(construction_evidence, "construction_policy")) == "standard" ||
+            throw(ArgumentError("OPERATOR_QUALIFICATION_CONSTRUCTION_POLICY_MISMATCH"))
+    end
     construction_evidence_sha256 =
         construction_evidence === nothing ? nothing :
         _operator_qualification_digest(construction_evidence)
+    # Task-derived selections bind their re-derivable identity into the scientific digest.
+    task_selection =
+        selection === nothing ? nothing :
+        merge(
+            _task_derived_selection_summary(selection),
+            (
+                operator_target_contract_sha256 = provenance_string(
+                    "operator_target_contract_sha256",
+                    "NOT_APPLICABLE",
+                ),
+            ),
+        )
+    if selection !== nothing
+        _validate_task_authority(
+            selection,
+            operator_qualification,
+            provenance,
+            authoritative_hamiltonian,
+            authoritative_hamiltonian_sha256,
+            task_selection.operator_target_contract_sha256,
+        )
+    end
     scientific_digest = _scientific_content_digest(
         profile,
         inventory,
@@ -1621,7 +2053,8 @@ function write_real_space_operator_bundle(
         target_authority,
         operator_qualification_sha256,
         band_frame_contract_sha256,
-        construction_evidence_sha256,
+        construction_evidence_sha256;
+        task_selection = task_selection,
     )
 
     mkpath(dirname(path))
@@ -1633,6 +2066,20 @@ function write_real_space_operator_bundle(
         root_attributes["generated_at_utc"] =
             Dates.format(now(UTC), dateformat"yyyy-mm-ddTHH:MM:SS.sssZ")
         root_attributes["operator_profile"] = String(profile)
+        if selection !== nothing
+            root_attributes["operator_selection_mode"] = task_selection.mode
+            root_attributes["requested_tasks"] = task_selection.requested_tasks
+            root_attributes["normalized_tasks"] = task_selection.normalized_tasks
+            root_attributes["task_dependency_closure"] = task_selection.task_dependency_closure
+            root_attributes["resolved_operator_inventory"] =
+                task_selection.resolved_operator_inventory
+            root_attributes["resolved_source_inventory"] = task_selection.resolved_source_inventory
+            root_attributes["operator_requirement_registry_version"] =
+                task_selection.registry_version
+            root_attributes["operator_selection_sha256"] = task_selection.selection_sha256
+            root_attributes["operator_target_contract_sha256"] =
+                task_selection.operator_target_contract_sha256
+        end
         root_attributes["operator_count"] = length(inventory)
         root_attributes["operator_inventory"] = join(real_space_operator_name.(inventory), ",")
         root_attributes["available_matrix_capabilities"] =
@@ -1656,7 +2103,7 @@ function write_real_space_operator_bundle(
         overall_eligible == normalized_geometry.production_eligible || throw(
             ArgumentError("root and geometry production eligibility must use one explicit value"),
         )
-        profile in (:hamiltonian_position_spin, :full) &&
+        has_spin_family &&
             overall_eligible &&
             !spin_family_production_eligible &&
             throw(
@@ -1664,7 +2111,7 @@ function write_real_space_operator_bundle(
                     "SPIN_FAMILY_NOT_PRODUCTION_QUALIFIED: bundle cannot assert production eligibility",
                 ),
             )
-        profile == :full &&
+        complete_family &&
             overall_eligible &&
             !finite_band_galerkin_production_eligible &&
             throw(
@@ -1672,7 +2119,7 @@ function write_real_space_operator_bundle(
                     "FINITE_BAND_GALERKIN_NOT_PRODUCTION_QUALIFIED: full bundle cannot assert production eligibility",
                 ),
             )
-        profile in (:hamiltonian_position_spin, :full) &&
+        has_spin_family &&
             overall_eligible &&
             String(band_frame_contract["status"]) != "PASS" &&
             throw(
@@ -1772,7 +2219,7 @@ function write_real_space_operator_bundle(
             ("numerical_quality", ""),
             ("tb_export_status", ""),
             ("converged", false),
-            ("diagnostic_only", false),
+            ("quality_review_recommended", false),
             ("physics_qualification", ""),
             ("tb_usability", ""),
             ("stopping_reason", ""),
@@ -1877,9 +2324,11 @@ function write_real_space_operator_bundle(
             attributes(construction_group)["payload_sha256"] = construction_evidence_sha256
             root_attributes["construction_evidence_sha256"] = construction_evidence_sha256
             for name in CONSTRUCTION_EVIDENCE_FIELDS
-                name in
-                ("construction_gate_records_json", "diagnostic_only", "production_eligible") &&
-                    continue
+                name in (
+                    "construction_gate_records_json",
+                    "quality_review_recommended",
+                    "production_eligible",
+                ) && continue
                 root_attributes[name] = construction_evidence[name]
             end
         end
@@ -1889,7 +2338,7 @@ function write_real_space_operator_bundle(
         create_group(handle, "tb_symmetry_qualification")
         compatibility_group = create_group(handle, "compatibility")
         attributes(compatibility_group)["legacy_cache_converter"] = "unsupported"
-        attributes(compatibility_group)["minimum_reader_schema"] = "6.2"
+        attributes(compatibility_group)["minimum_reader_schema"] = OPERATOR_BUNDLE_SCHEMA_VERSION
         flush(handle)
         dataset = handle["payload/complex128"]
         HDF5.iscontiguous(dataset) || error("payload dataset is not contiguous")
@@ -2001,8 +2450,13 @@ function _manifest_from_handle(path::String, handle)
     String(_required_attribute(handle, "schema")) == OPERATOR_BUNDLE_SCHEMA ||
         throw(ArgumentError("unsupported operator-bundle schema"))
     schema_version = String(_required_attribute(handle, "schema_version"))
-    # Field gates follow the complete legacy layout; the digest retains the wire label.
-    contract_version = schema_version == "1.0" ? "6.3" : schema_version
+    schema_version == OPERATOR_BUNDLE_SCHEMA_VERSION || throw(
+        ArgumentError(
+            "operator-bundle migration required: schema $(schema_version) is not readable by schema $(OPERATOR_BUNDLE_SCHEMA_VERSION)",
+        ),
+    )
+    # Schema 1.1 binds the complete 6.3 numerical layout to the new public names.
+    contract_version = "6.3"
     contract_version in (
         "3.0",
         "4.0",
@@ -2027,7 +2481,7 @@ function _manifest_from_handle(path::String, handle)
     legacy_schema_diagnostic = startswith(contract_version, "5.")
     writer_version = String(_required_attribute(handle, "wanniernlqg_version"))
     writer_version in
-    ("1.0.0", "1.0.1", "2.0.0", "2.0.0-wcc.20260804", "2.1.0", "2.3.0", "2.4.0") ||
+    ("1.0.0", "1.0.1", "1.1.0", "2.0.0", "2.0.0-wcc.20260804", "2.1.0", "2.3.0", "2.4.0") ||
         throw(ArgumentError("operator bundle was not written by a compatible WannierNLQG build"))
     isempty(String(_required_attribute(handle, "generated_at_utc"))) &&
         throw(ArgumentError("operator bundle generated_at_utc is empty"))
@@ -2080,7 +2534,76 @@ function _manifest_from_handle(path::String, handle)
 
     profile = Symbol(String(_required_attribute(handle, "operator_profile")))
     inventory = _split_inventory(_required_attribute(handle, "operator_inventory"))
-    inventory = validate_operator_profile(profile, inventory)
+    # A task-derived selection stores a re-derivable identity instead of a fixed profile.
+    # Re-derive it here so a tampered task, method, inventory, source closure, registry
+    # version, or selection digest is a hard failure rather than a silent capability grant.
+    selection_mode =
+        haskey(attributes(handle), "operator_selection_mode") ?
+        String(read(attributes(handle)["operator_selection_mode"])) : nothing
+    task_derived = selection_mode == OPERATOR_SELECTION_MODE_TASKS
+    if task_derived
+        profile == :task_derived || throw(
+            ArgumentError(
+                "TASK_DERIVED_OPERATOR_SELECTION_INVALID: tasks selection records profile " *
+                "$(profile)",
+            ),
+        )
+        stored_mode = String(_required_attribute(handle, "operator_selection_mode"))
+        stored_mode == OPERATOR_SELECTION_MODE_TASKS || throw(
+            ArgumentError("TASK_DERIVED_OPERATOR_SELECTION_INVALID: unsupported selection mode"),
+        )
+        stored_requested =
+            split(String(_required_attribute(handle, "requested_tasks")), ','; keepempty = false)
+        stored_normalized = String(_required_attribute(handle, "normalized_tasks"))
+        stored_closure = String(_required_attribute(handle, "task_dependency_closure"))
+        stored_operator_inventory =
+            String(_required_attribute(handle, "resolved_operator_inventory"))
+        stored_source_inventory = String(_required_attribute(handle, "resolved_source_inventory"))
+        stored_registry_version =
+            String(_required_attribute(handle, "operator_requirement_registry_version"))
+        stored_selection_sha256 = String(_required_attribute(handle, "operator_selection_sha256"))
+        resolution = validate_task_derived_operator_selection(
+            stored_requested,
+            inventory,
+            Symbol.(split(stored_source_inventory, ','; keepempty = false)),
+            stored_selection_sha256,
+            stored_registry_version,
+        )
+        stored_operator_inventory == join(real_space_operator_name.(inventory), ",") || throw(
+            ArgumentError(
+                "TASK_DERIVED_OPERATOR_SELECTION_INVALID: recorded resolved_operator_inventory " *
+                "disagrees with the stored operator inventory",
+            ),
+        )
+        stored_normalized ==
+        join((string(quantity, ":", method) for (quantity, method) in resolution.tasks), ",") ||
+            throw(
+                ArgumentError(
+                    "TASK_DERIVED_OPERATOR_SELECTION_INVALID: recorded normalized_tasks disagrees " *
+                    "with the re-derived task list",
+                ),
+            )
+        stored_closure == _task_derived_selection_summary(
+            resolve_operator_selection(nothing, operator_tasks_from_tokens(stored_requested)),
+        ).task_dependency_closure || throw(
+            ArgumentError(
+                "TASK_DERIVED_OPERATOR_SELECTION_INVALID: recorded task_dependency_closure " *
+                "disagrees with the re-derived closure",
+            ),
+        )
+        inventory = canonical_operator_inventory(inventory)
+    else
+        selection_mode === nothing ||
+            selection_mode == OPERATOR_SELECTION_MODE_PROFILE ||
+            throw(ArgumentError("unsupported operator selection mode $(selection_mode)"))
+        profile == :task_derived && throw(
+            ArgumentError(
+                "TASK_DERIVED_OPERATOR_SELECTION_INVALID: profile task_derived requires a " *
+                "recorded tasks selection",
+            ),
+        )
+        inventory = validate_operator_profile(profile, inventory)
+    end
     if contract_version == "3.0" && profile in (:derivative, :full)
         throw(
             ArgumentError(
@@ -2404,9 +2927,10 @@ function _manifest_from_handle(path::String, handle)
         has_spin_family ? "SCHEMA_6_0_SPIN_QUALIFICATION_NOT_RECORDED" :
         "PROFILE_HAS_NO_SPIN_FAMILY"
     spin_family_production_eligible = false
-    finite_band_galerkin_qualification = profile == :full ? "LEGACY_NOT_RECORDED" : "NOT_APPLICABLE"
+    complete_family = _inventory_is_complete_family(inventory)
+    finite_band_galerkin_qualification = complete_family ? "LEGACY_NOT_RECORDED" : "NOT_APPLICABLE"
     finite_band_galerkin_qualification_reason =
-        profile == :full ? "LEGACY_GALERKIN_RISK_CONTRACT_NOT_RECORDED" :
+        complete_family ? "LEGACY_GALERKIN_RISK_CONTRACT_NOT_RECORDED" :
         "PROFILE_HAS_NO_COMPLETE_FINITE_BAND_OPERATOR_FAMILY"
     finite_band_galerkin_production_eligible = false
     if contract_version in ("6.1", "6.2", "6.3")
@@ -2462,6 +2986,7 @@ function _manifest_from_handle(path::String, handle)
                 throw(ArgumentError("finite-band Galerkin root eligibility disagrees with payload"))
         end
     end
+    _validate_streamed_neighbor_evidence(operator_qualification, entries)
     legacy_nontrivial_frame = false
     if contract_version == "6.1" && has_spin_family
         records = _dictionary_entry(operator_qualification, "operators")
@@ -2518,11 +3043,22 @@ function _manifest_from_handle(path::String, handle)
             throw(ArgumentError("invalid root band-frame transform SHA-256"))
         occursin(r"^[0-9a-f]{64}$", band_frame_contract_sha256) ||
             throw(ArgumentError("invalid root band-frame contract SHA-256"))
-        something(band_frame_physical_isometry_maximum) <=
-        something(band_frame_physical_isometry_tolerance) ||
-            throw(ArgumentError("BAND_FRAME_PHYSICAL_ISOMETRY_FAILED"))
-        something(band_frame_replay_maximum) <= something(band_frame_replay_tolerance) ||
-            throw(ArgumentError("BAND_FRAME_REPLAY_FAILED"))
+        _frame_numerical_warning(
+            band_frame_physical_isometry_maximum,
+            band_frame_physical_isometry_tolerance,
+            band_frame_replay_maximum,
+            band_frame_replay_tolerance,
+        )
+        standard = _standard_operator_qualification(operator_qualification)
+        (
+            standard ||
+            something(band_frame_physical_isometry_maximum) <=
+            something(band_frame_physical_isometry_tolerance)
+        ) || throw(ArgumentError("BAND_FRAME_PHYSICAL_ISOMETRY_FAILED"))
+        (
+            standard ||
+            something(band_frame_replay_maximum) <= something(band_frame_replay_tolerance)
+        ) || throw(ArgumentError("BAND_FRAME_REPLAY_FAILED"))
     end
     scientific_digest = String(_required_attribute(handle, "scientific_content_sha256"))
     length(scientific_digest) == 64 || throw(ArgumentError("invalid scientific-content SHA-256"))
@@ -2533,6 +3069,48 @@ function _manifest_from_handle(path::String, handle)
     persisted_authority =
         WannierNLQG.SymmetryFoundation.validate_authoritative_hamiltonian_key(persisted_authority)
     construction_evidence_sha256 = _read_construction_evidence_digest(handle)
+    # Mirror the writer's task-derived digest block from the recorded identity.
+    task_selection =
+        task_derived ?
+        merge(
+            _task_derived_selection_summary(
+                resolve_operator_selection(
+                    nothing,
+                    operator_tasks_from_tokens(
+                        split(
+                            String(_required_attribute(handle, "requested_tasks")),
+                            ',';
+                            keepempty = false,
+                        ),
+                    ),
+                ),
+            ),
+            (
+                operator_target_contract_sha256 = String(
+                    _required_attribute(handle, "operator_target_contract_sha256"),
+                ),
+            ),
+        ) : nothing
+    if task_derived
+        selection = resolve_operator_selection(
+            nothing,
+            operator_tasks_from_tokens(
+                split(
+                    String(_required_attribute(handle, "requested_tasks")),
+                    ',';
+                    keepempty = false,
+                ),
+            ),
+        )
+        _validate_task_authority(
+            selection,
+            operator_qualification,
+            _read_metadata_tree(handle["provenance"]),
+            persisted_authority,
+            String(_required_attribute(handle, "authoritative_hamiltonian_sha256")),
+            task_selection.operator_target_contract_sha256,
+        )
+    end
     expected_scientific_digest = _scientific_content_digest(
         profile,
         inventory,
@@ -2579,7 +3157,8 @@ function _manifest_from_handle(path::String, handle)
         target_authority,
         operator_qualification_sha256,
         band_frame_contract_sha256,
-        construction_evidence_sha256,
+        construction_evidence_sha256;
+        task_selection = task_selection,
     )
     scientific_digest == expected_scientific_digest ||
         throw(ArgumentError("scientific-content SHA-256 does not match indexed model content"))
@@ -2804,7 +3383,7 @@ function _manifest_from_handle(path::String, handle)
             throw(ArgumentError("post-export validation seal mismatch"))
     end
     spin_family_diagnostic = has_spin_family && !spin_family_production_eligible
-    finite_band_galerkin_diagnostic = profile == :full && !finite_band_galerkin_production_eligible
+    finite_band_galerkin_diagnostic = complete_family && !finite_band_galerkin_production_eligible
     (legacy_schema_diagnostic || spin_family_diagnostic || finite_band_galerkin_diagnostic) &&
         (final_production_eligible = false)
     tb_symmetry_qualification_present = false
@@ -2879,7 +3458,7 @@ function _manifest_from_handle(path::String, handle)
         legacy_schema_diagnostic ||
         spin_family_diagnostic ||
         finite_band_galerkin_diagnostic ||
-        something(optional_bool("diagnostic_only"), !geometry.production_eligible),
+        something(optional_bool("quality_review_recommended"), !geometry.production_eligible),
         physics_qualification,
         tb_usability,
         stopping_reason,
@@ -2970,6 +3549,16 @@ function _manifest_from_handle(path::String, handle)
         band_frame_euclidean_nonunitarity_maximum,
         band_frame_minimum_singular_value,
         band_frame_maximum_condition_number,
+        task_derived ? OPERATOR_SELECTION_MODE_TASKS : OPERATOR_SELECTION_MODE_PROFILE,
+        task_derived ? String.(stored_requested) : String[],
+        task_derived ? stored_normalized : "",
+        task_derived ? stored_closure : "",
+        task_derived ? stored_operator_inventory : "",
+        task_derived ? stored_source_inventory : "",
+        task_derived ? stored_registry_version : OPERATOR_REQUIREMENT_REGISTRY_VERSION,
+        task_derived ? stored_selection_sha256 : nothing,
+        task_derived ? String(_required_attribute(handle, "operator_target_contract_sha256")) :
+        optional_string("operator_target_contract_sha256"),
     )
 end
 

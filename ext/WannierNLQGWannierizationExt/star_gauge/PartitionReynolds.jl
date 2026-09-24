@@ -942,7 +942,7 @@ function _star_project_formal_target_actions(
     )
     isfinite(initial.maximum) ||
         throw(ArgumentError("NONFINITE_STRUCTURAL_HOLD: formal target group residual"))
-    construction_policy == :diagnostic ||
+    construction_policy == :standard ||
         initial.maximum <= raw_tolerance ||
         throw(
             ArgumentError(
@@ -1024,7 +1024,7 @@ function _star_project_formal_target_actions(
         if residual.maximum <= target_tolerance &&
            residual.corepresentation <= target_tolerance &&
            residual.theta_squared <= target_tolerance
-            construction_policy == :diagnostic ||
+            construction_policy == :standard ||
                 correction <= correction_limit ||
                 throw(
                     ArgumentError(
@@ -1043,7 +1043,7 @@ function _star_project_formal_target_actions(
         end
         current = updated
     end
-    if construction_policy == :diagnostic
+    if construction_policy == :standard
         # Identity normalization can change the initial fallback; audit the
         # retained action itself, even if no synchronization step improved it.
         best = _star_target_action_group_residual(
@@ -1154,7 +1154,7 @@ function _star_validate_formal_target_actions_analytic(
         metadata_origin = :computed,
         validation_profile = :analytic,
     )
-    construction_policy == :diagnostic ||
+    construction_policy == :standard ||
         report.passed ||
         throw(
             ArgumentError(
@@ -1232,7 +1232,7 @@ function _star_formal_target_reynolds_projection(
         maximum(opnorm(projected_twice[kpoint] - projected[kpoint]) for kpoint in keys(projected))
     isfinite(residual) && isfinite(idempotence) ||
         throw(ArgumentError("NONFINITE_STRUCTURAL_HOLD: Reynolds residual"))
-    construction_policy == :diagnostic ||
+    construction_policy == :standard ||
         residual <= tolerance ||
         throw(
             ArgumentError(
@@ -1240,7 +1240,7 @@ function _star_formal_target_reynolds_projection(
                 "$(residual) exceeds $(tolerance); $(context)",
             ),
         )
-    construction_policy == :diagnostic ||
+    construction_policy == :standard ||
         idempotence <= tolerance ||
         throw(
             ArgumentError(
@@ -1835,6 +1835,11 @@ end
 # post-gauge physical gates or reaches a fail-closed boundary.  This sidecar is
 # diagnostic only: it is never accepted as a gauge or representation artifact.
 function _star_append_preflight_diagnostic(config, record)
+    buffer = get(task_local_storage(), :wannier_preparation_diagnostics, nothing)
+    if buffer !== nothing
+        push!(buffer, deepcopy(record))
+        return nothing
+    end
     config.preflight_diagnostics_jsonl === nothing && return nothing
     filename = abspath(something(config.preflight_diagnostics_jsonl))
     mkpath(dirname(filename))
@@ -2117,7 +2122,7 @@ function _star_raw_preflight_strict_diagnostics!(
             get(conventions, context_key, context),
         )
         gate_context = get(conventions, context_key, context)
-        if config.construction_policy == :diagnostic
+        if config.construction_policy == :standard
             _star_construction_quality_gate!(
                 config,
                 maxima,

@@ -81,6 +81,11 @@ import WannierNLQG.Wannierization:
     WannierizationRestartState,
     WannierizationNumericalThresholds,
     WannierizationStatus,
+    WannierizationEligibility,
+    WANNIERIZATION_ELIGIBILITY_SUMMARY_KEYS,
+    wannierization_eligibility_summary,
+    wannierization_eligibility_from_summary,
+    not_evaluated_wannierization_eligibility,
     authoritative_hamiltonian_key
 import ..WannierizationInternalSupport:
     atomic_hdf5_write,
@@ -154,11 +159,13 @@ const wannierization_checkpoint_sha256_v1_2 = _wannierization_checkpoint_sha256_
 const wannierization_checkpoint_sha256_v2_2 = _wannierization_checkpoint_sha256_v2_2
 const wannierization_checkpoint_sha256_v2_21 = _wannierization_checkpoint_sha256_v2_21
 const wannierization_checkpoint_sha256_v2_22 = _wannierization_checkpoint_sha256_v2_22
+const wannierization_checkpoint_sha256_v2_29 = _wannierization_checkpoint_sha256_v2_29
 const wannierization_checkpoint_sha256_v2_3 = _wannierization_checkpoint_sha256_v2_3
 const wannierization_checkpoint_sha256_v2_4 = _wannierization_checkpoint_sha256_v2_4
 const wannierization_checkpoint_sha256_v2_5 = _wannierization_checkpoint_sha256_v2_5
 const wannierization_checkpoint_sha256_v2_6 = _wannierization_checkpoint_sha256_v2_6
 const wannierization_production_eligible = _wannierization_production_eligible
+const wannierization_scoped_production_eligible = _wannierization_scoped_production_eligible
 const wannierization_result_is_finite = _wannierization_result_is_finite
 
 const SOLVER_CHECKPOINT_INTEGRATION_API = (
@@ -181,11 +188,13 @@ const SOLVER_CHECKPOINT_INTEGRATION_API = (
     :wannierization_checkpoint_sha256_v2_2,
     :wannierization_checkpoint_sha256_v2_21,
     :wannierization_checkpoint_sha256_v2_22,
+    :wannierization_checkpoint_sha256_v2_29,
     :wannierization_checkpoint_sha256_v2_3,
     :wannierization_checkpoint_sha256_v2_4,
     :wannierization_checkpoint_sha256_v2_5,
     :wannierization_checkpoint_sha256_v2_6,
     :wannierization_production_eligible,
+    :wannierization_scoped_production_eligible,
     :wannierization_result_is_finite,
     :classify_wannierization_u_periodicity,
     :evaluate_full_3d_wannier_spreads,

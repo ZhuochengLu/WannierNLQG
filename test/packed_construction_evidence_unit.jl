@@ -28,7 +28,7 @@ isdefined(@__MODULE__, :test_operator_bundle_geometry) || include("OperatorBundl
             "message" => "retained original failure",
             "context" => Dict(
                 "gate_result" => "FAIL",
-                "action" => "CONTINUE_DIAGNOSTIC",
+                "action" => "CONTINUE_STANDARD",
                 "stage" => "preparation",
                 "value" => "1e-7",
                 "threshold" => "1e-10",
@@ -36,12 +36,12 @@ isdefined(@__MODULE__, :test_operator_bundle_geometry) || include("OperatorBundl
         ),
     ]
     metadata = Dict{String, Any}(
-        "construction_policy" => "diagnostic",
+        "construction_policy" => "standard",
         "construction_gate_records_json" => String(JSON3.write(records)),
-        "manual_review_required" => true,
+        "quality_review_recommended" => true,
         "construction_quality_failed" => true,
-        "diagnostic_classification" => "DIAGNOSTIC_ONLY_QUALITY_FAILED",
-        "diagnostic_only" => true,
+        "model_availability" => "AVAILABLE_WITH_QUALITY_WARNINGS",
+        "quality_review_recommended" => true,
         "production_eligible" => false,
     )
     function write_bundle(path; values = metadata)
@@ -90,7 +90,7 @@ isdefined(@__MODULE__, :test_operator_bundle_geometry) || include("OperatorBundl
             ),
             f -> HDF5.delete_object(f, "construction_evidence"),
             f -> HDF5.delete_attribute(f, "construction_evidence_sha256"),
-            f -> set_attribute(f, "manual_review_required", false),
+            f -> set_attribute(f, "quality_review_recommended", false),
             f -> set_attribute(f["diagnostics"], "construction_quality_failed", false),
             f -> set_attribute(f["construction_evidence"], "construction_policy", "strict"),
             f -> begin
@@ -106,7 +106,7 @@ isdefined(@__MODULE__, :test_operator_bundle_geometry) || include("OperatorBundl
                 @test_throws ArgumentError reader(changed)
             end
         end
-        for name in ("construction_quality_failed", "manual_review_required", "diagnostic_only")
+        for name in ("construction_quality_failed", "quality_review_recommended")
             invalid = copy(metadata);
             invalid[name] = false
             @test_throws ArgumentError write_bundle(
@@ -126,12 +126,9 @@ isdefined(@__MODULE__, :test_operator_bundle_geometry) || include("OperatorBundl
             @test !haskey(f, "construction_evidence")
             @test !haskey(HDF5.attributes(f), "construction_evidence_sha256")
         end
-        # Existing checked-in historical bytes still validate with the unchanged old digest layout.
+        # Historical bytes require an explicit external migration.
         fixture = joinpath(@__DIR__, "fixtures", "schema_compatibility", "packed_6_3.h5")
-        stored =
-            h5open(f -> String(read(HDF5.attributes(f)["scientific_content_sha256"])), fixture, "r")
-        @test io.read_real_space_operator_bundle(fixture).manifest.scientific_content_sha256 ==
-              stored
+        @test_throws ArgumentError io.read_real_space_operator_bundle(fixture)
         # Explicitly omitted evidence adds no tag or bytes to old digest calls.
         args = (
             :hamiltonian_position,

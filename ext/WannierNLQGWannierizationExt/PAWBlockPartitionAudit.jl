@@ -164,7 +164,7 @@ function _write_paw_block_partition_audit_hdf5(
             attributes = HDF5.attributes(handle)
             attributes["schema"] = PAW_BLOCK_PARTITION_AUDIT_SCHEMA
             attributes["schema_version"] = PAW_BLOCK_PARTITION_AUDIT_SCHEMA_VERSION
-            attributes["status"] = "DIAGNOSTIC_ONLY"
+            attributes["status"] = "STANDARD"
             attributes["production_eligible"] = false
             for (key, value) in summary
                 key in ("status", "production_eligible") && continue
@@ -384,7 +384,7 @@ function audit_paw_block_partitions(config::PAWBlockPartitionAuditConfig)
             ) for operation_index in eachindex(operations)
         ]
         raw_transports = getfield.(transports, :raw)
-        source_energies = native.kpoints[source_kpoint].energies_ev
+        source_energies = native_point_metadata(native, source_kpoint).energies_ev
         workspace, buffer_leakage = _star_select_buffer(
             raw_transports,
             source_energies,
@@ -444,7 +444,7 @@ function audit_paw_block_partitions(config::PAWBlockPartitionAuditConfig)
                 max(maximum_hamiltonian_normalized_frobenius, full_metrics.normalized_frobenius_ev)
             maximum_hamiltonian_frobenius =
                 max(maximum_hamiltonian_frobenius, full_metrics.frobenius_ev)
-            target_energies = native.kpoints[target_kpoint].energies_ev[workspace]
+            target_energies = native_point_metadata(native, target_kpoint).energies_ev[workspace]
             far_mask = falses(size(raw))
             notable_far_mask = falses(size(raw))
             cancellation_candidates = NamedTuple[]
@@ -793,7 +793,7 @@ function audit_paw_block_partitions(config::PAWBlockPartitionAuditConfig)
         _star_input_audit_hash(config, raw_native.input_sha256, length(operations)),
     )
     summary = Dict{String, Any}(
-        "status" => "DIAGNOSTIC_ONLY",
+        "status" => "STANDARD",
         "production_eligible" => false,
         "source_kpoint_count" => length(selected_kpoints),
         "operation_count" => length(operations),
@@ -904,7 +904,7 @@ function audit_paw_block_partitions(config::PAWBlockPartitionAuditConfig)
     end
     mv(temporary_json, config.output_json; force = true)
     return PAWBlockPartitionAuditResult(
-        :DIAGNOSTIC_ONLY,
+        :STANDARD,
         root_cause,
         config.output_hdf5,
         config.output_csv,

@@ -140,6 +140,8 @@ function prepare_paw_scdm_input_artifact(
     representation_hdf5::AbstractString,
     output_hdf5::AbstractString;
     num_wannier::Integer,
+    construction_policy::Symbol = :standard,
+    execution::WavefunctionPreparationExecutionConfig = WavefunctionPreparationExecutionConfig(),
 )
     num_wannier > 0 || throw(ArgumentError("num_wannier must be positive"))
     for (name, value) in (
@@ -155,6 +157,8 @@ function prepare_paw_scdm_input_artifact(
         representation_hdf5,
         output_hdf5;
         num_wannier = Int(num_wannier),
+        construction_policy,
+        execution,
     )
 end
 
@@ -169,7 +173,7 @@ end
 
 Inventory every above-threshold physical PAW sewing edge and evaluate the
 declared fixed-gap lanes without sealing a gauge or entering SAWF.  The HDF5,
-CSV, and JSON outputs are diagnostic-only and bind the same source identities
+CSV, and JSON outputs are standard and bind the same source identities
 used by strict wavefunction preparation.
 """
 function audit_paw_block_partitions(config::PAWBlockPartitionAuditConfig)
@@ -263,6 +267,8 @@ function generate_vasp_paw_spn(
     thresholds::VASPPAWSPNThresholds = VASPPAWSPNThresholds(),
     require_oracle::Bool = false,
     formatted::Bool = false,
+    execution = nothing,
+    target_contract = nothing,
 )
     isempty(strip(output_spn_file)) && throw(ArgumentError("output_spn_file must not be empty"))
     isempty(strip(provenance_hdf5)) && throw(ArgumentError("provenance_hdf5 must not be empty"))
@@ -276,6 +282,8 @@ function generate_vasp_paw_spn(
         thresholds,
         require_oracle,
         formatted,
+        execution,
+        target_contract,
     )
 end
 
@@ -308,6 +316,7 @@ function generate_qe_paw_spn(
     formatted::Bool = false,
     overwrite::Bool = false,
     max_cached_wavefunction_kpoints::Int = 8,
+    execution::WavefunctionPreparationExecutionConfig = WavefunctionPreparationExecutionConfig(),
 )
     isempty(strip(topology_file)) && throw(ArgumentError("topology_file must not be empty"))
     isempty(strip(output_spn_file)) && throw(ArgumentError("output_spn_file must not be empty"))
@@ -324,6 +333,7 @@ function generate_qe_paw_spn(
         formatted,
         overwrite,
         max_cached_wavefunction_kpoints,
+        execution,
     )
 end
 
@@ -369,7 +379,7 @@ function generate_symmetry_completed_qe_paw_matrix_elements(
     nnkp_file::AbstractString;
     artifact_dir::AbstractString,
     thresholds::QEPAWParityThresholds = QEPAWParityThresholds(),
-    qualification_mode::Symbol = :strict,
+    qualification_mode::Symbol = :standard,
 )
     return _call_wannierization_extension(
         :generate_symmetry_completed_qe_paw_matrix_elements,

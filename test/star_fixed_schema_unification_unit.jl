@@ -192,7 +192,7 @@ using .QEPAWMatrixElementsTestSupport
         HDF5.h5open(fixed_file, "r") do handle
             @test String(read(HDF5.attributes(handle)["schema"])) ==
                   "wanniernlqg.wannierization-fixed-subspace"
-            @test String(read(HDF5.attributes(handle)["schema_version"])) == "1.0"
+            @test String(read(HDF5.attributes(handle)["schema_version"])) == "2.0"
         end
         for version in ("1.0", "1.1")
             path = joinpath(directory, "fixed-$(version).h5")

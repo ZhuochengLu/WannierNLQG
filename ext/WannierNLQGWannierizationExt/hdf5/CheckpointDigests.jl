@@ -466,8 +466,8 @@ function _wannierization_checkpoint_sha256_v2_7(result::WannierizationResult)
 end
 
 # Schema 2.8 binds the qualified-Z seal and the transactional Type-IV joint
-# update evidence. Older checkpoints remain readable but cannot acquire these
-# qualifications by interpretation alone.
+# update evidence. Older checkpoint digests are retained only for independent
+# migration tooling and are not readable through the public 1.1 reader.
 function _wannierization_checkpoint_sha256_v2_8(result::WannierizationResult)
     buffer = IOBuffer()
     write(buffer, _wannierization_checkpoint_sha256_v2_7(result), '\n')
@@ -714,8 +714,8 @@ function _wannierization_checkpoint_sha256_v2_21(result::WannierizationResult)
 end
 
 # Schema 2.22 binds algorithm-profile resolution and the immutable W90-4.0.1
-# protocol identity. Legacy-FR checkpoints remain readable but cannot satisfy
-# this continuation contract.
+# protocol identity. Legacy-FR digest support is retained only for independent
+# migration tooling and cannot satisfy the public 1.1 continuation contract.
 function _wannierization_checkpoint_sha256_v2_22(result::WannierizationResult)
     buffer = IOBuffer()
     write(buffer, _wannierization_checkpoint_sha256_v2_21(result), '\n')
@@ -763,7 +763,7 @@ function _wannierization_checkpoint_sha256_v2_23(result::WannierizationResult)
 end
 
 # Schema 2.24 removes every observer-state injection path and binds the v2
-# pure-Julia algorithm contract. Schema 2.23 stays readable but is not restartable.
+# pure-Julia algorithm contract. Schema 2.23 is an external-migration input only.
 function _wannierization_checkpoint_sha256_v2_24(result::WannierizationResult)
     buffer = IOBuffer()
     write(buffer, _wannierization_checkpoint_sha256_v2_23(result), '\n')
@@ -846,13 +846,61 @@ function _wannierization_checkpoint_sha256_v2_28(result::WannierizationResult)
     return bytes2hex(SHA.sha256(take!(buffer)))
 end
 
-# Public 1.0 seals the unchanged complete 2.28 state with its own wire identity.
-function _wannierization_checkpoint_sha256_v1_0(result::WannierizationResult)
+# Public 1.1 seals the unchanged complete 2.28 numerical state with the Standard wire identity.
+function _wannierization_checkpoint_sha256_v1_1(result::WannierizationResult)
     buffer = IOBuffer()
     write(buffer, _wannierization_checkpoint_sha256_v2_28(result), '\n')
-    write(buffer, "checkpoint_schema_version=1.0\n")
+    write(buffer, "checkpoint_schema_version=1.1\n")
     if haskey(result.input_summary, "construction_policy_contract")
-        for key in ("construction_policy_contract", "construction_policy", "manual_review_status")
+        for key in ("construction_policy_contract", "construction_policy", "quality_review_status")
+            write(buffer, key, '\0', get(result.input_summary, key, "NOT_RECORDED"), '\n')
+        end
+        # Bind the original check outcome and continuation action, including all
+        # context fields, so readback cannot silently erase a failed quality gate.
+        for diagnostic in result.diagnostics
+            write(buffer, repr((diagnostic.code, diagnostic.severity, diagnostic.message)), '\n')
+            for key in sort!(collect(keys(diagnostic.context)))
+                write(buffer, repr((key, diagnostic.context[key])), '\n')
+            end
+        end
+    end
+    return bytes2hex(SHA.sha256(take!(buffer)))
+end
+
+# Rebuild the canonical typed defaults for any eligibility key a summary lacks.
+# A partially written block that contradicts itself cannot be reconstructed, so
+# fall back to the honest not-evaluated placeholder instead of failing a write.
+function _wannierization_eligibility_defaults(summary)
+    try
+        return wannierization_eligibility_summary(wannierization_eligibility_from_summary(summary))
+    catch
+        return wannierization_eligibility_summary(not_evaluated_wannierization_eligibility())
+    end
+end
+
+# Public 1.2 seals the unchanged complete 2.28 numerical state with the Standard
+# wire identity and the typed eligibility block.  The three retired
+# qualified-seal/route/export keys are replaced by the ten canonical
+# WannierizationEligibility summary strings.
+function _wannierization_checkpoint_sha256_v2_29(result::WannierizationResult)
+    buffer = IOBuffer()
+    write(buffer, _wannierization_checkpoint_sha256_v2_28(result), '\n')
+    write(buffer, "checkpoint_schema_version=1.2\n")
+    # Bind the persisted typed block through its single canonical serializer so
+    # the digest, the summary dictionary, and the HDF5 attributes agree.  The
+    # reconstructed block only supplies a default for a key the summary lacks.
+    defaults = nothing
+    for key in WANNIERIZATION_ELIGIBILITY_SUMMARY_KEYS
+        if haskey(result.input_summary, key)
+            write(buffer, key, '=', result.input_summary[key], '\n')
+        else
+            defaults === nothing &&
+                (defaults = _wannierization_eligibility_defaults(result.input_summary))
+            write(buffer, key, '=', defaults[key], '\n')
+        end
+    end
+    if haskey(result.input_summary, "construction_policy_contract")
+        for key in ("construction_policy_contract", "construction_policy", "quality_review_status")
             write(buffer, key, '\0', get(result.input_summary, key, "NOT_RECORDED"), '\n')
         end
         # Bind the original check outcome and continuation action, including all
@@ -893,15 +941,23 @@ function _wannierization_production_eligible(result::WannierizationResult)
     representation_status = get(result.input_summary, "representation_compatible", "false")
     return get(result.input_summary, "construction_policy", "strict") == "strict" &&
            result.status in (COMPLETED, COMPLETED_WITH_WARNINGS) &&
-           get(result.input_summary, "controlled_symmetrization_diagnostic_only", "false") !=
-           "true" &&
+           get(
+               result.input_summary,
+               "controlled_symmetrization_quality_review_recommended",
+               "false",
+           ) != "true" &&
            get(result.input_summary, "controlled_symmetrization_production_eligible", "true") ==
            "true" &&
            get(result.input_summary, "optimizer_schedule", "") in ("two_stage", "joint") &&
            get(result.input_summary, "u_acceptance", "") == "armijo" &&
            get(result.input_summary, "z_seal_class", "") == "CONVERGED" &&
-           get(result.input_summary, "qualified_z_seal", "false") == "true" &&
-           get(result.input_summary, "standard_tb_export_eligible", "false") == "true" &&
+           get(
+               result.input_summary,
+               "wannierization_eligibility_strictly_converged_z_seal",
+               "false",
+           ) == "true" &&
+           get(result.input_summary, "wannierization_eligibility_export_eligible", "false") ==
+           "true" &&
            representation_status in ("true", "NOT_APPLICABLE") &&
            get(result.input_summary, "physics_qualification", "") == "QUALIFIED" &&
            get(result.input_summary, "band_validation_pass", "false") == "true" &&
@@ -931,13 +987,13 @@ end
 function _checkpoint_persisted_result(result::WannierizationResult)
     summary = Dict{String, String}(result.input_summary)
     summary["construction_policy"] = get(summary, "construction_policy", "strict")
-    summary["construction_policy"] in ("strict", "diagnostic") ||
+    summary["construction_policy"] in ("strict", "standard") ||
         throw(ArgumentError("CONSTRUCTION_POLICY_INVALID: unsupported persisted policy"))
-    summary["construction_policy_contract"] = "diagnostic_construction_v1"
-    summary["manual_review_status"] = get(
+    summary["construction_policy_contract"] = "standard_construction_v1"
+    summary["quality_review_status"] = get(
         summary,
-        "manual_review_status",
-        summary["construction_policy"] == "diagnostic" ? "REQUIRED" : "NOT_REQUESTED",
+        "quality_review_status",
+        summary["construction_policy"] == "standard" ? "RECOMMENDED" : "NOT_REQUESTED",
     )
     summary["algorithm_profile"] = get(summary, "algorithm_profile", "legacy")
     summary["effective_algorithm_profile"] = get(summary, "effective_algorithm_profile", "legacy")
@@ -959,11 +1015,14 @@ function _checkpoint_persisted_result(result::WannierizationResult)
     summary["localization_gradient_contract"] = LOCALIZATION_GRADIENT_CONTRACT
     summary["joint_update_contract"] = JOINT_UPDATE_CONTRACT
     summary["disentanglement_limit_policy"] =
-        get(summary, "disentanglement_limit_policy", "diagnostic_continue")
+        get(summary, "disentanglement_limit_policy", "standard_continue")
     summary["z_seal_class"] = get(summary, "z_seal_class", "NOT_APPLICABLE")
-    summary["qualified_z_seal"] = get(summary, "qualified_z_seal", "false")
-    summary["route_selection_eligible"] = get(summary, "route_selection_eligible", "false")
-    summary["standard_tb_export_eligible"] = get(summary, "standard_tb_export_eligible", "false")
+    # Materialize every typed eligibility key so each persisted checkpoint carries
+    # the complete, self-consistent block the wire-1.2 digest binds.
+    eligibility_defaults = _wannierization_eligibility_defaults(summary)
+    for key in WANNIERIZATION_ELIGIBILITY_SUMMARY_KEYS
+        summary[key] = get(summary, key, eligibility_defaults[key])
+    end
     summary["authoritative_hamiltonian"] = get(summary, "authoritative_hamiltonian", "native_dft")
     summary["authoritative_hamiltonian_sha256"] =
         get(summary, "authoritative_hamiltonian_sha256", "LEGACY_NATIVE_DFT")

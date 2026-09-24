@@ -14,13 +14,13 @@ end
 @testset "grouped Wannierization configuration architecture" begin
     @test fieldnames(GROUPED_W.SymmetryAdaptedWannierizationConfig) ==
           (:input, :solver, :checkpoint, :runtime, :output)
-    @test length(GROUPED_W.WANNIERIZATION_INPUT_CONFIG_FIELDS) == 27
+    @test length(GROUPED_W.WANNIERIZATION_INPUT_CONFIG_FIELDS) == 28
     @test length(GROUPED_W.WANNIERIZATION_SOLVER_CONFIG_FIELDS) == 20
     @test length(GROUPED_W.WANNIERIZATION_CHECKPOINT_CONFIG_FIELDS) == 4
     @test length(GROUPED_W.WANNIERIZATION_RUNTIME_CONFIG_FIELDS) == 2
-    @test length(GROUPED_W.WANNIERIZATION_OUTPUT_CONFIG_FIELDS) == 20
-    @test length(GROUPED_W.WANNIERIZATION_CONFIG_LEAF_FIELDS) == 73
-    @test length(unique(GROUPED_W.WANNIERIZATION_CONFIG_LEAF_FIELDS)) == 73
+    @test length(GROUPED_W.WANNIERIZATION_OUTPUT_CONFIG_FIELDS) == 21
+    @test length(GROUPED_W.WANNIERIZATION_CONFIG_LEAF_FIELDS) == 75
+    @test length(unique(GROUPED_W.WANNIERIZATION_CONFIG_LEAF_FIELDS)) == 75
     artifacts = GROUPED_W.WannierizationArtifacts(wannierization_log = "run.wannierization.out")
     @test artifacts.wannierization_log == "run.wannierization.out"
     @test !hasproperty(artifacts, :sawf_log)
@@ -51,11 +51,11 @@ end
     @test !hasproperty(ordinary_default, :win_file)
     @test_throws ErrorException ordinary_default.win_file
     @test restart_digest_family(ordinary_default) == (
-        current = "a9bcfa6cf580bcc42608a657a7e25ecde3b5c00ea4023962a36ea4cdf9d10c68",
-        pre_v2_12 = "3c3cf66184240ff665bfa4302f5fa8fe74b4d10158ff81d7e4f77705ed4925e5",
-        pre_v2_11 = "555ceb7144cb7fe752a90cb7e3bd6558248949fc12c13f49b031f524a5ca4566",
-        pre_v2_10 = "831780264f5aad536bca5592d8978fe62f5ef81ab8527972c72faa95370e5f2b",
-        pre_v2_9 = "a4bf286038543bda629bf985cff1bb6a8e8adae333612b877c001fa6c9977732",
+        current = "740e55436c908b0195427331ed258fedc94b3b2a4b1c6b89a74a92be5e2445ee",
+        pre_v2_12 = "450d0a67efc00cb8e8de3828880417dbc394370f6d7b1fe779d863121de0815c",
+        pre_v2_11 = "35fcae359a5b650ab1f69796b6e11a40a21fde2cbf524c1af39752c6621d51f3",
+        pre_v2_10 = "08ef45cf3f5cbde79b888280aeb262fb31344465beb13349a2780aa2e92e4603",
+        pre_v2_9 = "e5e82a3cd7c3ce0c57997e1b3a276f2f9a91a6f60689f5a2c91db8e3ed9498ab",
         pre_v2_8 = "4a083b94d976030751ab8338795235b51fc332cbbd0713895b7aae28b0899c35",
         pre_v2_7 = "98f330c0fc03f1ba98fb5dd4f49aba3b6131980f1023f6017157e328def54cad",
         pre_v2_6 = "7667757b789afc08e2fdb99663be0d003117b7c172347f8731b4abc5f0157798",
@@ -101,11 +101,11 @@ end
         ),
     )
     @test restart_digest_family(ordinary_custom) == (
-        current = "a9b39fc754ce3bd4307a9ffc4407aa4d9cac26609b6048254869e15f2c281ba1",
-        pre_v2_12 = "67f03092a451d9a5f8a8b8c84efb7e7da766389673aeb06295f66b2ed401973b",
-        pre_v2_11 = "faa0b20edd7d6dadc4c806a0f88b805f452c1e8005622f455962f146804dc806",
-        pre_v2_10 = "423bf27d40f46486385c79797964b30efb77800c0512a48e6b6042171811e6e2",
-        pre_v2_9 = "9b90ce7bc53a82c36cd406606f331d2e1f959d41115ab743ea19e7a69a1f6f41",
+        current = "b684cb255155bda8c603c0b0ddbb61f67c6af476788b587e3563f6eb61cedf08",
+        pre_v2_12 = "ed9ef002d62d83a7d02a28a97eb8dfb206f7fbbc3055bf5ac3d9f52ca077d820",
+        pre_v2_11 = "4d085ec548b1fc2bd819cbe7225fb2ae1a871c48f87d4a71affffb0116545289",
+        pre_v2_10 = "0a110436023be6b5ca08b25ec5536ea6f73289b974e7033e507bddfb61c96367",
+        pre_v2_9 = "469e3412f712b81cb86a3642e1a47f2134989f2acd98c7b9ea7cf3bad16a5369",
         pre_v2_8 = "7c7a8ccb2c08425260fcd52f1096ed728b93f07a9562558b0b1ccfb67444bce0",
         pre_v2_7 = "683c128ce02c7b128afd2d54770537dd7842bd0cb91837f8cc19707d2fe8dde3",
         pre_v2_6 = "5af51b81fb01fed2441472d3f2febf3aa5f570c5dc5bcd8bcfaafe56198cb2ec",
@@ -122,11 +122,11 @@ end
         ),
     )
     @test restart_digest_family(augmented) == (
-        current = "49165e9f6693334395a911409a680257778ce797ff23f55cb1fec3ff252ad277",
-        pre_v2_12 = "b86a610394344cc2ba6218c1eb19ff277a25eaeabf0955f7ea63574961435923",
+        current = "cded9e831fcab7b0ff76981687b6eb89e9856db66b75ce9d7ba0cb1122f3b4c1",
+        pre_v2_12 = "ffb62830479700920807da90f08464b8f24940fe908ad35a270b7779cdb83ef6",
         pre_v2_11 = nothing,
-        pre_v2_10 = "831780264f5aad536bca5592d8978fe62f5ef81ab8527972c72faa95370e5f2b",
-        pre_v2_9 = "a4bf286038543bda629bf985cff1bb6a8e8adae333612b877c001fa6c9977732",
+        pre_v2_10 = "08ef45cf3f5cbde79b888280aeb262fb31344465beb13349a2780aa2e92e4603",
+        pre_v2_9 = "e5e82a3cd7c3ce0c57997e1b3a276f2f9a91a6f60689f5a2c91db8e3ed9498ab",
         pre_v2_8 = "4a083b94d976030751ab8338795235b51fc332cbbd0713895b7aae28b0899c35",
         pre_v2_7 = "98f330c0fc03f1ba98fb5dd4f49aba3b6131980f1023f6017157e328def54cad",
         pre_v2_6 = "7667757b789afc08e2fdb99663be0d003117b7c172347f8731b4abc5f0157798",

@@ -907,7 +907,7 @@ function _transport_selected_subspace_corepresentation(
     target_symmetry = _maximum_target_frame_symmetry_error(transported, representation, plan)
     (
         isfinite(target_symmetry) &&
-        (construction_policy == :diagnostic || target_symmetry <= covariance_tolerance)
+        (construction_policy == :standard || target_symmetry <= covariance_tolerance)
     ) || return (
         success = false,
         code = :SUBSPACE_COREPRESENTATION_TRANSPORT_FAILED,
@@ -1859,22 +1859,20 @@ function _record_terminal_state!(
         for name in propertynames(hard_gate_residuals)
             input_summary["hard_gate_$(name)"] = string(getproperty(hard_gate_residuals, name))
         end
-        if get(input_summary, "covariance_qualification", "") == "DIAGNOSTIC_ONLY" &&
+        if get(input_summary, "covariance_qualification", "") == "STANDARD" &&
            hasproperty(hard_gate_residuals, :covariance)
             input_summary["diagnostic_covariance_residual"] =
                 string(getproperty(hard_gate_residuals, :covariance))
         end
     end
-    if get(input_summary, "construction_policy", "strict") == "diagnostic"
+    if get(input_summary, "construction_policy", "strict") == "standard"
         if get(input_summary, "construction_quality_failed", "false") == "true" ||
            any(diagnostic -> get(diagnostic.context, "gate_result", "") == "FAIL", diagnostics)
             input_summary["construction_quality_failed"] = "true"
         end
-        input_summary["manual_review_required"] = "true"
-        startswith(get(input_summary, "model_qualification", ""), "DIAGNOSTIC_ONLY") ||
-            (input_summary["model_qualification"] = "DIAGNOSTIC_ONLY")
-        input_summary["standard_tb_export_eligible"] = "false"
-        input_summary["route_selection_eligible"] = "false"
+        input_summary["quality_review_recommended"] = "true"
+        startswith(get(input_summary, "model_qualification", ""), "STANDARD") ||
+            (input_summary["model_qualification"] = "STANDARD")
         input_summary["scoped_production_eligible"] = "false"
         input_summary["global_production_eligible"] = "false"
     end
@@ -1905,8 +1903,7 @@ function _failure_result(
         restart_state === nothing ? Matrix{Float64}(centers) : copy(restart_state.centers_cartesian)
     retained_spreads =
         restart_state === nothing ? Float64.(spreads) : copy(restart_state.spreads_angstrom2)
-    v_matrix =
-        isempty(retained_frames) ? zeros(ComplexF64, 0, 0, 0) : cat(retained_frames...; dims = 3)
+    v_matrix = _pack_matrix_field(retained_frames)
     chk = if restart_state !== nothing && representation !== nothing
         WannierCHK(
             size(v_matrix, 1),
@@ -1953,6 +1950,21 @@ function _restart_matrix_field(values::Array{ComplexF64, 3})
     return [Matrix{ComplexF64}(@view values[:, :, kpoint]) for kpoint in axes(values, 3)]
 end
 
+# Pack a k-indexed matrix field without splatting every k-point into `cat`.
+# Dense meshes may contain thousands of matrices; splatting them turns each
+# matrix into a Julia call argument and can overflow the call stack.
+function _pack_matrix_field(values::AbstractVector{<:AbstractMatrix{ComplexF64}})
+    isempty(values) && return zeros(ComplexF64, 0, 0, 0)
+    rows, columns = size(first(values))
+    packed = Array{ComplexF64}(undef, rows, columns, length(values))
+    for (kpoint, value) in enumerate(values)
+        size(value) == (rows, columns) ||
+            throw(DimensionMismatch("matrix field dimensions disagree at k-point $(kpoint)"))
+        @views packed[:, :, kpoint] .= value
+    end
+    return packed
+end
+
 # Capture the complete state only after a full Z/U iteration has committed.
 function _restart_state(
     iteration,
@@ -1979,8 +1991,8 @@ function _restart_state(
     masks = BitMatrix(reduce(hcat, included_bands))
     return WannierizationRestartState(
         iteration,
-        cat(frames...; dims = 3),
-        z_previous === nothing ? nothing : cat(z_previous...; dims = 3),
+        _pack_matrix_field(frames),
+        z_previous === nothing ? nothing : _pack_matrix_field(z_previous),
         Matrix{Float64}(centers),
         Float64.(spreads),
         Matrix{Float64}(values),
@@ -1993,10 +2005,10 @@ function _restart_state(
         String(amn_sha256),
         optimizer_state,
         fixed_subspace_projectors === nothing ? nothing :
-        cat(fixed_subspace_projectors...; dims = 3),
-        fixed_subspace_frames === nothing ? nothing : cat(fixed_subspace_frames...; dims = 3),
+        _pack_matrix_field(fixed_subspace_projectors),
+        fixed_subspace_frames === nothing ? nothing : _pack_matrix_field(fixed_subspace_frames),
         localization_initial_frames === nothing ? nothing :
-        cat(localization_initial_frames...; dims = 3),
+        _pack_matrix_field(localization_initial_frames),
     )
 end
 

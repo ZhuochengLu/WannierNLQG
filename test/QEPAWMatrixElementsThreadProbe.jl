@@ -28,7 +28,7 @@ mktempdir() do directory
             artifact_dir = joinpath(lane_directory, "diagnostic"),
             require_oracle = false,
         )
-        diagnostic.passed || error("$(lane.label) diagnostic construction failed")
+        diagnostic.passed || error("$(lane.label) standard construction failed")
         oracle = copy_qe_paw_oracles(diagnostic, joinpath(lane_directory, "oracle"))
         write_qe_paw_oracle_provenance(dirname(oracle.mmn), diagnostic.input_sha256)
         qualified = W.generate_qe_paw_matrix_elements(

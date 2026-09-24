@@ -9,3 +9,16 @@ function load_documented_example(path::AbstractString, index::Int)
 end
 
 const DOCUMENTED_EXAMPLE_TEST_SUPPORT_LOADED = true
+
+"""Identify the three explicitly three-dimensional closed-model example families."""
+function documented_example_is_spectral(path)
+    return any(
+        startswith(basename(path), name) for
+        name in ("linear_transport_", "linear_optical_response_", "orbital_magnetization_")
+    )
+end
+
+"""Choose a two-point smoke mesh on each axis supported by the example."""
+function documented_example_smoke_mesh(path)
+    return documented_example_is_spectral(path) && occursin("/integral/", path) ? (2, 2, 2) : (2, 2)
+end

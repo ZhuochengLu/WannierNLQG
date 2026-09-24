@@ -5,7 +5,7 @@ using TOML
 using WannierNLQG
 
 const ROOT = normpath(joinpath(@__DIR__, ".."))
-const EXPECTED_VERSION = v"1.0.1"
+const EXPECTED_VERSION = v"1.1.0"
 const GPL2_ONLY_SPDX_IDENTIFIER = "GPL-2.0-only"
 const GPL2_ONLY_LICENSE_SHA256 = "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
 const GPL2_ONLY_METADATA_MARKERS = (
@@ -178,8 +178,22 @@ const INDEPENDENT_SCHEMA_CONSTANTS = (
 )
 for (relative_path, name) in INDEPENDENT_SCHEMA_CONSTANTS
     source = read(joinpath(ROOT, relative_path), String)
-    occursin(name * " = \"1.0\"", source) ||
-        error("independent storage schema is not 1.0: $(name) in $(relative_path)")
+    expected_version = get(
+        Dict(
+            "OPERATOR_BUNDLE_SCHEMA_VERSION" => "1.1",
+            "WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION" => "1.2",
+            "WANNIERIZATION_FIXED_SUBSPACE_SCHEMA_VERSION" => "2.0",
+            "VASP_PAW_SPN_SCHEMA_VERSION" => "1.1",
+            "QE_PAW_SPN_SCHEMA_VERSION" => "1.1",
+            "QE_PAW_MATRIX_ELEMENT_SCHEMA_VERSION" => "1.1",
+            "WANNIER_UIU_GENERATION_SCHEMA_VERSION" => "1.1",
+            "WANNIER_HAMILTONIAN_OPERATOR_GENERATION_SCHEMA_VERSION" => "1.1",
+        ),
+        name,
+        "1.0",
+    )
+    occursin(name * " = \"$(expected_version)\"", source) ||
+        error("independent storage schema is not $(expected_version): $(name) in $(relative_path)")
 end
 
 # Parse literal Band header declarations so spacing changes do not weaken or break
@@ -245,6 +259,10 @@ const INDEPENDENT_SCHEMA_MARKERS = (
     ("src/Runtime/Execution/KPathDriver.jl", "schema_version = \"1.0\""),
     ("scripts/visualization/model_lattice_probe.jl", "\"schema_version\" => \"1.0\""),
     ("scripts/visualization/common.py", "\"schema_version\": \"1.0\""),
+    (
+        "ext/WannierNLQGOperatorBundleExt/WannierNLQGOperatorBundleExt.jl",
+        "[\"minimum_reader_schema\"] = OPERATOR_BUNDLE_SCHEMA_VERSION",
+    ),
 )
 for (relative_path, marker) in INDEPENDENT_SCHEMA_MARKERS
     occursin(marker, read(joinpath(ROOT, relative_path), String)) ||
@@ -255,7 +273,7 @@ end
 const RETAINED_INTERNAL_SCHEMA_MARKERS = (
     (
         "ext/WannierNLQGWannierizationExt/OperatorProfileAssembly.jl",
-        "OPERATOR_QUALIFICATION_SCHEMA_VERSION = \"1.2\"",
+        "OPERATOR_QUALIFICATION_SCHEMA_VERSION = \"1.3\"",
     ),
     (
         "src/Wannierization/models/DiagnosticsQualification.jl",
@@ -265,10 +283,6 @@ const RETAINED_INTERNAL_SCHEMA_MARKERS = (
     (
         "ext/WannierNLQGWannierizationExt/ProjectionRepresentationSearchHDF5.jl",
         "WannierNLQG.projection_search_hdf5_mirror/2.1",
-    ),
-    (
-        "ext/WannierNLQGOperatorBundleExt/WannierNLQGOperatorBundleExt.jl",
-        "[\"minimum_reader_schema\"] = \"6.2\"",
     ),
 )
 for (relative_path, marker) in RETAINED_INTERNAL_SCHEMA_MARKERS
@@ -284,7 +298,7 @@ bundle_extension = read(
 )
 occursin("string(Base.pkgversion(WannierNLQG))", bundle_extension) ||
     error("Packed writer software provenance is not bound to package version")
-for identity in ("1.0.1", "1.0.0", "2.4.0", "2.3.0", "2.1.0", "2.0.0")
+for identity in ("1.1.0", "1.0.1", "1.0.0", "2.4.0", "2.3.0", "2.1.0", "2.0.0")
     occursin(identity, bundle_extension) ||
         error("Packed reader compatibility identity is missing: $(identity)")
 end
@@ -302,6 +316,6 @@ for (directory, directories, files) in walkdir(ROOT)
 end
 
 println(
-    "version consistency passed: software=$(EXPECTED_VERSION) independent_storage=1.0 internal_contracts=preserved " *
+    "version consistency passed: software=$(EXPECTED_VERSION) checkpoint=1.2 packed_hdf5=1.1 other_independent_storage=1.0 internal_contracts=preserved " *
     "internal_predecessor=2.4.0",
 )

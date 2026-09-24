@@ -345,6 +345,55 @@ function metadata_numerics_entries(cfg::EffectiveTaskConfig, ctx::RunContext)
         "tensor_indices" => metadata_value(cfg.tensor_indices),
         "band_selection" => metadata_value(cfg.band_selection),
     ]
+    if any(
+        spec->spec.quantity in
+              (:linear_transport, :linear_optical_response, :orbital_magnetization),
+        ctx.specs,
+    )
+        filter!(
+            entry->!(
+                first(entry) in (
+                    "broadening",
+                    "broadening_type",
+                    "transition_window_factor",
+                    "denominator_regularization",
+                    "band_window_size",
+                )
+            ),
+            entries,
+        )
+        append!(
+            entries,
+            [
+                "spectral_gap_tolerance_ev"=>string(cfg.spectral_gap_tolerance),
+                "response_semantics"=>"see spectral_response_metadata.txt",
+            ],
+        )
+        if any(spec -> spec.quantity in (:linear_transport, :orbital_magnetization), ctx.specs)
+            filter!(entry -> first(entry) != "fermi_energy", entries)
+            append!(
+                entries,
+                [
+                    "fermi_energies" => metadata_value(cfg.fermi_energies),
+                    "fermi_energies_sha256" => cfg.fermi_energies_sha256,
+                ],
+            )
+        end
+    end
+    if any(spec -> spec.quantity == :second_harmonic_generation, ctx.specs)
+        append!(
+            entries,
+            Pair{String, String}[
+                "shg_low_frequency_broadening" => metadata_value(cfg.shg_low_frequency_broadening),
+                "shg_eta_correction" => metadata_value(cfg.shg_eta_correction),
+                "shg_output" => string(cfg.shg_output),
+                "shg_response" => string(cfg.shg_response),
+                "shg_zero_temperature_policy" => "temperature <= 1e-7 K: step occupations; omit one-band terms",
+                "shg_state_multiplicity" => "one electron per explicit model state",
+                "shg_kslice_definition" => "BZ-integrated-form density; no k weight; full-BZ mean recovers integral",
+            ],
+        )
+    end
     if cfg.response_symmetry_file !== nothing
         push!(entries, "response_symmetry_file" => metadata_value(cfg.response_symmetry_file))
         push!(entries, "response_symmetry_policy" => metadata_value(cfg.response_symmetry_policy))
@@ -758,6 +807,7 @@ function write_metadata(
     response_symmetry_summary::NamedTuple = NamedTuple(),
     band_summary::NamedTuple = NamedTuple(),
     replica_summary::NamedTuple = NamedTuple(),
+    qualification_summary::NamedTuple = NamedTuple(),
 )
     _ = family_counts
     single_task = length(ctx.specs) == 1
@@ -872,6 +922,16 @@ function write_metadata(
     open(ctx.metadata_path, "w") do io
         metadata_section(io, "Run", run_entries)
         metadata_section(io, "Input", input_entries)
+        if !isempty(keys(qualification_summary))
+            metadata_section(
+                io,
+                "Qualification",
+                Pair{String, String}[
+                    string(key) => metadata_value(getproperty(qualification_summary, key)) for
+                    key in keys(qualification_summary)
+                ],
+            )
+        end
         metadata_section(io, "Tasks", task_entries)
         metadata_section(io, "Numerics", metadata_numerics_entries(cfg, ctx))
         if !isempty(keys(replica_summary))

@@ -202,7 +202,7 @@ function _validate_vasp_projection_run_contract(
             "VASP_PAW_PROJECTION_CONTRACT_MISMATCH: OUTCAR/WAVECAR k-point counts differ",
         ),
     )
-    parse(Int, count_match.captures[2]) >= size(first(native.kpoints).coefficients, 1) ||
+    parse(Int, count_match.captures[2]) >= native_point_metadata(native, 1).num_bands ||
         throw(ArgumentError("VASP_PAW_PROJECTION_CONTRACT_MISMATCH: OUTCAR has too few bands"))
     cutoff = _vasp_outcar_scalar(outcar_text, r"ENCUT\s*=\s*([-+0-9.EeDd]+)", "ENCUT")
     lattice_lines = split(outcar_text, '\n')
@@ -808,19 +808,156 @@ function _paw_projectors(native::NativeWavefunctionData, paw::VASPPawSystem)
     )
     projectors = Vector{Array{ComplexF64, 3}}(undef, length(native.kpoints))
     for (kpoint_index, point) in enumerate(native.kpoints)
-        basis = _paw_projector_basis(point, native, paw)
-        values = zeros(
-            ComplexF64,
-            size(point.coefficients, 1),
-            paw.num_channels,
-            size(point.coefficients, 3),
-        )
-        for spin in axes(point.coefficients, 3)
-            values[:, :, spin] .= @view(point.coefficients[:, :, spin]) * transpose(basis)
-        end
-        projectors[kpoint_index] = values
+        projectors[kpoint_index] = _paw_projector_point(point, native, paw)
     end
     return projectors
+end
+
+"""Contract one raw VASP point with its PAW projector basis without changing arithmetic."""
+function _paw_projector_point(point, native, paw)
+    basis = _paw_projector_basis(point, native, paw)
+    values = zeros(
+        ComplexF64,
+        size(point.coefficients, 1),
+        paw.num_channels,
+        size(point.coefficients, 3),
+    )
+    for spin in axes(point.coefficients, 3)
+        values[:, :, spin] .= @view(point.coefficients[:, :, spin]) * transpose(basis)
+    end
+    return values
+end
+
+"""Bind standalone VASP operator preparation while preserving an existing batch scope."""
+function _with_vasp_operator_artifacts(
+    f,
+    source::VASPWavefunctionSource,
+    output_directory;
+    execution = nothing,
+    additional_inputs = String[],
+)
+    effective =
+        execution === nothing ? get(task_local_storage(), :wannier_preparation_execution, nothing) :
+        execution
+    paths = collect(values(_preparation_source_files(source)))
+    append!(paths, additional_inputs)
+    root, implementation = _preparation_implementation_paths()
+    return with_verified_file_digests(vcat(paths, implementation)) do
+        run =
+            () -> task_local_storage(
+                () -> _with_spn_provenance_reuse(f),
+                :wannier_preparation_execution,
+                effective,
+            )
+        if effective !== nothing && (effective.mode == :dense_reference || !effective.resume)
+            # Explicit baseline/recompute settings override inherited batch caches.
+            return task_local_storage(run, :wannier_preparation_artifact_cache, nothing)
+        end
+        get(task_local_storage(), :wannier_preparation_artifact_cache, nothing) === nothing ||
+            return run()
+        source_bindings = sort!([
+            (realpath(path), sha256_file(path)) for
+            path in values(_preparation_source_files(source))
+        ])
+        code = [(relpath(path, root), sha256_file(path)) for path in implementation]
+        contract =
+            bytes2hex(SHA.sha256(repr(("vasp-operator-preparation-v1", source_bindings, code))))
+        directory =
+            effective === nothing || effective.checkpoint_directory === nothing ?
+            joinpath(output_directory, ".wannier_preparation", "vasp") :
+            joinpath(effective.checkpoint_directory, "shared-native")
+        return with_preparation_artifact_cache(run, directory, contract)
+    end
+end
+
+"""Bind operator inputs to the physical explicit spin basis when no INCAR exists."""
+function _vasp_operator_input_sha256(source::VASPWavefunctionSource, native::NativeWavefunctionData)
+    hashes = copy(native.input_sha256)
+    hashes["POTCAR"] = sha256_file(something(source.potcar_file))
+    if get(hashes, "INCAR", "") == "EXPLICIT_SPIN_BASIS"
+        delete!(hashes, "INCAR")
+        hashes["SPIN_BASIS_CONTRACT"] =
+            bytes2hex(SHA.sha256(codeunits(get(native.source_metadata, "saxis", "not_applicable"))))
+    end
+    return hashes
+end
+
+"""Reuse compact raw PAW data shared by native spin and overlap operator stages.
+
+The caller supplies a freshly read raw source; target-gauge rotations remain in
+later operator stages. Durable reuse is enabled only inside a bound artifact scope.
+"""
+function _vasp_operator_paw_context(source::VASPWavefunctionSource, native::NativeWavefunctionData)
+    get(native.source_metadata, "coefficient_normalization", "") == "vasp_raw" ||
+        throw(ArgumentError("VASP_PAW_RAW_COEFFICIENTS_REQUIRED"))
+    if get(task_local_storage(), :wannier_preparation_artifact_cache, nothing) === nothing
+        return _vasp_compact_paw_context(native, "") do
+            read_vasp_paw_system(something(source.potcar_file), native.structure)
+        end
+    end
+    hashes = copy(native.input_sha256)
+    # With no INCAR, both readers use the same explicit source SAXIS. Their
+    # requirement-status markers differ but are not distinct physical inputs.
+    source.incar_file === nothing && (hashes["INCAR"] = "SOURCE_SPIN_BASIS")
+    hashes["POTCAR"] = sha256_file(something(source.potcar_file))
+    identity = _vasp_raw_context_identity(source, native, hashes)
+    return _vasp_compact_paw_context(native, identity) do
+        read_vasp_paw_system(something(source.potcar_file), native.structure)
+    end
+end
+
+"""Canonicalize equivalent source selections while retaining physical configuration and hashes."""
+function _vasp_raw_context_identity(
+    source::VASPWavefunctionSource,
+    native::NativeWavefunctionData,
+    hashes,
+)
+    bands = native_point_metadata(native, 1).num_bands
+    selection = source.band_range === nothing ? (1:bands) : source.band_range
+    length(selection) == bands || throw(ArgumentError("VASP_RAW_CONTEXT_BAND_RANGE_MISMATCH"))
+    fields = map(fieldnames(typeof(source))) do name
+        value = getfield(source, name)
+        if name == :band_range
+            value = selection
+        elseif name == :spinor
+            value = native.spinor
+        elseif name in (:poscar_file, :wavecar_file, :potcar_file, :incar_file, :outcar_file) &&
+               value !== nothing
+            value = ispath(value) ? realpath(value) : abspath(value)
+        end
+        name => value
+    end
+    return bytes2hex(SHA.sha256(repr((fields, sort!(collect(hashes); by = first)))))
+end
+
+"""Seal PAW/projector/norm payloads separately so a resumed stage needs no coefficient replay."""
+function _vasp_compact_paw_context(paw_builder, native::NativeWavefunctionData, identity::String)
+    paw = cached_preparation_artifact(paw_builder, "vasp-paw", () -> identity)
+    radial_q_maximum, radial_q_worst =
+        cached_preparation_artifact("vasp-radial-q", () -> identity) do
+            _paw_radial_q_gate(paw)
+        end
+    projectors = [
+        cached_preparation_artifact(
+            "vasp-projector",
+            () -> identity * ":" * string(k);
+            unit = k,
+        ) do
+            _paw_projector_point(native.kpoints[k], native, paw)
+        end for k in eachindex(native.kpoints)
+    ]
+    generalized_norm, generalized_norm_worst =
+        cached_preparation_artifact("vasp-norm", () -> identity) do
+            _paw_generalized_norm_residuals(native, paw, projectors)
+        end
+    return (;
+        paw,
+        radial_q_maximum,
+        radial_q_worst,
+        projectors,
+        generalized_norm,
+        generalized_norm_worst,
+    )
 end
 
 # Return the maximum residual from identity on one selected band subspace.
@@ -861,13 +998,25 @@ function _paw_generalized_norm_residuals(
     projectors::Vector{Array{ComplexF64, 3}},
     outer_mask::Union{Nothing, AbstractMatrix{Bool}} = nothing,
 )
-    bands = size(first(native.kpoints).coefficients, 1)
+    return only(_paw_generalized_norm_scopes(native, paw, projectors, (outer_mask,)))
+end
+
+"""Evaluate multiple norm scopes from each physical overlap computed exactly once."""
+function _paw_generalized_norm_scopes(
+    native::NativeWavefunctionData,
+    paw::VASPPawSystem,
+    projectors::Vector{Array{ComplexF64, 3}},
+    masks::Tuple,
+)
+    bands = native_point_metadata(native, 1).num_bands
     kpoints = length(native.kpoints)
-    outer_mask === nothing ||
-        size(outer_mask) == (bands, kpoints) ||
-        throw(ArgumentError("VASP PAW norm scope dimensions disagree"))
-    maximum_residual = 0.0
-    worst = (0, 0, 0)
+    for mask in masks
+        mask === nothing ||
+            size(mask) == (bands, kpoints) ||
+            throw(ArgumentError("VASP PAW norm scope dimensions disagree"))
+    end
+    maxima = zeros(Float64, length(masks))
+    worst = fill((0, 0, 0), length(masks))
     for (kpoint_index, point) in enumerate(native.kpoints)
         size(point.coefficients, 1) == bands ||
             throw(ArgumentError("VASP PAW band count changes between k-points"))
@@ -879,15 +1028,16 @@ function _paw_generalized_norm_residuals(
             overlap .+= conj(projector) * paw.q0_augmentation * transpose(projector)
         end
         _paw_require_positive_band_metric(overlap)
-        selected =
-            outer_mask === nothing ? trues(bands) : BitVector(@view(outer_mask[:, kpoint_index]))
-        local_value, local_index = _paw_scoped_identity_residual(overlap, selected)
-        if local_value > maximum_residual
-            maximum_residual = local_value
-            worst = (kpoint_index, local_index[1], local_index[2])
+        for (scope_index, mask) in enumerate(masks)
+            selected = mask === nothing ? trues(bands) : BitVector(@view(mask[:, kpoint_index]))
+            local_value, local_index = _paw_scoped_identity_residual(overlap, selected)
+            if local_value > maxima[scope_index]
+                maxima[scope_index] = local_value
+                worst[scope_index] = (kpoint_index, local_index[1], local_index[2])
+            end
         end
     end
-    return maximum_residual, worst
+    return Tuple((maxima[index], worst[index]) for index in eachindex(masks))
 end
 
 # Stable low-order spherical Bessel functions used in finite-b PAW integrals.
@@ -1139,7 +1289,7 @@ function _paw_generate_mmn(
     projectors::Vector{Array{ComplexF64, 3}},
     topology::WannierMMNTopology,
 )
-    bands = size(first(native.kpoints).coefficients, 1)
+    bands = native_point_metadata(native, 1).num_bands
     topology.num_bands == bands || throw(
         ArgumentError(
             "VASP_PAW_DATA_REQUIRED: topology has $(topology.num_bands) bands, WAVECAR selection has $(bands)",
@@ -1347,7 +1497,7 @@ function _paw_generate_amn(
 )
     native.spinor == basis.spinor ||
         throw(ArgumentError("wavefunction and projection basis spin conventions disagree"))
-    bands = size(first(native.kpoints).coefficients, 1)
+    bands = native_point_metadata(native, 1).num_bands
     values = zeros(ComplexF64, bands, basis.num_wannier, length(native.kpoints))
     pseudo_maximum = 0.0
     augmentation_maximum = 0.0
@@ -2013,7 +2163,11 @@ function _generate_vasp_paw_matrix_elements(
         (oracle_mmn_file === nothing || oracle_amn_file === nothing) &&
         throw(ArgumentError("VASP_PAW_DATA_REQUIRED: both MMN and AMN oracle files are required"))
     topology = read_wannier_mmn_topology(topology_mmn_file)
-    native = read_vasp_wavefunctions(source; normalize_coefficients = false)
+    native = read_vasp_wavefunctions(
+        source;
+        point_provider = native_vasp_point_provider,
+        normalize_coefficients = false,
+    )
     get(native.source_metadata, "coefficient_normalization", "") == "vasp_raw" || throw(
         ArgumentError("VASP_PAW_RAW_COEFFICIENTS_REQUIRED: WAVECAR coefficients were normalized"),
     )
@@ -2021,9 +2175,7 @@ function _generate_vasp_paw_matrix_elements(
     projection_contract = _build_vasp_projection_contract(source, native, basis)
     radial_q_maximum, radial_worst = _paw_radial_q_gate(paw)
     projectors = _paw_projectors(native, paw)
-    parent_generalized_norm_maximum, parent_generalized_norm_worst =
-        _paw_generalized_norm_residuals(native, paw, projectors)
-    bands = size(first(native.kpoints).coefficients, 1)
+    bands = native_point_metadata(native, 1).num_bands
     kpoints = length(native.kpoints)
     effective_scope = if qualification_scope === nothing
         BandRepresentationQualificationScope(trues(bands, kpoints), falses(bands, kpoints))
@@ -2035,8 +2187,10 @@ function _generate_vasp_paw_matrix_elements(
         occursin(r"^[0-9a-f]{64}$", digest) ||
             throw(ArgumentError("VASP_PAW_TARGET_SCOPE_HASH_MISMATCH: invalid $(key) SHA-256"))
     end
-    generalized_norm_maximum, generalized_norm_worst =
-        _paw_generalized_norm_residuals(native, paw, projectors, effective_scope.outer_mask)
+    parent_norm, target_norm =
+        _paw_generalized_norm_scopes(native, paw, projectors, (nothing, effective_scope.outer_mask))
+    parent_generalized_norm_maximum, parent_generalized_norm_worst = parent_norm
+    generalized_norm_maximum, generalized_norm_worst = target_norm
     mmn, mmn_component_norms = _paw_generate_mmn(native, paw, projectors, topology)
     amn_q0_metric = _paw_integrated_q0_metric(paw)
     amn, amn_component_norms, trial_normalization = _paw_generate_amn(
@@ -2054,7 +2208,13 @@ function _generate_vasp_paw_matrix_elements(
     )
     amn_component_norms["q0_metric_tabulated_vs_integrated_max_absolute"] =
         maximum(abs, amn_q0_metric .- paw.q0_augmentation)
-    kpoints_fractional = reduce(vcat, (transpose(point.k_fractional) for point in native.kpoints))
+    kpoints_fractional = reduce(
+        vcat,
+        (
+            transpose(native_point_metadata(native, k).k_fractional) for
+            k in eachindex(native.kpoints)
+        ),
+    )
     solver_amn, solver_gauge_diagnostics = _canonicalize_vasp_amn_for_wannierization(
         amn,
         kpoints_fractional,

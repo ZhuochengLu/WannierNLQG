@@ -53,6 +53,7 @@ name to its owning configuration group.
 | `mmn_file` | `input.mmn_file` |
 | `amn_file` | `input.amn_file` |
 | `matrix_elements` | `input.matrix_elements` |
+| `preparation_execution` | `input.preparation_execution` |
 | `projection_basis` | `input.projection_basis` |
 | `band_representation` | `input.band_representation` |
 | `band_representation_hdf5` | `input.band_representation_hdf5` |
@@ -99,6 +100,7 @@ name to its owning configuration group.
 | `tb_output_formats` | `output.tb_output_formats` |
 | `write_wannier90_tb` | `output.write_wannier90_tb` |
 | `profile` | `output.profile` |
+| `operator_tasks` | `output.operator_tasks` |
 | `spn_file` | `output.spn_file` |
 | `spn_provenance_file` | `output.spn_provenance_file` |
 | `uiu_file` | `output.uiu_file` |
@@ -118,9 +120,9 @@ name to its owning configuration group.
 
 ## Construction policy
 
-`WannierizationInputConfig` defaults to `construction_policy=:diagnostic`.
-Diagnostic construction can continue from a finite, dimensionally valid state
-while recording unmet quality gates for manual review. It does not relax
+`WannierizationInputConfig` defaults to `construction_policy=:standard`.
+Standard construction can continue from a finite, dimensionally valid state
+while recording unmet quality gates and recommending quality review. It does not relax
 missing-data, rank, positive-metric, source-identity, or persistence-integrity
 requirements, and it does not grant production eligibility.
 
@@ -152,3 +154,43 @@ metadata; relabeling does not change qualification.
 Package examples and tests use synthetic data. Their successful execution is a
 software regression result, not a material-specific Physics or Production
 qualification.
+
+## Task-derived output selection in 1.1.0
+
+New Wannierization exports accept only `output.profile=:hamiltonian_position`
+(the unchanged default) or `:full`. To select by task, set `output.profile=nothing`
+and supply a nonempty tuple of `WannierNLQG.Core.OperatorTask` in
+`output.operator_tasks`. These are mutually exclusive; leaving the default profile
+while adding tasks is an error. `operator_tasks` is a new field, not a historical
+flat-config compatibility alias. Both selectors are excluded from the solver restart digest.
+
+Replace a former new-export `:hamiltonian_position_spin` request with a supported
+Zeeman task selection when that is the intended capability, or `:full` when the
+complete inventory is required. Existing spin-profile bundles remain readable
+within the reader's supported wire schema. `:spin` has no alias. No old bundle is
+upgraded by changing its profile string: task-derived qualification requires a new
+export and fresh re-resolution of requested tasks, closure, hashes and inventory.
+See [selection examples and the complete dependency table](WANNIERIZATION.md#task-derived-selection-and-canonical-union)
+and [storage compatibility](STORAGE_SCHEMAS.md#task-derived-packed-operator-selection).
+
+## Neighbor-order derived-operator rebuild
+
+The former streamed uIu/uHu consumer defect confused source-file neighbor
+indices with internal stencil indices. Preserve original input files and their
+provenance. Rebuild affected `derivative_overlap_tensor`, its axial/symmetric
+contractions, and `hamiltonian_weighted_axial_derivative_overlap` from the same
+qualified raw sources using a corrected and validated assembler, then regenerate
+the dependent bundle qualification/seals and response results into new artifacts.
+Do not reorder raw files, overwrite historical bundles, or obtain corrected status
+by changing algorithm/profile labels. Hamiltonian/position-only payloads are not
+implicated by this specific F/C assembly defect; other qualification rules remain.
+
+The diagnostic mapping correction is not a complete OAM parity or convergence
+result. Remaining real-material kernel, position/curvature, off-grid,
+finite-window and subspace differences stay open. Source-schema readability and
+Packed wire compatibility are independent of this rebuild requirement. Missing additive neighbor-order receipts
+remain readable as `LEGACY_UNVERIFIED`; only validated per-operator receipts confer
+`REBUILT_SOURCE_TO_INTERNAL`, which is a construction status, not production
+qualification. The global derivative algorithm marker and wire/schema versions
+are unchanged; assembly version changes alone do not certify a rebuild. See
+[algorithm provenance](STORAGE_SCHEMAS.md#neighbor-order-algorithm-provenance).

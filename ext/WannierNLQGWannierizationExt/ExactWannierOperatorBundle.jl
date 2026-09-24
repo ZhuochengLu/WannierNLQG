@@ -1,4 +1,4 @@
-const EXACT_WANNIER_OPERATOR_BUNDLE_ALGORITHM_VERSION = "raw-same-gauge-schema-6.3-v1"
+const EXACT_WANNIER_OPERATOR_BUNDLE_ALGORITHM_VERSION = "raw-same-gauge-schema-6.3-v2-source-neighbor-order"
 
 """Resolve and validate the exact-bundle input and output paths."""
 function _exact_bundle_paths(config::ExactWannierOperatorBundleConfig)
@@ -38,13 +38,13 @@ function _exact_bundle_uiu_provenance(paths)
     String(payload.schema) == WANNIER_UIU_GENERATION_SCHEMA || throw(
         ArgumentError("PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: uIu provenance schema differs"),
     )
-    String(payload.schema_version) in ("1.0", "1.2") || throw(
+    String(payload.schema_version) in ("1.0", "1.1", "1.2") || throw(
         ArgumentError("PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: uIu provenance version differs"),
     )
     # Distinguish the frame-aware public layout from earlier incomplete 1.0
     # payloads. Historical 1.2 retains its original checks below; this layout
     # discriminator does not introduce a new frame-qualification algorithm.
-    if String(payload.schema_version) == "1.0"
+    if String(payload.schema_version) in ("1.0", "1.1")
         required = (
             :source_band_gauge,
             :target_band_gauge,
@@ -164,6 +164,14 @@ Build and atomically validate a same-gauge operator bundle with full uIu derivat
 """
 function prepare_exact_wannier_operator_bundle(config::ExactWannierOperatorBundleConfig)
     paths = _exact_bundle_paths(config)
+    inputs = [path for (name, path) in paths if name != "output_bundle_file"]
+    return SymmetryFoundation.with_verified_file_digests(inputs) do
+        _prepare_exact_wannier_operator_bundle(config, paths)
+    end
+end
+
+"""Construct the unchanged exact derivative payload inside its caller's input scope."""
+function _prepare_exact_wannier_operator_bundle(config::ExactWannierOperatorBundleConfig, paths)
     uiu_provenance, uiu_sha256 = _exact_bundle_uiu_provenance(paths)
     model = IO.read_wannier_tb(paths["tb_file"])
     chk = IO.read_wannier_chk(paths["chk_file"])
@@ -242,6 +250,10 @@ function prepare_exact_wannier_operator_bundle(config::ExactWannierOperatorBundl
         "julia_version" => string(VERSION),
         "input_files" => input_evidence,
         "operator_construction" => EXACT_WANNIER_OPERATOR_BUNDLE_ALGORITHM_VERSION,
+        "source_neighbor_order_contract" => _streamed_neighbor_order_contract(
+            match_finite_difference_stencil_to_mmn(build_finite_difference_stencil(chk), chk, mmn),
+            chk.num_kpts,
+        ),
         "symmetrization" => "not_applied",
         "tb_gauge" => "preserved",
         "derivative_overlap_source" => "wannier90_uIu",

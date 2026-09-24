@@ -5,7 +5,7 @@ function _assemble_solver_terminal_result(state::NamedTuple)
         centers,
         compatibility,
         config,
-        diagnostic_disentanglement_nonconverged,
+        retained_disentanglement_nonconverged,
         diagnostics,
         effective_compatibility_policy,
         fixed_stationary,
@@ -41,15 +41,12 @@ function _assemble_solver_terminal_result(state::NamedTuple)
     )
     if config.solver.acceleration.schedule == :joint &&
        z_stability_count < config.solver.acceleration.z_stability_window
-        input_summary["disentanglement_convergence"] = "DIAGNOSTIC_NONCONVERGED"
-        input_summary["z_seal_class"] = "DIAGNOSTIC_NONCONVERGED"
-        input_summary["qualified_z_seal"] = "false"
-        input_summary["route_selection_eligible"] = "false"
-        input_summary["standard_tb_export_eligible"] = "false"
+        input_summary["disentanglement_convergence"] = "NONCONVERGED_RETAINED"
+        input_summary["z_seal_class"] = "NONCONVERGED_RETAINED"
         push!(
             diagnostics,
             WannierizationDiagnostic(
-                :JOINT_Z_NONCONVERGED_DIAGNOSTIC,
+                :JOINT_Z_NONCONVERGED_STANDARD,
                 :warning,
                 "joint iteration retained a structurally valid diagnostic state without a qualified Z seal";
                 context = Dict(
@@ -63,8 +60,6 @@ function _assemble_solver_terminal_result(state::NamedTuple)
     elseif config.solver.acceleration.schedule == :joint
         input_summary["disentanglement_convergence"] = "CONVERGED"
         input_summary["z_seal_class"] = "CONVERGED"
-        input_summary["qualified_z_seal"] = "true"
-        input_summary["route_selection_eligible"] = string(full_constraint_scope)
     end
     final_projector_diagnostic =
         apply_symmetry ?
@@ -78,7 +73,7 @@ function _assemble_solver_terminal_result(state::NamedTuple)
         ) : nothing
     final_projector_diagnostic === nothing || push!(
         diagnostics,
-        config.input.construction_policy == :diagnostic &&
+        config.input.construction_policy == :standard &&
             final_projector_diagnostic.code == :ANTIUNITARY_PROJECTOR_COVARIANCE_FAILED ?
         _construction_quality_diagnostic(final_projector_diagnostic, "final_projector") :
         final_projector_diagnostic,
@@ -92,7 +87,7 @@ function _assemble_solver_terminal_result(state::NamedTuple)
                               _maximum_target_frame_symmetry_error(frames, representation, plan) : NaN,
         ),
     )
-    if diagnostic_disentanglement_nonconverged
+    if retained_disentanglement_nonconverged
         terminal_qualification = _qualify_nonconverged_disentanglement_state(
             frames,
             z_previous,
@@ -106,26 +101,25 @@ function _assemble_solver_terminal_result(state::NamedTuple)
             apply_symmetry;
             construction_policy = config.input.construction_policy,
         )
-        diagnostic_tb_ready =
+        accepted_state_tb_ready =
             terminal_qualification.qualified &&
             (
-                config.input.construction_policy == :diagnostic ||
+                config.input.construction_policy == :standard ||
                 final_projector_diagnostic === nothing
             ) &&
-            (config.input.construction_policy == :diagnostic || u_steps > 0)
+            (config.input.construction_policy == :standard || u_steps > 0)
         input_summary["localization_convergence"] =
             get(input_summary, "localization_convergence", "IN_PROGRESS") == "IN_PROGRESS" ?
             "MAX_ITERATIONS" : input_summary["localization_convergence"]
-        input_summary["diagnostic_tb_export_eligible"] = string(diagnostic_tb_ready)
         push!(
             diagnostics,
             WannierizationDiagnostic(
-                diagnostic_tb_ready ? :NONCONVERGED_DISENTANGLEMENT_DIAGNOSTIC_TB_READY :
+                accepted_state_tb_ready ? :NONCONVERGED_DISENTANGLEMENT_ACCEPTED_STATE_TB_READY :
                 :NONCONVERGED_DISENTANGLEMENT_DIAGNOSTIC_TB_REJECTED,
-                diagnostic_tb_ready ? :warning : :error,
-                diagnostic_tb_ready ?
-                "localization retained a finite invariant-valid terminal state after nonconverged disentanglement; diagnostic TB export is allowed" :
-                "terminal localization state failed the diagnostic TB export gate";
+                accepted_state_tb_ready ? :warning : :error,
+                accepted_state_tb_ready ?
+                "localization retained a finite invariant-valid terminal state after nonconverged disentanglement; standard TB export is allowed" :
+                "terminal localization state failed the standard TB export gate";
                 context = Dict(
                     "localization_steps" => string(u_steps),
                     "structural_gate_pass" => string(terminal_qualification.qualified),
@@ -143,7 +137,7 @@ function _assemble_solver_terminal_result(state::NamedTuple)
         something(latest_restart_state).iteration;
         hard_gate_residuals = terminal_residuals,
     )
-    v_matrix = cat(frames...; dims = 3)
+    v_matrix = _pack_matrix_field(frames)
     chk = WannierCHK(
         nb,
         num_wannier,
@@ -190,7 +184,7 @@ function _finish_solver_iteration(state::NamedTuple)
         config,
         config_sha256,
         convergence_values,
-        diagnostic_disentanglement_nonconverged,
+        retained_disentanglement_nonconverged,
         diagnostics,
         disentanglement_objective_history,
         effective_algorithms,
@@ -329,8 +323,6 @@ function _finish_solver_iteration(state::NamedTuple)
     if solver_converged
         if fixed_mode
             input_summary["localization_convergence"] = "CONVERGED"
-            input_summary["standard_tb_export_eligible"] =
-                string(fixed_source_qualified && full_constraint_scope)
         end
         final_projector_diagnostic =
             apply_symmetry ?
@@ -344,13 +336,13 @@ function _finish_solver_iteration(state::NamedTuple)
             ) : nothing
         final_projector_diagnostic === nothing || push!(
             diagnostics,
-            config.input.construction_policy == :diagnostic &&
+            config.input.construction_policy == :standard &&
                 final_projector_diagnostic.code == :ANTIUNITARY_PROJECTOR_COVARIANCE_FAILED ?
             _construction_quality_diagnostic(final_projector_diagnostic, "final_projector") :
             final_projector_diagnostic,
         )
         if final_projector_diagnostic !== nothing && !(
-            config.input.construction_policy == :diagnostic &&
+            config.input.construction_policy == :standard &&
             final_projector_diagnostic.code == :ANTIUNITARY_PROJECTOR_COVARIANCE_FAILED
         )
             return _failure_result(
@@ -372,7 +364,7 @@ function _finish_solver_iteration(state::NamedTuple)
                 initialization_report,
             )
         end
-        v_matrix = cat(frames...; dims = 3)
+        v_matrix = _pack_matrix_field(frames)
         chk = WannierCHK(
             nb,
             num_wannier,
@@ -385,7 +377,7 @@ function _finish_solver_iteration(state::NamedTuple)
             v_matrix,
         )
         diagnostic_qualification =
-            diagnostic_disentanglement_nonconverged ?
+            retained_disentanglement_nonconverged ?
             _qualify_nonconverged_disentanglement_state(
                 frames,
                 z_previous,
@@ -399,22 +391,22 @@ function _finish_solver_iteration(state::NamedTuple)
                 apply_symmetry;
                 construction_policy = config.input.construction_policy,
             ) : nothing
-        diagnostic_tb_ready =
+        accepted_state_tb_ready =
             diagnostic_qualification !== nothing &&
             something(diagnostic_qualification).qualified &&
-            (config.input.construction_policy == :diagnostic || u_steps > 0)
-        if diagnostic_disentanglement_nonconverged
+            (config.input.construction_policy == :standard || u_steps > 0)
+        if retained_disentanglement_nonconverged
             input_summary["localization_convergence"] = "CONVERGED"
-            input_summary["diagnostic_tb_export_eligible"] = string(diagnostic_tb_ready)
             input_summary["failure_class"] = "NUMERICAL_B"
             push!(
                 diagnostics,
                 WannierizationDiagnostic(
-                    diagnostic_tb_ready ? :NONCONVERGED_DISENTANGLEMENT_DIAGNOSTIC_TB_READY :
+                    accepted_state_tb_ready ?
+                    :NONCONVERGED_DISENTANGLEMENT_ACCEPTED_STATE_TB_READY :
                     :NONCONVERGED_DISENTANGLEMENT_DIAGNOSTIC_TB_REJECTED,
-                    diagnostic_tb_ready ? :warning : :error,
-                    diagnostic_tb_ready ?
-                    "localization converged from a structurally qualified but nonconverged disentanglement projector; diagnostic TB export is allowed" :
+                    accepted_state_tb_ready ? :warning : :error,
+                    accepted_state_tb_ready ?
+                    "localization converged from a structurally qualified but nonconverged disentanglement projector; standard TB export is allowed" :
                     "the nonconverged disentanglement trajectory did not retain an exportable diagnostic localization state";
                     context = Dict(
                         "localization_steps" => string(u_steps),
@@ -426,7 +418,7 @@ function _finish_solver_iteration(state::NamedTuple)
                 ),
             )
         end
-        status = if diagnostic_disentanglement_nonconverged
+        status = if retained_disentanglement_nonconverged
             MAX_ITERATIONS
         elseif any(diagnostic -> diagnostic.severity == :warning, diagnostics)
             COMPLETED_WITH_WARNINGS
@@ -488,7 +480,7 @@ function _finish_solver_iteration(state::NamedTuple)
             config,
             config_sha256,
             convergence_values,
-            diagnostic_disentanglement_nonconverged,
+            retained_disentanglement_nonconverged,
             diagnostics,
             disentanglement_objective_history,
             effective_algorithms,

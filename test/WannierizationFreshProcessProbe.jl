@@ -185,7 +185,7 @@ maximum_checkpoint = joinpath(root, "maximum-iterations.wannierization.h5")
 maximum_result = W.construct_symmetry_adapted_wannier_functions(
     W.SymmetryAdaptedWannierizationConfig(
         input = W.WannierizationInputConfig(
-            construction_policy = :strict,
+            construction_policy = :standard,
             wannierization_mode = :symmetry_adapted,
             win_file = win_file,
             eig_file = eig_file,
@@ -229,16 +229,30 @@ maximum_result = W.construct_symmetry_adapted_wannier_functions(
 maximum_result.status == W.MAX_ITERATIONS ||
     error("maximum-iteration probe returned $(maximum_result.status)")
 isfile(maximum_checkpoint) || error("maximum-iteration checkpoint is missing")
-maximum_result.input_summary["diagnostic_classification"] == "MAX_ITERATIONS_DIAGNOSTIC" ||
-    error("maximum-iteration result has the wrong diagnostic classification")
+maximum_result.input_summary["model_availability"] == "AVAILABLE_WITH_QUALITY_WARNINGS" || error(
+    "maximum-iteration result has model_availability=" *
+    maximum_result.input_summary["model_availability"] *
+    "; tb_export_status=" *
+    get(maximum_result.input_summary, "tb_export_status", "MISSING") *
+    "; reason=" *
+    get(maximum_result.input_summary, "accepted_state_export_gate_reason", "MISSING") *
+    "; errors=" *
+    join(
+        (
+            "$(diagnostic.severity):$(diagnostic.code):$(diagnostic.message)" for
+            diagnostic in maximum_result.diagnostics
+        ),
+        " | ",
+    ),
+)
 maximum_result.input_summary["tb_export_status"] == "EXPORTED_WITH_WARNING" ||
-    error("maximum-iteration result did not record diagnostic TB export")
+    error("maximum-iteration result did not record standard TB export")
 maximum_packed = something(maximum_result.artifacts.packed_hdf5)
 maximum_exchange = something(maximum_result.artifacts.wannier90_tb)
-isfile(maximum_packed) || error("maximum-iteration diagnostic packed TB is missing")
-isfile(maximum_exchange) || error("maximum-iteration diagnostic Wannier90 TB is missing")
+isfile(maximum_packed) || error("maximum-iteration Standard packed TB is missing")
+isfile(maximum_exchange) || error("maximum-iteration Standard Wannier90 TB is missing")
 maximum_manifest = IOW.read_real_space_operator_bundle_manifest(maximum_packed)
-maximum_manifest.diagnostic_only || error("maximum-iteration TB is not diagnostic-only")
+maximum_manifest.quality_review_recommended || error("maximum-iteration TB is not standard")
 something(maximum_manifest.production_eligible, false) &&
     error("maximum-iteration TB was incorrectly marked production eligible")
 println("WANNIERIZATION_FRESH_PROCESS_PASS root=$(root)")

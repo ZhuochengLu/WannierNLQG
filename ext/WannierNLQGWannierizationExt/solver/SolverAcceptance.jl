@@ -36,7 +36,7 @@ function _seal_solver_disentanglement_state(state::NamedTuple)
         omega_i,
         projector_residual,
         disentanglement_objective_history,
-        diagnostic_transition,
+        standard_transition,
         localization_reference_frames,
         plan,
         apply_symmetry,
@@ -98,15 +98,15 @@ function _seal_solver_disentanglement_state(state::NamedTuple)
         frozen_mask[frozen_indices[kpoint], kpoint] .= true
     end
     disentanglement_state = DisentanglementState(
-        cat(sealed_subspace_projectors...; dims = 3),
-        cat(sealed_subspace_frames...; dims = 3),
-        cat(something(z_previous)...; dims = 3),
+        _pack_matrix_field(sealed_subspace_projectors),
+        _pack_matrix_field(sealed_subspace_frames),
+        _pack_matrix_field(something(z_previous)),
         omega_i,
         outer_mask,
         frozen_mask,
         projector_residual,
         copy(disentanglement_objective_history),
-        !diagnostic_transition,
+        !standard_transition,
     )
     input_summary["fixed_subspace_stage_boundary_iteration"] = string(iteration)
     input_summary["fixed_subspace_stage_boundary_projector_drift"] = "0.0"
@@ -303,7 +303,7 @@ function _accept_solver_iteration(state::NamedTuple)
         config,
         config_sha256,
         convergence_values,
-        diagnostic_disentanglement_nonconverged,
+        retained_disentanglement_nonconverged,
         diagnostics,
         disentanglement_objective_history,
         effective_algorithms,
@@ -556,7 +556,6 @@ function _accept_solver_iteration(state::NamedTuple)
         end
         joint_z_converged = z_stability_count >= config.solver.acceleration.z_stability_window
         input_summary["z_seal_class"] = joint_z_converged ? "CONVERGED" : "IN_PROGRESS"
-        input_summary["qualified_z_seal"] = string(joint_z_converged)
         input_summary["disentanglement_convergence"] =
             joint_z_converged ? "CONVERGED" : "IN_PROGRESS"
         input_summary["localization_convergence"] =
@@ -692,15 +691,12 @@ function _accept_solver_iteration(state::NamedTuple)
             z_steps += 1
             z_stage_converged = z_stability_count >= config.solver.acceleration.z_stability_window
             z_stage_limit_reached = z_steps >= config.solver.acceleration.disentanglement_max_steps
-            diagnostic_transition = false
+            standard_transition = false
             transition_to_localization = z_stage_converged
             if !z_stage_converged && z_stage_limit_reached
                 if config.solver.acceleration.disentanglement_limit_policy == :strict_hold
-                    input_summary["disentanglement_convergence"] = "DIAGNOSTIC_NONCONVERGED"
-                    input_summary["z_seal_class"] = "DIAGNOSTIC_NONCONVERGED"
-                    input_summary["qualified_z_seal"] = "false"
-                    input_summary["route_selection_eligible"] = "false"
-                    input_summary["standard_tb_export_eligible"] = "false"
+                    input_summary["disentanglement_convergence"] = "NONCONVERGED_RETAINED"
+                    input_summary["z_seal_class"] = "NONCONVERGED_RETAINED"
                     input_summary["localization_convergence"] = "NOT_RUN"
                     input_summary["localization_qualification"] = "NOT_RUN"
                     stage_stop_reason = :DISENTANGLEMENT_MAX_STEPS_STRICT_HOLD
@@ -719,16 +715,13 @@ function _accept_solver_iteration(state::NamedTuple)
                         construction_policy = config.input.construction_policy,
                     )
                     if qualification.qualified
-                        diagnostic_transition = true
+                        standard_transition = true
                         transition_to_localization = true
-                        diagnostic_disentanglement_nonconverged = true
-                        input_summary["disentanglement_convergence"] = "DIAGNOSTIC_NONCONVERGED"
-                        input_summary["z_seal_class"] = "DIAGNOSTIC_NONCONVERGED"
-                        input_summary["qualified_z_seal"] = "false"
-                        input_summary["route_selection_eligible"] = "false"
-                        input_summary["standard_tb_export_eligible"] = "false"
-                        input_summary["localization_qualification"] = "DIAGNOSTIC_ONLY"
-                        input_summary["model_qualification"] = "DIAGNOSTIC_ONLY/Z_NONCONVERGED"
+                        retained_disentanglement_nonconverged = true
+                        input_summary["disentanglement_convergence"] = "NONCONVERGED_RETAINED"
+                        input_summary["z_seal_class"] = "NONCONVERGED_RETAINED"
+                        input_summary["localization_qualification"] = "STANDARD"
+                        input_summary["model_qualification"] = "AVAILABLE_WITH_QUALITY_WARNINGS"
                         input_summary["z_continuation_corepresentation_residual"] =
                             string(qualification.corepresentation_residual)
                         input_summary["z_continuation_kstar_expansion_residual"] =
@@ -738,7 +731,7 @@ function _accept_solver_iteration(state::NamedTuple)
                         push!(
                             diagnostics,
                             WannierizationDiagnostic(
-                                :DISENTANGLEMENT_MAX_STEPS_CONTINUED_DIAGNOSTIC,
+                                :DISENTANGLEMENT_MAX_STEPS_CONTINUED_STANDARD,
                                 :warning,
                                 "disentanglement reached its step limit; the finite, full-rank, invariant-valid projector is retained for diagnostic localization without a qualified Z seal";
                                 context = Dict(
@@ -784,11 +777,8 @@ function _accept_solver_iteration(state::NamedTuple)
                                 ),
                             ),
                         )
-                        input_summary["disentanglement_convergence"] = "DIAGNOSTIC_NONCONVERGED_STRUCTURAL_GATE_FAILED"
-                        input_summary["z_seal_class"] = "DIAGNOSTIC_NONCONVERGED"
-                        input_summary["qualified_z_seal"] = "false"
-                        input_summary["route_selection_eligible"] = "false"
-                        input_summary["standard_tb_export_eligible"] = "false"
+                        input_summary["disentanglement_convergence"] = "NONCONVERGED_RETAINED_STRUCTURAL_GATE_FAILED"
+                        input_summary["z_seal_class"] = "NONCONVERGED_RETAINED"
                         input_summary["localization_convergence"] = "NOT_RUN"
                         input_summary["localization_qualification"] = "NOT_RUN"
                         input_summary["model_qualification"] = "NOT_RUN/Z_STRUCTURAL_GATE_FAILED"
@@ -831,7 +821,7 @@ function _accept_solver_iteration(state::NamedTuple)
                     z_previous,
                     omega_i,
                     disentanglement_objective_history,
-                    diagnostic_transition,
+                    standard_transition,
                     localization_reference_frames,
                     plan,
                     apply_symmetry,
@@ -860,11 +850,9 @@ function _accept_solver_iteration(state::NamedTuple)
                     convergence_values,
                     two_stage_complete,
                 ) = seal
-                if !diagnostic_transition
+                if !standard_transition
                     input_summary["disentanglement_convergence"] = "CONVERGED"
                     input_summary["z_seal_class"] = "CONVERGED"
-                    input_summary["qualified_z_seal"] = "true"
-                    input_summary["route_selection_eligible"] = string(full_constraint_scope)
                     input_summary["localization_qualification"] =
                         config.solver.localize ? "FORMAL_CANDIDATE" : "NOT_APPLICABLE"
                     input_summary["model_qualification"] = "FORMAL_CANDIDATE"
@@ -896,13 +884,11 @@ function _accept_solver_iteration(state::NamedTuple)
             if two_stage_complete
                 optimizer_phase = :completed
                 input_summary["localization_convergence"] = "CONVERGED"
-                qualified_z = get(input_summary, "qualified_z_seal", "false") == "true"
+                qualified_z = get(input_summary, "z_seal_class", "") == "CONVERGED"
                 input_summary["localization_qualification"] =
-                    qualified_z ? "FORMAL_CANDIDATE" : "DIAGNOSTIC_ONLY"
+                    qualified_z ? "FORMAL_CANDIDATE" : "STANDARD"
                 input_summary["model_qualification"] =
-                    qualified_z ? "FORMAL_CANDIDATE" : "DIAGNOSTIC_ONLY/Z_NONCONVERGED"
-                input_summary["standard_tb_export_eligible"] =
-                    string(full_constraint_scope && qualified_z)
+                    qualified_z ? "FORMAL_CANDIDATE" : "AVAILABLE_WITH_QUALITY_WARNINGS"
             end
             !two_stage_complete &&
                 u_steps >= config.solver.acceleration.localization_max_steps &&
@@ -913,12 +899,6 @@ function _accept_solver_iteration(state::NamedTuple)
         end
     elseif config.solver.acceleration.schedule == :joint
         z_steps += 1
-        joint_z_converged = z_stability_count >= config.solver.acceleration.z_stability_window
-        joint_converged = joint_z_converged && u_stability_count >= config.solver.convergence_window
-        input_summary["route_selection_eligible"] =
-            string(full_constraint_scope && joint_z_converged)
-        input_summary["standard_tb_export_eligible"] =
-            string(full_constraint_scope && joint_converged)
     end
     if config.solver.acceleration.strategy == :adaptive
         actual_z_mix_ratio, actual_u_mix_ratio, improvement_streak = _adaptive_next_mixing(
@@ -997,7 +977,7 @@ function _accept_solver_iteration(state::NamedTuple)
         last_accepted_u_step_scale,
         gradient_fallback_active,
         gradient_steps,
-        cat(best_polar_frames...; dims = 3),
+        _pack_matrix_field(best_polar_frames),
         best_polar_centers,
         best_polar_spreads,
         best_polar_objective,
@@ -1013,9 +993,9 @@ function _accept_solver_iteration(state::NamedTuple)
         localization_trial_sweeps,
         localization_trial_accepted,
         previous_u_gradient === nothing ? zeros(ComplexF64, 0, 0, 0) :
-        cat(something(previous_u_gradient)...; dims = 3),
+        _pack_matrix_field(something(previous_u_gradient)),
         previous_u_direction === nothing ? zeros(ComplexF64, 0, 0, 0) :
-        cat(something(previous_u_direction)...; dims = 3),
+        _pack_matrix_field(something(previous_u_direction)),
         u_cg_iteration,
         u_cg_restart_count,
         last_cg_beta,
@@ -1033,7 +1013,7 @@ function _accept_solver_iteration(state::NamedTuple)
         wannier90_reference_overlaps === nothing ? zeros(ComplexF64, 0, 0, 0, 0) :
         something(wannier90_reference_overlaps),
         wannier90_reference_unitaries === nothing ? zeros(ComplexF64, 0, 0, 0) :
-        cat(something(wannier90_reference_unitaries)...; dims = 3),
+        _pack_matrix_field(something(wannier90_reference_unitaries)),
         something(wannier90_reference_omega_i, NaN),
     )
     latest_restart_state = _restart_state(
@@ -1108,8 +1088,6 @@ function _accept_solver_iteration(state::NamedTuple)
                     u_stability_count = u_stability_count,
                     disentanglement_convergence = input_summary["disentanglement_convergence"],
                     z_seal_class = input_summary["z_seal_class"],
-                    qualified_z_seal = input_summary["qualified_z_seal"],
-                    route_selection_eligible = input_summary["route_selection_eligible"],
                     localization_convergence = input_summary["localization_convergence"],
                     localization_qualification = input_summary["localization_qualification"],
                     model_qualification = input_summary["model_qualification"],
@@ -1241,7 +1219,7 @@ function _accept_solver_iteration(state::NamedTuple)
         config,
         config_sha256,
         convergence_values,
-        diagnostic_disentanglement_nonconverged,
+        retained_disentanglement_nonconverged,
         diagnostics,
         disentanglement_objective_history,
         effective_algorithms,

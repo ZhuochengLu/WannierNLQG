@@ -100,7 +100,7 @@ end
         frames,
         representation.irreducible_indices,
         falses(2, 2);
-        source_sha256 = Dict("qualified_z_seal" => "true", "z_seal_class" => "CONVERGED"),
+        source_sha256 = Dict("z_seal_class" => "CONVERGED"),
     )
     identity_fixed = extension._constraint_scoped_fixed_subspace(
         fixed,

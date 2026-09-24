@@ -114,7 +114,7 @@ function _star_select_buffer(
 
     function validate_candidate(first_band::Int, last_band::Int)
         extra = length(first_band:last_band) - length(target_indices)
-        if construction_policy == :diagnostic && extra > policy.max_extra_bands
+        if construction_policy == :standard && extra > policy.max_extra_bands
             return false
         end
         extra <= policy.max_extra_bands || throw(
@@ -130,7 +130,7 @@ function _star_select_buffer(
             representative_energies[last_band] - representative_energies[last(target_indices)],
             0.0,
         )
-        if construction_policy == :diagnostic &&
+        if construction_policy == :standard &&
            maximum((lower_distance, upper_distance)) > policy.hard_energy_cap_ev
             return false
         end

@@ -169,14 +169,23 @@ function _star_payload_with_sealed_representatives(
     payload::_StarCovariantPAWPayload,
     representative_points::AbstractDict{Int, PlaneWaveKPoint},
 )
-    points = copy(payload.native.kpoints)
     for representative in payload.star_representatives
         haskey(representative_points, representative) || throw(
             ArgumentError(
                 "PAW_GAUGE_ARTIFACT_TAMPERED: sealed representative inventory is incomplete",
             ),
         )
-        points[representative] = representative_points[representative]
+    end
+    points = if _qe_disk_bounded()
+        preparation_source_vector(PlaneWaveKPoint, length(payload.native.kpoints)) do k
+            haskey(representative_points, k) ? representative_points[k] : payload.native.kpoints[k]
+        end
+    else
+        preparation_sealed_vector(
+            payload.native.kpoints,
+            representative_points,
+            payload.star_representatives,
+        )
     end
     native = NativeWavefunctionData(
         payload.native.source_code,
@@ -659,7 +668,7 @@ end
 # Replace cached projectors after a PAW-S Lowdin rotation without changing the metric data.
 function _star_metric_with_projectors(
     metric::_QEStrictSewingMetric,
-    projectors::Vector{Array{ComplexF64, 3}},
+    projectors::AbstractVector{Array{ComplexF64, 3}},
 )
     return _QEStrictSewingMetric(
         metric.upf_data,
@@ -704,8 +713,21 @@ function _star_replay_local_completed_frame(
         length(something(reference_native).kpoints) == nkpoints ||
         throw(ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: replay reference k-count differs"))
 
-    points = PlaneWaveKPoint[]
-    projectors = Array{ComplexF64, 3}[]
+    bounded = _qe_disk_bounded() && raw_native.source_code == :qe
+    points =
+        bounded ?
+        preparation_source_vector(PlaneWaveKPoint, nkpoints) do k
+            raw_point = raw_native.kpoints[k]
+            PlaneWaveKPoint(
+                raw_point.k_fractional,
+                raw_point.g_vectors,
+                _star_rotate_rows(raw_point.coefficients, @view(rotations[:, :, k])),
+                Vector{Float64}(@view(energies_ev[:, k]));
+                normalize_coefficients = false,
+            )
+        end : preparation_vector(PlaneWaveKPoint, "frames")
+    bounded && (points = _qe_guarded(points, _qe_provider_guard(raw_native.kpoints)))
+    projectors = preparation_vector(Array{ComplexF64, 3}, "rotated-projectors")
     maximum_coefficient_reconstruction = 0.0
     maximum_projector_reconstruction = 0.0
     worst_coefficient_reconstruction = "NOT_RECORDED"
@@ -722,7 +744,7 @@ function _star_replay_local_completed_frame(
             Vector{Float64}(@view(energies_ev[:, kpoint]));
             normalize_coefficients = false,
         )
-        push!(points, point)
+        bounded || push!(points, point)
         push!(projectors, completed_projectors)
         if reference_native !== nothing
             reference_point = something(reference_native).kpoints[kpoint]
@@ -819,7 +841,12 @@ function _build_band_frame_transform_contract(
             raw_native,
             raw_metric,
             transforms,
-            hcat((point.energies_ev for point in completed_native.kpoints)...);
+            hcat(
+                (
+                    native_point_metadata(completed_native, k).energies_ev for
+                    k in eachindex(completed_native.kpoints)
+                )...,
+            );
             reference_native = completed_native,
             reference_metric = completed_metric,
         ) : replay_evidence
@@ -1008,7 +1035,7 @@ end
 # Replace cached VASP projectors after a PAW-S Lowdin rotation.
 function _star_metric_with_projectors(
     metric::_VASPStrictSewingMetric,
-    projectors::Vector{Array{ComplexF64, 3}},
+    projectors::AbstractVector{Array{ComplexF64, 3}},
 )
     return _VASPStrictSewingMetric(metric.paw, projectors, metric.projector_bases)
 end
@@ -1026,8 +1053,8 @@ function _star_lowdin_native(
     ;
     enforce_residual::Bool = true,
 )
-    points = PlaneWaveKPoint[]
-    projectors = Array{ComplexF64, 3}[]
+    points = preparation_vector(PlaneWaveKPoint, "frames")
+    projectors = preparation_vector(Array{ComplexF64, 3}, "rotated-projectors")
     rotations = Matrix{ComplexF64}[]
     hamiltonians = Matrix{ComplexF64}[]
     maximum_before = 0.0

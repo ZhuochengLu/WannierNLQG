@@ -5,6 +5,17 @@ Reject unsupported or contradictory settings before numerical computation; the c
 """
 function validate_config(cfg::EffectiveTaskConfig)
     specs = normalize_task_specs(cfg)
+    if any(
+        spec->spec.quantity in
+              (:linear_transport, :linear_optical_response, :orbital_magnetization),
+        specs,
+    )
+        cfg.spatial_dimension==3 || error("New response tasks require spatial_dimension=3")
+        cfg.response_symmetry_file===nothing ||
+            cfg.response_symmetry_kmesh_mode=="full" ||
+            error("New response tasks require full BZ; reduced mode is unsupported")
+        cfg.band_selection == -1 || error("New response tasks require AllBands")
+    end
     normalize_wannier_center_convention(cfg.wannier_center_convention)
     _response_symmetry_policy(cfg.response_symmetry_policy)
     response_symmetry_kmesh_mode = _response_symmetry_kmesh_mode(cfg.response_symmetry_kmesh_mode)
@@ -181,6 +192,18 @@ function validate_config(cfg::EffectiveTaskConfig)
         error("Integral current-response tasks require a non-empty photon_energies vector.")
     end
 
+    if any(spec -> spec.quantity == :second_harmonic_generation, specs)
+        cfg.spatial_dimension == 3 || error(
+            "SHG uses three Cartesian axes; use spatial_dimension=3, including for planar sampling.",
+        )
+        cfg.band_window_size == -1 || error("SHG requires all intermediate bands.")
+        all(isfinite, cfg.photon_energies) &&
+        all(>=(0), cfg.photon_energies) &&
+        !isempty(cfg.photon_energies) || error("Invalid SHG energy grid")
+        calculation == :kslice &&
+            length(cfg.photon_energies) != 1 &&
+            error("SHG K-slice requires one energy")
+    end
     return specs
 end
 
@@ -316,6 +339,10 @@ function validate_quantity_short_label_calculation(
     quantity::Symbol,
     calculation::Symbol,
 )
+    # SHG is the public quantity name for both supported sampling geometries.
+    quantity == :second_harmonic_generation &&
+        uppercase(strip(requested_quantity)) == "SHG" &&
+        return nothing
     definition = quantity_short_label_definition(requested_quantity)
     definition === nothing && return nothing
 
@@ -467,6 +494,8 @@ end
 Return the public tensor rank required by a task, including four-axis spin-current and curvature cases.
 """
 function expected_cidx_rank(spec::NormalizedTaskSpec)
+    spec.quantity in (:linear_transport, :linear_optical_response) && return 2
+    spec.quantity==:orbital_magnetization && return 1
     if is_rank2_real_only_kslice_quantity(spec.quantity)
         return 2
     elseif is_rank4_target_group_real_kslice_quantity(spec.quantity) ||
