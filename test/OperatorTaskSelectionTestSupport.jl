@@ -93,9 +93,31 @@ function ots_fixture(directory; nonzero_neighbors = false, neighbor_permutation 
     model = Base.invokelatest(extension.build_wannier_tight_binding_model, prepared, authority, mmn)
     inputs = Base.invokelatest(_profile_write_inputs, directory, mmn, authority, gauge, parent)
     if nonzero_neighbors
-        rng = Random.MersenneTwister(928)
-        x = [randn(rng, ComplexF64, 4, 2) for neighbor in 1:mmn.num_neighbors, k in 1:mmn.num_kpts]
-        energy = [Matrix(Hermitian(randn(rng, ComplexF64, 4, 4))) for k in 1:mmn.num_kpts]
+        # Replaying the frozen Julia 1.11.2 draw keeps scalar baselines stable on
+        # every supported Julia version; MersenneTwister randn changed in 1.10.
+        frozen = JSON3.read(
+            read(
+                joinpath(@__DIR__, "fixtures", "ots_nonzero_neighbors_v1.11_seed928.json"),
+                String,
+            ),
+        )
+        frozen.schema == "wanniernlqg.test.nonzero-neighbor-operators.v1" ||
+            error("unexpected nonzero-neighbor test fixture schema")
+        (mmn.num_neighbors, mmn.num_kpts) == (8, 2) || error(
+            "unexpected nonzero-neighbor test fixture shape: $(mmn.num_neighbors), $(mmn.num_kpts)",
+        )
+        x = reshape(
+            [
+                reshape(ComplexF64[complex(pair[1], pair[2]) for pair in row], 4, 2) for
+                row in frozen.x
+            ],
+            8,
+            2,
+        )
+        energy = [
+            reshape(ComplexF64[complex(pair[1], pair[2]) for pair in row], 4, 4) for
+            row in frozen.energy
+        ]
         OTS_IO.write_wannier_uiu(
             inputs.uiu_file,
             OTS_IO.WannierUIUHeader("nonzero Gram regression", 2, 2, mmn.num_neighbors),
