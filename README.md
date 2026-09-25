@@ -246,11 +246,3 @@ WannierNLQG has received code contributions from:
 
 This source release is distributed under the
 [GNU General Public License version 2 only (`GPL-2.0-only`)](LICENSE).
-
-## Second-harmonic generation
-
-Version 1.1.0 adds integral and K-slice SHG susceptibility and conductivity, with total or seven-term output. See [SHG configuration and qualification](docs/SECOND_HARMONIC_GENERATION.md).
-
-## Linear and orbital response tasks
-
-See [linear transport, optics, and modern orbital magnetization](docs/LINEAR_AND_ORBITAL_RESPONSES.md) for the independent modules, dual methods, contribution outputs, and input qualification requirements.
