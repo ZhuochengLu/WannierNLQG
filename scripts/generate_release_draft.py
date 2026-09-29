@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import sys
+import tomllib
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -77,6 +78,13 @@ def tag_target(tag: str) -> str:
     if not TAG_PATTERN.fullmatch(tag):
         raise DraftError("only stable vMAJOR.MINOR.PATCH tags create a Draft Release")
     return git("rev-list", "-n", "1", f"refs/tags/{tag}")
+
+
+def verify_package_version(tag: str, root: Path = ROOT) -> None:
+    with (root / "Project.toml").open("rb") as project_file:
+        version = tomllib.load(project_file).get("version")
+    if version != tag.removeprefix("v"):
+        raise DraftError(f"tag {tag} differs from Project.toml version {version}")
 
 
 def verify_source_inventory(root: Path = ROOT) -> int:
@@ -176,6 +184,8 @@ def associated_prs(api: GitHubAPI, commits: list[tuple[str, str]]) -> list[dict[
         if not isinstance(matches, list):
             raise DraftError(f"PR associations unavailable for {commit}")
         for item in matches:
+            if not item.get("merged_at"):
+                continue
             number = int(item["number"])
             prs[number] = item
     return [prs[number] for number in sorted(prs)]
@@ -263,6 +273,7 @@ def write_summary(lines: list[str]) -> None:
 def prepare(api: GitHubAPI, tag: str, target: str, ci_run_id: str) -> tuple[str, list[str]]:
     if tag_target(tag) != target:
         raise DraftError("tag target differs from the workflow commit")
+    verify_package_version(tag)
     ci_run = check_ci_run(api, ci_run_id, target)
     releases = published_releases(api)
     base = previous_release(releases, tag, target)

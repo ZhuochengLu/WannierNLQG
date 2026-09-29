@@ -64,6 +64,14 @@ class ReleaseDraftTests(unittest.TestCase):
         api = FakeAPI({"/commits/" + "a" * 40 + "/pulls?per_page=100": []})
         self.assertEqual(draft.associated_prs(api, [("a" * 40, "First change")]), [])
 
+    def test_tag_version_must_match_package_version(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            (root / "Project.toml").write_text('name = "WannierNLQG"\nversion = "1.2.0"\n')
+            draft.verify_package_version("v1.2.0", root)
+            with self.assertRaisesRegex(draft.DraftError, "differs"):
+                draft.verify_package_version("v1.2.1", root)
+
     def test_exact_ci_is_required(self):
         good = {
             "head_sha": "a" * 40,
