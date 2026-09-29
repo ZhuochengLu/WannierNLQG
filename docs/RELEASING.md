@@ -1,7 +1,7 @@
 # Release procedure
 
-This document defines the reusable public release procedure used for the
-WannierNLQG v1 release line. The current feature release is 1.1.0. It is not a
+This document defines the reusable public release procedure for WannierNLQG.
+The current feature release is 1.1.0. It is not a
 historical checklist and does not assert that an unfinished candidate has
 passed any gate.
 
