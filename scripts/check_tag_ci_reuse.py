@@ -118,6 +118,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--current-run-id", type=int)
     parser.add_argument("--runs-json")
     parser.add_argument("--jobs-json")
+    parser.add_argument("--github-output")
     return parser.parse_args()
 
 
@@ -174,6 +175,9 @@ def main() -> int:
         f"sha={args.sha} source_run_id={selected['id']} source_branch=main "
         f"required_jobs={len(EXPECTED_JOB_NAMES)}"
     )
+    if args.github_output:
+        with open(args.github_output, "a", encoding="utf-8") as output:
+            output.write(f"source_run_id={selected['id']}\n")
     return 0
 
 

@@ -17,6 +17,8 @@ jobs:
   reuse-exact-main-ci:
     name: reuse exact main CI
     runs-on: ubuntu-latest
+    outputs:
+      source_run_id: ${{ steps.ci.outputs.source_run_id }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,6 +31,7 @@ jobs:
           test "$(git cat-file -t "$target_sha")" = commit
           echo "sha=$target_sha" >> "$GITHUB_OUTPUT"
       - name: Require exact successful main CI for target
+        id: ci
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -36,4 +39,32 @@ jobs:
             --repository "$GITHUB_REPOSITORY" \
             --sha "${{ steps.target.outputs.sha }}" \
             --workflow ci.yml \
-            --current-run-id "$GITHUB_RUN_ID"
+            --current-run-id "$GITHUB_RUN_ID" \
+            --github-output "$GITHUB_OUTPUT"
+
+  create-draft-release:
+    name: create draft release
+    needs: reuse-exact-main-ci
+    runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check draft generator
+        run: python3 -m unittest discover -s test -p 'generate_release_draft_unit.py'
+      - name: Create draft from verified tag
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ needs.reuse-exact-main-ci.outputs.source_run_id }}
+        run: |
+          python3 scripts/generate_release_draft.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --tag "$GITHUB_REF_NAME" \
+            --sha "$(git rev-list -n 1 "$GITHUB_REF")" \
+            --ci-run-id "$SOURCE_RUN_ID"

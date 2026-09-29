@@ -1,7 +1,7 @@
 # Release procedure
 
-This document defines the reusable public release procedure used for the
-WannierNLQG v1 release line. The current feature release is 1.1.0. It is not a
+This document defines the reusable public release procedure for WannierNLQG.
+The current feature release is 1.1.0. It is not a
 historical checklist and does not assert that an unfinished candidate has
 passed any gate.
 
@@ -55,6 +55,30 @@ Report Engineering, Numerical, Physics, and Production independently. A package
 test pass does not qualify a material, a physical model, or production use.
 `NOT_RUN`, environment invalidity, retained holds, and user waivers must remain
 explicit and must not be rewritten as PASS.
+
+## GitHub Release description and Draft
+
+The GitHub Release description follows
+[the maintained template](../.github/RELEASE_NOTE_TEMPLATE.md): a version
+heading, one positioning sentence, `Changes`, and `Compatibility`. Keep it
+short and version-specific. Do not add validation or integrity sections or
+checksum details to the Release description. Report CI and source-inventory
+checks in the Actions run summary and release preparation evidence instead.
+
+After an exact successful main-push CI run exists for the release commit, push
+the approved version tag. The tag gate reuses that CI run before its second job
+selects the previous published ancestor, reads the tagged changelog, gathers
+commit and associated-PR evidence, verifies the committed source inventory,
+and creates a Draft Release. It never edits an existing Draft or published
+Release. A missing CI match, source checksum failure, or missing GitHub access
+stops Draft creation. Uploaded assets are absent at initial Draft creation;
+check any assets attached later separately before publication.
+
+Review the generated change bullets against the tagged source, replace the
+one-sentence positioning and compatibility TODOs, and remove every TODO before
+manually publishing the Draft. Confirm API, reader/writer formats, migration,
+numerical behavior, benchmarks, method correctness, and material or production
+limits from their own evidence; the workflow does not infer these claims.
 
 ## Promotion and remote publication
 
