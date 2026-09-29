@@ -59,6 +59,9 @@ class ReleaseDraftTests(unittest.TestCase):
                 draft.previous_release(records, "v1.0.2", "c" * 40)
             with self.assertRaisesRegex(draft.DraftError, "already exists"):
                 draft.previous_release(records, "v1.0.1", "c" * 40)
+        with mock.patch.object(draft, "tag_target", side_effect=draft.DraftError("missing tag")):
+            with self.assertRaisesRegex(draft.DraftError, "missing tag"):
+                draft.previous_release(records, "v1.1.0", "c" * 40)
 
     def test_no_prs_remains_an_empty_evidence_list(self):
         api = FakeAPI({"/commits/" + "a" * 40 + "/pulls?per_page=100": []})
@@ -106,7 +109,11 @@ class ReleaseDraftTests(unittest.TestCase):
                 draft.verify_source_inventory(root)
 
     def test_changelog_fills_changes_without_scientific_or_checksum_claims(self):
-        source = "# Changelog\n\n## 1.2.0 — Feature\n\n- Add a method.\n- Record SHA-256 checks.\n\n## 1.1.0\n- Earlier work.\n"
+        source = (
+            "# Changelog\n\n## 1.2.0 — Feature\n\n- Add a method.\n"
+            "- Record SHA-256 checks.\n"
+            f"- Record checksum {'a' * 64}.\n\n## 1.1.0\n- Earlier work.\n"
+        )
         changes = draft.changelog_changes("v1.2.0", source)
         self.assertEqual(changes, ["Add a method."])
         body = draft.render_body(

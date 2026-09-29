@@ -21,7 +21,9 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 TAG_PATTERN = re.compile(r"v[0-9]+\.[0-9]+\.[0-9]+\Z")
 DIGEST_PATTERN = re.compile(r"[0-9a-f]{64}\Z")
-PROHIBITED_BODY = re.compile(r"SHA[ -]?256|^### (?:Validation|Integrity)\s*$", re.I | re.M)
+PROHIBITED_BODY = re.compile(
+    r"SHA[ -]?256|\b[0-9a-f]{64}\b|^### (?:Validation|Integrity)\s*$", re.I | re.M
+)
 
 
 class DraftError(RuntimeError):
@@ -153,10 +155,7 @@ def previous_release(releases: list[dict[str, Any]], tag: str, target: str) -> s
         other = item.get("tag_name", "")
         if item.get("draft") or item.get("prerelease") or not TAG_PATTERN.fullmatch(other):
             continue
-        try:
-            other_target = tag_target(other)
-        except DraftError:
-            continue
+        other_target = tag_target(other)
         ancestor = subprocess.run(
             ["git", "merge-base", "--is-ancestor", other_target, target],
             cwd=ROOT,
