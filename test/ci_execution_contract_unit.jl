@@ -151,6 +151,9 @@ end
     @test occursin("contents: read", tag)
     @test occursin("cancel-in-progress: false", tag)
     @test occursin("check_tag_ci_reuse.py", tag)
+    @test occursin("needs: reuse-exact-main-ci", tag)
+    @test occursin("generate_release_draft.py", tag)
+    @test occursin("contents: write", tag)
 end
 
 @testset "tag CI reuse accepts only an exact completed-success main run" begin
