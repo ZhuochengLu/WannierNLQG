@@ -1,8 +1,9 @@
 # Independent storage formats and retained contracts
 
-The first public software version remains `1.0.0`. Independently written
-scientific artifacts use wire identifiers `1.0`, preserving their numerical
-payloads and current qualification contracts. Band-representation HDF5 retains
+The first public software version remains `1.0.0`. Scientific artifact formats
+are independently versioned: software releases do not mechanically change their
+wire identifiers, numerical payloads, or qualification contracts. The table below
+records each current writer version. Band-representation HDF5 retains
 `schema="WannierNLQG.band_representation"` and writes
 `schema_version="1.0"`; no new attributes are added. Its three readers accept
 only this wire version and reject non-`1.0` files, including historical
@@ -17,7 +18,7 @@ supports it, with the original field, digest, and qualification requirements.
 | Independent artifact | Current wire identifier | Preserved contract / previous writer |
 | --- | --- | --- |
 | Wannierization checkpoint HDF5 | `1.2` | Complete 2.28 numerical layout (internal contract 2.29) plus the `standard_construction_v1` policy, gate-evidence seal, and typed `WannierizationEligibility` block; the previous wire `1.1` remains readable with unchanged readback, and older files require external migration |
-| Packed real-space operator bundle HDF5 | `1.1` | Complete 6.3 numerical layout with Standard availability and quality-review fields; older files require external migration |
+| Packed real-space operator bundle HDF5 | `1.1` | Complete 6.3 numerical layout with Standard availability and quality-review fields; reader accepts only `1.1`; older files require external migration |
 | Band-representation HDF5 | `1.0` | Current complete contract; non-`1.0` versions rejected by all three readers; no migration or qualification upgrade |
 | Band-representation JSON summary | `1.0` | Existing summary layout |
 | Projection-representation search HDF5 and canonical JSON summary | `1.0` | Complete 2.1 canonical payload and typed mirror |
@@ -30,13 +31,15 @@ supports it, with the original field, digest, and qualification requirements.
 | Symmetrization report JSON | `1.0` | Former 3.0 report content |
 | Gauge-aware validation HDF5 | `1.0` | Existing complete validation content |
 | VASP PAW matrix-element HDF5 | `1.0` | Former 1.3 source, frame, and matrix-element contract |
-| VASP / QE PAW SPN provenance | `1.0` | Former 1.2 spin/source/frame contract |
-| QE PAW matrix-element HDF5, oracle provenance, completed matrix-element HDF5 | `1.0` | Existing complete contracts |
+| VASP PAW SPN HDF5 | `1.1` | Target hard gate, complete-parent audit, mask digests, and target-contract binding; reader accepts `1.0`, `1.1`, `1.2` with their original contract rules |
+| QE PAW SPN provenance JSON | `1.1` | Target hard gate, complete-parent audit, mask digests, and target-contract binding |
+| QE PAW matrix-element HDF5 | `1.1` | Target-scoped matrix-element contract |
+| QE PAW oracle provenance HDF5 | `1.0` | Existing oracle contract; reader accepts only `1.0` |
+| Symmetry-completed QE PAW matrix-element HDF5 | `1.0` | Existing completed matrix-element contract |
 | PAW SCDM input HDF5 | `1.0` | Existing input contract |
 | PAW block-partition audit HDF5 | `1.0` | Former 1.1 audit content |
 | Wannier uIu generation provenance / partial JSON | `1.1` | Target-scoped qualification plus parent audit; legacy 1.0 remains readable |
 | Wannier Hamiltonian-operator provenance JSON | `1.1` | Target-scoped closure and explicit generation/delivery gauge evidence; legacy 1.0 remains readable |
-| VASP/QE PAW SPN provenance JSON | `1.1` | Target hard gate, complete-parent audit, mask digests, and target-contract binding |
 | QE direct PAW MMN/AMN provenance JSON | `1.1` | Target hard gate and complete-parent audit; legacy 1.0 remains readable |
 | Wannier gauge-chain diagnostic HDF5 / JSON | `1.0` | Existing diagnostic contract |
 | AMN provenance and native VASP symmetry-gauge HDF5 | `1.0` | Existing provenance contracts |

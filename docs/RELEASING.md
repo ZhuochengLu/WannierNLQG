@@ -16,9 +16,11 @@ software version.
 ## Candidate gate
 
 1. Work in an isolated candidate copied from a frozen formal source tree.
-2. Require every independent writer to use schema `1.0` and all three Band
-   readers to reject non-`1.0` input. Keep supported historical reads for other
-   formats and retain Band historical fixtures as rejection evidence. Run the
+2. Verify each independent writer version and supported reader-version set
+   against [the schema inventory](STORAGE_SCHEMAS.md) and its source constants.
+   All three Band readers must accept only wire `1.0` and reject non-`1.0`
+   input. Keep supported historical reads for other formats and retain Band
+   historical fixtures as rejection evidence. Run the
    formatter, architecture contracts, documentation audit, version
    consistency, and exact release whitelist.
 3. Run the default self-contained Fast suite.

@@ -54,7 +54,6 @@ output, with corrected Berry-curvature-dipole contraction and the legacy zero-te
 switch. All intermediate model bands remain included. See
 [SHG documentation](SECOND_HARMONIC_GENERATION.md) and
 [theory](../theory/SecondHarmonicGeneration.md) for numerical conventions and limits.
-No remote release is implied by the local candidate version identifier.
 
 ## Standard Wannierization route
 
@@ -80,15 +79,25 @@ Full operator bundles now preserve the raw generation gauge separately from the
 delivered `final_wannier_gauge`. OAM's five required operators can claim a common
 delivery gauge only after transform replay and q-to-R roundtrip validation.
 
+## Current compatibility and identities
+
+- The Julia package software version is 1.1.0; writer software provenance is
+  separate from each wire-schema contract.
+- Wannierization checkpoint HDF5 writes `1.2` and reads `1.1`, `1.2`.
+- Packed real-space operator bundle HDF5 writes `1.1` and reads `1.1`.
+- Other independently versioned formats and their supported historical reads
+  are listed in [the schema inventory](STORAGE_SCHEMAS.md). Unsupported wire
+  versions require the migration policy of the particular format.
+
 ## WannierNLQG 1.0.1 history
 
-## Maintenance release
+### Maintenance release
 
 WannierNLQG 1.0.1 incorporates the public updates accumulated after version
 1.0.0 and aligns the versioned release with the maintained v1 source tree.
 The version 1.0.0 API and migration documents remain the public baseline.
 
-## Runtime progress and output reports
+### Runtime progress and output reports
 
 - Integral and K-slice execution now present one concise Fourier-plan summary
   with task, backend, grid, local-point, decomposition, and fallback context.
@@ -104,7 +113,7 @@ The version 1.0.0 API and migration documents remain the public baseline.
   `<seed>.wannierization-diagnostics.jsonl`. Compact report grouping does not
   discard warnings, errors, failed gates, or original diagnostic records.
 
-## Test and release orchestration
+### Test and release orchestration
 
 - Test selection is explicit and fail-closed: Fast, five registered Full-only
   shards, and MPI-only are independent modes with a frozen inventory.
@@ -117,7 +126,7 @@ The version 1.0.0 API and migration documents remain the public baseline.
 - Version tags use a separate gate that accepts only an exact successful
   `main`-push CI run for the tag target.
 
-## Documentation and presentation
+### Documentation and presentation
 
 - The README and user/developer documentation describe the maintained task
   inventory, progress output, and test entry points more precisely.
@@ -125,17 +134,17 @@ The version 1.0.0 API and migration documents remain the public baseline.
   response kernels or the public physical qualification boundary.
 - Project logo assets and citation guidance were added to the public source.
 
-## Compatibility and identities
+### Compatibility and identities
 
-- The Julia package software version is 1.1.0.
-- Wannierization checkpoints and Packed HDF5 operator bundles use wire schema
-  `1.1`; readers reject every older schema with an explicit external-migration
-  requirement. Unrelated storage schemas retain their existing versions.
-- Operator bundles record the 1.1.0 writer version and keep writer identity
-  separate from the wire-schema contract.
+- The Julia package software version is 1.0.1.
+- Public storage schemas remain at version 1.0; software versioning does not
+  mechanically change wire-format, evidence, or qualification identifiers.
+- Operator bundles record the 1.0.1 writer version. Readers retain the listed
+  historical writer-version compatibility and continue to reject unknown
+  versions.
 - The original `v1.0.0` tag and GitHub Release remain unchanged.
 
-## Reproducible source
+### Reproducible source
 
 `SOURCE_MANIFEST.tsv` and `SHA256SUMS` define the public source inventory. After
 extracting a release archive, verify its payload with:
@@ -148,11 +157,11 @@ Public tests and examples use repository-owned synthetic fixtures. Private
 material inputs, local release evidence, and generated research outputs are not
 part of the source release.
 
-## Qualification limits
+### Qualification limits
 
 - Software and package regression checks do not establish material convergence
   or material-specific numerical qualification.
 - No physical model or material result is newly qualified by this maintenance
   release.
-- Standard Wannier construction and quality-review artifacts do not become
+- Diagnostic Wannier construction and manual-review artifacts do not become
   production eligible solely because a software gate succeeds.

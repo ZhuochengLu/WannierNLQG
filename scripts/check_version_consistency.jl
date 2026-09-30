@@ -75,6 +75,50 @@ end
 
 check_response_summary_schema_documentation(ROOT)
 
+# Check specific current inventory rows; software-version mentions and history
+# cannot satisfy these per-format wire checks.
+const KEY_SCHEMA_DOCUMENTATION_ROWS = (
+    ("Wannierization checkpoint HDF5", "WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION"),
+    ("Packed real-space operator bundle HDF5", "OPERATOR_BUNDLE_SCHEMA_VERSION"),
+    ("Band-representation HDF5", "BAND_REPRESENTATION_SCHEMA_VERSION"),
+    ("SAWF fixed-subspace HDF5", "WANNIERIZATION_FIXED_SUBSPACE_SCHEMA_VERSION"),
+    ("VASP PAW SPN HDF5", "VASP_PAW_SPN_SCHEMA_VERSION"),
+    ("QE PAW SPN provenance JSON", "QE_PAW_SPN_SCHEMA_VERSION"),
+    ("QE PAW matrix-element HDF5", "QE_PAW_MATRIX_ELEMENT_SCHEMA_VERSION"),
+    ("QE PAW oracle provenance HDF5", "QE_PAW_ORACLE_PROVENANCE_SCHEMA_VERSION"),
+    ("Symmetry-completed QE PAW matrix-element HDF5", "SYMMETRY_COMPLETED_QE_PAW_SCHEMA_VERSION"),
+    ("Wannier uIu generation provenance / partial JSON", "WANNIER_UIU_GENERATION_SCHEMA_VERSION"),
+    (
+        "Wannier Hamiltonian-operator provenance JSON",
+        "WANNIER_HAMILTONIAN_OPERATOR_GENERATION_SCHEMA_VERSION",
+    ),
+)
+
+function check_storage_schema_documentation(root::AbstractString, writer_versions::AbstractDict)
+    rows = readlines(joinpath(root, "docs", "STORAGE_SCHEMAS.md"))
+    for (label, name) in KEY_SCHEMA_DOCUMENTATION_ROWS
+        matching_rows = filter(line -> startswith(line, "| $(label) |"), rows)
+        length(matching_rows) == 1 ||
+            error("schema inventory must contain exactly one $(label) row")
+        marker = "| $(label) | `$(writer_versions[name])` |"
+        startswith(only(matching_rows), marker) ||
+            error("schema inventory writer version disagrees with $(name)")
+    end
+
+    release_notes = read(joinpath(root, "docs", "RELEASE_NOTES.md"), String)
+    current_notes = first(split(release_notes, "## WannierNLQG 1.0.1 history"; limit = 2))
+    checkpoint_version = writer_versions["WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION"]
+    packed_version = writer_versions["OPERATOR_BUNDLE_SCHEMA_VERSION"]
+    for marker in (
+        "Wannierization checkpoint HDF5 writes `$(checkpoint_version)` and reads `1.1`, `$(checkpoint_version)`.",
+        "Packed real-space operator bundle HDF5 writes `$(packed_version)` and reads `$(packed_version)`.",
+    )
+        occursin(marker, current_notes) ||
+            error("current release compatibility is missing: $(marker)")
+    end
+    return true
+end
+
 project = TOML.parsefile(joinpath(ROOT, "Project.toml"))
 VersionNumber(project["version"]) == EXPECTED_VERSION ||
     error("Project.toml version is not $(EXPECTED_VERSION)")
@@ -176,6 +220,7 @@ const INDEPENDENT_SCHEMA_CONSTANTS = (
         "WANNIER_GAUGE_CHAIN_DIAGNOSTIC_SCHEMA_VERSION",
     ),
 )
+const INDEPENDENT_WRITER_VERSIONS = Dict{String, String}()
 for (relative_path, name) in INDEPENDENT_SCHEMA_CONSTANTS
     source = read(joinpath(ROOT, relative_path), String)
     expected_version = get(
@@ -194,7 +239,16 @@ for (relative_path, name) in INDEPENDENT_SCHEMA_CONSTANTS
     )
     occursin(name * " = \"$(expected_version)\"", source) ||
         error("independent storage schema is not $(expected_version): $(name) in $(relative_path)")
+    INDEPENDENT_WRITER_VERSIONS[name] = expected_version
 end
+
+check_storage_schema_documentation(ROOT, INDEPENDENT_WRITER_VERSIONS)
+checkpoint_source =
+    read(joinpath(ROOT, "ext", "WannierNLQGWannierizationExt", "hdf5", "FixedSubspace.jl"), String)
+occursin(
+    r"WANNIERIZATION_CHECKPOINT_READABLE_SCHEMA_VERSIONS\s*=\s*\(\"1\.1\",\s*\"1\.2\"\)",
+    checkpoint_source,
+) || error("checkpoint readable versions disagree with documented 1.1/1.2 compatibility")
 
 # Parse literal Band header declarations so spacing changes do not weaken or break
 # the version gate. Reader behavior and shared-header use are tested separately.
@@ -316,6 +370,6 @@ for (directory, directories, files) in walkdir(ROOT)
 end
 
 println(
-    "version consistency passed: software=$(EXPECTED_VERSION) checkpoint=1.2 packed_hdf5=1.1 other_independent_storage=1.0 internal_contracts=preserved " *
+    "version consistency passed: software=$(EXPECTED_VERSION) checkpoint=1.2 packed_hdf5=1.1 independent_writer_versions=checked_per_format key_schema_documentation=checked internal_contracts=preserved " *
     "internal_predecessor=2.4.0",
 )
