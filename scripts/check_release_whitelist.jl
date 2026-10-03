@@ -41,6 +41,7 @@ const ALLOWED_SCRIPT_FILES = Set([
     "check_documentation.jl",
     "check_format.jl",
     "check_mpi_smoke.jl",
+    "check_mpi_context.jl",
     "check_progress_output.jl",
     "check_release_whitelist.jl",
     "check_response_symmetry_catalog.jl",

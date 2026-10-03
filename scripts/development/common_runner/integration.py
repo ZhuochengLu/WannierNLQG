@@ -108,6 +108,17 @@ def prepare(args, package, launcher):
         for app in policy['applications']:
             for arg in app['argv']:
                 if isinstance(arg,str) and Path(arg).is_absolute() and Path(arg).is_file(): pin(inputs,arg)
+        if args.kind == 'full':
+            if not getattr(args, 'mpi_context_run', None):
+                raise ValueError('Full MPI ownership requires actual same-source Julia/Pkg.test/MPI2 context preflight')
+            import full_mpi_catalog
+            context = full_mpi_catalog.validate_full_context(package, args.mpi_context_run, policy, stage['env'], args.julia)
+            for path in context['hdf5_inputs']: pin(inputs, path)
+            context_run = Path(args.mpi_context_run).resolve()
+            for path in context_run.rglob('*'):
+                if path.is_file(): pin(inputs, path)
+            load_path = stage['env']['JULIA_LOAD_PATH'].split(':')
+            for name in ('Project.toml', 'LocalPreferences.toml'): pin(inputs, Path(load_path[1]) / name)
         stage['mpi_ownership']=policy
     request = adapters.request(args.kind.replace('-','_'),args.run_id,[stage],limits,
         {'execute':gates},{'execute':qualification},process_contract='foreground_owned_mpi' if stage.get('mpi_ownership') else 'foreground_owned_group')
@@ -130,6 +141,7 @@ def main(package,launcher,argv=None):
         p.add_argument('--run-id',required=True);p.add_argument('--runs-root',required=True)
         p.add_argument('--request-out',required=True);p.add_argument('--env-json',required=True)
         p.add_argument('--mpi-ownership-json',help='explicit pinned local OpenMPI rank-argv catalogue');p.add_argument('--input',action='append',default=[]);p.add_argument('--gates-json')
+        p.add_argument('--mpi-context-run',help='sealed same-source actual Julia/Pkg.test/MPI2 preflight required with Full MPI ownership')
         p.add_argument('--timeout',type=float,required=True);p.add_argument('--rss-gib',type=float,default=42)
         p.add_argument('--cpu-budget',type=int,required=True);p.add_argument('--reserve-gib',type=float,default=0)
         p.add_argument('--plan-only',action='store_true',help='write validated request without launching')
@@ -178,6 +190,19 @@ def main(package,launcher,argv=None):
                         '--julia',julia,'--output-dir',str(root/request['run_id']/stage['name']/'suite')]
                     if argv!=expected or Path(stage['cwd']).resolve()!=package:
                         raise ValueError('Full submit must preserve canonical owned-group scheduler command')
+                    if stage.get('mpi_ownership'):
+                        context_runs = {Path(path).parent.parent for path in stage['inputs']
+                                        if Path(path).name == 'parent-context.json' and Path(path).parent.name == 'execute'}
+                        if len(context_runs) != 1:
+                            raise ValueError('Full submit requires one explicit pinned actual MPI context run')
+                        import full_mpi_catalog
+                        context_run = next(iter(context_runs))
+                        context = full_mpi_catalog.validate_full_context(package, context_run, stage['mpi_ownership'], stage['env'], julia)
+                        required = dict(context['hdf5_inputs'])
+                        required.update({str(path.resolve()): runner.digest(path) for path in context_run.rglob('*') if path.is_file()})
+                        if any(stage['inputs'].get(path) != sha for path, sha in required.items()):
+                            raise ValueError('Full submit lacks sealed context/HDF5 input closure')
+
             if any(stage['inputs'].get(p)!=sha for p,sha in current.items()):raise ValueError('request lacks current package input closure')
         result=runner.submit(request,root)
     else:

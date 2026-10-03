@@ -192,3 +192,61 @@ No cached argv or ownership grace is admitted: persistent EIO, other errno and
 PID reuse remain missing evidence/rejection. CI admission uses the single resulting
 leader argv consistently. `snapshot_selftest.py --output-dir /ABS/OWNED/NEW`
 replays query/copy EIO and admission negatives without scientific computation.
+
+## Private MPI preferences and measured catalogue
+
+Root and test projects directly declare MPIPreferences so an explicit private
+preference project can supply the same MPI selection to root, Pkg.test sandbox,
+and ranks. Keep its Project.toml, LocalPreferences.toml, depot, environment,
+expected runtime identities and all receipts outside the source. Use the complete
+explicit environment with JULIA_LOAD_PATH=@:/absolute/private/project:@stdlib;
+never rely on global versioned environments or edit global preferences.
+
+`scripts/check_mpi_context.jl EXPECTED_JSON OUTPUT_JSON` measures the effective
+preferences, binary/ABI, loaded MPI library, MPI.mpiexec argv and file hashes.
+Mismatch throws before MPI initialization or a rank launch. The expected JSON
+contains binary, abi, launcher, launcher_sha256, library, library_sha256 and
+library_version_contains, plus hdf5, hdf5_sha256, hdf5_hl, hdf5_hl_sha256 and
+hdf5_version. Host bindings are private inputs, never source assets. Supply both
+HDF5 library preferences in the private project when the default HDF5 selection
+does not bind to the same MPI library. The checker loads HDF5 before declaring a
+match: it requires one MPI object, the expected parallel HDF5/HL pair and identical
+MPI_Init, MPI_Comm_rank and MPI_File_open addresses through all three handles
+within each process. Addresses may differ between processes. An artifact runtime
+prefix or mixed library/symbol binding is rejected; no prefix is cleared.
+
+The catalogue checks the selected HDF5 dependency closure separately from the
+unchanged MPI ownership core. A high-level @rpath reference is supported only
+when its sibling resolves to the measured HDF5 library and the actual loaded
+handle proves the same MPI symbols. Pin that complete native closure in the
+preflight; Full preparation and raw submission retain those pins and all sealed
+context inputs. The catalogue preserves the final project separator for the three
+test commands using Julia's normpath ROOT; the other literal paths stay exact.
+
+Before building a Full catalogue, retain one actual root/Pkg.test sandbox/MPI2
+context engineering run with four declared context outputs, actual root wait
+exit, resource and cleanup evidence, current source inputs and private preference
+files pinned. `full_mpi_catalog.py --preflight-run /absolute/sealed/run` requires
+that same-source proof, matching measured sandbox Base.julia_cmd().exec and an
+explicit --runtime matching that preflight. Full also requires --mpi-context-run
+with the same private preference/depot environment; raw Full submission checks
+the pinned context evidence too. It derives the launcher and library from those measurements;
+there is no Homebrew launcher/library default. Rebuild after source, environment,
+preferences or parent flags change. Python MPI fixtures prove process ownership
+only; they do not prove Julia or Pkg.test MPI selection. Neither this context proof
+nor catalogue preparation grants scientific or publication qualification.
+
+The canonical Full scheduler launches the native Julia executable with its default
+compiled-module flags. Its typed request therefore requires a preflight under
+those same parent flags. A private execution request using compiled-modules=existing
+can still prove library coherence and its own exact argv; it cannot qualify that
+different Full parent. A task-private Julia wrapper is not accepted as the native
+typed Full executable. Keep such execution evidence separate and remeasure the
+actual scheduler parent before preparing Full; no mismatched flag request is launched.
+
+Changing native HDF5 or MPI preferences is an environment change, even with the
+same Julia source and dependency graph. Retain its original evidence separately,
+verify focused HDF5 IO and actual MPI comparisons in the selected environment,
+and do not relabel an earlier scientific PASS. No HDF5 version or host library
+path is selected by this public helper. Complete package loading, the original
+MPI smoke and scientific contracts remain separate validation gates.
