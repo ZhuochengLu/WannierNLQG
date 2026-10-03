@@ -1,0 +1,144 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__shift_current__geometric_loop",
+  "native_science": {
+    "kslice_shift_current_geometric_loop/synthetic_demo_sck_i_geo.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000"
+      ],
+      "nonzero_scientific_values": 0,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_shift_current_geometric_loop/synthetic_demo_sck_r_geo.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "3c48b9472c55a52c",
+        "3c48b9472c55a52c",
+        "3c48b9472c55a52c",
+        "3c48b9472c55a52c",
+        "3deac10b11fd2dee",
+        "3deac10b11fd2dee",
+        "3deac10b11fd2dee",
+        "3deac10b11fd2dee",
+        "3c48b9472c55a534",
+        "3c48b9472c55a534",
+        "3c48b9472c55a534",
+        "3c48b9472c55a534"
+      ],
+      "nonzero_scientific_values": 12,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 1.9466151693564152e-10,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_shift_current_geometric_loop/synthetic_demo_sck_r_geo.dat",
+      "sha256": "8a415b721293c6d6fba38d655353c85a8509082ab168f2b6ae04bf78a458e2b3"
+    },
+    {
+      "file": "kslice_shift_current_geometric_loop/synthetic_demo_sck_i_geo.dat",
+      "sha256": "39578347d52ff34250fbfb8ea28ae027caae3bfcd694cfb812b1c40656a8c997"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "fdaec3d75b4dd9551863b0d6a90e84a8cf258336009363aa52a9cda755cfeea7",
+    "2b8a5dd6064c7e7017b40a510b7a1d924d65e9f7bf9f179c80d34197d2219a90",
+    "6fd6c11f52a81ddfb23b56e18d8523fcd0dbe63b424a1c85ac791fcb6741e6e4",
+    "12994bbbbfb9176f676f1ca72302a7a6870fea04ad6b0ca6bd36ee64866e0add",
+    "f2a831f3cff6c3d9597182858183077a483a2e3b50eade1c970810031d2de538",
+    "1ad9aa097e8d864e18022ba7b423d8747d540e291d196fd6daf0ec34b312c558",
+    "d0d0ca763a4ef4e3bc726b1e644416ba8c39ce0e66c401140989d9318fe8c58c",
+    "39009c53fd4e43d7591ce1cee31899ffd4578cc9973c64975ec1a026bcf66a35",
+    "47a4a8ee6573d30e66ad8fdb1aa99a69c276df3eed736b1f10ad84243affe941",
+    "24b15c5a903555052251a17a4863ffd3f4e394c9c7e7f17217774167500620a9",
+    "75e1c617db1374c280cea99378069b8b26e12086035697504d4f59654dcb5b49",
+    "fecec8a049ae59ab82017bf9acdae949bf829c3cf72a2f1960da660703104d28"
+  ],
+  "original_receipt_sha256": "fdaec3d75b4dd9551863b0d6a90e84a8cf258336009363aa52a9cda755cfeea7",
+  "rank_output_inventory": [
+    [
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_r_geo.dat",
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_i_geo.dat"
+    ],
+    [
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_r_geo.dat",
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_i_geo.dat"
+    ],
+    [
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_r_geo.dat",
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_i_geo.dat"
+    ],
+    [
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_r_geo.dat",
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_i_geo.dat"
+    ],
+    [
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_r_geo.dat",
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_i_geo.dat"
+    ],
+    [
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_r_geo.dat",
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_i_geo.dat"
+    ],
+    [
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_r_geo.dat",
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_i_geo.dat"
+    ],
+    [
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_r_geo.dat",
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_i_geo.dat"
+    ],
+    [
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_r_geo.dat",
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_i_geo.dat"
+    ],
+    [
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_r_geo.dat",
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_i_geo.dat"
+    ],
+    [
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_r_geo.dat",
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_i_geo.dat"
+    ],
+    [
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_r_geo.dat",
+      "kslice_shift_current_geometric_loop/synthetic_demo_sck_i_geo.dat"
+    ]
+  ],
+  "ranks": 12,
+  "task_labels": [
+    "shift_current/k_slice/geometric_loop"
+  ]
+}

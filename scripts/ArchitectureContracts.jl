@@ -274,10 +274,15 @@ function direct_using_providers(source::AbstractString)
     return sort!(collect(providers))
 end
 
-"""Reject uses of the root package binding outside an explicit call allowlist."""
-function root_module_usage_violations(source::AbstractString; allowed_functions = ("pkgversion",))
+"""Reject root package uses outside explicit call and exact if-condition allowlists."""
+function root_module_usage_violations(
+    source::AbstractString;
+    allowed_functions = ("pkgversion",),
+    allowed_guards = (),
+)
     violations = String[]
     allowed = Set(String.(allowed_functions))
+    guards = Meta.parse.(String.(allowed_guards))
     function is_allowed_callee(expression)
         expression isa Symbol && return String(expression) in allowed
         expression isa Expr && expression.head == :. || return false
@@ -290,6 +295,13 @@ function root_module_usage_violations(source::AbstractString; allowed_functions 
         end
         expression isa Expr || return
         expression.head in (:using, :import) && return
+        if expression.head == :if &&
+           length(expression.args) >= 2 &&
+           any(guard -> first(expression.args) == guard, guards)
+            # Only the exact condition is permitted; every branch remains audited.
+            foreach(visit, expression.args[2:end])
+            return
+        end
         if expression.head == :call &&
            !isempty(expression.args) &&
            is_allowed_callee(first(expression.args))
@@ -823,6 +835,81 @@ function _qualified_imports(code::AbstractString, module_name::AbstractString)
     return names
 end
 
+# Project verified Type operands in literal compiler requests out of the runtime
+# dependency scan. Calls, imports and arbitrary expressions retain their edges.
+function _compiler_type_projection(source::AbstractString, verified_types::AbstractDict)
+    recorders = Set((
+        :precompile,
+        :_record_precompile,
+        :_record_early_prepare,
+        :_record_matrix_first_use,
+        :_record_sequence,
+        :_record_symmetrization,
+        :_record_foundation,
+        :_foundation_owner_sequence,
+        :_record_response_writer_symmetrization,
+        :_record_response_writer_foundation,
+        :_record_vasp_spn_residual,
+    ))
+    function module_leaf(x)
+        x isa Symbol && return String(x)
+        x isa Expr &&
+            x.head == :. &&
+            last(x.args) isa QuoteNode &&
+            return String(last(x.args).value)
+        return ""
+    end
+    function type_operand(x)
+        x isa Expr || return x
+        if x.head == :. && length(x.args) == 2 && last(x.args) isa QuoteNode
+            provider = module_leaf(first(x.args))
+            name = last(x.args).value
+            name in get(verified_types, provider, Set{Symbol}()) && return :Nothing
+            return x
+        end
+        if x.head in (:curly, :where, :tuple, :(<:), :(>:))
+            return Expr(x.head, map(type_operand, x.args)...)
+        end
+        if x.head == :call && length(x.args) == 2 && first(x.args) == :typeof
+            operand = x.args[2]
+            # typeof may inspect a binding, but never evaluate a nested call.
+            (operand isa Symbol || (operand isa Expr && operand.head == :.)) &&
+                return Expr(:call, :typeof, type_operand(operand))
+        end
+        return x
+    end
+    function visit(x; in_workload = false)
+        x isa Expr || return x
+        x.head in (:function, :import, :using) && return x
+        if x.head == :let
+            bindings = first(x.args)
+            entries = bindings isa Expr && bindings.head == :block ? bindings.args : Any[bindings]
+            any(entries) do binding
+                binding isa Expr &&
+                    binding.head == :(=) &&
+                    first(binding.args) isa Symbol &&
+                    haskey(verified_types, String(first(binding.args)))
+            end && return x
+        end
+        if x.head == :macrocall && first(x.args) == Symbol("@compile_workload")
+            return Expr(
+                x.head,
+                first(x.args),
+                x.args[2],
+                map(a -> visit(a; in_workload = true), x.args[3:end])...,
+            )
+        end
+        if in_workload && x.head == :call && first(x.args) in recorders && length(x.args) == 2
+            signature = x.args[2]
+            if signature isa Expr && signature.head == :curly && first(signature.args) == :Tuple
+                return Expr(:call, first(x.args), type_operand(signature))
+            end
+        end
+        return Expr(x.head, map(a -> visit(a; in_workload), x.args)...)
+    end
+    return visit(Meta.parseall(source))
+end
+
 # Return non-public shared-layer references absent from the explicit integration allowlists.
 function shared_boundary_reference_violations(
     sources::AbstractDict{<:AbstractString, <:AbstractString},
@@ -833,15 +920,33 @@ function shared_boundary_reference_violations(
             ("src/SymmetryFoundation/", "ext/WannierNLQGSymmetryFoundationExt/"),
         "WannierProjection" => ("src/WannierProjection/",),
     ),
+    compiler_type_symbols = Dict{String, Set{Symbol}}(),
 )
     violations = String[]
     for path in sort!(collect(keys(sources)))
-        code = _code_only(sources[path])
+        syntax = _compiler_type_projection(sources[path], compiler_type_symbols)
+        imports = direct_import_records(sources[path])
         for module_name in sort!(collect(keys(owner_prefixes)))
             any(prefix -> startswith(path, prefix), owner_prefixes[module_name]) && continue
-            referenced = Set(_qualified_imports(code, module_name))
-            qualified = Regex("\\b" * module_name * "\\s*\\.\\s*([A-Za-z_][A-Za-z0-9_]*(?:!)?)")
-            union!(referenced, Symbol(match.captures[1]) for match in eachmatch(qualified, code))
+            referenced = Set{Symbol}()
+            for (provider, record) in imports
+                last(split(provider, '.')) == module_name || continue
+                union!(referenced, Symbol.(record.symbols))
+            end
+            function visit_reference(x)
+                x isa Expr || return
+                if x.head == :. && length(x.args) == 2 && last(x.args) isa QuoteNode
+                    provider = _import_provider_name(first(x.args))
+                    name = last(x.args).value
+                    if !isempty(provider) &&
+                       last(split(provider, '.')) == module_name &&
+                       name isa Symbol
+                        push!(referenced, name)
+                    end
+                end
+                foreach(visit_reference, x.args)
+            end
+            visit_reference(syntax)
             public = Set(Symbol.(public_symbols[module_name]))
             allowed = Set(Symbol.(integration_allowlists[module_name]))
             for name in sort!(collect(referenced); by = string)

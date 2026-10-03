@@ -1,0 +1,19 @@
+{
+  "id": "validate_unified_representation_mode_contract",
+  "ranks": [
+    {
+      "original_receipt_sha256": "b4eae490e77031df106d771ebe127c51380741c38107131c972b2a17103556cc",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [],
+          "type": "Nothing"
+        },
+        "semantic_return": "nothing"
+      }
+    }
+  ],
+  "schema": 1
+}

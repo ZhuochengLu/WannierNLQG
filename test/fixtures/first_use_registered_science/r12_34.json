@@ -1,0 +1,99 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__quantum_christoffel_symbol__conventional",
+  "native_science": {
+    "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3f6ed1fb4c66c640",
+        "3f6ed1fb4c66c640",
+        "3f6ed1fb4c66c640",
+        "3f6ed1fb4c66c640",
+        "bf70d975980e4ac8",
+        "bf70d975980e4ac8",
+        "bf70d975980e4ac8",
+        "bf70d975980e4ac8",
+        "3f72a7b2bb1b1b88",
+        "3f72a7b2bb1b1b88",
+        "3f72a7b2bb1b1b88",
+        "3f72a7b2bb1b1b88",
+        "bf7484070ff16950",
+        "bf7484070ff16950",
+        "bf7484070ff16950",
+        "bf7484070ff16950"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.005008723818799091,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat",
+      "sha256": "8a7358bd5bc72cd28d54b8bf28ee7d114f6b1b2e9bf8298f198329b924eef505"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "013e7430d69838df8c059df9e840dbc3d8417c81c82d6228fb826bdf8b5b3312",
+    "4948a9743a9c7fa98f4e7b2d31e565b337ccfed0cad884e75046c59760c13909",
+    "4b8e36b3d02293c886e08544d4481125901098dc4654103f5e89d44224863e77",
+    "f4474ce372e6332afdbff12cc1cbb515500c60b506fb62aab7f0f8c89af3fb92",
+    "c9104acaafe54e9a0e968e1ba85f975d2a5418dbffd25c8a15c083151c60a7d6",
+    "0678d5e83cb430ac633334eced19bbc4684a19eec4ef15d568d6da6511a0b2b5",
+    "0199a6f54d7a52af616c57e5127c657bf7de8516e582ab71c1e48984cabf8da3",
+    "d8b06b056d30457fa3b1f9fe15324569959dc1e3a3b63af2ffe00461ead1be33",
+    "696378b4b40c25cf9e683436cc2c2b4009fbf2de57f64e73f1561f66c37a84d3",
+    "a2caf489a13a143e1137ddca4be6b5665d63da30c881f1434fb43f0385d7bb7c",
+    "d68fd434edcea2bd97d4c2395ddd9c976d50e2b9963d102c9a8c79553358380e",
+    "622674768c7f151732eb6f0383ddf258ce5bef51293350cfc414c167a5cb7946"
+  ],
+  "original_receipt_sha256": "013e7430d69838df8c059df9e840dbc3d8417c81c82d6228fb826bdf8b5b3312",
+  "rank_output_inventory": [
+    [
+      "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat"
+    ]
+  ],
+  "ranks": 12,
+  "task_labels": [
+    "quantum_christoffel_symbol/k_slice/conventional"
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__berry_curvature__conventional",
+  "native_science": {
+    "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "3f654b743d420281",
+        "3f654b743d420281",
+        "3f654b743d420281",
+        "3f654b743d420281",
+        "bbd8955d4d3d6ac0",
+        "bbd8955d4d3d6ac0",
+        "bbd8955d4d3d6ac0",
+        "bbd8955d4d3d6ac0",
+        "bf654b743d420281",
+        "bf654b743d420281",
+        "bf654b743d420281",
+        "bf654b743d420281"
+      ],
+      "nonzero_scientific_values": 12,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0025994558619120704,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat",
+      "sha256": "a03cf9f4c82922c1c8ac36c08f81776b79d2779089ff21f315a23021c48e5fbc"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "ed122bc00e278cc6294863ee02aedb7a8699485d3c49d736b9769971d8a5b80c",
+    "05eb7f01029e51b405a13335fd17b9e32f1903ca9dd38d6c66c6b2a1f70709ff",
+    "15606faa63c16266e80a9d928d74d177f310fda757161a30024d6a331f7b4ef3",
+    "bcc7d087c44808ef543ded612e4ed6784fd503514ae4002c044dc0dcbc60acf0",
+    "11174ecc9d19538e3a770f951667a19eb942f50590a2c2c2bec6bd96fbd05dc7",
+    "c2872afd5b25e8c1a5667eaa174f009ede06d5c180fcd6bdb4f1fa4217e9a129",
+    "12c83bddb962f4be70382c0feeafe5be6870ba919c2505188ecf6e3bb02081cf",
+    "45ebbce65aebf3b2ddb5297d9ee7053c2f547469f54207c40974c770d8e6ec45",
+    "f76e68d860d12c9e754467f91fbd3d4f067bb12fe1affe8adf4e523c19814d3b",
+    "52f5d983c4f93888a13c65a104680320fa376d6613a082cc0ffe9ecf7d63f4ba",
+    "af942c1af61c7c19ee4d4edd1d7b37481d7d3a1076e6417fde49fbe8fa752c91",
+    "3d2da77e2119d31b4515040ad9fc50e28f05a08052fb1f7623b69183f4ea70f3"
+  ],
+  "original_receipt_sha256": "ed122bc00e278cc6294863ee02aedb7a8699485d3c49d736b9769971d8a5b80c",
+  "rank_output_inventory": [
+    [
+      "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat"
+    ]
+  ],
+  "ranks": 12,
+  "task_labels": [
+    "berry_curvature/k_slice/conventional"
+  ]
+}

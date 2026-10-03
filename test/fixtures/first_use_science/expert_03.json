@@ -1,0 +1,19 @@
+{
+  "id": "band_representation_schema_version",
+  "ranks": [
+    {
+      "original_receipt_sha256": "910fbb1ec8930b8a0adc154b1f0dc2474d396312c88f3b2e3c8a49093b95b3f8",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [],
+          "type": "String"
+        },
+        "semantic_return": "\"1.0\""
+      }
+    }
+  ],
+  "schema": 1
+}

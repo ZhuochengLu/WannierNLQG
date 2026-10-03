@@ -47,22 +47,20 @@ end
     ) ? _pair_channel_count(plan, kind) : _axis_channel_count(plan, kind)
 end
 
-"""
-One operator/offset FFT buffer, its transform plan and the currently packed block index.
-
-Repacking overwrites the buffer when block ownership changes; the entry does not own the underlying model.
-"""
-mutable struct MixedFourierCacheEntry
+"""One reusable FFT buffer, its plan, packed block, byte size, and LRU access time."""
+mutable struct MixedFourierCacheEntry{N}
     block::NTuple{3, Int}
-    buffer::Array{ComplexF64}
+    buffer::Array{ComplexF64, N}
     plan::Any
+    bytes::Int
+    last_used::Int
 end
 
 """
-Store reusable per-offset FFT buffers whose dictionary survives block changes.
+Store memory-bounded FFT buffers for operator, offset, and block combinations.
 """
 mutable struct MixedFourierBlockStore
-    entries::Dict{Tuple{Symbol, NTuple{3, Float64}}, MixedFourierCacheEntry}
+    entries::Dict{Tuple{Symbol, NTuple{3, Float64}, NTuple{3, Int}}, MixedFourierCacheEntry}
     seen_offsets::Set{NTuple{3, Float64}}
     allocated_bytes::Int
     peak_allocated_bytes::Int
@@ -72,6 +70,8 @@ mutable struct MixedFourierBlockStore
     extract_seconds::Float64
     fft_calls::Int
     cache_hits::Int
+    evictions::Int
+    access_clock::Int
 end
 
 """
@@ -88,6 +88,11 @@ mutable struct MixedFourierProvider
     logical_index::NTuple{3, Int}
     block::NTuple{3, Int}
     fft_index::NTuple{3, Int}
+    pack_bins::Vector{Int}
+    pack_indices::Dict{Symbol, Union{Nothing, Vector{Int}}}
+    pack_factors::Vector{ComplexF64}
+    pack_key::Union{Nothing, Tuple{NTuple{3, Int}, NTuple{3, Float64}}}
+    reuse_completed_blocks::Bool
 end
 
 const _MIXED_PROVIDER_LOCK = ReentrantLock()
@@ -324,7 +329,7 @@ end
 # Create an empty operator/offset cache with the configured byte limit and zero allocation, timing and hit counters.
 function MixedFourierBlockStore(; memory_limit_bytes::Int = _mixed_memory_limit())
     return MixedFourierBlockStore(
-        Dict{Tuple{Symbol, NTuple{3, Float64}}, MixedFourierCacheEntry}(),
+        Dict{Tuple{Symbol, NTuple{3, Float64}, NTuple{3, Int}}, MixedFourierCacheEntry}(),
         Set{NTuple{3, Float64}}(),
         0,
         0,
@@ -332,6 +337,8 @@ function MixedFourierBlockStore(; memory_limit_bytes::Int = _mixed_memory_limit(
         0.0,
         0.0,
         0.0,
+        0,
+        0,
         0,
         0,
     )
@@ -392,6 +399,18 @@ function enable_mixed_fourier!(
         (0, 0, 0),
         (0, 0, 0),
         (0, 0, 0),
+        [
+            1 +
+            mod(grid.r_grid[1, r], grid.nkfft[1]) +
+            grid.nkfft[1] * (
+                mod(grid.r_grid[2, r], grid.nkfft[2]) +
+                grid.nkfft[2] * mod(grid.r_grid[3, r], grid.nkfft[3])
+            ) for r in 1:model.num_r_vectors
+        ],
+        Dict{Symbol, Union{Nothing, Vector{Int}}}(),
+        zeros(ComplexF64, model.num_r_vectors),
+        nothing,
+        false,
     )
     lock(_MIXED_PROVIDER_LOCK) do
         _MIXED_PROVIDERS[workspace] = provider
@@ -502,7 +521,19 @@ function mixed_fourier_buffer_estimate(
     )
 end
 
-# Allocate and register one operator/offset FFT buffer and backward FFT plan, rejecting byte-limit overflow and updating peak usage.
+# Find the least recently used entry, optionally restricted to a compatible operator group.
+function _mixed_lru_key(store::MixedFourierBlockStore, group::Union{Nothing, Symbol} = nothing)
+    oldest_key = nothing
+    oldest_access = typemax(Int)
+    for (key, entry) in store.entries
+        (group === nothing || key[1] === group) && entry.last_used < oldest_access || continue
+        oldest_key = key
+        oldest_access = entry.last_used
+    end
+    return oldest_key
+end
+
+# Allocate or recycle one FFT buffer without exceeding the workspace byte limit.
 function _mixed_allocate_entry!(
     provider::MixedFourierProvider,
     group::Symbol,
@@ -514,20 +545,51 @@ function _mixed_allocate_entry!(
     shape = (grid.nkfft..., provider.model.num_orbitals, provider.model.num_orbitals, channels)
     bytes = _mixed_entry_bytes(grid, provider.model, plan, group)
     store = provider.store
+    key = (group, delta, provider.block)
+    # A block-major owner never revisits its completed block. Reuse its same-group,
+    # same-offset storage without changing pack order or relying on a larger cache.
+    if provider.reuse_completed_blocks
+        compatible_key = _mixed_lru_key(store, group)
+        if compatible_key !== nothing &&
+           compatible_key[2] == delta &&
+           compatible_key[3] != provider.block
+            entry = pop!(store.entries, compatible_key)
+            entry.block = (-1, -1, -1)
+            store.entries[key] = entry
+            store.evictions += 1
+            return entry
+        end
+    end
     if store.allocated_bytes + bytes > store.memory_limit_bytes
-        reason =
-            "allocating group=$(group), offset=$(delta), bytes=$(bytes) would exceed " *
-            "per-rank limit=$(store.memory_limit_bytes) (already $(store.allocated_bytes))"
-        error("Mixed Fourier memory/configuration error: $(reason)")
+        compatible_key = _mixed_lru_key(store, group)
+        if compatible_key !== nothing
+            entry = pop!(store.entries, compatible_key)
+            entry.block = (-1, -1, -1)
+            store.entries[key] = entry
+            store.evictions += 1
+            return entry
+        end
+        while store.allocated_bytes + bytes > store.memory_limit_bytes
+            victim_key = _mixed_lru_key(store)
+            victim_key === nothing && error(
+                "Mixed Fourier memory/configuration error: group=$(group) buffer exceeds " *
+                "per-workspace limit=$(store.memory_limit_bytes) bytes.",
+            )
+            victim = pop!(store.entries, victim_key)
+            store.allocated_bytes -= victim.bytes
+            store.evictions += 1
+        end
     end
     store.allocated_bytes + bytes <= store.memory_limit_bytes || error(
         "Internal mixed Fourier memory accounting error: requested $(bytes) bytes with " *
         "$(store.allocated_bytes)/$(store.memory_limit_bytes) bytes already allocated.",
     )
-    buffer = zeros(ComplexF64, shape)
+    # ESTIMATE planning does not read or write the array (FFTW.jl fft.jl).
+    # _mixed_pack_and_fft! clears every element before its first numerical use.
+    buffer = Array{ComplexF64}(undef, shape)
     plan = plan_bfft!(buffer, (1, 2, 3); flags = FFTW.ESTIMATE)
-    entry = MixedFourierCacheEntry((-1, -1, -1), buffer, plan)
-    store.entries[(group, delta)] = entry
+    entry = MixedFourierCacheEntry((-1, -1, -1), buffer, plan, bytes, 0)
+    store.entries[key] = entry
     store.allocated_bytes += bytes
     store.peak_allocated_bytes = max(store.peak_allocated_bytes, store.allocated_bytes)
     return entry
@@ -628,6 +690,25 @@ function _mixed_pack_values!(
     return flattened
 end
 
+# Pack in the original R/value order, reusing geometric factors across operator groups.
+function _mixed_pack_cached!(flattened, source_flat, bins, factors, indices)
+    for r_index in axes(source_flat, 2)
+        linear = bins[r_index]
+        factor = factors[r_index]
+        if indices === nothing
+            for value_index in axes(source_flat, 1)
+                flattened[linear, value_index] += factor * source_flat[value_index, r_index]
+            end
+        else
+            for value_index in eachindex(indices)
+                flattened[linear, value_index] +=
+                    factor * source_flat[indices[value_index], r_index]
+            end
+        end
+    end
+    return flattened
+end
+
 # Clear and repack one cache entry for the current block/offset, execute its backward FFT, and update timings and block identity.
 function _mixed_pack_and_fft!(
     entry::MixedFourierCacheEntry,
@@ -643,7 +724,9 @@ function _mixed_pack_and_fft!(
     fill!(buffer, COMPLEX_ZERO)
     flattened = reshape(buffer, prod(grid.nkfft), :)
     source_flat = reshape(source, :, model.num_r_vectors)
-    source_indices = _mixed_source_indices(source, plan, group, model.num_orbitals)
+    source_indices = get!(provider.pack_indices, group) do
+        _mixed_source_indices(source, plan, group, model.num_orbitals)
+    end
     phase_origin =
         grid.origin .+
         grid.directions * Float64[
@@ -653,7 +736,25 @@ function _mixed_pack_and_fft!(
         ]
     phase_point = phase_origin .+ collect(delta)
     pack_t0 = time_ns()
-    _mixed_pack_values!(flattened, source_flat, grid, model, phase_point, source_indices)
+    key = (provider.block, delta)
+    if provider.pack_key != key
+        for r_index in 1:model.num_r_vectors
+            r1 = model.r_vectors[1, r_index]
+            r2 = model.r_vectors[2, r_index]
+            r3 = model.r_vectors[3, r_index]
+            provider.pack_factors[r_index] =
+                cis(2pi * (r1 * phase_point[1] + r2 * phase_point[2] + r3 * phase_point[3])) /
+                model.r_degeneracies[r_index]
+        end
+        provider.pack_key = key
+    end
+    _mixed_pack_cached!(
+        flattened,
+        source_flat,
+        provider.pack_bins,
+        provider.pack_factors,
+        source_indices,
+    )
     provider.store.pack_seconds += (time_ns() - pack_t0) * 1e-9
     fft_t0 = time_ns()
     entry.plan * buffer
@@ -692,17 +793,19 @@ function _mixed_copy!(
     delta = _mixed_delta_key(provider, kpoint)
     source = _mixed_source(workspace, model, group)
     source === nothing && return false
-    key = (group, delta)
+    key = (group, delta, provider.block)
     entry = get(provider.store.entries, key, nothing)
     if entry === nothing
         push!(provider.store.seen_offsets, delta)
         entry = _mixed_allocate_entry!(provider, group, delta, workspace.plan)
         entry === nothing && return false
-    elseif entry.block == provider.block
+    else
         provider.store.cache_hits += 1
     end
     entry.block == provider.block ||
         _mixed_pack_and_fft!(entry, provider, source, workspace.plan, group, delta)
+    provider.store.access_clock += 1
+    entry.last_used = provider.store.access_clock
     extract_t0 = time_ns()
     m1, m2, m3 = provider.fft_index
     if group === :H
@@ -756,6 +859,7 @@ function mixed_fourier_stats(workspace::MatrixElementWorkspace)
         memory_limit_bytes = store.memory_limit_bytes,
         fft_calls = store.fft_calls,
         cache_hits = store.cache_hits,
+        evictions = store.evictions,
         pack_seconds = store.pack_seconds,
         fft_seconds = store.fft_seconds,
         extract_seconds = store.extract_seconds,
@@ -786,4 +890,12 @@ function mixed_fourier_local_k_indices(grid::MixedFourierGrid, rank::Int, size::
         end
     end
     return indices
+end
+
+# Runtime enables this only after constructing whole-block, non-revisiting ownership.
+function _reuse_completed_mixed_blocks!(workspace::MatrixElementWorkspace)
+    provider = _mixed_provider(workspace)
+    provider === nothing && error("Completed-block reuse requires a mixed Fourier provider")
+    provider.reuse_completed_blocks = true
+    return nothing
 end

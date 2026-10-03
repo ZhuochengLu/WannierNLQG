@@ -1,0 +1,82 @@
+{
+  "all_finite": true,
+  "leaves": [
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "result.lattice",
+      "sha256": "1332df685c45a61a0ac008a6a653295b8c5655361c1d34b6304b22ec40235fb8",
+      "shape": [
+        3,
+        3
+      ],
+      "type": "Matrix{Float64}"
+    },
+    {
+      "finite": true,
+      "path": "result.num_orbitals",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "result.num_r_vectors",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "result.r_degeneracies",
+      "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+      "shape": [
+        1
+      ],
+      "type": "Vector{Int64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "result.r_vectors",
+      "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+      "shape": [
+        3,
+        1
+      ],
+      "type": "Matrix{Int64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.5,
+      "max_abs_nonfinite_repr": null,
+      "path": "result.hamiltonian_r",
+      "sha256": "898cbf30b93f86082996bca1fad83351f2040d030832bf45ff79f0720efa0fba",
+      "shape": [
+        1,
+        1,
+        1
+      ],
+      "type": "Array{ComplexF64, 3}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "result.position_r",
+      "sha256": "17b0761f87b081d5cf10757ccc89f12be355c70e2e29df288b65b30710dcbcd1",
+      "shape": [
+        1,
+        1,
+        3,
+        1
+      ],
+      "type": "Array{ComplexF64, 4}"
+    }
+  ],
+  "numeric_leaf_count": 7,
+  "numeric_sha256": "f656ee78342be11a037074c16920df497ae3922f39b9d745b08bec143189bcdb",
+  "type": "WannierNLQG.Core.TightBindingModel{Array{ComplexF64, 3}, Array{ComplexF64, 4}}"
+}

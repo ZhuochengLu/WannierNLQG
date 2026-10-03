@@ -1,20 +1,20 @@
 schema_version = "2.0"
 
 [extensions.WannierNLQGOperatorBundleExt]
-triggers = ["HDF5", "JSON3"]
-source_dependencies = ["Dates", "HDF5", "JSON3", "SHA", "WannierNLQG", "WannierNLQG.Core", "WannierNLQG.IO"]
+triggers = ["MPI", "HDF5", "JSON3"]
+source_dependencies = ["MPI", "PrecompileTools", "Dates", "HDF5", "JSON3", "SHA", "WannierNLQG", "WannierNLQG.Core", "WannierNLQG.IO"]
 
 [extensions.WannierNLQGSymmetryFoundationExt]
 triggers = ["Spglib", "HDF5", "JSON3"]
-source_dependencies = ["Dates", "HDF5", "JSON3", "LinearAlgebra", "Printf", "SHA", "Spglib", "WannierNLQG", "WannierNLQG.Core", "WannierNLQG.IO", "WannierNLQG.SymmetryFoundation"]
+source_dependencies = ["PrecompileTools", "Dates", "HDF5", "JSON3", "LinearAlgebra", "Printf", "SHA", "Spglib", "WannierNLQG", "WannierNLQG.Core", "WannierNLQG.IO", "WannierNLQG.SymmetryFoundation"]
 
 [extensions.WannierNLQGSymmetrizationExt]
 triggers = ["HDF5", "JSON3", "EzXML"]
-source_dependencies = ["Dates", "EzXML", "HDF5", "JSON3", "LinearAlgebra", "Printf", "SHA", "WannierNLQG", "WannierNLQG.Core", "WannierNLQG.IO", "WannierNLQG.MatrixElements", "WannierNLQG.Symmetrization", "WannierNLQG.SymmetryFoundation", "WannierNLQG.WannierProjection"]
+source_dependencies = ["PrecompileTools", "Dates", "EzXML", "HDF5", "JSON3", "LinearAlgebra", "Printf", "SHA", "WannierNLQG", "WannierNLQG.Core", "WannierNLQG.IO", "WannierNLQG.MatrixElements", "WannierNLQG.Symmetrization", "WannierNLQG.SymmetryFoundation", "WannierNLQG.WannierProjection"]
 
 [extensions.WannierNLQGWannierizationExt]
-triggers = ["HDF5", "JSON3", "EzXML"]
-source_dependencies = ["Dates", "EzXML", "FFTW", "HDF5", "JSON3", "LinearAlgebra", "MPI", "Printf", "Random", "SHA", "WannierNLQG", "WannierNLQG.Core", "WannierNLQG.IO", "WannierNLQG.MatrixElements", "WannierNLQG.SymmetryFoundation", "WannierNLQG.WannierProjection", "WannierNLQG.Wannierization"]
+triggers = ["MPI", "HDF5", "JSON3", "EzXML"]
+source_dependencies = ["PrecompileTools", "Dates", "EzXML", "FFTW", "HDF5", "JSON3", "LinearAlgebra", "MPI", "Printf", "Random", "SHA", "WannierNLQG", "WannierNLQG.Core", "WannierNLQG.IO", "WannierNLQG.MatrixElements", "WannierNLQG.SymmetryFoundation", "WannierNLQG.WannierProjection", "WannierNLQG.Wannierization"]
 
 [components.WannierizationInternalSupport]
 dependencies = []
@@ -200,3 +200,7 @@ integration_api = ["construct_symmetry_adapted_wannier_functions", "prepare_band
 "WannierNLQG.WannierProjection" = { module_binding = true, symbols = ["WannierProjectionBasis", "build_wannier_projection_basis", "build_wannier_symmetry_plan"] }
 "WannierNLQG.Wannierization" = { module_binding = true, symbols = [] }
 "WannierizationInternalSupport" = { module_binding = false, symbols = ["AMNExactFrozenInitialization", "AbstractAuthoritativeHamiltonian", "AbstractBandSewingBackend", "AbstractWavefunctionGaugeBackend", "AugmentationAwareSewing", "BandRepresentationPreparationConfig", "BandRepresentationPreparationResult", "COMPLETED", "COMPLETED_WITH_WARNINGS", "CoefficientMappingSewing", "ExternalWannier90Matrices", "FarBandCovarianceCorrection", "INVALID_INPUT", "IO_FAILURE", "NativeEigenstateGauge", "NativeQEPAWMatrices", "NativeVASPPAWMatrices", "PAWGaugeThresholds", "PAWSCDMInitialization", "REPRESENTATION_INCOMPATIBLE", "REPRESENTATION_UNDETERMINED", "REPRESENTATION_VALIDATION_UNDETERMINED", "RepresentationCompatibilityReport", "StarCovariantPAWGauge", "SymmetrizedDFTHamiltonian", "SymmetryAdaptedWannierizationConfig", "SymmetryCompletedQEPAWMatrices", "TargetSubspaceQualificationContract", "VASPPAWMatrixElementResult", "VASPPAWParityThresholds", "WANNIERIZATION_ELIGIBILITY_SUMMARY_KEYS", "WannierizationArtifacts", "WannierizationDiagnostic", "WannierizationEligibility", "WannierizationIteration", "WannierizationResult", "WannierizationStatus", "atomic_hdf5_write", "authoritative_hamiltonian_key", "band_sewing_backend_key", "canonical_band_block_labels", "discrete_hamiltonian_correction_key", "not_evaluated_wannierization_eligibility", "projection_basis_sha256", "read_band_representation_preparation_hdf5", "replace_wannierization_config", "sha256_file", "updated_wannierization_result", "wavefunction_gauge_backend_key", "wannierization_eligibility_from_summary", "wannierization_eligibility_summary", "window_masks_from_energies", "write_tb_symmetry_qualification_group"] }
+
+[extensions.WannierNLQGWannierizationPrecompileExt]
+triggers = ["MPI", "HDF5", "JSON3", "EzXML", "Spglib"]
+source_dependencies = ["MPI", "WannierNLQG", "HDF5", "JSON3", "EzXML", "Dates", "LinearAlgebra", "Printf", "PrecompileTools", "Serialization"]

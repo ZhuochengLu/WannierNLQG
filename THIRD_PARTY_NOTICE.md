@@ -117,7 +117,8 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 The repository contains no real or third-party pseudopotentials. It contains
 only self-generated synthetic analytic fixtures that exercise UPF and related
 parser contracts. Derived regression fixtures are accompanied by
-capsule/provenance manifests and exclude wavefunctions and real
-pseudopotentials. These files are not reference-material datasets. Do not add
+capsule/provenance manifests and exclude real or third-party wavefunctions and
+pseudopotentials. Synthetic wavefunction parser fixtures are included. These
+files are not reference-material datasets. Do not add
 third-party or proprietary research data without an explicit redistribution
 review.

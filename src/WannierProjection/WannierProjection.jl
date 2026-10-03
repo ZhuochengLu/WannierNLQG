@@ -15,4 +15,6 @@ export WannierProjectionBlock, WannierProjectionBasis
 export WannierWinData, read_wannier_win, crystal_structure
 export projection_orbital_values, build_wannier_projection_basis, build_wannier_symmetry_plan
 
+include("WannierProjectionFirstUsePrecompile.jl")
+
 end

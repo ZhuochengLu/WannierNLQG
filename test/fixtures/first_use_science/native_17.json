@@ -1,0 +1,49 @@
+{
+  "original_artifact_attestation": null,
+  "original_report_sha256": "ea875d3a75d2a79fb716c03bec03fbf163b4564dc25c80c8235046723f8bd812",
+  "report": {
+    "all_finite": true,
+    "leaves": [
+      {
+        "finite": true,
+        "max_abs": 1.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result[1]",
+        "sha256": "3239b05c38b825ebb79f103172438292a22a0951351a6b81be1df5d44776cc65",
+        "shape": [
+          1,
+          1
+        ],
+        "type": "Matrix{ComplexF64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result[2]",
+        "sha256": "3239b05c38b825ebb79f103172438292a22a0951351a6b81be1df5d44776cc65",
+        "shape": [
+          1,
+          1
+        ],
+        "type": "Matrix{ComplexF64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result[3]",
+        "sha256": "3239b05c38b825ebb79f103172438292a22a0951351a6b81be1df5d44776cc65",
+        "shape": [
+          1,
+          1
+        ],
+        "type": "Matrix{ComplexF64}"
+      }
+    ],
+    "numeric_leaf_count": 3,
+    "numeric_sha256": "a95625dab37ab70482c1a9ed144d196ab4440f4cedb6100ceb7ff58e8d96655a",
+    "type": "Vector{Matrix{ComplexF64}}"
+  },
+  "schema": 1
+}

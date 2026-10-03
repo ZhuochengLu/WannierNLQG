@@ -1,0 +1,26 @@
+{
+  "id": "smv_fletcher_reeves_two_stage_audit",
+  "ranks": [
+    {
+      "original_receipt_sha256": "7bc3fce7ffa4cb43d3e6c933a629aeba327d2adfc5e251dbc7be0caed751cb19",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.passed",
+              "payload": "01",
+              "type": "Bool"
+            }
+          ],
+          "type": "@NamedTuple{passed::Bool, status::String, reason::String, manifest_path::String, manifest_sha256::String}"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

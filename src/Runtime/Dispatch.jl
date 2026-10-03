@@ -298,6 +298,7 @@ function run(config::TaskConfig)
                         specs,
                         plan.controls;
                         prepare_only = true,
+                        block_local_order = length(configs) == 1,
                         progress_owner = task_index == 1,
                         shared_sources = loaded_sources,
                         mixed_memory_limit_bytes = task_memory_limit,
@@ -347,6 +348,9 @@ function run(config::TaskConfig)
                         response_symmetry_summary = value.response_symmetry_summary,
                         replica_summary = value.replica_summary,
                         qualification_summary = response_qualification_summary(value.qualification),
+                        metadata_centers = ctx.model_input_mode == :legacy &&
+                                           cfg.real_space_replica_policy == "input" ?
+                                           extract_wannier_centers(loaded_sources.model) : nothing,
                     ) : ""
                 push!(
                     results,

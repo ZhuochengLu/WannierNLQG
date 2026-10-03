@@ -1,0 +1,89 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__triple_phase_product__conventional",
+  "native_science": {
+    "kslice_triple_phase_product_conventional/synthetic_demo_tppk_i_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "3f21f8d3a337e5b3",
+        "3f21f8d3a337e5b3",
+        "3f21f8d3a337e5b3",
+        "3f21f8d3a337e5b3",
+        "3bc787031eb91872",
+        "3bc787031eb91872",
+        "3bc787031eb91872",
+        "3bc787031eb91872",
+        "bf21f8d3a337e5b3",
+        "bf21f8d3a337e5b3",
+        "bf21f8d3a337e5b3",
+        "bf21f8d3a337e5b3"
+      ],
+      "nonzero_scientific_values": 12,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0001371153208394156,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_triple_phase_product_conventional/synthetic_demo_tppk_r_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3f17a9a35e0d98e0",
+        "3f17a9a35e0d98e0",
+        "3f17a9a35e0d98e0",
+        "3f17a9a35e0d98e0",
+        "3ed7ed54526dea64",
+        "3ed7ed54526dea64",
+        "3ed7ed54526dea64",
+        "3ed7ed54526dea64",
+        "3f000020390f1b3c",
+        "3f000020390f1b3c",
+        "3f000020390f1b3c",
+        "3f000020390f1b3c",
+        "3ed7ed54526dea64",
+        "3ed7ed54526dea64",
+        "3ed7ed54526dea64",
+        "3ed7ed54526dea64"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 9.026584258506635e-05,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_triple_phase_product_conventional/synthetic_demo_tppk_r_conv.dat",
+      "sha256": "2a7c1ca7d583f430dd6dfccc36249b09b55dfe2cb78141d69fd9f3aff544245b"
+    },
+    {
+      "file": "kslice_triple_phase_product_conventional/synthetic_demo_tppk_i_conv.dat",
+      "sha256": "84ae6d5158c50c800a91496e6b97130b7a8b0c749eaa394f6bf7e1ac5dcfd5bf"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "e97bf66aa1274b413582d5c6259b07232bba91f23cedca867d216a71f5973b71"
+  ],
+  "original_receipt_sha256": "e97bf66aa1274b413582d5c6259b07232bba91f23cedca867d216a71f5973b71",
+  "rank_output_inventory": [
+    [
+      "kslice_triple_phase_product_conventional/synthetic_demo_tppk_r_conv.dat",
+      "kslice_triple_phase_product_conventional/synthetic_demo_tppk_i_conv.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "triple_phase_product/k_slice/conventional"
+  ]
+}

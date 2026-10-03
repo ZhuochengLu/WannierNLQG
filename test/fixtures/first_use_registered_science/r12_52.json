@@ -1,0 +1,99 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__zeeman_interband_quantum_metric__conventional",
+  "native_science": {
+    "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3f51b886c827ebb8",
+        "3f51b886c827ebb8",
+        "3f51b886c827ebb8",
+        "3f51b886c827ebb8",
+        "3f22d5546d435e10",
+        "3f22d5546d435e10",
+        "3f22d5546d435e10",
+        "3f22d5546d435e10",
+        "bf2a1ca36839ce70",
+        "bf2a1ca36839ce70",
+        "bf2a1ca36839ce70",
+        "bf2a1ca36839ce70",
+        "bf51114d56e63ed3",
+        "bf51114d56e63ed3",
+        "bf51114d56e63ed3",
+        "bf51114d56e63ed3"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0010815922001927557,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat",
+      "sha256": "ab5e2a7273cf058605187ece2fe1e5f8a4fe50d693cec090773800cce9a12817"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "314cafade37e2e1fb2013a512970aaed765ba0e26bb4f97765589a4584c931a2",
+    "1d2580143d059230c05cb5ea5532c6d801dbb5564ce508c96507ab526df9c3b6",
+    "0f160057d244a91ac0fba6b870e8559d536df39b238b561c8442887d3793c059",
+    "da986b6f86fe6c337fb475f18a99346c664b54ce4fe4896ec03dde0a4a429d6f",
+    "4ea25334f01f3eed96492310e8c610bbe3eefdd707ab74539e04f715ab22598c",
+    "292a94874dc1ed22e2538a3c1bb90f5d616a8f369a2570c4c4e38d3b590db6d2",
+    "5c6d5bd300064a3c4cb217f2b0cb905cf987ec4a0f812e171aa90a907f73f71f",
+    "022905675786efaca7b00f4e6d71efff10b64d89d17a5e80cfb0f3f883160a0f",
+    "e2d199b53370302e644b75db12d7a9cba109cbaed67a96df63e4bdbcd627aa07",
+    "c28863191bddb3b803e414b06e1574b9b5940aa48941b782cac05e083c731815",
+    "30facb1950c93d69eee9cddb6ba3e7937f94fbaa0f714b26043f28436e16b237",
+    "5cce792009e77717589fded5b51b5c507b30f6ea21c69d0fa8c26739591c12d1"
+  ],
+  "original_receipt_sha256": "314cafade37e2e1fb2013a512970aaed765ba0e26bb4f97765589a4584c931a2",
+  "rank_output_inventory": [
+    [
+      "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat"
+    ],
+    [
+      "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat"
+    ],
+    [
+      "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat"
+    ],
+    [
+      "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat"
+    ],
+    [
+      "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat"
+    ],
+    [
+      "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat"
+    ],
+    [
+      "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat"
+    ],
+    [
+      "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat"
+    ],
+    [
+      "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat"
+    ],
+    [
+      "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat"
+    ],
+    [
+      "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat"
+    ],
+    [
+      "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat"
+    ]
+  ],
+  "ranks": 12,
+  "task_labels": [
+    "zeeman_interband_quantum_metric/k_slice/conventional"
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "id": "materialize_projection_basis",
+  "ranks": [
+    {
+      "original_receipt_sha256": "cc5431e747167357a53da266da08d8d94c892259518aa3ca5385e84e9e0035c3",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.blocks[1].positions_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3,
+                1
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.blocks[1].indices",
+              "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+              "shape": [
+                1,
+                1
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.blocks[1].local_bases",
+              "sha256": "1332df685c45a61a0ac008a6a653295b8c5655361c1d34b6304b22ec40235fb8",
+              "shape": [
+                3,
+                3,
+                1
+              ],
+              "type": "Array{Float64, 3}"
+            },
+            {
+              "finite": true,
+              "path": "result.blocks[1].spinor",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.num_wannier",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.spinor",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.radial_transform.gauss_laguerre_order",
+              "payload": "4000000000000000",
+              "type": "Int64"
+            }
+          ],
+          "type": "WannierNLQG.WannierProjection.WannierProjectionBasis"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

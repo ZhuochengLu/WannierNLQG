@@ -1,0 +1,19 @@
+{
+  "id": "smv_fletcher_reeves_two_stage_audit_contract_sha256",
+  "ranks": [
+    {
+      "original_receipt_sha256": "e2f9b8fcfd7bc3447a8d4628511a34166b69960284da94a3b7af02fa6c7ba8c5",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [],
+          "type": "String"
+        },
+        "semantic_return": "\"14d67f1247bebda26e608e05894be5acd36094a6cf38d2632179c9f94c3288b9\""
+      }
+    }
+  ],
+  "schema": 1
+}

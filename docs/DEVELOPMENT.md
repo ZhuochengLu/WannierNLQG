@@ -8,7 +8,7 @@
 - `test/` contains self-contained synthetic unit and integration tests.
 - `examples/` contains runnable synthetic configurations and fixtures.
 - `scripts/` contains only public quality/release tools, visualization tools,
-  and the VASP PAW SPN generator.
+  the VASP PAW SPN generator, and the lightweight repository development launcher.
 - `docs/` and `theory/` contain public English documentation.
 
 The public tree intentionally has no top-level `data/` directory. Production
@@ -28,6 +28,93 @@ Keep public APIs narrow and ownership explicit. Cross-module calls use declared
 integration ports, not underscored implementation helpers. The extension and
 component dependency allowlists are checked by
 `scripts/check_structure_boundaries.jl`.
+
+## Default repository development entrypoint
+
+From this package root, use `python3 scripts/development_runner.py --help`.
+From the workspace root use the same file under
+`Code/wannierNLQG-source/wannierNLQG-v1.1.1/`. Root/package AGENTS and the
+package-local `wanniernlqg-development-runner` skill direct development agents
+here for ordinary Full/MPI/cold-call/source-audit requests. Agents prepare the
+explicit command/environment/inputs/contracts themselves; users need not supply
+complex prompts. The core and full recovery documentation live in
+[the bundled tool README](../scripts/development/common_runner/README.md).
+
+This launcher verifies the versioned common-core identity and the package's
+current exact SOURCE_MANIFEST inventory. It is outside the Julia module graph.
+The complete source archive includes the core in `scripts/development/common_runner`,
+its pinned identity, this guide, and `.agents/skills/wanniernlqg-development-runner`.
+It works from an independent extracted package without any parent repository or
+global skill. Repository modules outside the package are compatibility shims that
+load this one implementation; there is no second core to synchronize. A missing
+bundled file or identity mismatch fails explicitly. Detached helpers disable Python
+bytecode writes so source inventories remain clean. Legacy commands and CI remain
+explicit compatibility paths; they have not been silently redirected.
+
+Full has a dedicated command factory and preserves all seven task selections:
+
+```bash
+python3 scripts/development_runner.py full --run-id full-new-001 \
+  --runs-root /absolute/owned/runs --request-out /absolute/full-request.json \
+  --env-json /absolute/complete-env.json --julia /absolute/julia \
+  --jobs 1 --cpu-budget 17 --timeout 7200 --rss-gib 42 --plan-only
+python3 scripts/development_runner.py submit /absolute/full-request.json \
+  --root /absolute/owned/runs
+```
+
+Remove `--plan-only` to prepare and submit in one action. The scheduler inherits
+its supervisor's process group through `--owned-group`, while retaining independent
+Pkg.test processes, thread settings, reservations, logs and marker contracts.
+Direct legacy run_tests.py keeps its existing separate-session behavior.
+
+The other three actions `mpi`, `cold`, `source-audit` require `--argv-json`,
+`--cwd`, `--env-json`, `--outputs-json`, `--qualification-json`, `--run-id`,
+`--runs-root`, `--request-out`, `--timeout`, and `--cpu-budget`; repeat `--input`
+for extra scripts/data. The launcher pins the whole current package, executable,
+launcher/integration, configuration files, and independent reference inputs.
+Full constructs its typed contract; the other actions require the exact matching
+adapter schema and package identity, with no generic fallback. Use direct
+foreground scientific entry commands, not the old campaign's guardian wrapper.
+Qualification examples and parser boundaries are in the common tool README.
+
+Use `status RUN_DIRECTORY`, `reconcile RUN_DIRECTORY`, `resume RUN_DIRECTORY`,
+and `qualify RUN_DIRECTORY` on this same entrypoint. status is read-only;
+reconcile rebuilds a final receipt only from verified original evidence. Same
+run_id and same spec are idempotent; different spec is rejected. resume never
+reruns an already executed or ambiguous/failed stage. Upstream gate failure
+blocks dependent stages; multi-stage requests use the common-core Python API.
+Missing exit/monitor evidence fails closed, regardless of task markers.
+
+Resources: typed tasks enforce three consecutive RSS-over-limit samples and stop
+on any host Swapouts increase. Default sampling is one second and disk floor is
+10 GiB; request explicit timeout/RSS/CPU/reserve for the workload. Host Swapouts
+is global traffic, not measured task swap use. CPU budget is declarative at the
+core and must be implemented by command/thread settings. RSS is a sampled tree
+peak, not an OS high-water mark. The supported macOS contract is
+foreground_owned_group; daemonization/PGID escape is unsupported and complete
+kernel containment is UNKNOWN. Linux execution has not been qualified.
+
+This integration changes development tooling and package payload identity, not
+scientific formulas or assertion tolerances. Prior numerical/scientific evidence
+keeps its original digest; it does not become a full acceptance of this new
+payload. Validate the affected tooling, scheduler process mode and manifests;
+select any subsequent scientific tests by actual changed-symbol reachability.
+
+## Portable tool smoke and local source artifact
+
+```bash
+python3 scripts/development/common_runner/smoke.py --output-dir /absolute/new/evidence
+python3 scripts/development/common_runner/package_release.py --output /absolute/new/source.zip
+```
+
+The smoke uses only seconds-scale Python fake tasks and all four typed adapter
+schemas, plus real exit/query/recovery negatives. It does not run Julia/MPI science.
+The archive builder reads the exact positive manifest, rejects extra files/symlinks,
+fixes ZIP metadata, and emits the full archive SHA and payload SHA. Two builds
+from identical inputs must match. Neither command installs or publishes anything.
+Run/evidence/archive outputs must stay outside the package payload. A complete local
+source snapshot includes every manifest row plus SOURCE_MANIFEST.tsv and SHA256SUMS;
+a partial development-only Git commit is not a complete release input.
 
 ## Tests
 
@@ -138,6 +225,13 @@ VASP and Quantum Espresso readers remain production code. Their public tests
 use synthetic parser and provenance fixtures; redistribution-restricted or
 large first-principles data does not belong in the source tree.
 
+## Precompilation and maintenance
+
+Use [the precompilation guide](PRECOMPILATION.md) for package/extension preparation
+and safe cache rebuilding. Source recapture, attribution and cold qualification
+are documented separately in [first-use maintenance](FIRST_USE_PRECOMPILE_MAINTENANCE.md);
+they are not user-facing module precompile selectors.
+
 ## Documentation
 
 Public readable source is English-only. Markdown uses single-dollar delimiters
@@ -177,3 +271,16 @@ promoted into Numerical, Physics, or Production results.
 Follow [the release procedure](RELEASING.md). Regenerate
 `SOURCE_MANIFEST.tsv` and `SHA256SUMS` only after the final source freeze. Do not
 create a tag, push, or GitHub Release without separate explicit approval.
+
+
+## Historical isolated shift-current maintenance work
+
+The following describes the isolated candidate work preceding local promotion of this maintenance version. Mixed-FFT packing reuses per-provider R bins, source channel indices, and a last-block/offset phase vector; buffer zeroing and the original R accumulation order remain intact. Replica preparation reuses one Float64 search scratch and memoizes residues within each orbital pair and invocation; other expert numeric types retain the generic search. No prepared model persists across public calls.
+
+The block-local variant additionally assigns stable reduction lanes over a deterministic block-major point permutation for a single conventional shift-current full-mesh task. Physical point identity remains distinct from traversal order. Other task families, direct transforms, response symmetry, and multi-task bundles keep the original traversal. Cross-thread/rank equality is mandatory. Difference from the old lane grouping must be reported separately and is not covered by any existing geometric-response tolerance exception.
+
+Regenerate and check the release manifest before engineering validation of any subsequent revision. Local promotion does not authorize remote publication.
+
+The final isolated refinement allocates FFT buffers uninitialized only for ESTIMATE planning; the existing unconditional full clear remains before numerical packing. Operator components reuse one invocation-local target-index dictionary. Neither change reorders floating-point accumulation.
+
+The block-major single-SC owner additionally reuses completed same-group/same-offset FFT buffers. This opt-in is private and never enabled for general lane traversal. The eviction counter includes these intentional completed-block recycles, which cause no extra FFT.

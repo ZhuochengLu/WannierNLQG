@@ -1,0 +1,47 @@
+{
+  "schema": "wanniernlqg.first-use-provenance-shards",
+  "schema_version": 2,
+  "source_src_ext_sha256": "9038179c0bc6949cbd306950bb2d447be68869bb79a4eeb9c65f276f99295543",
+  "julia": "1.11.2",
+  "manifest_sha256": "b088b1da3e98143b76142072bec56b1cd55a622505e0ef43d3b8471d81a602ce",
+  "canonical_sha256": "15f20ab69e0d3988026a43c418b6fdca80bf514a33133c80e9c13fdefc3a8656",
+  "canonical_bytes": 15976814,
+  "retained_rows": 9716,
+  "unowned": 0,
+  "parts": [
+    {
+      "file": "part-001.tsv",
+      "sha256": "42ef1750eee9217c070537b39f068aa2a9d201e94eb0fbcce0508945b79dfb73",
+      "bytes": 4191682,
+      "rows": 2455
+    },
+    {
+      "file": "part-002.tsv",
+      "sha256": "7b73e31090e63235278ea64295d14dada5c8a4be21215a7b85f80e2938416aae",
+      "bytes": 4190957,
+      "rows": 2635
+    },
+    {
+      "file": "part-003.tsv",
+      "sha256": "938167b3896a3c1b318a1572ffdb3e7e9c3929934b99c393768b732e88b76d37",
+      "bytes": 4193264,
+      "rows": 2395
+    },
+    {
+      "file": "part-004.tsv",
+      "sha256": "7df2cc31dc1825c75500fed83f439d9e6307dbaacebac474c23c367a7c909126",
+      "bytes": 3401484,
+      "rows": 2231
+    }
+  ],
+  "exact_reconstruction": true,
+  "independent_audit_check_pending": false,
+  "final_pass": false,
+  "raw_origin_source_sha256": [
+    "0da9fe95c0a06b4fd8ee7f13158603a3d52406920b43c76d824ccf3fe92d0e68",
+    "9038179c0bc6949cbd306950bb2d447be68869bb79a4eeb9c65f276f99295543"
+  ],
+  "source_equivalence_certificate_sha256": "c7ca8e3ee861ef936b7254ac38ac1b4ccecde2aede54e31f6103cb10a3d694eb",
+  "independent_write_check_complete": true,
+  "qualification_scope": "Source attribution only; separate final cold/science/engineering evidence required"
+}

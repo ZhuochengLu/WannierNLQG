@@ -1,0 +1,40 @@
+{
+  "gc_on": true,
+  "gc_checked_at_every_timer": true,
+  "gc_check_count": 3,
+  "backend_state_at_every_timer": [
+    null,
+    {
+      "WannierNLQGWannierizationPrecompileExt": false,
+      "WannierNLQGWannierizationExt": false,
+      "WannierNLQGOperatorBundleExt": false,
+      "WannierNLQGSymmetryFoundationExt": false,
+      "WannierNLQGSymmetrizationExt": false
+    },
+    {
+      "WannierNLQGWannierizationPrecompileExt": false,
+      "WannierNLQGWannierizationExt": false,
+      "WannierNLQGOperatorBundleExt": true,
+      "WannierNLQGSymmetryFoundationExt": true,
+      "WannierNLQGSymmetrizationExt": false
+    }
+  ],
+  "validation": {
+    "compile_time": 0.020272416,
+    "recompile_time": 0.005685333,
+    "time": 0.559783541,
+    "gc_time": 0.020401542,
+    "wall_seconds": 0.577211833,
+    "allocated_bytes": 58778704
+  },
+  "writer": {
+    "compile_time": 0.016544416,
+    "recompile_time": 0,
+    "time": 0.017324916,
+    "gc_time": 0,
+    "wall_seconds": 0.02507925,
+    "allocated_bytes": 1284576
+  },
+  "validation_before_backend": false,
+  "writer_before_backend": true
+}

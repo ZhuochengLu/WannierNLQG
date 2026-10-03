@@ -1,0 +1,33 @@
+{
+  "first_calls": [
+    {
+      "return_summary": {
+        "type": "WannierNLQGWannierizationExt.OperatorExport.AuthoritativeBandHamiltonian",
+        "numeric_leaf_count": 2,
+        "all_finite": true,
+        "numeric_sha256": "df0f9b16683c0707d641f823621624afc0670d2c11be91ad6bb5aad575c9ac15",
+        "leaves": [
+          {
+            "path": "result.matrices_ev",
+            "type": "Array{ComplexF64, 3}",
+            "shape": [
+              2,
+              2,
+              2
+            ],
+            "finite": true,
+            "max_abs": 1,
+            "max_abs_nonfinite_repr": null,
+            "sha256": "d5759ef68d8325f2e05bd9799d91d8c771bac098c094b1185e84a3641ceec4a4"
+          },
+          {
+            "path": "result.qualified",
+            "type": "Bool",
+            "finite": true,
+            "payload": "01"
+          }
+        ]
+      }
+    }
+  ]
+}

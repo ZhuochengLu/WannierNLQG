@@ -5210,3 +5210,29 @@ end
     @test occursin("global_production_eligible = false", scope)
     @test occursin("scoped_production_eligible = NOT_RECORDED", scope)
 end
+
+@testset "source identity agrees with the sealed release inventory" begin
+    package_root = pkgdir(WannierNLQG)
+    source_records = Dict{String, Tuple{String, String}}()
+    for line in eachline(joinpath(package_root, "SHA256SUMS"))
+        digest, relative = split(line, "  "; limit = 2)
+        if relative in ("Project.toml", "Manifest.toml") ||
+           startswith(relative, "src/") ||
+           startswith(relative, "ext/")
+            native_relative = joinpath(split(relative, '/')...)
+            source_records[native_relative] = (String(relative), String(digest))
+        end
+    end
+    @test !isempty(source_records)
+    entries = [
+        string(source_records[key][1], '\0', source_records[key][2]) for
+        key in sort!(collect(keys(source_records)))
+    ]
+    expected = bytes2hex(
+        WANNIERIZATION_IMPLEMENTATION.OperatorExport.SHA.sha256(codeunits(join(entries, '\n'))),
+    )
+    observed = Base.invokelatest(
+        WANNIERIZATION_IMPLEMENTATION.OperatorExport._wannierization_source_sha256,
+    )
+    @test observed == expected
+end

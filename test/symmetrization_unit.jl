@@ -27,6 +27,8 @@ const EXPECTED_MATRIX_ELEMENTS_INTEGRATION_API = Set((
     :matrix_element_axis_required,
     :matrix_element_pair_required,
     :materialize_replica_component,
+    :materialize_replica_components,
+    :reuse_completed_mixed_blocks!,
     :minimum_distance_real_space_replica_map,
     :mp_residue_grid,
     :projector_block_velocity,
@@ -1105,12 +1107,34 @@ end
         r"\bcollinear_axis_cart\b",
         r"\b(BB|CC|FF|OO|GG|UIU|UHU|SS|SH|SR|SHR|AA)\b",
     )
+    # This exact ISO timestamp type tag belongs to Julia's Dates.DateFormat,
+    # including in compiler-only declarations; SS here denotes seconds.
+    # Keep every physical/API identifier and every other type tag in the audit.
+    timestamp_type_tag = r"(Dates\.DateFormat\{\s*):var\"yyyy-mm-ddTHH:MM:SS\"(?=\s*,)"
+    audit_type_tags(source) = replace(source, timestamp_type_tag => s"\1:iso8601_timestamp")
+    physical_short_names = r"\b(BB|CC|FF|OO|GG|UIU|UHU|SS|SH|SR|SHR|AA)\b"
+    timestamp_declaration = "Dates.DateFormat{ :var\"yyyy-mm-ddTHH:MM:SS\", Tuple{Dates.DatePart}}"
+    @test !occursin(physical_short_names, audit_type_tags(timestamp_declaration))
+    for short_name in ("BB", "CC", "FF", "OO", "GG", "UIU", "UHU", "SS", "SH", "SR", "SHR", "AA")
+        @test occursin(
+            physical_short_names,
+            audit_type_tags(timestamp_declaration * "; const " * short_name * " = 1"),
+        )
+    end
+    @test occursin(physical_short_names, audit_type_tags("Dates.DateFormat{:SS, Tuple{}}"))
+    @test occursin(
+        physical_short_names,
+        audit_type_tags("OtherType{ :var\"yyyy-mm-ddTHH:MM:SS\", Tuple{}}"),
+    )
+    @test occursin(physical_short_names, audit_type_tags("const SS = :var\"yyyy-mm-ddTHH:MM:SS\""))
     for root in roots, (directory, _, files) in walkdir(root), file in files
         endswith(file, ".jl") || continue
         source = read(joinpath(directory, file), String)
         for pattern in forbidden
             audited_source = if pattern == r"\b[A-Za-z0-9_]+_cart\b"
                 replace(source, r"\b(wannier_centers_cart|unit_cell_cart|atoms_cart)\b" => "")
+            elseif pattern == physical_short_names
+                audit_type_tags(source)
             else
                 source
             end

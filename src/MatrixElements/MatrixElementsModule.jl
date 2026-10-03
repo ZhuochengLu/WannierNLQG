@@ -94,4 +94,6 @@ export OrbitalCompletion,
     conventional_spectral_pair,
     projector_spectral_pair
 
+include("FirstUsePrecompile.jl")
+
 end

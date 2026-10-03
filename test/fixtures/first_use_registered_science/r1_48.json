@@ -1,0 +1,89 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__shift_vector__geometric_loop",
+  "native_science": {
+    "kslice_shift_vector_geometric_loop/synthetic_demo_svk_i_geo.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3fc533893adcf8a0",
+        "3fc533893adcf8a0",
+        "3fc533893adcf8a0",
+        "3fc533893adcf8a0",
+        "bfdd56b5ca87dd60",
+        "bfdd56b5ca87dd60",
+        "bfdd56b5ca87dd60",
+        "bfdd56b5ca87dd60",
+        "3fdad87900bb89d0",
+        "3fdad87900bb89d0",
+        "3fdad87900bb89d0",
+        "3fdad87900bb89d0",
+        "bfceed462bc19440",
+        "bfceed462bc19440",
+        "bfceed462bc19440",
+        "bfceed462bc19440"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.4584173658217505,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_shift_vector_geometric_loop/synthetic_demo_svk_r_geo.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3fd235068cdfaa72",
+        "3fd235068cdfaa72",
+        "3fd235068cdfaa72",
+        "3fd235068cdfaa72",
+        "bfdad89d323d1b66",
+        "bfdad89d323d1b66",
+        "bfdad89d323d1b66",
+        "bfdad89d323d1b66",
+        "bfd31f67bec163e4",
+        "bfd31f67bec163e4",
+        "bfd31f67bec163e4",
+        "bfd31f67bec163e4",
+        "3fd62de2fd6d3ea3",
+        "3fd62de2fd6d3ea3",
+        "3fd62de2fd6d3ea3",
+        "3fd62de2fd6d3ea3"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.41947107225535374,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_shift_vector_geometric_loop/synthetic_demo_svk_r_geo.dat",
+      "sha256": "1a34bf823a8561b9ea38196da026329b0bd7f78462efd969aac01d861ee49dc5"
+    },
+    {
+      "file": "kslice_shift_vector_geometric_loop/synthetic_demo_svk_i_geo.dat",
+      "sha256": "a7b7c2d3fd93bad128dbe40479294eaa6611523d333ccb494a3e66a12b4d3f98"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "282dd08f76f9504fecdbc2b4c3a45b4771a81b7927acc9005509a686ca86e841"
+  ],
+  "original_receipt_sha256": "282dd08f76f9504fecdbc2b4c3a45b4771a81b7927acc9005509a686ca86e841",
+  "rank_output_inventory": [
+    [
+      "kslice_shift_vector_geometric_loop/synthetic_demo_svk_r_geo.dat",
+      "kslice_shift_vector_geometric_loop/synthetic_demo_svk_i_geo.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "shift_vector/k_slice/geometric_loop"
+  ]
+}

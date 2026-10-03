@@ -1,0 +1,16 @@
+num_wann = 1
+mp_grid = 2 2 2
+begin unit_cell_cart
+1 0 0
+0 1 0
+0 0 1
+end unit_cell_cart
+begin atoms_frac
+X 0 0 0
+end atoms_frac
+begin projections
+X:s
+end projections
+begin kpoints
+0.123 0.234 0.345
+end kpoints

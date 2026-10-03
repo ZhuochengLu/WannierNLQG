@@ -217,6 +217,20 @@ end
     @test !isempty(root_module_usage_violations("value = WannierNLQG.IO.read_model(path)\n"))
     @test !isempty(root_module_usage_violations("value = identity(WannierNLQG)\n"))
 
+    guard = "WannierNLQG.FIRST_USE_TRACE_COMPATIBLE"
+    guarded_include = "if $guard\n    include(\"coverage.jl\")\nend\n"
+    @test !isempty(root_module_usage_violations(guarded_include))
+    @test isempty(root_module_usage_violations(guarded_include; allowed_guards = (guard,)))
+    for source in (
+        "value = $guard\n",
+        "if WannierNLQG.OTHER_FLAG\n    include(\"coverage.jl\")\nend\n",
+        "if $guard && true\n    include(\"coverage.jl\")\nend\n",
+        "if $guard\n    WannierNLQG.IO.read_model(path)\nend\n",
+        "if $guard\n    include(\"coverage.jl\")\nelse\n    identity(WannierNLQG)\nend\n",
+    )
+        @test !isempty(root_module_usage_violations(source; allowed_guards = (guard,)))
+    end
+
     leaves = (:win_file, :outer_min_ev)
     @test isempty(
         typed_sawf_flat_config_reads(
@@ -503,4 +517,43 @@ end
 @testset "aliased imports retain their source contract" begin
     records = direct_import_records("import Library: load as local_load, save\n")
     @test records["Library"].symbols == ["load", "save"]
+end
+
+@testset "compiler Type operands preserve runtime owner boundaries" begin
+    public_symbols = Dict("SymmetryFoundation" => Symbol[], "WannierProjection" => Symbol[])
+    integration = Dict("SymmetryFoundation" => Symbol[], "WannierProjection" => Symbol[])
+    verified = Dict("SymmetryFoundation" => Set([:IndexedPlaneWavePoints, Symbol("#3#4")]))
+    function violations(source)
+        shared_boundary_reference_violations(
+            Dict("ext/CompilerFixture/Requests.jl" => source),
+            public_symbols,
+            integration;
+            compiler_type_symbols = verified,
+        )
+    end
+    literal = "@compile_workload begin\n_record_precompile(Tuple{Array{SymmetryFoundation.IndexedPlaneWavePoints, 1}, SymmetryFoundation.var\"#3#4\"})\nend\n"
+    @test isempty(violations(literal))
+    @test !isempty(
+        shared_boundary_reference_violations(
+            Dict("ext/CompilerFixture/Requests.jl" => literal),
+            public_symbols,
+            integration,
+        ),
+    )
+    for source in (
+        "value = SymmetryFoundation.IndexedPlaneWavePoints()\n",
+        "@compile_workload begin\nlet SymmetryFoundation = unverified_provider\n_record_precompile(Tuple{SymmetryFoundation.IndexedPlaneWavePoints})\nend\nend\n",
+        "value = SymmetryFoundation.var\"#3#4\"()\n",
+        "import WannierNLQG.SymmetryFoundation: IndexedPlaneWavePoints\n",
+        "import WannierNLQG.SymmetryFoundation: _hidden\n",
+        "@compile_workload begin\n_record_unknown(Tuple{SymmetryFoundation.IndexedPlaneWavePoints})\nend\n",
+        "_record_precompile(Tuple{SymmetryFoundation.IndexedPlaneWavePoints})\n",
+        "@compile_workload begin\n_record_precompile(Tuple{typeof(SymmetryFoundation.IndexedPlaneWavePoints())})\nend\n",
+        "@compile_workload begin\n_record_precompile(Tuple{identity(SymmetryFoundation.IndexedPlaneWavePoints)})\nend\n",
+        "@compile_workload begin\n_record_precompile(Tuple{typeof(SymmetryFoundation._hidden)})\nend\n",
+        "@compile_workload begin\n_record_precompile(Tuple{SymmetryFoundation.UnverifiedType})\nend\n",
+        "@compile_workload begin\nfunction escaped()\n_record_precompile(Tuple{SymmetryFoundation.IndexedPlaneWavePoints})\nend\nend\n",
+    )
+        @test !isempty(violations(source))
+    end
 end

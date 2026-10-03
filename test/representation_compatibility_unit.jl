@@ -582,7 +582,8 @@ end
         @test_throws ArgumentError WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(
             legacy_v11,
         )
-        extension = first(WannierNLQG.SymmetryFoundation._load_symmetry_foundation_extension!())
+        extension = Base.get_extension(WannierNLQG, :WannierNLQGSymmetryFoundationExt)
+        @test extension !== nothing
         @test_throws ArgumentError Base.invokelatest(
             extension._read_band_representation_qualification_hdf5,
             legacy_v11,

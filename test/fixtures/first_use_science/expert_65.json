@@ -1,0 +1,490 @@
+{
+  "id": "write_wannierization_u_convergence_diagnostics_hdf5",
+  "ranks": [
+    {
+      "original_receipt_sha256": "7d046e222e0da91a594e0726c4e57c41267f520c0e992e184715e923341cc392",
+      "rank": 0,
+      "science": {
+        "native_readback": {
+          "original_artifact_attestation": {
+            "bytes": 13024,
+            "sha256": "4f9bd4b363da7b92b5fb1dc6336e8d3fb79831ac5c4894acabd296298369ffd1",
+            "verified": true
+          },
+          "report": {
+            "artifact_sha256": "4f9bd4b363da7b92b5fb1dc6336e8d3fb79831ac5c4894acabd296298369ffd1",
+            "dataset_paths": [
+              "/@fixture_kind",
+              "/@ibz_kpoint_count",
+              "/@record_count",
+              "/@schema",
+              "/@schema_version",
+              "/@z_u_stage_semantics",
+              "/environment/@ezxml_version",
+              "/environment/@generated_at_utc",
+              "/environment/@hdf5_jl_version",
+              "/environment/@julia_version",
+              "/environment/@threads",
+              "/environment/@wanniernlqg_version",
+              "/irreducible_indices",
+              "/iterations/000001/@accepted_actual_change",
+              "/iterations/000001/@accepted_objective",
+              "/iterations/000001/@accepted_required_change",
+              "/iterations/000001/@accepted_u_step_scale",
+              "/iterations/000001/@aligned_one_step_geodesic_distance",
+              "/iterations/000001/@anderson_reason",
+              "/iterations/000001/@base_objective",
+              "/iterations/000001/@branch_safe_backtracking_triggered",
+              "/iterations/000001/@cg_beta",
+              "/iterations/000001/@cg_descent_cosine",
+              "/iterations/000001/@cg_restart_reason",
+              "/iterations/000001/@cg_restarted",
+              "/iterations/000001/@directional_derivative",
+              "/iterations/000001/@fixed_projector_drift",
+              "/iterations/000001/@frozen_projector_residual",
+              "/iterations/000001/@isometry_residual",
+              "/iterations/000001/@localization_backtracking_steps",
+              "/iterations/000001/@maximum_covariance_error",
+              "/iterations/000001/@maximum_kstar_gradient_index",
+              "/iterations/000001/@maximum_kstar_gradient_rms",
+              "/iterations/000001/@minimum_diagonal_phase_margin",
+              "/iterations/000001/@minimum_phase_kpoint",
+              "/iterations/000001/@minimum_phase_neighbor",
+              "/iterations/000001/@minimum_phase_value",
+              "/iterations/000001/@minimum_phase_wannier",
+              "/iterations/000001/@one_step_geodesic_distance",
+              "/iterations/000001/@optimizer_phase",
+              "/iterations/000001/@projector_residual",
+              "/iterations/000001/@spread_total",
+              "/iterations/000001/@trial_objective",
+              "/iterations/000001/@two_step_geodesic_distance",
+              "/iterations/000001/@u_cg_iteration",
+              "/iterations/000001/@u_cg_restart_count",
+              "/iterations/000001/@z_recheck_drift",
+              "/iterations/000001/block_sorted_spreads",
+              "/iterations/000001/gauge_aligned_spreads",
+              "/iterations/000001/ibz_frames",
+              "/iterations/000001/ibz_frames/@axis_order",
+              "/iterations/000001/kstar_gradient_rms",
+              "/iterations/000001/per_kpoint/000001/@aligned_geodesic_distance",
+              "/iterations/000001/per_kpoint/000001/@aligned_one_step_geodesic_distance",
+              "/iterations/000001/per_kpoint/000001/@condition",
+              "/iterations/000001/per_kpoint/000001/@kpoint",
+              "/iterations/000001/per_kpoint/000001/@one_step_geodesic_distance",
+              "/iterations/000001/per_kpoint/000001/@rank",
+              "/iterations/000001/per_kpoint/000001/@raw_geodesic_distance",
+              "/iterations/000001/per_kpoint/000001/@two_step_geodesic_distance",
+              "/iterations/000001/per_kpoint/000001/aligned_eigenphases",
+              "/iterations/000001/per_kpoint/000001/block_permutation",
+              "/iterations/000001/per_kpoint/000001/block_phases",
+              "/iterations/000001/per_kpoint/000001/localization_singular_values",
+              "/iterations/000001/per_kpoint/000001/raw_eigenphases",
+              "/iterations/000001/raw_spreads"
+            ],
+            "format": "hdf5",
+            "numeric_leaves": [
+              {
+                "finite": true,
+                "path": "native/@ibz_kpoint_count",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native/@record_count",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native/environment/@threads",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/irreducible_indices",
+                "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Int64}"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@accepted_actual_change",
+                "payload": "9a9999999999b93f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@accepted_objective",
+                "payload": "b81e85eb51b89e3f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@accepted_required_change",
+                "payload": "0ad7a3703d0ab73f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@accepted_u_step_scale",
+                "payload": "7b14ae47e17aa43f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@aligned_one_step_geodesic_distance",
+                "payload": "0ad7a3703d0ac73f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@base_objective",
+                "payload": "7b14ae47e17ab43f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@branch_safe_backtracking_triggered",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@cg_beta",
+                "payload": "b81e85eb51b8ce3f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@cg_descent_cosine",
+                "payload": "000000000000d03f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@cg_restarted",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@directional_derivative",
+                "payload": "b81e85eb51b8ae3f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@fixed_projector_drift",
+                "payload": "ec51b81e85ebb13f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@frozen_projector_residual",
+                "payload": "ec51b81e85ebc13f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@isometry_residual",
+                "payload": "a4703d0ad7a3c03f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@localization_backtracking_steps",
+                "payload": "9a9999999999a93f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@maximum_covariance_error",
+                "payload": "b81e85eb51b8be3f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@maximum_kstar_gradient_index",
+                "payload": "8fc2f5285c8fd23f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@maximum_kstar_gradient_rms",
+                "payload": "ec51b81e85ebd13f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@minimum_diagonal_phase_margin",
+                "payload": "52b81e85eb51c83f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@minimum_phase_kpoint",
+                "payload": "9a9999999999c93f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@minimum_phase_neighbor",
+                "payload": "e17a14ae47e1ca3f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@minimum_phase_value",
+                "payload": "713d0ad7a370cd3f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@minimum_phase_wannier",
+                "payload": "295c8fc2f528cc3f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@one_step_geodesic_distance",
+                "payload": "7b14ae47e17ac43f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@projector_residual",
+                "payload": "295c8fc2f528bc3f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@spread_total",
+                "payload": "7b14ae47e17a843f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@trial_objective",
+                "payload": "7b14ae47e17a943f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@two_step_geodesic_distance",
+                "payload": "c3f5285c8fc2c53f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@u_cg_iteration",
+                "payload": "a4703d0ad7a3d03f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@u_cg_restart_count",
+                "payload": "48e17a14ae47d13f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/@z_recheck_drift",
+                "payload": "333333333333c33f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "max_abs": 1.25,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/iterations/000001/block_sorted_spreads",
+                "sha256": "dbd4c1a79b2e521053ee9b910f06d6110e7169884cda62d8acf6b5f9dbf4b7dd",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Float64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1.25,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/iterations/000001/gauge_aligned_spreads",
+                "sha256": "dbd4c1a79b2e521053ee9b910f06d6110e7169884cda62d8acf6b5f9dbf4b7dd",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Float64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 0.7071067811865475,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/iterations/000001/ibz_frames",
+                "sha256": "78160874b99fcd2d5e76e7701bc5518b2502dc39ca3b80cb8b4e035bfb5ec722",
+                "shape": [
+                  2,
+                  1,
+                  1
+                ],
+                "type": "Array{ComplexF64, 3}"
+              },
+              {
+                "finite": true,
+                "max_abs": 0.2,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/iterations/000001/kstar_gradient_rms",
+                "sha256": "ec361add5afbcdb8b62bf8daef0ed186d18714095ea66df0b460266669a7c753",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Float64}"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/per_kpoint/000001/@aligned_geodesic_distance",
+                "payload": "9a9999999999a93f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/per_kpoint/000001/@aligned_one_step_geodesic_distance",
+                "payload": "9a9999999999a93f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/per_kpoint/000001/@condition",
+                "payload": "000000000000f03f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/per_kpoint/000001/@kpoint",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/per_kpoint/000001/@one_step_geodesic_distance",
+                "payload": "9a9999999999b93f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/per_kpoint/000001/@rank",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/per_kpoint/000001/@raw_geodesic_distance",
+                "payload": "9a9999999999b93f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/iterations/000001/per_kpoint/000001/@two_step_geodesic_distance",
+                "payload": "333333333333c33f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "max_abs": 0.05,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/iterations/000001/per_kpoint/000001/aligned_eigenphases",
+                "sha256": "7f925b2036e92fe2f1f0697c3aedfff74d719c1ee2cb6b739d7c30484e75972c",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Float64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/iterations/000001/per_kpoint/000001/block_permutation",
+                "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Int64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 0.2,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/iterations/000001/per_kpoint/000001/block_phases",
+                "sha256": "ec361add5afbcdb8b62bf8daef0ed186d18714095ea66df0b460266669a7c753",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Float64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/iterations/000001/per_kpoint/000001/localization_singular_values",
+                "sha256": "6c3c396ed6b5c36dcae172271f462051b1266b851e92df3deea8ac65478fd712",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Float64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 0.1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/iterations/000001/per_kpoint/000001/raw_eigenphases",
+                "sha256": "45d2b662d9d490ae9b932759c910b26b9a874065de620f4ac0a3a23a65e40b8c",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Float64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1.25,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/iterations/000001/raw_spreads",
+                "sha256": "dbd4c1a79b2e521053ee9b910f06d6110e7169884cda62d8acf6b5f9dbf4b7dd",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Float64}"
+              }
+            ],
+            "raw_file_bytes": 13024,
+            "semantic_fields": {
+              "/@fixture_kind": "synthetic_nonempty_storage_contract",
+              "/@schema": "wanniernlqg.wannierization-u-convergence-diagnostics",
+              "/@schema_version": "1.0",
+              "/@z_u_stage_semantics": "disentanglement_localization_decoupled_v1",
+              "/environment/@ezxml_version": "1.2.3",
+              "/environment/@generated_at_utc": "2026-10-01T15:29:22.571",
+              "/environment/@hdf5_jl_version": "0.17.3",
+              "/environment/@julia_version": "1.11.2",
+              "/environment/@wanniernlqg_version": "1.1.1",
+              "/iterations/000001/@anderson_reason": "NOT_USED",
+              "/iterations/000001/@cg_restart_reason": "NOT_RESTARTED",
+              "/iterations/000001/@optimizer_phase": "localization",
+              "/iterations/000001/ibz_frames/@axis_order": "band,wannier,irreducible_kpoint"
+            }
+          }
+        },
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [],
+          "type": "String"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

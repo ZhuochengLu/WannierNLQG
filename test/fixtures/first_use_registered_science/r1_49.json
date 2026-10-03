@@ -1,0 +1,89 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__shift_vector__wilson_loop",
+  "native_science": {
+    "kslice_shift_vector_wilson_loop/synthetic_demo_svk_i_wilson.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3fc2e8c78f287100",
+        "3fc2e8c78f287100",
+        "3fc2e8c78f287100",
+        "3fc2e8c78f287100",
+        "bfde1ac1e32235c0",
+        "bfde1ac1e32235c0",
+        "bfde1ac1e32235c0",
+        "bfde1ac1e32235c0",
+        "3fdbc2ede62e9d40",
+        "3fdbc2ede62e9d40",
+        "3fdbc2ede62e9d40",
+        "3fdbc2ede62e9d40",
+        "bfccf524087a5100",
+        "bfccf524087a5100",
+        "bfccf524087a5100",
+        "bfccf524087a5100"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.47038314038294615,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_shift_vector_wilson_loop/synthetic_demo_svk_r_wilson.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3fd235068cdf8dd8",
+        "3fd235068cdf8dd8",
+        "3fd235068cdf8dd8",
+        "3fd235068cdf8dd8",
+        "bfdad89d323cccbb",
+        "bfdad89d323cccbb",
+        "bfdad89d323cccbb",
+        "bfdad89d323cccbb",
+        "bfd31f67bec130da",
+        "bfd31f67bec130da",
+        "bfd31f67bec130da",
+        "bfd31f67bec130da",
+        "3fd62de2fd6d40e5",
+        "3fd62de2fd6d40e5",
+        "3fd62de2fd6d40e5",
+        "3fd62de2fd6d40e5"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.4194710722542358,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_shift_vector_wilson_loop/synthetic_demo_svk_r_wilson.dat",
+      "sha256": "3d7c1a5332b0ebe39e58acd78465231f8e6777a3dd1bdc53fbfc034c667f3890"
+    },
+    {
+      "file": "kslice_shift_vector_wilson_loop/synthetic_demo_svk_i_wilson.dat",
+      "sha256": "1d680c79404e063baad428a8156c08c950cb924e07adea48ff66d2a2e3b80734"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "877b1aee54de1240fd345dcc054d636b37c11f01e6e7a1d4d4c89c66eb3e047d"
+  ],
+  "original_receipt_sha256": "877b1aee54de1240fd345dcc054d636b37c11f01e6e7a1d4d4c89c66eb3e047d",
+  "rank_output_inventory": [
+    [
+      "kslice_shift_vector_wilson_loop/synthetic_demo_svk_r_wilson.dat",
+      "kslice_shift_vector_wilson_loop/synthetic_demo_svk_i_wilson.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "shift_vector/k_slice/wilson_loop"
+  ]
+}

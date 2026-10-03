@@ -1,0 +1,18 @@
+{
+    "parity_standard_version": "smv-fletcher-reeves-two-stage-float64-frozen-tolerance-v1",
+    "algorithm_contract_version": "ordinary-smv-fletcher-reeves-two-stage-default-v4",
+    "solver_source_sha256": "a0abca53c94053781a6569799a41257f8f1c9be1ce148e955a5978b8b25c0804",
+    "oracle_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "accepted_step_absolute_tolerance": 5.0e-12,
+    "schema": "wanniernlqg.smv-fletcher-reeves-two-stage-audit",
+    "passed": true,
+    "accepted_step_combination_rule": "abs_diff <= abs_tol + rel_tol * max(abs(reference), abs(candidate))",
+    "models_source_sha256": "d50436a0e413e0b2a5ef6ebb5978e32c1e78f366be424fed4e61f3c41ec63a3f",
+    "status": "SMV_FLETCHER_REEVES_TWO_STAGE_AUDIT_PASS",
+    "parity_semantic": "SMV_FLETCHER_REEVES_TWO_STAGE_ORACLE_PARITY_WITH_FROZEN_TOLERANCE",
+    "accepted_step_relative_tolerance": 5.0e-8,
+    "cr_qualification_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "parity_contract_sha256": "14d67f1247bebda26e608e05894be5acd36094a6cf38d2632179c9f94c3288b9",
+    "parity_evidence_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "schema_version": "1.0"
+}

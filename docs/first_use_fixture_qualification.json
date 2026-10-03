@@ -1,0 +1,180 @@
+{
+  "schema": "wanniernlqg.first-use-fixture-relocation",
+  "schema_version": 1,
+  "source_src_ext_sha256": "3eabdfc65f01e33559328004af3bd1c751e0ac04a25b323373a007d924b5cf45",
+  "julia": "1.11.2",
+  "manifest_sha256": "b088b1da3e98143b76142072bec56b1cd55a622505e0ef43d3b8471d81a602ce",
+  "serialized_argument_graphs": 27,
+  "serialized_graph_exact_inverse_verified": true,
+  "strict_backend_cold_loading_verified": true,
+  "actual_expert_scenes": 68,
+  "actual_mpi_ranks": 12,
+  "exact_fixture_transport_replay_files": 67,
+  "predeclared_input_digest_rebindings": [
+    {
+      "file": "assets/group_2/synthetic.wannierization.h5",
+      "original_sha256": "318680737a37516ffc4aeab36e2267133ec94aeb35dd7d27d743477e968a0722",
+      "portable_sha256": "0593a1f095d72eba5b7d5e46f47bbe272042157d545630442140922f8ff53007",
+      "change_kind": "predeclared locator and coupled integrity digest; scientific graph exact"
+    },
+    {
+      "file": "assets/group_4/gauge.standard.h5",
+      "original_sha256": "adbc6c63358028ca821691cf8932bd92b735794cf2c9df161b611130279c07e4",
+      "portable_sha256": "53bfc3fce1423941271466c254846334e171ea6982236eb24b2a8e3ba0b86842",
+      "change_kind": "predeclared locator and coupled integrity digest; scientific graph exact"
+    },
+    {
+      "file": "assets/group_14/representation.h5",
+      "original_sha256": "70a0609d029eb767ccd6f26f5889b0fc958a6c3fd747516958025af5a29de4b4",
+      "portable_sha256": "ecf21500221b58eefde2b36ff39f0c21648ef14f59f7a56d2c55e4d595cdd4ce",
+      "change_kind": "predeclared locator and coupled integrity digest; scientific graph exact"
+    },
+    {
+      "file": "assets/group_14/star_gauge.h5",
+      "original_sha256": "49a7afcfbb70730e90224343f132efea6228bb04a0e01cb34df7bad74a865a23",
+      "portable_sha256": "c1bc493a2e8892b572003806a7cfc99505372cb90c2dcc64ce33bc1bea4fae3d",
+      "change_kind": "predeclared locator and coupled integrity digest; scientific graph exact"
+    },
+    {
+      "file": "assets/native_directory_2/qe-native.spn.json",
+      "original_sha256": "e80e9b0971226e66d36316f1e6fd5123cf3bde3f8c5298fd3a42786d4f5500ab",
+      "portable_sha256": "6685dc5bd1ab455117ed771e14fc2e0b3b61efd1d7b3ec0666ccd0b6ed201e70",
+      "change_kind": "explicit locator/provenance transport only; native scientific fields preserved"
+    },
+    {
+      "file": "assets/additional_38/receipt.json",
+      "original_sha256": "47f6eef21de2dd5daf3002c789760a64199bbc403c11688dedd1b67d673a5fb5",
+      "portable_sha256": "a0635d6e52f63fe949b6f291af5e5d5738d888a6eb469d832339427160b95662",
+      "change_kind": "explicit locator/provenance transport only; native scientific fields preserved"
+    },
+    {
+      "file": "assets/additional_39/all_frozen_source_files.json",
+      "original_sha256": "443ec6dd93cbc0ef4c9d55330799b2e94b601d12cc72983aa9e0e201bbfc0c56",
+      "portable_sha256": "da86d7b4d268aaa94c78719d8287cbdcfe28c5363f179f7ae104dc626c743262",
+      "change_kind": "explicit locator/provenance transport only; native scientific fields preserved"
+    },
+    {
+      "file": "assets/additional_41/vasp_spn.h5",
+      "original_sha256": "e31d9adab13c7a3a85a2785be943da4f68426e506669a3cbe337675d16e64b7e",
+      "portable_sha256": "e8c65a1bb579b9680852d0b4bf907a5b6179610efb630d91e4244e78c152aec1",
+      "change_kind": "explicit locator/provenance transport only; native scientific fields preserved"
+    }
+  ],
+  "official_hdf5_json_integrity_and_replay_verified": true,
+  "portable_scientific_reference_scenes": 68,
+  "portable_scientific_reference_rank_records": 79,
+  "additional_native_references": 28,
+  "existing_portable_science_all68": true,
+  "scientific_comparison_qualification_sha256": "19b9c4f3e1f8a9878d837042fc85b5b88aeb7e4fbf5d3703ae649ff2eddb5b1a",
+  "official_coupled_digest_field_readback_checks": 4,
+  "native_comparator_negative_cases": 16,
+  "original_qualification_source_sha256": "3eabdfc65f01e33559328004af3bd1c751e0ac04a25b323373a007d924b5cf45",
+  "current_source_src_ext_sha256": "f226388e2d795bad7689b837b1469ff3c8557a1757a48c439503fc56d3a50fe3",
+  "current_candidate_source_qualification_pending": true,
+  "formatting_changes_ast_equivalent": false,
+  "qualification_scope": "Historical fixture transport/science references and prior source audit only. Current static guard/repack revision is not runtime-qualified; its exact stored-field proof is separate from historical measurements.",
+  "previous_current_source_src_ext_sha256": "9038179c0bc6949cbd306950bb2d447be68869bb79a4eeb9c65f276f99295543",
+  "historical_formatting_changes_ast_equivalent": true,
+  "static_release_revision": {
+    "kind": "static_release_guard_HDF5_repack_and_typed_serialized_metadata_migration",
+    "current_source_src_ext_sha256": "f226388e2d795bad7689b837b1469ff3c8557a1757a48c439503fc56d3a50fe3",
+    "previous_accepted_source_src_ext_sha256": "9038179c0bc6949cbd306950bb2d447be68869bb79a4eeb9c65f276f99295543",
+    "tests": "NOT_RUN",
+    "precompilation": "NOT_RUN",
+    "cold_qualification": "NOT_RUN",
+    "source_attribution_recapture": "NOT_RUN",
+    "official_Julia_readback": "NOT_RUN",
+    "scientific_execution": "NOT_RUN",
+    "historical_results_not_new_measurements": true,
+    "physical_repacked_files": [
+      {
+        "file": "test/fixtures/first_use_portable/assets/frozen_solver/synthetic.wannierization.h5",
+        "fields": 614,
+        "datasets": 57,
+        "persisted_field_difference": [],
+        "dataset_creation_property_difference": [],
+        "original_sha256": "1b04f2a3eb34ec5f12a450e3e740fe3efc376d9a92fb7ff45eb97ad3b52f6ec7",
+        "repacked_sha256": "94cb21b92e1f99a09e45251799c6d0da90f9489675cca2d045c364e05386c2b6",
+        "original_bytes": 88446,
+        "repacked_bytes": 72802,
+        "private_home_bytes_after": 0
+      },
+      {
+        "file": "test/fixtures/first_use_portable/assets/group_2/synthetic.wannierization.h5",
+        "fields": 614,
+        "datasets": 57,
+        "persisted_field_difference": [],
+        "dataset_creation_property_difference": [],
+        "original_sha256": "0593a1f095d72eba5b7d5e46f47bbe272042157d545630442140922f8ff53007",
+        "repacked_sha256": "84b53f3699f20a6f15e91d387245b7e6106625b8cefefe6de376ba5f5ec36659",
+        "original_bytes": 88446,
+        "repacked_bytes": 72798,
+        "private_home_bytes_after": 0
+      },
+      {
+        "file": "test/fixtures/first_use_portable/assets/group_4/gauge.standard.h5",
+        "fields": 539,
+        "datasets": 36,
+        "persisted_field_difference": [],
+        "dataset_creation_property_difference": [],
+        "original_sha256": "53bfc3fce1423941271466c254846334e171ea6982236eb24b2a8e3ba0b86842",
+        "repacked_sha256": "a353e7af494d2d7359a1cce87db56f92c9e508f71bf70f7eefd9db51d9888984",
+        "original_bytes": 102351,
+        "repacked_bytes": 90939,
+        "private_home_bytes_after": 0
+      }
+    ],
+    "Julia_Serialization_data_maintenance": {
+      "status": "COMPLETED",
+      "Julia": "1.11.2",
+      "scientific_reader_invocations": "NOT_RUN",
+      "tests": "NOT_RUN",
+      "explicit_precompilation": "NOT_RUN",
+      "runtime_cache_hit_qualification": "NOT_RUN",
+      "scientific_execution": "NOT_RUN",
+      "typed_roundtrip_only_allowlisted_metadata_leaves_changed": true,
+      "SPN_provenance_dependency_rebound": true,
+      "files": [
+        {
+          "old_file": "test/fixtures/first_use_portable/assets/native_directory_2/.wannier_preparation/qe/band-frame/5c1ee904d5a1119faa946a2a6293c0845dc82246c372e0765f6c839f09128ed7.bin",
+          "new_file": "test/fixtures/first_use_portable/assets/native_directory_2/.wannier_preparation/qe/band-frame/7622139341a478c1fff97ffdc3e727a23d274ace118bc8e0d82ca0e0bffa17ad.bin",
+          "old_sha256": "b410b77ba1dd917434885fb908f52ddc4913a0a355a2d2ae74bd2425efba4d64",
+          "new_sha256": "0465fb66644134924ab6d4bb69a65969992e233a5d38c51c3b965cd0d139184f",
+          "changed_leaves": [
+            "/contract"
+          ]
+        },
+        {
+          "old_file": "test/fixtures/first_use_portable/assets/native_directory_2/.wannier_preparation/qe/qe-upf/3327f5b7f4e8cbcb6b434fd55a79eff80b9b9b771f62684458d08be018f3aa41.bin",
+          "new_file": "test/fixtures/first_use_portable/assets/native_directory_2/.wannier_preparation/qe/qe-upf/3327f5b7f4e8cbcb6b434fd55a79eff80b9b9b771f62684458d08be018f3aa41.bin",
+          "old_sha256": "e7e39373bc4dd68cb5b08c99187ca38022b14ff7b64de86536534a193e15f4db",
+          "new_sha256": "2940ddbbf49399ef6f060323905c09ba479fd58227b5e72a11638681ba00756c",
+          "changed_leaves": [
+            "/payload/\"X\"/filename"
+          ]
+        },
+        {
+          "old_file": "test/fixtures/first_use_portable/assets/native_directory_2/.wannier_preparation/spin-publication-blocks/408dc7bb17bc086ea300892e8c0af63fd015806748938c6894a1f1ba5aa02025/published-operators/qe-native.spn.SPN.bin",
+          "new_file": "test/fixtures/first_use_portable/assets/native_directory_2/.wannier_preparation/spin-publication-blocks/408dc7bb17bc086ea300892e8c0af63fd015806748938c6894a1f1ba5aa02025/published-operators/qe-native.spn.SPN.bin",
+          "old_sha256": "edb878f66008e6cd7d2d2095a1ebbc949dcc68f6df7caf84d4ccda03d601030c",
+          "new_sha256": "f70a60ba062ddd6cf159a7b1b21a2f45c1ba2132955a7b61e581194445cf9b99",
+          "changed_leaves": [
+            "/payload/provenance_sha256",
+            "/payload/result/blocks/directory",
+            "/payload/result/fields/6",
+            "/payload/result/fields/7/\"provenance_json\"",
+            "/payload/result/fields/7/\"spn\""
+          ]
+        }
+      ]
+    },
+    "formatting_repair": {
+      "files": [
+        "scripts/check_release_whitelist.jl",
+        "src/FirstUseWorkspaceTypes.jl"
+      ],
+      "parent_src_ext_sha256": "fc91026696c31ee598abf135ed521d0951006915d2c4530171390cdebc99f6a8",
+      "runtime_and_cold_qualification": "NOT_RUN"
+    }
+  }
+}

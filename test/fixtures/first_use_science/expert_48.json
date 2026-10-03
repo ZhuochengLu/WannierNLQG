@@ -1,0 +1,219 @@
+{
+  "id": "search_projection_representations",
+  "ranks": [
+    {
+      "original_receipt_sha256": "395cb72d21fb626d05a3b1e450dcdf41fb72943a8365a539c967703c37f60eb2",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.complete",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_info.parity_eligible",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_info.character_tolerance",
+              "payload": "fca9f1d24d62503f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_info.character_round_digits",
+              "payload": "0300000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_info.little_group_tolerance",
+              "payload": "f168e388b5f8e43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.spinor",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.num_wannier",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.candidates[1].specs[1].positions_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3,
+                1
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.candidates[1].specs[1].local_bases",
+              "sha256": "1332df685c45a61a0ac008a6a653295b8c5655361c1d34b6304b22ec40235fb8",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.candidates[1].min_multiplicity",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.candidates[1].max_multiplicity",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.candidates[1].fixed_multiplicity",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.radial_transform.gauss_laguerre_order",
+              "payload": "4000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.visited_nodes",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.total_solution_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.truncated",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.signatures[1].kpoint_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.signatures[1].dimensions",
+              "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+              "shape": [
+                1
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.signatures[1].frozen_lower",
+              "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+              "shape": [
+                1
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.signatures[1].outer_upper",
+              "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+              "shape": [
+                1
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.solutions[1].coefficients",
+              "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+              "shape": [
+                1
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "path": "result.solutions[1].total_dimension",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.solutions[1].nonzero_candidate_types",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.solutions[1].total_block_multiplicity",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.solutions[1].signature_multiplicities[1]",
+              "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+              "shape": [
+                1
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "path": "result.solutions[1].embedding_residuals.frozen_to_target",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.solutions[1].embedding_residuals.target_to_outer",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            }
+          ],
+          "type": "WannierNLQG.Wannierization.ProjectionRepresentationSearchResult"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

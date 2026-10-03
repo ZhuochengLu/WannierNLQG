@@ -1,0 +1,6 @@
+num_bands = 2
+num_wann = 1
+mp_grid = 2 1 1
+begin projections
+X:s
+end projections

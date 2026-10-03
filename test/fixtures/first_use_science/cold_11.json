@@ -1,0 +1,19 @@
+{
+  "fixture_passed": true,
+  "first_calls": [
+    {
+      "target": "construct_symmetry_adapted_wannier_functions",
+      "extension_state_before": {
+        "WannierNLQGWannierizationPrecompileExt": false,
+        "WannierNLQGWannierizationExt": false,
+        "WannierNLQGOperatorBundleExt": false,
+        "WannierNLQGSymmetryFoundationExt": false,
+        "WannierNLQGSymmetrizationExt": false
+      },
+      "gc_on_at_target": true,
+      "success": true,
+      "compile_time": 0.250836916,
+      "recompile_time": 0.011034124
+    }
+  ]
+}

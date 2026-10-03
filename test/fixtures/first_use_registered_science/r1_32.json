@@ -1,0 +1,89 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__photon_drag_injection_current__conventional",
+  "native_science": {
+    "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "414d0e93e0769560",
+        "414d0e93e0769560",
+        "414d0e93e0769560",
+        "414d0e93e0769560",
+        "412fda12f8d01758",
+        "412fda12f8d01758",
+        "412fda12f8d01758",
+        "412fda12f8d01758",
+        "4137fb34779c31bc",
+        "4137fb34779c31bc",
+        "4137fb34779c31bc",
+        "4137fb34779c31bc",
+        "4145e1a87b8e2aad",
+        "4145e1a87b8e2aad",
+        "4145e1a87b8e2aad",
+        "4145e1a87b8e2aad"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 3808551.753618881,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "41720c86b38e2a72",
+        "41720c86b38e2a72",
+        "41720c86b38e2a72",
+        "41720c86b38e2a72",
+        "4149f1013c0cc51e",
+        "4149f1013c0cc51e",
+        "4149f1013c0cc51e",
+        "4149f1013c0cc51e",
+        "c1519a836715baf1",
+        "c1519a836715baf1",
+        "c1519a836715baf1",
+        "c1519a836715baf1",
+        "c1706c04cd573172",
+        "c1706c04cd573172",
+        "c1706c04cd573172",
+        "c1706c04cd573172"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 18925675.222208448,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat",
+      "sha256": "dbb12e14114dcc4539b44d74fa43dc0090f88a0e6fc7a6249935cc32fd72c796"
+    },
+    {
+      "file": "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat",
+      "sha256": "0b59134bc1f3f551773b9dc60605b5d658132657ac3543c70924d1d3c4b1ca59"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "8165a2511015f1626eab6777fe9ab0712cbe77423f87ee0a34fb2528b087b1af"
+  ],
+  "original_receipt_sha256": "8165a2511015f1626eab6777fe9ab0712cbe77423f87ee0a34fb2528b087b1af",
+  "rank_output_inventory": [
+    [
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat",
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "photon_drag_injection_current/k_slice/conventional"
+  ]
+}

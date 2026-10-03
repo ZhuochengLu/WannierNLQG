@@ -1,0 +1,3 @@
+{"stage":"qe-spn","event":"BATCH_COMMITTED","next_index":2,"workers":1,"wall_seconds":0.027651071548461914,"peak_rss_bytes":1175699456,"resumed_blocks":0}
+{"stage":"qe-spn","event":"BATCH_COMMITTED","next_index":3,"workers":1,"wall_seconds":0.004895925521850586,"peak_rss_bytes":1175945216,"resumed_blocks":0}
+{"stage":"qe-spn","event":"BATCH_COMMITTED","next_index":4,"workers":1,"wall_seconds":0.0007870197296142578,"peak_rss_bytes":1176027136,"resumed_blocks":0}

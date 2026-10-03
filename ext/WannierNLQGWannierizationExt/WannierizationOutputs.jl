@@ -35,9 +35,27 @@ function _wannierization_source_sha256()
             isfile(path) && push!(files, path)
         end
     end
-    sort!(files; by = path -> relpath(path, root))
-    entries =
-        ["$(replace(relpath(path, root), '\\' => '/'))\0$(sha256_file(path))" for path in files]
+    # Reuse each relative-path key within this call; still hash every current file.
+    prefix = joinpath(root, "")
+    within_root = true
+    for path in files
+        within_root &= startswith(path, prefix)
+    end
+    relative_paths = if within_root
+        # Keep the original key type while avoiding repeated path normalization.
+        keys = Vector{String}(undef, length(files))
+        for index in eachindex(files)
+            keys[index] = String(SubString(files[index], ncodeunits(prefix) + 1))
+        end
+        keys
+    else
+        map(path -> relpath(path, root), files)
+    end
+    order = sortperm(relative_paths)
+    entries = [
+        "$(replace(relative_paths[index], '\\' => '/'))\0$(sha256_file(files[index]))" for
+        index in order
+    ]
     return bytes2hex(SHA.sha256(codeunits(join(entries, '\n'))))
 end
 
@@ -63,6 +81,17 @@ function _periodic_stage_summary(snapshot)
         "quality_review_recommended" => "true",
         "global_production_eligible" => "false",
     )
+    # The accepted solver state already knows the initializer version.  Carry
+    # that provenance into periodic checkpoints so a valid frozen-rowspace
+    # restart can pass the same fail-closed check as a terminal checkpoint.
+    # Callers that construct a periodic snapshot directly may predate this
+    # provenance field.  Keep their checkpoint unqualified for restart rather
+    # than rejecting the checkpoint construction itself.
+    initializer_version =
+        hasproperty(snapshot, :initializer_algorithm_version) ?
+        String(snapshot.initializer_algorithm_version) : "NOT_RECORDED"
+    initializer_version == "NOT_RECORDED" ||
+        (summary["initializer_algorithm_version"] = initializer_version)
     # A periodic boundary has an accepted state but no terminal structural gate
     # yet, so publish the honest not-evaluated typed block.  The only evidence
     # available from the snapshot is the Z-stability seal.

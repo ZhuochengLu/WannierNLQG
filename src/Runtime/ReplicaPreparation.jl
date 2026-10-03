@@ -297,20 +297,12 @@ function prepare_runtime_components(
     output_vectors = model.r_vectors
     output_degeneracies = model.r_degeneracies
     if plan.transformed_this_run
-        prepared =
-            Dict{RealSpaceOperatorKind, Dict{NTuple{2, Int8}, AbstractArray{ComplexF64, 3}}}()
-        for (kind, component_views) in components
-            selected = Dict{NTuple{2, Int8}, AbstractArray{ComplexF64, 3}}()
-            for (component, values) in component_views
-                selected[component] = MatrixElements.materialize_replica_component(
-                    values,
-                    model.r_degeneracies,
-                    map,
-                    MatrixElements.SerializedWannier90ReplicaValues(),
-                )
-            end
-            prepared[kind] = selected
-        end
+        prepared = MatrixElements.materialize_replica_components(
+            components,
+            model.r_degeneracies,
+            map,
+            MatrixElements.SerializedWannier90ReplicaValues(),
+        )
         output_vectors = map.target_r_vectors
         output_degeneracies = ones(Int, size(output_vectors, 2))
     end

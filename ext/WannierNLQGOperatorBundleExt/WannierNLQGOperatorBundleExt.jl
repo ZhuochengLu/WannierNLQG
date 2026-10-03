@@ -2480,9 +2480,17 @@ function _manifest_from_handle(path::String, handle)
     )
     legacy_schema_diagnostic = startswith(contract_version, "5.")
     writer_version = String(_required_attribute(handle, "wanniernlqg_version"))
-    writer_version in
-    ("1.0.0", "1.0.1", "1.1.0", "2.0.0", "2.0.0-wcc.20260804", "2.1.0", "2.3.0", "2.4.0") ||
-        throw(ArgumentError("operator bundle was not written by a compatible WannierNLQG build"))
+    writer_version in (
+        "1.0.0",
+        "1.0.1",
+        "1.1.0",
+        "1.1.1",
+        "2.0.0",
+        "2.0.0-wcc.20260804",
+        "2.1.0",
+        "2.3.0",
+        "2.4.0",
+    ) || throw(ArgumentError("operator bundle was not written by a compatible WannierNLQG build"))
     isempty(String(_required_attribute(handle, "generated_at_utc"))) &&
         throw(ArgumentError("operator bundle generated_at_utc is empty"))
     String(_required_attribute(handle, "symmetrization_status")) in ("applied", "not_provided") ||
@@ -3768,6 +3776,13 @@ function read_real_space_operator_bundle(filename::AbstractString; verify_digest
         read_mode = loaded.read_mode,
         fallback_reason = loaded.fallback_reason,
     )
+end
+
+# Captured first-use declarations are specific to the frozen Julia trace.
+if WannierNLQG.FIRST_USE_TRACE_COMPATIBLE
+    include("OperatorBundleExtFirstUsePrecompile.jl")
+
+    include("OperatorBundleTaskInferenceResidualCoverage.jl")
 end
 
 end

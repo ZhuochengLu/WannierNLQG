@@ -1,0 +1,243 @@
+{
+  "expected_nonzero": true,
+  "id": "integral__orbital_magnetization__conventional",
+  "native_science": {
+    "integral_orbital_magnetization_conventional/orbital_magnetization_cmocc.dat": {
+      "headers": [
+        "# schema=wanniernlqg.orbital-magnetization-vector/1.0",
+        "# quantity=orbital_magnetization",
+        "# method=conventional",
+        "# temperature_K=300.0",
+        "# fermi_energies_count=1",
+        "# fermi_energies_sha256=a897aa4d9b3ccd1b1bda8bff1f51e55eb876bb6f5646fda7c2ec5e42a2ce4565",
+        "# release_tree_sha256=<attested-producer>",
+        "# model_sha256=69d9c9a12c7eb468fb4ebef68ddd5eae3fbee95b3aaaedc45dc5d14055c0e3a6",
+        "# input_identity_sha256=69d9c9a12c7eb468fb4ebef68ddd5eae3fbee95b3aaaedc45dc5d14055c0e3a6",
+        "# gamma_intra_ev=NOT_APPLICABLE",
+        "# gamma_inter_ev=NOT_APPLICABLE",
+        "# fs_kind=NOT_APPLICABLE",
+        "# eta_fs_ev=NOT_APPLICABLE",
+        "# mpi_size=1",
+        "# julia_threads_per_rank=1",
+        "# qualification_status=DIAGNOSTIC_ONLY",
+        "# input_semantics=defined_finite_model",
+        "# operator_inventory=NOT_APPLICABLE_DEFINED_FINITE_MODEL",
+        "# target_contract_sha256=NOT_APPLICABLE_DEFINED_FINITE_MODEL",
+        "# authoritative_hamiltonian_sha256=NOT_APPLICABLE_DEFINED_FINITE_MODEL",
+        "# band_frame_contract_sha256=NOT_APPLICABLE_DEFINED_FINITE_MODEL",
+        "# operator_selection_sha256=NOT_APPLICABLE_DEFINED_FINITE_MODEL",
+        "# task_sha256=<attested-task>",
+        "# term=cmocc",
+        "# units=muB/cell",
+        "# mu_eV x_real x_imag y_real y_imag z_real z_imag"
+      ],
+      "native_float_bits": [
+        "3fc0a3d70a3d70a4",
+        "bc62000000000000",
+        "0000000000000000",
+        "bc52000000000000",
+        "0000000000000000",
+        "3f8048efff09ad32",
+        "0000000000000000"
+      ],
+      "nonzero_scientific_values": 3,
+      "science_skip_columns": 1,
+      "scientific_max_abs": 0.007951617212902027,
+      "scientific_value_count": 6,
+      "shape": [
+        1,
+        7
+      ]
+    },
+    "integral_orbital_magnetization_conventional/orbital_magnetization_srocc.dat": {
+      "headers": [
+        "# schema=wanniernlqg.orbital-magnetization-vector/1.0",
+        "# quantity=orbital_magnetization",
+        "# method=conventional",
+        "# temperature_K=300.0",
+        "# fermi_energies_count=1",
+        "# fermi_energies_sha256=a897aa4d9b3ccd1b1bda8bff1f51e55eb876bb6f5646fda7c2ec5e42a2ce4565",
+        "# release_tree_sha256=<attested-producer>",
+        "# model_sha256=69d9c9a12c7eb468fb4ebef68ddd5eae3fbee95b3aaaedc45dc5d14055c0e3a6",
+        "# input_identity_sha256=69d9c9a12c7eb468fb4ebef68ddd5eae3fbee95b3aaaedc45dc5d14055c0e3a6",
+        "# gamma_intra_ev=NOT_APPLICABLE",
+        "# gamma_inter_ev=NOT_APPLICABLE",
+        "# fs_kind=NOT_APPLICABLE",
+        "# eta_fs_ev=NOT_APPLICABLE",
+        "# mpi_size=1",
+        "# julia_threads_per_rank=1",
+        "# qualification_status=DIAGNOSTIC_ONLY",
+        "# input_semantics=defined_finite_model",
+        "# operator_inventory=NOT_APPLICABLE_DEFINED_FINITE_MODEL",
+        "# target_contract_sha256=NOT_APPLICABLE_DEFINED_FINITE_MODEL",
+        "# authoritative_hamiltonian_sha256=NOT_APPLICABLE_DEFINED_FINITE_MODEL",
+        "# band_frame_contract_sha256=NOT_APPLICABLE_DEFINED_FINITE_MODEL",
+        "# operator_selection_sha256=NOT_APPLICABLE_DEFINED_FINITE_MODEL",
+        "# task_sha256=<attested-task>",
+        "# term=srocc",
+        "# units=muB/cell",
+        "# mu_eV x_real x_imag y_real y_imag z_real z_imag"
+      ],
+      "native_float_bits": [
+        "3fc0a3d70a3d70a4",
+        "3c5a000000000000",
+        "0000000000000000",
+        "3c44000000000000",
+        "0000000000000000",
+        "bf395481f463ddd0",
+        "0000000000000000"
+      ],
+      "nonzero_scientific_values": 3,
+      "science_skip_columns": 1,
+      "scientific_max_abs": 0.0003865067741481683,
+      "scientific_value_count": 6,
+      "shape": [
+        1,
+        7
+      ]
+    },
+    "integral_orbital_magnetization_conventional/orbital_magnetization_total.dat": {
+      "headers": [
+        "# schema=wanniernlqg.orbital-magnetization-vector/1.0",
+        "# quantity=orbital_magnetization",
+        "# method=conventional",
+        "# temperature_K=300.0",
+        "# fermi_energies_count=1",
+        "# fermi_energies_sha256=a897aa4d9b3ccd1b1bda8bff1f51e55eb876bb6f5646fda7c2ec5e42a2ce4565",
+        "# release_tree_sha256=<attested-producer>",
+        "# model_sha256=69d9c9a12c7eb468fb4ebef68ddd5eae3fbee95b3aaaedc45dc5d14055c0e3a6",
+        "# input_identity_sha256=69d9c9a12c7eb468fb4ebef68ddd5eae3fbee95b3aaaedc45dc5d14055c0e3a6",
+        "# gamma_intra_ev=NOT_APPLICABLE",
+        "# gamma_inter_ev=NOT_APPLICABLE",
+        "# fs_kind=NOT_APPLICABLE",
+        "# eta_fs_ev=NOT_APPLICABLE",
+        "# mpi_size=1",
+        "# julia_threads_per_rank=1",
+        "# qualification_status=DIAGNOSTIC_ONLY",
+        "# input_semantics=defined_finite_model",
+        "# operator_inventory=NOT_APPLICABLE_DEFINED_FINITE_MODEL",
+        "# target_contract_sha256=NOT_APPLICABLE_DEFINED_FINITE_MODEL",
+        "# authoritative_hamiltonian_sha256=NOT_APPLICABLE_DEFINED_FINITE_MODEL",
+        "# band_frame_contract_sha256=NOT_APPLICABLE_DEFINED_FINITE_MODEL",
+        "# operator_selection_sha256=NOT_APPLICABLE_DEFINED_FINITE_MODEL",
+        "# task_sha256=<attested-task>",
+        "# term=total",
+        "# units=muB/cell",
+        "# mu_eV x_real x_imag y_real y_imag z_real z_imag"
+      ],
+      "native_float_bits": [
+        "3fc0a3d70a3d70a4",
+        "bc3d000000000000",
+        "0000000000000000",
+        "bc35000000000000",
+        "0000000000000000",
+        "3f7efc97decd1c84",
+        "0000000000000000"
+      ],
+      "nonzero_scientific_values": 3,
+      "science_skip_columns": 1,
+      "scientific_max_abs": 0.007565110438753856,
+      "scientific_value_count": 6,
+      "shape": [
+        1,
+        7
+      ]
+    },
+    "integral_orbital_magnetization_conventional/spectral_response_metadata.txt": {
+      "metadata_lines": [
+        "quantity = \"orbital_magnetization\"",
+        "formula_identity = \"modern-orbital-W7-W12-thermal-convolution-v1\"",
+        "source_sha256 = \"<attested-source>\"",
+        "method = \"conventional\"",
+        "scope = \"BZ_integral\"",
+        "terms = (\"srocc\", \"cmocc\", \"total\")",
+        "contribution_contract = \"NOT_APPLICABLE\"",
+        "schema = \"wanniernlqg.orbital-magnetization-vector/1.0\"",
+        "fermi_energies_ev = [0.13]",
+        "fermi_energies_sha256 = \"a897aa4d9b3ccd1b1bda8bff1f51e55eb876bb6f5646fda7c2ec5e42a2ce4565\"",
+        "fermi_energies_count = \"1\"",
+        "task_sha256 = \"<attested-task>\"",
+        "release_tree_sha256 = \"<attested-producer>\"",
+        "temperature_K = \"300.0\"",
+        "model_sha256 = \"69d9c9a12c7eb468fb4ebef68ddd5eae3fbee95b3aaaedc45dc5d14055c0e3a6\"",
+        "input_identity_sha256 = \"69d9c9a12c7eb468fb4ebef68ddd5eae3fbee95b3aaaedc45dc5d14055c0e3a6\"",
+        "fermi_energy_ev = \"NOT_APPLICABLE_VECTOR_AXIS\"",
+        "gamma_intra_ev = \"NOT_APPLICABLE\"",
+        "gamma_inter_ev = \"NOT_APPLICABLE\"",
+        "fs_kind = \"NOT_APPLICABLE\"",
+        "eta_fs_ev = \"NOT_APPLICABLE\"",
+        "photon_energies_ev = Float64[]",
+        "undefined_zero_frequency = Int64[]",
+        "dielectric_zero_frequency_status = \"NOT_APPLICABLE\"",
+        "dielectric_background = \"NOT_APPLICABLE\"",
+        "thermal_definition = \"thermal_convolution_of_zero_temperature_projectors\"",
+        "input_semantics = \"defined_finite_model\"",
+        "contact_definition = \"NOT_APPLICABLE\"",
+        "spatial_dimension = 3",
+        "cell_volume_m3 = 4.182e-29",
+        "state_multiplicity = \"one_per_explicit_model_state\"",
+        "spectral_gap_tolerance_ev = 1.0e-10",
+        "model_content_sha256 = \"69d9c9a12c7eb468fb4ebef68ddd5eae3fbee95b3aaaedc45dc5d14055c0e3a6\"",
+        "mpi_size = \"1\"",
+        "julia_threads_per_rank = \"1\"",
+        "chemical_potential_count = 1",
+        "mu_independent_geometry_evaluations = 16",
+        "orbital_completion_evaluations = 0",
+        "matrix_workspace_count_per_rank = 1",
+        "vector_accumulator_shape = [1, 1, 3, 3]",
+        "operator_inventory = \"NOT_APPLICABLE_DEFINED_FINITE_MODEL\"",
+        "target_contract_sha256 = \"NOT_APPLICABLE_DEFINED_FINITE_MODEL\"",
+        "authoritative_hamiltonian_sha256 = \"NOT_APPLICABLE_DEFINED_FINITE_MODEL\"",
+        "band_frame_contract_sha256 = \"NOT_APPLICABLE_DEFINED_FINITE_MODEL\"",
+        "operator_selection_sha256 = \"NOT_APPLICABLE_DEFINED_FINITE_MODEL\"",
+        "operator_qualification = \"NOT_APPLICABLE\"",
+        "scientific_content_sha256 = \"see_model_sha256\"",
+        "finite_band_galerkin_qualification = \"NOT_APPLICABLE\"",
+        "execution_eligible = true",
+        "qualification_status = \"DIAGNOSTIC_ONLY\"",
+        "production_eligible = false",
+        "quality_review_recommended = true",
+        "qualification_reasons = [\"LEGACY_INPUT_QUALIFICATION_NOT_RECORDED\"]",
+        "verified_contracts = [\"input.required_components\", \"input.required_operators\", \"input.structure\"]",
+        "unverified_contracts = [\"input.bundle_qualification\"]",
+        "conflicting_contracts = String[]",
+        "input_qualification = Dict{String, Any}(\"input_mode\" => \"legacy\", \"quality_review_recommended\" => true, \"bundle_present\" => false, \"production_eligible\" => false, \"qualification_status\" => \"NOT_RECORDED\")"
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "integral_orbital_magnetization_conventional/orbital_magnetization_srocc.dat",
+      "sha256": "49787d4520c6eff7a0d0fa4e1304ddea2d65d1818d8af3a33a93c311fdc0a654"
+    },
+    {
+      "file": "integral_orbital_magnetization_conventional/orbital_magnetization_cmocc.dat",
+      "sha256": "0e88e4ce9081fa1dd951ec662ec88ac30d4f9044c6ead1d065a01ae05f9f351f"
+    },
+    {
+      "file": "integral_orbital_magnetization_conventional/orbital_magnetization_total.dat",
+      "sha256": "c6e084c508690b766b5249f88944164d0d6b012881f4a0c4f800def169d8e1d2"
+    },
+    {
+      "file": "integral_orbital_magnetization_conventional/spectral_response_metadata.txt",
+      "sha256": "61bda134444d615ef75c804f4839f8e291152fde8f09686494d23748f7607b3a"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "31d0888da13ab74c1399c2c10c7041c9af38b0de55cb1ad9efaa638600b4e4b4"
+  ],
+  "original_receipt_sha256": "31d0888da13ab74c1399c2c10c7041c9af38b0de55cb1ad9efaa638600b4e4b4",
+  "rank_output_inventory": [
+    [
+      "integral_orbital_magnetization_conventional/orbital_magnetization_srocc.dat",
+      "integral_orbital_magnetization_conventional/orbital_magnetization_cmocc.dat",
+      "integral_orbital_magnetization_conventional/orbital_magnetization_total.dat",
+      "integral_orbital_magnetization_conventional/spectral_response_metadata.txt"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "orbital_magnetization/integral/conventional"
+  ]
+}

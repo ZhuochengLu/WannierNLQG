@@ -1,0 +1,62 @@
+{
+  "id": "prepare_wannier_operator_target_contract",
+  "ranks": [
+    {
+      "original_receipt_sha256": "0643f22c88e2df889a9bf0f9fd390ae3ffd4fea388d99f40c429816a90b6b8fa",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.num_bands",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.num_kpoints",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.num_neighbors",
+              "payload": "0600000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.qualification_scope.outer_mask",
+              "sha256": "27ecd0a598e76f8a2fd264d427df0a119903e8eae384e478902541756f089dd1",
+              "shape": [
+                2,
+                2
+              ],
+              "type": "BitMatrix"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.qualification_scope.frozen_mask",
+              "sha256": "507503b51960cceda8d924904fb85377fe7d177fb8dfcf56b24e4557644ed486",
+              "shape": [
+                2,
+                2
+              ],
+              "type": "BitMatrix"
+            }
+          ],
+          "type": "WannierNLQG.Wannierization.WannierOperatorTargetContract"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

@@ -6,6 +6,18 @@ structure gate derives the required set recursively from the source tree and
 rejects any undocumented addition or stale path.
 
 ```text
+ext/WannierNLQGSymmetryFoundationExt/BandPublicFirstUseCoverage.jl
+src/FirstUseThreadTypes.jl
+ext/WannierNLQGWannierizationExt/VASPMatrixFirstUseCoverage.jl
+ext/WannierNLQGWannierizationExt/VASPSPNFirstUseCoverage.jl
+ext/WannierNLQGWannierizationExt/UIUFirstUseCoverage.jl
+src/ProjectionConfigurationFirstUseWorkload.jl
+ext/WannierNLQGWannierizationExt/ProjectionSearchFirstUseCoverage.jl
+ext/WannierNLQGWannierizationExt/NativeOperatorFirstUseCoverage.jl
+ext/WannierNLQGWannierizationExt/QESPnFirstUseCoverage.jl
+ext/WannierNLQGWannierizationExt/CheckpointReadFirstUseCoverage.jl
+src/SymmetryFoundation/SymmetryFoundationFirstUsePrecompile.jl
+src/WannierProjection/WannierProjectionFirstUsePrecompile.jl
 ext/WannierNLQGSymmetrizationExt/MagneticMomentReaders.jl
 ext/WannierNLQGSymmetrizationExt/ResponseSymmetryArtifactWriter.jl
 ext/WannierNLQGSymmetrizationExt/ResponseSymmetryQualification.jl
@@ -42,6 +54,7 @@ ext/WannierNLQGWannierizationExt/ExactWannierOperatorBundle.jl
 ext/WannierNLQGWannierizationExt/GaugeProvenanceContracts.jl
 ext/WannierNLQGWannierizationExt/NativeSourceDispatch.jl
 ext/WannierNLQGWannierizationExt/OperatorProfileAssembly.jl
+ext/WannierNLQGWannierizationExt/OrdinarySolverFirstUseCoverage.jl
 ext/WannierNLQGWannierizationExt/PAWBlockPartitionAudit.jl
 ext/WannierNLQGWannierizationExt/PAWSCDMInitialization.jl
 ext/WannierNLQGWannierizationExt/ProjectionRepresentationCompatibility.jl
@@ -148,4 +161,26 @@ src/Wannierization/models/DiagnosticsQualification.jl
 src/Wannierization/models/OptimizerStates.jl
 src/Wannierization/models/ResultsArtifacts.jl
 src/Wannierization/models/WannierizationEligibility.jl
+ext/WannierNLQGSymmetryFoundationExt/FoundationOwnerFirstUseCoverage.jl
+ext/WannierNLQGSymmetryFoundationExt/ResponseGroupFirstUseCoverage.jl
 ```
+
+## First-use compiler coverage inventory
+
+These owner-local files declare compiler requests only. Their actual Type
+identity and original call provenance are verified independently; they execute
+no scientific solver, user writer or MPI lifecycle.
+
+- `ext/WannierNLQGSymmetrizationExt/ExistingModelColdNativeCoverage.jl`
+- `ext/WannierNLQGSymmetrizationExt/Generated/SymmetrizationResponseWriterSignatures.jl`
+- `ext/WannierNLQGSymmetrizationExt/ResponseQualificationFirstUseCoverage.jl`
+- `ext/WannierNLQGSymmetrizationExt/SymmetrizationTaskInferenceResidualCoverage.jl`
+- `ext/WannierNLQGSymmetryFoundationExt/Generated/NativeCanonicalBuilderInference.jl`
+- `ext/WannierNLQGSymmetryFoundationExt/Generated/SymmetryFoundationResponseWriterSignatures.jl`
+- `ext/WannierNLQGSymmetryFoundationExt/Generated/VASPBandFirstUseSignatures.jl`
+- `ext/WannierNLQGSymmetryFoundationExt/SymmetryFoundationTaskInferenceResidualCoverage.jl`
+- `ext/WannierNLQGWannierizationExt/Generated/VASPPAWSPNResidualSignatures.jl`
+- `ext/WannierNLQGWannierizationExt/PAWSCDMInputFirstUseCoverage.jl`
+- `ext/WannierNLQGWannierizationExt/RemainingExpertColdNativeCoverage.jl`
+- `ext/WannierNLQGWannierizationExt/TBQualificationFirstUseCoverage.jl`
+- `ext/WannierNLQGWannierizationExt/WannierizationTaskInferenceResidualCoverage.jl`

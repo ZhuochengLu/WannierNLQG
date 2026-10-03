@@ -1,0 +1,96 @@
+{
+  "all_finite": true,
+  "leaves": [
+    {
+      "finite": true,
+      "path": "result.mmn.num_bands",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "result.mmn.num_kpts",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "result.mmn.num_neighbors",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "result.mmn.data",
+      "sha256": "3239b05c38b825ebb79f103172438292a22a0951351a6b81be1df5d44776cc65",
+      "shape": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "type": "Array{ComplexF64, 4}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "result.mmn.neighbors",
+      "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+      "shape": [
+        1,
+        1
+      ],
+      "type": "Matrix{Int64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "result.mmn.reciprocal_shifts",
+      "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+      "shape": [
+        3,
+        1,
+        1
+      ],
+      "type": "Array{Int64, 3}"
+    },
+    {
+      "finite": true,
+      "path": "result.amn.num_bands",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "result.amn.num_kpts",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "result.amn.num_wannier",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "max_abs": 4.99907594989189,
+      "max_abs_nonfinite_repr": null,
+      "path": "result.amn.data",
+      "sha256": "46db9daf78278e8f6e775cae66bf592c1092fae1e02038aaa6d8f72e1ec7decb",
+      "shape": [
+        1,
+        1,
+        1
+      ],
+      "type": "Array{ComplexF64, 3}"
+    }
+  ],
+  "numeric_leaf_count": 10,
+  "numeric_sha256": "b407efa8f43a65d21d5b9dd2a30a3ba51c2acbe75ca19de6603c7cc50b9486d0",
+  "type": "@NamedTuple{mmn::WannierNLQG.IO.WannierMMN, amn::WannierNLQG.IO.WannierAMN}"
+}

@@ -1,0 +1,31 @@
+{
+  "gc_on": true,
+  "gc_checked_at_every_timer": true,
+  "gc_check_count": 4,
+  "backend_state_at_every_timer": [
+    null,
+    {
+      "WannierNLQGWannierizationPrecompileExt": false,
+      "WannierNLQGWannierizationExt": false,
+      "WannierNLQGOperatorBundleExt": false,
+      "WannierNLQGSymmetryFoundationExt": false,
+      "WannierNLQGSymmetrizationExt": false
+    },
+    {
+      "WannierNLQGWannierizationPrecompileExt": false,
+      "WannierNLQGWannierizationExt": false,
+      "WannierNLQGOperatorBundleExt": false,
+      "WannierNLQGSymmetryFoundationExt": false,
+      "WannierNLQGSymmetrizationExt": false
+    },
+    {
+      "WannierNLQGWannierizationPrecompileExt": false,
+      "WannierNLQGWannierizationExt": true,
+      "WannierNLQGOperatorBundleExt": true,
+      "WannierNLQGSymmetryFoundationExt": false,
+      "WannierNLQGSymmetrizationExt": true
+    }
+  ],
+  "compile_time": 0.014174834,
+  "recompile_time": 0.005501875
+}

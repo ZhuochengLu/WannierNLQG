@@ -1,0 +1,486 @@
+{
+  "original_artifact_attestation": {
+    "bytes": 21368,
+    "sha256": "eeb6397d6881b6024b887d165a34e49a54bbbe034b184b59c78a42e4b7899cc8",
+    "verified": true
+  },
+  "original_report_sha256": "0fb725d6528362bed469c24621d7b3ee618de1c208a1a8c24e853c19d7411eb3",
+  "report": {
+    "artifact_sha256": "eeb6397d6881b6024b887d165a34e49a54bbbe034b184b59c78a42e4b7899cc8",
+    "dataset_paths": [
+      "/@augmentation_metric",
+      "/@band_first",
+      "/@band_frame_contract_sha256",
+      "/@band_frame_transform_sha256",
+      "/@band_gauge",
+      "/@band_gauge_rotation_semantics",
+      "/@band_gauge_rotation_sha256",
+      "/@band_last",
+      "/@coefficient_normalization",
+      "/@diagonal_imaginary_max_absolute",
+      "/@full_cutoff_required",
+      "/@gauge_artifact_sha256",
+      "/@generalized_norm_max_absolute",
+      "/@hermiticity_max_absolute",
+      "/@num_bands",
+      "/@num_kpoints",
+      "/@operator_target_contract_sha256",
+      "/@parent_audit_policy",
+      "/@parent_audit_status",
+      "/@parent_generalized_norm_max_absolute",
+      "/@passed",
+      "/@payload_sha256",
+      "/@physical_metric",
+      "/@quantity",
+      "/@radial_q_max_absolute",
+      "/@schema",
+      "/@schema_version",
+      "/@source_band_gauge",
+      "/@source_code",
+      "/@spin_channel",
+      "/@spin_components",
+      "/@spinor",
+      "/@status",
+      "/@target_authority",
+      "/@target_band_gauge",
+      "/@target_generalized_norm_max_absolute",
+      "/@wavecar_cutoff_ev",
+      "/@wavecar_num_bands",
+      "/@wavecar_num_kpoints",
+      "/@wavecar_precision_tag",
+      "/@wavecar_spin_channels",
+      "/artifacts/@provenance_hdf5",
+      "/artifacts/@spn",
+      "/artifacts/@spn_sha256",
+      "/band_frame_contract/@contract_sha256",
+      "/band_frame_contract/@euclidean_nonunitarity_maximum",
+      "/band_frame_contract/@gauge_artifact_sha256",
+      "/band_frame_contract/@legacy",
+      "/band_frame_contract/@maximum_condition_number",
+      "/band_frame_contract/@metric_kind",
+      "/band_frame_contract/@minimum_singular_value",
+      "/band_frame_contract/@physical_isometry_maximum",
+      "/band_frame_contract/@physical_isometry_tolerance",
+      "/band_frame_contract/@replay_maximum",
+      "/band_frame_contract/@replay_tolerance",
+      "/band_frame_contract/@schema",
+      "/band_frame_contract/@schema_version",
+      "/band_frame_contract/@source_band_gauge",
+      "/band_frame_contract/@status",
+      "/band_frame_contract/@target_band_gauge",
+      "/band_frame_contract/@transform_sha256",
+      "/component_norms/@augmentation_frobenius",
+      "/component_norms/@augmentation_max_absolute",
+      "/component_norms/@maximum_cancellation_condition",
+      "/component_norms/@pseudo_frobenius",
+      "/component_norms/@pseudo_max_absolute",
+      "/component_norms/@total_frobenius",
+      "/component_norms/@total_max_absolute",
+      "/diagnostics",
+      "/energies_ev",
+      "/input_sha256/@POSCAR",
+      "/input_sha256/@POTCAR",
+      "/input_sha256/@SPIN_BASIS_CONTRACT",
+      "/input_sha256/@WAVECAR",
+      "/kpoints_fractional",
+      "/parent_generalized_norm_worst",
+      "/positions_fractional",
+      "/real_lattice_angstrom",
+      "/reciprocal_lattice_inverse_angstrom",
+      "/source_metadata/@coefficient_normalization",
+      "/source_metadata/@saxis",
+      "/source_metadata/@spin_basis",
+      "/source_metadata/@spin_basis_input",
+      "/source_metadata/@spin_channel",
+      "/source_metadata/@spin_mode",
+      "/species",
+      "/target_generalized_norm_worst",
+      "/thresholds/@diagonal_imaginary_max_absolute",
+      "/thresholds/@generalized_norm_max_absolute",
+      "/thresholds/@hermiticity_max_absolute",
+      "/thresholds/@oracle_max_absolute",
+      "/thresholds/@oracle_relative_l2",
+      "/thresholds/@oracle_rms",
+      "/thresholds/@radial_q_max_absolute"
+    ],
+    "format": "hdf5",
+    "numeric_leaves": [
+      {
+        "finite": true,
+        "path": "native/@band_first",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "native/@band_last",
+        "payload": "0200000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "native/@diagonal_imaginary_max_absolute",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/@full_cutoff_required",
+        "payload": "01",
+        "type": "Bool"
+      },
+      {
+        "finite": true,
+        "path": "native/@generalized_norm_max_absolute",
+        "payload": "000000b05824533e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/@hermiticity_max_absolute",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/@num_bands",
+        "payload": "0200000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "native/@num_kpoints",
+        "payload": "0200000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "native/@parent_generalized_norm_max_absolute",
+        "payload": "000000b05824533e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/@passed",
+        "payload": "01",
+        "type": "Bool"
+      },
+      {
+        "finite": true,
+        "path": "native/@radial_q_max_absolute",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/@spin_channel",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "native/@spinor",
+        "payload": "01",
+        "type": "Bool"
+      },
+      {
+        "finite": true,
+        "path": "native/@target_generalized_norm_max_absolute",
+        "payload": "000000b05824533e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/@wavecar_cutoff_ev",
+        "payload": "0000000000001440",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/@wavecar_num_bands",
+        "payload": "0200000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "native/@wavecar_num_kpoints",
+        "payload": "0200000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "native/@wavecar_precision_tag",
+        "payload": "9ab0000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "native/@wavecar_spin_channels",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "native/band_frame_contract/@euclidean_nonunitarity_maximum",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/band_frame_contract/@legacy",
+        "payload": "00",
+        "type": "Bool"
+      },
+      {
+        "finite": true,
+        "path": "native/band_frame_contract/@maximum_condition_number",
+        "payload": "000000000000f03f",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/band_frame_contract/@minimum_singular_value",
+        "payload": "000000000000f03f",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/band_frame_contract/@physical_isometry_maximum",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/band_frame_contract/@physical_isometry_tolerance",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/band_frame_contract/@replay_maximum",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/band_frame_contract/@replay_tolerance",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/component_norms/@augmentation_frobenius",
+        "payload": "4b01a912d393703e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/component_norms/@augmentation_max_absolute",
+        "payload": "f23739b05824533e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/component_norms/@maximum_cancellation_condition",
+        "payload": "000000000000f03f",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/component_norms/@pseudo_frobenius",
+        "payload": "aa4c58e87ab60b40",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/component_norms/@pseudo_max_absolute",
+        "payload": "000000000000f03f",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/component_norms/@total_frobenius",
+        "payload": "3336a2f07ab60b40",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/component_norms/@total_max_absolute",
+        "payload": "2c16c9040000f03f",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/energies_ev",
+        "sha256": "ac44b3214636dc7a21e80ed87ddef6ccf8b4988fcf2e69f045dd6e6e3a320c55",
+        "shape": [
+          2,
+          2
+        ],
+        "type": "Matrix{Float64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.5,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/kpoints_fractional",
+        "sha256": "c3ef795130ae64dd5c975f1567fbdef361865bab663026ed1d3be0564e2514af",
+        "shape": [
+          2,
+          3
+        ],
+        "type": "Matrix{Float64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/parent_generalized_norm_worst",
+        "sha256": "605390e5a369ee568b19ead1733af824c7c1d286d7d24b86283238fc44a99334",
+        "shape": [
+          3
+        ],
+        "type": "Vector{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/positions_fractional",
+        "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+        "shape": [
+          3,
+          1
+        ],
+        "type": "Matrix{Float64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 5.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/real_lattice_angstrom",
+        "sha256": "7619ef6bfc8e045ea32e19d6cb2d6d44890bfa330204c8aaefa46fc0c0c86b94",
+        "shape": [
+          3,
+          3
+        ],
+        "type": "Matrix{Float64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.2566370614359172,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/reciprocal_lattice_inverse_angstrom",
+        "sha256": "fcf0434fa2a62c3330a3efa0116b9ab9026807464b54d4224ef4b74a4be279e6",
+        "shape": [
+          3,
+          3
+        ],
+        "type": "Matrix{Float64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/target_generalized_norm_worst",
+        "sha256": "605390e5a369ee568b19ead1733af824c7c1d286d7d24b86283238fc44a99334",
+        "shape": [
+          3
+        ],
+        "type": "Vector{Int64}"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@diagonal_imaginary_max_absolute",
+        "payload": "bbbdd7d9df7cdb3d",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@generalized_norm_max_absolute",
+        "payload": "f168e388b5f8d43e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@hermiticity_max_absolute",
+        "payload": "bbbdd7d9df7cdb3d",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@oracle_max_absolute",
+        "payload": "3a8c30e28e79453e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@oracle_relative_l2",
+        "payload": "3a8c30e28e79453e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@oracle_rms",
+        "payload": "bbbdd7d9df7cdb3d",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@radial_q_max_absolute",
+        "payload": "8dedb5a0f7c6a03e",
+        "type": "Float64"
+      }
+    ],
+    "raw_file_bytes": 21368,
+    "semantic_fields": {
+      "/@augmentation_metric": "POTCAR q0 AE-minus-PS",
+      "/@band_frame_contract_sha256": "dd02f100b71dba3d7b97181de4f9c3cbec36a0aeb34916092066bfdabdc81b30",
+      "/@band_frame_transform_sha256": "5c26e8a1c65aebb40ee5f3e7031639600b7af23a321abdf3454eceea2e8f485f",
+      "/@band_gauge": "native_dft_eigenstate",
+      "/@band_gauge_rotation_semantics": "legacy_alias_of_band_frame_transform_sha256",
+      "/@band_gauge_rotation_sha256": "5c26e8a1c65aebb40ee5f3e7031639600b7af23a321abdf3454eceea2e8f485f",
+      "/@coefficient_normalization": "vasp_raw",
+      "/@gauge_artifact_sha256": "NOT_APPLICABLE",
+      "/@operator_target_contract_sha256": "LEGACY_NOT_RECORDED",
+      "/@parent_audit_policy": "legacy_hard_gate",
+      "/@parent_audit_status": "PASS",
+      "/@payload_sha256": "18317c9e440c77ab350df1a605ef2270505fc0343a0e8b2e592c284f8574689a",
+      "/@physical_metric": "VASP PAW q=0 pseudo plus POTCAR augmentation",
+      "/@quantity": "dimensionless Cartesian Pauli matrix elements",
+      "/@schema": "wanniernlqg.vasp-paw-spn",
+      "/@schema_version": "1.1",
+      "/@source_band_gauge": "native_dft_eigenstate",
+      "/@source_code": "vasp",
+      "/@spin_components": "x,y,z",
+      "/@status": "PASS",
+      "/@target_authority": "full_parent",
+      "/@target_band_gauge": "native_dft_eigenstate",
+      "/artifacts/@provenance_hdf5": "output/native.spn.h5",
+      "/artifacts/@spn": "output/native.spn",
+      "/artifacts/@spn_sha256": "3fc62224a0da74fea4bbb8d97f45324b2a407a9498219231ce4598b55c02134c",
+      "/band_frame_contract/@contract_sha256": "dd02f100b71dba3d7b97181de4f9c3cbec36a0aeb34916092066bfdabdc81b30",
+      "/band_frame_contract/@gauge_artifact_sha256": "NOT_APPLICABLE",
+      "/band_frame_contract/@metric_kind": "not_applicable_native_identity",
+      "/band_frame_contract/@schema": "WannierNLQG.band_frame_transform_contract",
+      "/band_frame_contract/@schema_version": "1.0",
+      "/band_frame_contract/@source_band_gauge": "native_dft_eigenstate",
+      "/band_frame_contract/@status": "PASS",
+      "/band_frame_contract/@target_band_gauge": "native_dft_eigenstate",
+      "/band_frame_contract/@transform_sha256": "5c26e8a1c65aebb40ee5f3e7031639600b7af23a321abdf3454eceea2e8f485f",
+      "/input_sha256/@POSCAR": "d94e3f7c6052ab589b74ac3f17fa4ff885d6d80c005118f60e1aa62c245ec286",
+      "/input_sha256/@POTCAR": "765cc25994b86ebc4f82ff73679154be39c68ac26f2357d6b9d08ce1bd9e3ef6",
+      "/input_sha256/@SPIN_BASIS_CONTRACT": "ba03884320975fd44bd080f84e1403cbed606d8408122c3ca2c4fa0b915bd48d",
+      "/input_sha256/@WAVECAR": "7c43499b997814e8a80201d2bf21b76c01d74c7c5059b586d7afd11902a3ff14",
+      "/source_metadata/@coefficient_normalization": "vasp_raw",
+      "/source_metadata/@saxis": "0.0,0.0,1.0",
+      "/source_metadata/@spin_basis": "Cartesian-z Pauli basis",
+      "/source_metadata/@spin_basis_input": "explicit",
+      "/source_metadata/@spin_channel": "1",
+      "/source_metadata/@spin_mode": "noncollinear_spinor"
+    }
+  },
+  "schema": 1
+}

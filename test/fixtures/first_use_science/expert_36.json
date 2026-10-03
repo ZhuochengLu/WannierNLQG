@@ -1,0 +1,134 @@
+{
+  "id": "qualify_exported_wannierization_tb",
+  "ranks": [
+    {
+      "original_receipt_sha256": "c27a879cc4f7a3f939e7ba605f08995426926d5b00d4b9210236c8ac29e9f582",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.metrics[1].value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.metrics[1].threshold",
+              "payload": "f168e388b5f8e43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.metrics[2].value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.metrics[2].threshold",
+              "payload": "95d626e80b2e113e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.metrics[3].value",
+              "payload": "025c143326a6913c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.metrics[3].threshold",
+              "payload": "3a8c30e28e79453e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.metrics[4].value",
+              "payload": "025c143326a6913c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.metrics[4].threshold",
+              "payload": "bbbdd7d9df7cdb3d",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.metrics[5].value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.metrics[5].threshold",
+              "payload": "bbbdd7d9df7cdb3d",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.metrics[6].value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.metrics[6].threshold",
+              "payload": "3a8c30e28e79453e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.metrics[7].value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.metrics[7].threshold",
+              "payload": "bbbdd7d9df7cdb3d",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.metrics[8].value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.metrics[8].threshold",
+              "payload": "f168e388b5f8e43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.target_scope_production_eligible",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.scoped_production_eligible",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.global_production_eligible",
+              "payload": "00",
+              "type": "Bool"
+            }
+          ],
+          "type": "WannierNLQG.Wannierization.TBSymmetryQualification"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

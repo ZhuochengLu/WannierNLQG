@@ -1,0 +1,28 @@
+{
+  "julia": "1.11.2",
+  "fixture_kind": "data_only_production_prepared_antiunitary_band_representation",
+  "binary_sha256": "2cb368411785e3f5cfbc020ec38053a24fddf012e650cd43c0df677420253f8a",
+  "native_input_sha256": "a52532e5309d0ab034e8adbe0d550f5c6393fc105175d3c9e285ed7ddc822356",
+  "sewing_bits_sha256": "ef112d42f942a6dd49b155b8906f6dc40336ab84b566f0334ae8948c9e2ce493",
+  "note": "Prepared in an independent process. Validators are not invoked by deserialization in the measurement process.",
+  "field_types": [
+    "String",
+    "Symbol",
+    "Bool",
+    "Matrix{Float64}",
+    "Matrix{Float64}",
+    "Tuple{Int64, Int64, Int64}",
+    "Matrix{Float64}",
+    "Matrix{Float64}",
+    "Vector{WannierNLQG.SymmetryFoundation.SymmetryOperation}",
+    "Matrix{Int64}",
+    "Array{Int64, 3}",
+    "Array{ComplexF64, 4}",
+    "Matrix{Int64}",
+    "Vector{Int64}",
+    "Vector{Int64}",
+    "Vector{Int64}",
+    "Dict{String, String}",
+    "Dict{String, String}"
+  ]
+}

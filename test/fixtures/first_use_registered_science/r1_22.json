@@ -1,0 +1,89 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__injection_current__conventional",
+  "native_science": {
+    "kslice_injection_current_conventional/synthetic_demo_ick_i_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "414dc9eb2753dabb",
+        "414dc9eb2753dabb",
+        "414dc9eb2753dabb",
+        "414dc9eb2753dabb",
+        "4134e5013a8c3d45",
+        "4134e5013a8c3d45",
+        "4134e5013a8c3d45",
+        "4134e5013a8c3d45",
+        "413ed89988d8b337",
+        "413ed89988d8b337",
+        "413ed89988d8b337",
+        "413ed89988d8b337",
+        "41461099e8948e3f",
+        "41461099e8948e3f",
+        "41461099e8948e3f",
+        "41461099e8948e3f"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 3904470.3072465337,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_injection_current_conventional/synthetic_demo_ick_r_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "4172937dee2a9f5f",
+        "4172937dee2a9f5f",
+        "4172937dee2a9f5f",
+        "4172937dee2a9f5f",
+        "4151bbbb5a85759b",
+        "4151bbbb5a85759b",
+        "4151bbbb5a85759b",
+        "4151bbbb5a85759b",
+        "c15789933bd1ddb1",
+        "c15789933bd1ddb1",
+        "c15789933bd1ddb1",
+        "c15789933bd1ddb1",
+        "c17091f0e664cbf1",
+        "c17091f0e664cbf1",
+        "c17091f0e664cbf1",
+        "c17091f0e664cbf1"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 19478494.885405894,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_injection_current_conventional/synthetic_demo_ick_r_conv.dat",
+      "sha256": "f617e6e78489454a6f8d0ded23b24e187b2b42dd73feb2e46657fcd0b409dc34"
+    },
+    {
+      "file": "kslice_injection_current_conventional/synthetic_demo_ick_i_conv.dat",
+      "sha256": "e529e2134a7ef14a131b86265eed1fde7d4a5a75467e8a6e4dde1d79b50638d1"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "0a398de55422cf7c9dbe26722a890e8e9a4abde6331932c717a5f5f66e6df273"
+  ],
+  "original_receipt_sha256": "0a398de55422cf7c9dbe26722a890e8e9a4abde6331932c717a5f5f66e6df273",
+  "rank_output_inventory": [
+    [
+      "kslice_injection_current_conventional/synthetic_demo_ick_r_conv.dat",
+      "kslice_injection_current_conventional/synthetic_demo_ick_i_conv.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "injection_current/k_slice/conventional"
+  ]
+}

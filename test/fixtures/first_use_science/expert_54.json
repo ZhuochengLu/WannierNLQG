@@ -1,0 +1,19 @@
+{
+  "id": "symmetry_detection_backend_provenance",
+  "ranks": [
+    {
+      "original_receipt_sha256": "a52c9a164bb01edec37fdb558f6f219986ffe954b4030456e527e02c8e40eb46",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [],
+          "type": "@NamedTuple{package::String, version::String}"
+        },
+        "semantic_return": "(package = \"Spglib\", version = \"1.2.0\")"
+      }
+    }
+  ],
+  "schema": 1
+}

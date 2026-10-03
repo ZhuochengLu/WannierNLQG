@@ -1,0 +1,70 @@
+{
+  "id": "generate_qe_paw_spn",
+  "ranks": [
+    {
+      "original_receipt_sha256": "a55ec03c295edb8194f40f61c72143161cc15ad296d135cc1612fb236e90a8ec",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.spn.num_bands",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.spn.num_kpts",
+              "payload": "0300000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.spn.data",
+              "sha256": "e5c321935a710a0431f6ea9380033610920f4a685d51312770822208e1685842",
+              "shape": [
+                1,
+                1,
+                3,
+                3
+              ],
+              "type": "Array{ComplexF64, 4}"
+            },
+            {
+              "finite": true,
+              "path": "result.generalized_norm_max_absolute",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.hermiticity_max_absolute",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.diagonal_imaginary_max_absolute",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.passed",
+              "payload": "01",
+              "type": "Bool"
+            }
+          ],
+          "type": "WannierNLQG.Wannierization.QEPAWSPNResult"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

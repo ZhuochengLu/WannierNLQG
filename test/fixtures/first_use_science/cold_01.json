@@ -1,0 +1,19 @@
+{
+  "fixture_passed": true,
+  "first_calls": [
+    {
+      "target": "prepare_band_representation",
+      "extension_state_before": {
+        "WannierNLQGWannierizationPrecompileExt": false,
+        "WannierNLQGWannierizationExt": false,
+        "WannierNLQGOperatorBundleExt": true,
+        "WannierNLQGSymmetryFoundationExt": false,
+        "WannierNLQGSymmetrizationExt": false
+      },
+      "gc_on_at_target": true,
+      "success": true,
+      "compile_time": 0.178486666,
+      "recompile_time": 0.043558459
+    }
+  ]
+}

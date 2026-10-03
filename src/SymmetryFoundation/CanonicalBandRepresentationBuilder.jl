@@ -425,9 +425,17 @@ function build_canonical_band_representation(
         end
         first_diagnostic = length(raw_diagnostics) + 1
         try
+            source_point = native.kpoints[source_kpoint]
+            target_point = native.kpoints[target_kpoint]
+            # Express the existing native container's declared element contract.
+            # Duck-typed non-native inputs retain their original behavior.
+            if native isa NativeWavefunctionData
+                source_point = source_point::PlaneWaveKPoint
+                target_point = target_point::PlaneWaveKPoint
+            end
             sewing[:, :, operation_index, source_kpoint] .= canonical_plane_wave_sewing_matrix(
-                native.kpoints[source_kpoint],
-                native.kpoints[target_kpoint],
+                source_point,
+                target_point,
                 operations[operation_index],
                 @view(shifts[:, operation_index, source_kpoint]),
                 degeneracy_tolerance_ev;

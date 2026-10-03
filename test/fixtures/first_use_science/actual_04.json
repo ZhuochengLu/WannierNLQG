@@ -1,0 +1,59 @@
+{
+  "excluded_artifact_metadata": [
+    "hdf5_sha256"
+  ],
+  "science_semantics": {
+    "input_sha256": {
+      "band_representation_hdf5": "647a59b544fdb98681a299df1a62691b992337c7f5d4b1871a467d1a53ccd152",
+      "eig_file": "ac686efc3efc59bf886f988c8e3978c2fc139c1bc3395bb8db8ae8906842d8b9",
+      "mmn_file": "8988bcaca70cad3f1987a2d41f97e896bb3064efbb04e1200f74fab9d6d37445",
+      "wannierization_checkpoint_hdf5": "0593a1f095d72eba5b7d5e46f47bbe272042157d545630442140922f8ff53007"
+    },
+    "qualification": "STANDARD",
+    "schema": "WannierNLQG.wannier_gauge_chain_diagnostic",
+    "schema_version": "1.0",
+    "status": "PASS_DIAGNOSTIC",
+    "summary": {
+      "construction_policy": "strict",
+      "exported_matrix_roundtrip_residual": "6.123233995736766e-17",
+      "exported_spectral_roundtrip_residual_ev": "0.0",
+      "finite_difference_completeness_residual": "1.9229626863835638e-16",
+      "finite_difference_stencil_sha256": "a26c03f931567c69297d84317ed03515c17c1fb95904b056b95848d7565065ea",
+      "finite_difference_stencil_source": "checkpoint",
+      "fourier_roundtrip_tolerance": "1.0e-10",
+      "input_identity": "PASS",
+      "minimum_distance_construction_authoritative_band_hamiltonian_algorithm_version": "authoritative-band-hamiltonian-v3-physical-frame-transform",
+      "minimum_distance_construction_authoritative_band_hamiltonian_digest": "fa63815e840c0670a3958fe981a46a9d2f087c7e8bca64f21a8f82eb2cfaf0d6",
+      "minimum_distance_construction_authoritative_hamiltonian": "native_dft",
+      "minimum_distance_construction_fourier_roundtrip_gate_tolerance": "1.0e-10",
+      "minimum_distance_construction_hamiltonian_fourier_roundtrip_residual": "6.123233995736766e-17",
+      "minimum_distance_construction_position_fourier_roundtrip_residual": "0.0",
+      "minimum_distance_construction_real_space_replica_policy": "minimum_distance",
+      "mp_grid_construction_authoritative_band_hamiltonian_algorithm_version": "authoritative-band-hamiltonian-v3-physical-frame-transform",
+      "mp_grid_construction_authoritative_band_hamiltonian_digest": "fa63815e840c0670a3958fe981a46a9d2f087c7e8bca64f21a8f82eb2cfaf0d6",
+      "mp_grid_construction_authoritative_hamiltonian": "native_dft",
+      "mp_grid_construction_fourier_roundtrip_gate_tolerance": "1.0e-10",
+      "mp_grid_construction_hamiltonian_fourier_roundtrip_residual": "NaN",
+      "mp_grid_construction_position_fourier_roundtrip_residual": "NaN",
+      "mp_grid_construction_real_space_replica_policy": "mp_grid",
+      "mp_matrix_roundtrip_residual": "6.123233995736766e-17",
+      "mp_spectral_roundtrip_residual_ev": "0.0",
+      "qualification": "STANDARD",
+      "sawf_maximum_invariant_defect": "0.0",
+      "sawf_minimum_link_singular_value": "1.0",
+      "sawf_omega_i": "0.0",
+      "sawf_top_one_percent_concentration": "0.0",
+      "schema": "WannierNLQG.wannier_gauge_chain_diagnostic",
+      "schema_version": "1.0",
+      "status": "PASS_DIAGNOSTIC",
+      "support_radius_0.9999_angstrom": "0.0",
+      "support_radius_0.999_angstrom": "0.0",
+      "support_radius_0.99_angstrom": "0.0",
+      "support_radius_0.9_angstrom": "0.0",
+      "tail_radius_angstrom": "14.4",
+      "tail_weight": "0.0",
+      "wigner_seitz_matrix_roundtrip_residual": "6.123233995736766e-17",
+      "wigner_seitz_spectral_roundtrip_residual_ev": "0.0"
+    }
+  }
+}

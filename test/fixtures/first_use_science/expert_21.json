@@ -1,0 +1,118 @@
+{
+  "id": "generate_vasp_paw_spn",
+  "ranks": [
+    {
+      "original_receipt_sha256": "8cf51cf39a072219ec7879beb96fc57c8433e3ff452c49f93df56a9cfc972bd4",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.spn.num_bands",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.spn.num_kpts",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 1.0000000178273565,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.spn.data",
+              "sha256": "facc5ecfaa7b6ef348dd4b8996f718f3d9127e9ca8fcd840abfb86a28717e7b5",
+              "shape": [
+                2,
+                2,
+                3,
+                2
+              ],
+              "type": "Array{ComplexF64, 4}"
+            },
+            {
+              "finite": true,
+              "path": "result.radial_q_max_absolute",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.generalized_norm_max_absolute",
+              "payload": "000000b05824533e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.hermiticity_max_absolute",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.diagonal_imaginary_max_absolute",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.passed",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.component_norms.augmentation_frobenius",
+              "payload": "4b01a912d393703e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.component_norms.augmentation_max_absolute",
+              "payload": "f23739b05824533e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.component_norms.maximum_cancellation_condition",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.component_norms.pseudo_frobenius",
+              "payload": "aa4c58e87ab60b40",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.component_norms.pseudo_max_absolute",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.component_norms.total_frobenius",
+              "payload": "3336a2f07ab60b40",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.component_norms.total_max_absolute",
+              "payload": "2c16c9040000f03f",
+              "type": "Float64"
+            }
+          ],
+          "type": "WannierNLQG.Wannierization.VASPPAWSPNResult"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

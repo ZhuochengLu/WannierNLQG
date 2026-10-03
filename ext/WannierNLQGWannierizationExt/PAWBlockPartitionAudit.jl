@@ -779,7 +779,7 @@ function audit_paw_block_partitions(config::PAWBlockPartitionAuditConfig)
         :FAR_BAND_PAIR_RESIDUAL_HOLD
     elseif cumulative_residual_hold &&
            weighted_policy &&
-           weighted_partition_policy.pre_gauge_cumulative_mode == :diagnostic
+           hamiltonian_policy.pre_gauge_cumulative_mode == :diagnostic
         :PRE_GAUGE_FAR_BAND_CUMULATIVE_DIAGNOSTIC_EXCEEDED
     elseif cumulative_residual_hold
         :FAR_BAND_CUMULATIVE_RESIDUAL_HOLD
@@ -800,13 +800,12 @@ function audit_paw_block_partitions(config::PAWBlockPartitionAuditConfig)
         "block_partition_policy" =>
             paw_block_partition_policy_key(config.block_partition_policy),
         "pre_gauge_far_cumulative_mode" =>
-            weighted_policy ? string(weighted_partition_policy.pre_gauge_cumulative_mode) :
+            weighted_policy ? string(hamiltonian_policy.pre_gauge_cumulative_mode) :
             "not_applicable",
         "pre_gauge_far_cumulative_status" =>
             cumulative_residual_hold ?
             (
-                weighted_policy &&
-                weighted_partition_policy.pre_gauge_cumulative_mode == :diagnostic ?
+                weighted_policy && hamiltonian_policy.pre_gauge_cumulative_mode == :diagnostic ?
                 "DIAGNOSTIC_EXCEEDED_CONTINUE_TO_POST_GAUGE" : "HOLD"
             ) : "PASS",
         "record_count" => length(records),

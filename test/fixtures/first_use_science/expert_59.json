@@ -1,0 +1,617 @@
+{
+  "id": "write_band_representation_hdf5",
+  "ranks": [
+    {
+      "original_receipt_sha256": "9be975f1a1d7174a35af422aab6e61325f8adadfabf1581d17e02a4fa2c0ccf3",
+      "rank": 0,
+      "science": {
+        "native_readback": {
+          "original_artifact_attestation": {
+            "bytes": 23154,
+            "sha256": "305a712883b949f9840a8d40c7912f953c7d1bfe7530ffac6bcff832923746c9",
+            "verified": true
+          },
+          "report": {
+            "artifact_sha256": "305a712883b949f9840a8d40c7912f953c7d1bfe7530ffac6bcff832923746c9",
+            "dataset_paths": [
+              "/@preparation_digest",
+              "/@schema",
+              "/@schema_version",
+              "/@source_code",
+              "/@spinor",
+              "/action/kpoint_map",
+              "/action/kpoint_map/@axis_order",
+              "/action/reciprocal_shifts",
+              "/action/reciprocal_shifts/@axis_order",
+              "/action/sewing_matrices",
+              "/action/sewing_matrices/@axis_order",
+              "/bands/block_labels",
+              "/bands/block_labels/@axis_order",
+              "/bands/energies_ev",
+              "/bands/energies_ev/@axis_order",
+              "/compatibility/@assessment_status",
+              "/compatibility/@gate_definition_status",
+              "/compatibility/@maximum_kramers_residual",
+              "/compatibility/@maximum_reciprocal_shift_residual",
+              "/compatibility/@maximum_required_block_unitarity_residual",
+              "/compatibility/@metadata_origin",
+              "/compatibility/@qualification_sha256",
+              "/compatibility/@representation_sha256",
+              "/compatibility/@status",
+              "/compatibility/@supported_contract",
+              "/compatibility/@theta_squared_residual",
+              "/compatibility/@tolerance",
+              "/compatibility/@validation_profile",
+              "/compatibility/band_group_law_residual",
+              "/compatibility/band_group_law_residual/@axis_order",
+              "/compatibility/maximum_group_law_residual",
+              "/compatibility/maximum_group_law_residual/@axis_order",
+              "/compatibility/oracle_excess_group_law_residual",
+              "/compatibility/oracle_excess_group_law_residual/@axis_order",
+              "/compatibility/target_group_law_residual",
+              "/compatibility/target_group_law_residual/@axis_order",
+              "/compatibility_policy/@effective",
+              "/compatibility_policy/@requested",
+              "/compatibility_policy/@symmetry_tolerance_status",
+              "/conventions/@antiunitary_gauge_transform",
+              "/conventions/@effective_wannierization_mode",
+              "/conventions/@pre_unified_schema_version",
+              "/conventions/@representation_source",
+              "/conventions/@requested_wannierization_mode",
+              "/conventions/@sewing",
+              "/conventions/@symmetry_constraints_applied",
+              "/environment/@generated_at_utc",
+              "/environment/@hdf5_jl_version",
+              "/environment/@julia_version",
+              "/environment/@threads",
+              "/environment/@wanniernlqg_version",
+              "/geometry/kpoints_fractional",
+              "/geometry/kpoints_fractional/@axis_order",
+              "/geometry/mp_grid",
+              "/geometry/real_lattice",
+              "/geometry/real_lattice/@axis_order",
+              "/geometry/reciprocal_lattice",
+              "/geometry/reciprocal_lattice/@axis_order",
+              "/input_sha256/@EIG",
+              "/input_sha256/@WIN",
+              "/input_sha256/@fixture",
+              "/inventory/@status",
+              "/operations/antiunitary",
+              "/operations/rotation_cartesian",
+              "/operations/rotation_cartesian/@axis_order",
+              "/operations/rotation_fractional",
+              "/operations/rotation_fractional/@axis_order",
+              "/operations/translation_fractional",
+              "/operations/translation_fractional/@axis_order",
+              "/products/@identity_operation",
+              "/products/@theta_operation",
+              "/products/canonical_identity/@000001",
+              "/products/canonical_identity/@000002",
+              "/products/product_index",
+              "/products/product_index/@axis_order",
+              "/products/spin_action",
+              "/products/spin_action/@axis_order",
+              "/products/spinor_factor",
+              "/products/spinor_factor/@axis_order",
+              "/products/translation_integer",
+              "/products/translation_integer/@axis_order",
+              "/qualification_scope/@diagnostic_status",
+              "/qualification_scope/@frozen_mask_sha256",
+              "/qualification_scope/@outer_mask_sha256",
+              "/qualification_scope/frozen_mask",
+              "/qualification_scope/frozen_mask/@axis_order",
+              "/qualification_scope/outer_mask",
+              "/qualification_scope/outer_mask/@axis_order",
+              "/raw_diagnostics/@count",
+              "/raw_diagnostics/@status",
+              "/raw_diagnostics/integer_values",
+              "/raw_diagnostics/real_values",
+              "/raw_diagnostics/scope_code",
+              "/raw_diagnostics/status_code",
+              "/sewing_backend/@sewing_backend",
+              "/stars/full_to_irreducible",
+              "/stars/full_to_operation",
+              "/stars/irreducible_indices",
+              "/wavefunction_gauge/@wavefunction_gauge_backend",
+              "/wavefunction_gauge/@wavefunction_gauge_hdf5_sha256"
+            ],
+            "format": "hdf5",
+            "numeric_leaves": [
+              {
+                "finite": true,
+                "path": "native/@spinor",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "max_abs": 2,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/action/kpoint_map",
+                "sha256": "4ff8ce1dd9258ef46321f9fb12e38f4efed2eb402d51db622746dd58b3c91c9a",
+                "shape": [
+                  2,
+                  2
+                ],
+                "type": "Matrix{Int64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/action/reciprocal_shifts",
+                "sha256": "e00d10927bdaae737f307d754ba075902bfc135154abf47ff6e450005a5c95fa",
+                "shape": [
+                  3,
+                  2,
+                  2
+                ],
+                "type": "Array{Int64, 3}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/action/sewing_matrices",
+                "sha256": "a48705cf6ffd4bc3cae0056e9e9a670d11d9b2544261147407dcd441ad5653a3",
+                "shape": [
+                  2,
+                  2,
+                  2,
+                  2
+                ],
+                "type": "Array{ComplexF64, 4}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/bands/block_labels",
+                "sha256": "5e4ffd7d196e150659e625599778aa9c37538bb184fce71b42b1d5b339f2aeec",
+                "shape": [
+                  2,
+                  2
+                ],
+                "type": "Matrix{Int64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 0,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/bands/energies_ev",
+                "sha256": "66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925",
+                "shape": [
+                  2,
+                  2
+                ],
+                "type": "Matrix{Float64}"
+              },
+              {
+                "finite": false,
+                "path": "native/compatibility/@maximum_kramers_residual",
+                "payload": "000000000000f87f",
+                "type": "Float64"
+              },
+              {
+                "finite": false,
+                "path": "native/compatibility/@maximum_reciprocal_shift_residual",
+                "payload": "000000000000f87f",
+                "type": "Float64"
+              },
+              {
+                "finite": false,
+                "path": "native/compatibility/@maximum_required_block_unitarity_residual",
+                "payload": "000000000000f87f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/compatibility/@supported_contract",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": false,
+                "path": "native/compatibility/@theta_squared_residual",
+                "payload": "000000000000f87f",
+                "type": "Float64"
+              },
+              {
+                "finite": false,
+                "path": "native/compatibility/@tolerance",
+                "payload": "000000000000f87f",
+                "type": "Float64"
+              },
+              {
+                "finite": false,
+                "max_abs": null,
+                "max_abs_nonfinite_repr": "NaN",
+                "path": "native/compatibility/band_group_law_residual",
+                "sha256": "947540360b0cd8d6212e6c72a37481fc1a765d78e9ee34da3f2498b083e1fb60",
+                "shape": [
+                  4
+                ],
+                "type": "Vector{Float64}"
+              },
+              {
+                "finite": false,
+                "max_abs": null,
+                "max_abs_nonfinite_repr": "NaN",
+                "path": "native/compatibility/maximum_group_law_residual",
+                "sha256": "947540360b0cd8d6212e6c72a37481fc1a765d78e9ee34da3f2498b083e1fb60",
+                "shape": [
+                  4
+                ],
+                "type": "Vector{Float64}"
+              },
+              {
+                "finite": false,
+                "max_abs": null,
+                "max_abs_nonfinite_repr": "NaN",
+                "path": "native/compatibility/oracle_excess_group_law_residual",
+                "sha256": "947540360b0cd8d6212e6c72a37481fc1a765d78e9ee34da3f2498b083e1fb60",
+                "shape": [
+                  4
+                ],
+                "type": "Vector{Float64}"
+              },
+              {
+                "finite": false,
+                "max_abs": null,
+                "max_abs_nonfinite_repr": "NaN",
+                "path": "native/compatibility/target_group_law_residual",
+                "sha256": "947540360b0cd8d6212e6c72a37481fc1a765d78e9ee34da3f2498b083e1fb60",
+                "shape": [
+                  4
+                ],
+                "type": "Vector{Float64}"
+              },
+              {
+                "finite": true,
+                "path": "native/environment/@threads",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "max_abs": 0.75,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/geometry/kpoints_fractional",
+                "sha256": "3039c7ef59bdecc5be249f77d93a6855576662d7e45896da05add1d8d1ddfda1",
+                "shape": [
+                  3,
+                  2
+                ],
+                "type": "Matrix{Float64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 2,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/geometry/mp_grid",
+                "sha256": "198950af48e0c178d1e80017a467e5322a76c6f1ebbe5a8e4860705ccc19ce6b",
+                "shape": [
+                  3
+                ],
+                "type": "Vector{Int64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/geometry/real_lattice",
+                "sha256": "1332df685c45a61a0ac008a6a653295b8c5655361c1d34b6304b22ec40235fb8",
+                "shape": [
+                  3,
+                  3
+                ],
+                "type": "Matrix{Float64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 6.283185307179586,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/geometry/reciprocal_lattice",
+                "sha256": "a7bd7ebbf1f7479c3864a60faea5fed130808b61a7bd43712740d8cd0f5e91e2",
+                "shape": [
+                  3,
+                  3
+                ],
+                "type": "Matrix{Float64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/operations/antiunitary",
+                "sha256": "b413f47d13ee2fe6c845b2ee141af81de858df4ec549a58b7970bb96645bc8d2",
+                "shape": [
+                  2
+                ],
+                "type": "Vector{UInt8}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/operations/rotation_cartesian",
+                "sha256": "08d94fcf4e14c682e988305422e5563f5c7fc2f7dec91824379bd8352a7c7994",
+                "shape": [
+                  3,
+                  3,
+                  2
+                ],
+                "type": "Array{Float64, 3}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/operations/rotation_fractional",
+                "sha256": "d32cd053e79cae1a5c02fb5f531dbec9e4e2537c1aad6d01880b0a7c97bc03b8",
+                "shape": [
+                  3,
+                  3,
+                  2
+                ],
+                "type": "Array{Int64, 3}"
+              },
+              {
+                "finite": true,
+                "max_abs": 0,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/operations/translation_fractional",
+                "sha256": "17b0761f87b081d5cf10757ccc89f12be355c70e2e29df288b65b30710dcbcd1",
+                "shape": [
+                  3,
+                  2
+                ],
+                "type": "Matrix{Float64}"
+              },
+              {
+                "finite": true,
+                "path": "native/products/@identity_operation",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native/products/@theta_operation",
+                "payload": "0200000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "max_abs": 2,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/products/product_index",
+                "sha256": "4ff8ce1dd9258ef46321f9fb12e38f4efed2eb402d51db622746dd58b3c91c9a",
+                "shape": [
+                  2,
+                  2
+                ],
+                "type": "Matrix{Int64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/products/spin_action",
+                "sha256": "8fd900f377c2221ccb5272fdc6618196caf0463097b52956c91fdee228e0f85a",
+                "shape": [
+                  2,
+                  2,
+                  2
+                ],
+                "type": "Array{ComplexF64, 3}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/products/spinor_factor",
+                "sha256": "44e41c721ef7ad53582de3a2470e7bf6e74ea4471f54c42469817ef5844da195",
+                "shape": [
+                  2,
+                  2
+                ],
+                "type": "Matrix{Int64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 0,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/products/translation_integer",
+                "sha256": "2ea9ab9198d1638007400cd2c3bef1cc745b864b76011a0e1bc52180ac6452d4",
+                "shape": [
+                  3,
+                  2,
+                  2
+                ],
+                "type": "Array{Int64, 3}"
+              },
+              {
+                "finite": true,
+                "max_abs": 0,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/qualification_scope/frozen_mask",
+                "sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+                "shape": [
+                  2,
+                  2
+                ],
+                "type": "Matrix{UInt8}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/qualification_scope/outer_mask",
+                "sha256": "27ecd0a598e76f8a2fd264d427df0a119903e8eae384e478902541756f089dd1",
+                "shape": [
+                  2,
+                  2
+                ],
+                "type": "Matrix{UInt8}"
+              },
+              {
+                "finite": true,
+                "path": "native/raw_diagnostics/@count",
+                "payload": "1000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "max_abs": 2,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/raw_diagnostics/integer_values",
+                "sha256": "94be4062231c5a68c9aec10d810fd386d84d8efafed81cd289e03a765e9c0fb1",
+                "shape": [
+                  8,
+                  16
+                ],
+                "type": "Matrix{Int64}"
+              },
+              {
+                "finite": false,
+                "max_abs": null,
+                "max_abs_nonfinite_repr": "Inf",
+                "path": "native/raw_diagnostics/real_values",
+                "sha256": "ee8fc8de272db2c43dfe7ca10423b7968cbff9f2f3fc66632bd6d46f4a7b5d9c",
+                "shape": [
+                  6,
+                  16
+                ],
+                "type": "Matrix{Float64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 4,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/raw_diagnostics/scope_code",
+                "sha256": "b56d2194cade251164b85e29a224ed28cfa458477bec0d2db69735b9b0b927c0",
+                "shape": [
+                  16
+                ],
+                "type": "Vector{UInt8}"
+              },
+              {
+                "finite": true,
+                "max_abs": 3,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/raw_diagnostics/status_code",
+                "sha256": "b7bc1c998b1a70eebea72248188d62998ce81b1fb91b1981a0f87153c00b89f9",
+                "shape": [
+                  16
+                ],
+                "type": "Vector{UInt8}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/stars/full_to_irreducible",
+                "sha256": "814dd7b9784d57c15b9c2972e9b4fd6cf7e164f8162a934bdb2452a413dab1f7",
+                "shape": [
+                  2
+                ],
+                "type": "Vector{Int64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 2,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/stars/full_to_operation",
+                "sha256": "0c730b69905c5ef7a4ca5269f72365400bde2dd2c04eaf9bbb3d1c4a265a0131",
+                "shape": [
+                  2
+                ],
+                "type": "Vector{Int64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/stars/irreducible_indices",
+                "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Int64}"
+              }
+            ],
+            "raw_file_bytes": 23154,
+            "semantic_fields": {
+              "/@preparation_digest": "e3d72e381c06c3793394a9591831b44443b3a9c6dff6ed330f1a800a676adc44",
+              "/@schema": "WannierNLQG.band_representation",
+              "/@schema_version": "1.0",
+              "/@source_code": "synthetic",
+              "/action/kpoint_map/@axis_order": "kpoint,operation",
+              "/action/reciprocal_shifts/@axis_order": "kpoint,operation,xyz",
+              "/action/sewing_matrices/@axis_order": "kpoint,operation,target_band,source_band",
+              "/bands/block_labels/@axis_order": "kpoint,band",
+              "/bands/energies_ev/@axis_order": "kpoint,band",
+              "/compatibility/@assessment_status": "REPRESENTATION_UNDETERMINED",
+              "/compatibility/@gate_definition_status": "GATE_NOT_EVALUATED",
+              "/compatibility/@metadata_origin": "computed_native_julia",
+              "/compatibility/@qualification_sha256": "",
+              "/compatibility/@representation_sha256": "9d4973de97fceb1e5bbd68308fdfbf9587135ffe23972582b01e0825e040ac63",
+              "/compatibility/@status": "NOT_EVALUATED",
+              "/compatibility/@validation_profile": "empirical",
+              "/compatibility/band_group_law_residual/@axis_order": "combination_UU_UA_AU_AA",
+              "/compatibility/maximum_group_law_residual/@axis_order": "combination_UU_UA_AU_AA",
+              "/compatibility/oracle_excess_group_law_residual/@axis_order": "combination_UU_UA_AU_AA",
+              "/compatibility/target_group_law_residual/@axis_order": "combination_UU_UA_AU_AA",
+              "/compatibility_policy/@effective": "strict",
+              "/compatibility_policy/@requested": "strict",
+              "/compatibility_policy/@symmetry_tolerance_status": "NOT_APPLICABLE",
+              "/conventions/@antiunitary_gauge_transform": "B'=U_target'*B*conj(U_source)",
+              "/conventions/@effective_wannierization_mode": "symmetry_adapted",
+              "/conventions/@pre_unified_schema_version": "1.1",
+              "/conventions/@representation_source": "provided",
+              "/conventions/@requested_wannierization_mode": "symmetry_adapted",
+              "/conventions/@sewing": "rows target bands, columns source bands",
+              "/conventions/@symmetry_constraints_applied": "true",
+              "/environment/@generated_at_utc": "2026-10-01T15:28:18.158",
+              "/environment/@hdf5_jl_version": "0.17.3",
+              "/environment/@julia_version": "1.11.2",
+              "/environment/@wanniernlqg_version": "1.1.1",
+              "/geometry/kpoints_fractional/@axis_order": "kpoint,xyz",
+              "/geometry/real_lattice/@axis_order": "cartesian_vector,xyz",
+              "/geometry/reciprocal_lattice/@axis_order": "cartesian_vector,xyz",
+              "/input_sha256/@EIG": "0ec1620440edd3d2035a141df59286ee538073c3b06be1db1180f048812fc42b",
+              "/input_sha256/@WIN": "195602b20b5c9f3aae54416b15a4ace6e9a98cded4d233cf9a408f00f8faca3e",
+              "/input_sha256/@fixture": "1111111111111111111111111111111111111111111111111111111111111111",
+              "/inventory/@status": "UNAVAILABLE",
+              "/operations/rotation_cartesian/@axis_order": "operation,target_xyz,source_xyz",
+              "/operations/rotation_fractional/@axis_order": "operation,target_xyz,source_xyz",
+              "/operations/translation_fractional/@axis_order": "operation,xyz",
+              "/products/canonical_identity/@000001": "U|W=1,0,0,0,1,0,0,0,1|tau=0.0,0.0,0.0",
+              "/products/canonical_identity/@000002": "A|W=1,0,0,0,1,0,0,0,1|tau=0.0,0.0,0.0",
+              "/products/product_index/@axis_order": "left_operation,right_operation",
+              "/products/spin_action/@axis_order": "operation,target_spin,source_spin",
+              "/products/spinor_factor/@axis_order": "left_operation,right_operation",
+              "/products/translation_integer/@axis_order": "left_operation,right_operation,xyz",
+              "/qualification_scope/@diagnostic_status": "AVAILABLE",
+              "/qualification_scope/@frozen_mask_sha256": "a0f020a43c77309c4f46958914437aaad6ea01def03d88ba5bcf55d39ebd666e",
+              "/qualification_scope/@outer_mask_sha256": "d15ac3da78b8a02a8f88316711d8a540838034f288c13960a539a9981a200ec8",
+              "/qualification_scope/frozen_mask/@axis_order": "band,kpoint",
+              "/qualification_scope/outer_mask/@axis_order": "band,kpoint",
+              "/raw_diagnostics/@status": "AVAILABLE",
+              "/sewing_backend/@sewing_backend": "coefficient_mapping",
+              "/wavefunction_gauge/@wavefunction_gauge_backend": "native_eigenstate",
+              "/wavefunction_gauge/@wavefunction_gauge_hdf5_sha256": "NOT_APPLICABLE"
+            }
+          }
+        },
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [],
+          "type": "String"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

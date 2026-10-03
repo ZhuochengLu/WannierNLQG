@@ -542,6 +542,7 @@ end
 symmetrization_root_usage_errors = root_module_usage_violations(
     join((read(path, String) for path in source_files(extension_root)), "\n");
     allowed_functions = ("pkgversion", "pkgdir"),
+    allowed_guards = ("WannierNLQG.FIRST_USE_TRACE_COMPATIBLE",),
 )
 isempty(symmetrization_root_usage_errors) ||
     fail("Symmetrization extension uses the WannierNLQG root outside version/path provenance")
@@ -1423,6 +1424,17 @@ for provider in String.(symmetrization_extension_contract["project_dependencies"
     )
 end
 
+# Compiler-only Type operands are checked against actual owner bindings. This
+# does not expose private functions or add a runtime integration port.
+compiler_type_symbols = Dict(
+    string(nameof(owner)) => Set(
+        name for
+        name in names(owner; all = true, imported = false) if isdefined(owner, name) &&
+        getproperty(owner, name) isa Type &&
+        parentmodule(getproperty(owner, name)) === owner
+    ) for owner in
+    (WannierNLQG.SymmetryFoundation, WannierNLQG.WannierProjection, WannierNLQG.MatrixElements)
+)
 shared_boundary_violations = shared_boundary_reference_violations(
     boundary_sources,
     Dict(
@@ -1436,6 +1448,8 @@ shared_boundary_violations = shared_boundary_reference_violations(
             WannierNLQG.SymmetryFoundation.SYMMETRY_FOUNDATION_INTEGRATION_API,
         "WannierProjection" => WannierNLQG.WannierProjection.WANNIER_PROJECTION_INTEGRATION_API,
     ),
+    ;
+    compiler_type_symbols,
 )
 isempty(shared_boundary_violations) || fail(
     "shared-layer qualified references bypass integration allowlists: " *
@@ -1446,6 +1460,7 @@ matrix_elements_boundary_violations = shared_boundary_reference_violations(
     Dict("MatrixElements" => names(WannierNLQG.MatrixElements; all = false, imported = false)),
     Dict("MatrixElements" => WannierNLQG.MatrixElements.MATRIX_ELEMENTS_INTEGRATION_API);
     owner_prefixes = Dict("MatrixElements" => ("src/MatrixElements/",)),
+    compiler_type_symbols = compiler_type_symbols,
 )
 isempty(matrix_elements_boundary_violations) || fail(
     "MatrixElements qualified references bypass the integration allowlist: " *

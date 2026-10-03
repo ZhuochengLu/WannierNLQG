@@ -244,4 +244,16 @@ export write_projection_representation_search_hdf5
 export materialize_projection_basis
 export materialize_symmetry_adapted_wannierization_config
 
+# Captured first-use declarations are specific to the frozen Julia trace.
+if WannierizationInternalSupport.WannierNLQG.FIRST_USE_TRACE_COMPATIBLE
+    include("WannierizationExtFirstUsePrecompile.jl")
+    include("Generated/VASPPAWSPNResidualSignatures.jl")
+
+    include("TBQualificationFirstUseCoverage.jl")
+
+    include("RemainingExpertColdNativeCoverage.jl")
+
+    include("WannierizationTaskInferenceResidualCoverage.jl")
+end
+
 end

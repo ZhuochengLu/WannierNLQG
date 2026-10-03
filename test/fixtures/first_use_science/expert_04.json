@@ -1,0 +1,82 @@
+{
+  "id": "build_band_product_table",
+  "ranks": [
+    {
+      "original_receipt_sha256": "af4bc577e7865a2543ee3daa5ba30136e4e2adca00635831bed902fb4ee5da5b",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.identity_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.theta_index",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.spin_actions",
+              "sha256": "26d9dddbe8ac537633bf1438d999c00a815f7af6419d6af2da66023a358ca736",
+              "shape": [
+                2,
+                2,
+                2
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "max_abs": 2,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.product_indices",
+              "sha256": "4ff8ce1dd9258ef46321f9fb12e38f4efed2eb402d51db622746dd58b3c91c9a",
+              "shape": [
+                2,
+                2
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.translation_differences",
+              "sha256": "2ea9ab9198d1638007400cd2c3bef1cc745b864b76011a0e1bc52180ac6452d4",
+              "shape": [
+                3,
+                2,
+                2
+              ],
+              "type": "Array{Int64, 3}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.spinor_factors",
+              "sha256": "44e41c721ef7ad53582de3a2470e7bf6e74ea4471f54c42469817ef5844da195",
+              "shape": [
+                2,
+                2
+              ],
+              "type": "Matrix{Int64}"
+            }
+          ],
+          "type": "WannierNLQGSymmetryFoundationExt.BandRepresentationProductTable"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

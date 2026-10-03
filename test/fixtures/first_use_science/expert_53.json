@@ -1,0 +1,44 @@
+{
+  "id": "symmetrize_wannier_operators",
+  "ranks": [
+    {
+      "original_receipt_sha256": "0d697d8b0fa2a1b5609ca9bc6fde362c898be144a360abe2912bafaf3c73f099",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.validation.REAL_SPACE_HAMILTONIAN.covariance_error",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.validation.REAL_SPACE_HAMILTONIAN.idempotence_error",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.validation.REAL_SPACE_POSITION.covariance_error",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.validation.REAL_SPACE_POSITION.idempotence_error",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            }
+          ],
+          "type": "WannierNLQG.Symmetrization.SymmetrizationResult"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

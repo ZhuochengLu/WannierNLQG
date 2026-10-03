@@ -1,0 +1,173 @@
+{
+  "id": "write_projection_representation_search_hdf5",
+  "ranks": [
+    {
+      "original_receipt_sha256": "a541577093edf21726a852144dedf07593e78976865c9d3a50498573d9a2b79b",
+      "rank": 0,
+      "science": {
+        "native_readback": {
+          "original_artifact_attestation": {
+            "bytes": 8060,
+            "sha256": "6fc8961d05f4d62d4372486058c2ccbfb07111bb3f551f5038cfb4e9bc3d472c",
+            "verified": true
+          },
+          "report": {
+            "artifact_sha256": "6fc8961d05f4d62d4372486058c2ccbfb07111bb3f551f5038cfb4e9bc3d472c",
+            "dataset_paths": [
+              "/@mirror_sha256",
+              "/@payload_sha256",
+              "/@schema",
+              "/@schema_version",
+              "/canonical_payload_json",
+              "/compatibility/@character_round_digits",
+              "/compatibility/@character_tolerance",
+              "/compatibility/@little_group_tolerance",
+              "/compatibility/@parity_eligible",
+              "/compatibility/@scope",
+              "/compatibility/@upstream_commit",
+              "/compatibility/@upstream_package",
+              "/compatibility/@upstream_source_sha256",
+              "/compatibility/@upstream_version",
+              "/signatures/000001/@kpoint_index",
+              "/signatures/000001/@labels_json",
+              "/signatures/000001/@wigner_types_json",
+              "/signatures/000001/dimensions",
+              "/signatures/000001/frozen_lower",
+              "/signatures/000001/outer_upper",
+              "/solutions/000001/@embedding_residual_names_json",
+              "/solutions/000001/@validation_sha256",
+              "/solutions/000001/@validation_status",
+              "/solutions/000001/coefficients",
+              "/solutions/000001/embedding_residual_values",
+              "/solutions/000001/signature_multiplicities/000001"
+            ],
+            "format": "hdf5",
+            "numeric_leaves": [
+              {
+                "finite": true,
+                "path": "native/compatibility/@character_round_digits",
+                "payload": "0300000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native/compatibility/@character_tolerance",
+                "payload": "fca9f1d24d62503f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/compatibility/@little_group_tolerance",
+                "payload": "f168e388b5f8e43e",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native/compatibility/@parity_eligible",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native/signatures/000001/@kpoint_index",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/signatures/000001/dimensions",
+                "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Int64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/signatures/000001/frozen_lower",
+                "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Int64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/signatures/000001/outer_upper",
+                "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Int64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/solutions/000001/coefficients",
+                "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Int64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 0,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/solutions/000001/embedding_residual_values",
+                "sha256": "374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb",
+                "shape": [
+                  2
+                ],
+                "type": "Vector{Float64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/solutions/000001/signature_multiplicities/000001",
+                "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Int64}"
+              }
+            ],
+            "raw_file_bytes": 8060,
+            "semantic_fields": {
+              "/@mirror_sha256": "af8d9edbe544cc37607b374ad1d39252a673cefa626428c8fa8f3883924589aa",
+              "/@payload_sha256": "524bc9501c3f4cefab52fd69fc1c1c41b27b76fb673ddb8f5ba0703535ce5070",
+              "/@schema": "WannierNLQG.projection_representation_search",
+              "/@schema_version": "1.0",
+              "/canonical_payload_json": "{\"status\":\"PROJECTION_SEARCH_COMPLETE\",\"complete\":true,\"representation_sha256\":\"4444444444444444444444444444444444444444444444444444444444444444\",\"contract_sha256\":\"5555555555555555555555555555555555555555555555555555555555555555\",\"compatibility\":{\"upstream_package\":\"WannierBerri\",\"upstream_version\":\"1.7.0\",\"upstream_commit\":\"50265d5d1cef184f8377f87ed691c8d9a2f6cdbf\",\"upstream_source_sha256\":\"8552e056b568860c4c7dbd868e997fe4e9e6fb4a0349b182665aee2c8330d5c2\",\"parity_eligible\":true,\"scope\":\"spinless_unitary\",\"character_tolerance\":0.001,\"character_round_digits\":3,\"little_group_tolerance\":1.0e-5},\"config_sha256\":\"6666666666666666666666666666666666666666666666666666666666666666\",\"spinor\":false,\"num_wannier\":1,\"outer_mask_sha256\":\"7777777777777777777777777777777777777777777777777777777777777777\",\"frozen_mask_sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"candidates\":[{\"id\":\"X:s\",\"min_multiplicity\":0,\"max_multiplicity\":1,\"fixed_multiplicity\":-1,\"specs\":[{\"selector\":\"X\",\"orbital_sets\":[\"s\"],\"positions_fractional\":{\"dimensions\":[3,1],\"values\":[0.0,0.0,0.0]},\"local_bases\":{\"dimensions\":[3,3],\"values\":[1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]}}]}],\"radial_transform\":{\"method\":\"gauss_laguerre_high_precision\",\"gauss_laguerre_order\":64},\"visited_nodes\":3,\"total_solution_count\":1,\"truncated\":false,\"signatures\":[{\"kpoint_index\":1,\"labels\":[\"A\"],\"dimensions\":[1],\"wigner_types\":[\"unitary\"],\"frozen_lower\":[1],\"outer_upper\":[1]}],\"solutions\":[{\"candidate_ids\":[\"X:s\"],\"coefficients\":[1],\"total_dimension\":1,\"nonzero_candidate_types\":1,\"total_block_multiplicity\":1,\"signature_multiplicities\":[[1]],\"validation_status\":\"PROJECTION_VALIDATION_PASSED\",\"embedding_residuals\":[{\"name\":\"frozen_to_target\",\"value\":0.0},{\"name\":\"target_to_outer\",\"value\":0.0}],\"validation_sha256\":\"6c6f6925a0782cb6eacee201d8c302ccd641d322a407aeb3692ddf0588ce0be0\"}],\"diagnostics\":[\"synthetic persistence fixture\"]}",
+              "/compatibility/@scope": "spinless_unitary",
+              "/compatibility/@upstream_commit": "50265d5d1cef184f8377f87ed691c8d9a2f6cdbf",
+              "/compatibility/@upstream_package": "WannierBerri",
+              "/compatibility/@upstream_source_sha256": "8552e056b568860c4c7dbd868e997fe4e9e6fb4a0349b182665aee2c8330d5c2",
+              "/compatibility/@upstream_version": "1.7.0",
+              "/signatures/000001/@labels_json": "[\"A\"]",
+              "/signatures/000001/@wigner_types_json": "[\"unitary\"]",
+              "/solutions/000001/@embedding_residual_names_json": "[\"frozen_to_target\",\"target_to_outer\"]",
+              "/solutions/000001/@validation_sha256": "6c6f6925a0782cb6eacee201d8c302ccd641d322a407aeb3692ddf0588ce0be0",
+              "/solutions/000001/@validation_status": "PROJECTION_VALIDATION_PASSED"
+            }
+          }
+        },
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [],
+          "type": "String"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

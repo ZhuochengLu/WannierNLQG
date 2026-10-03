@@ -1,0 +1,144 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__quantum_hermitian_connection__wilson_loop",
+  "native_science": {
+    "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_i_wilson.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3efe54d52e17e7dc",
+        "3efe54d52e17e7dc",
+        "3efe54d52e17e7dc",
+        "3efe54d52e17e7dc",
+        "3eec93a21bc5e074",
+        "3eec93a21bc5e074",
+        "3eec93a21bc5e074",
+        "3eec93a21bc5e074",
+        "3ec72d9a1cf915b0",
+        "3ec72d9a1cf915b0",
+        "3ec72d9a1cf915b0",
+        "3ec72d9a1cf915b0",
+        "3eec93a21bc5e073",
+        "3eec93a21bc5e073",
+        "3eec93a21bc5e073",
+        "3eec93a21bc5e073"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 2.8926256055307342e-05,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_r_wilson.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000"
+      ],
+      "nonzero_scientific_values": 0,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_r_wilson.dat",
+      "sha256": "39578347d52ff34250fbfb8ea28ae027caae3bfcd694cfb812b1c40656a8c997"
+    },
+    {
+      "file": "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_i_wilson.dat",
+      "sha256": "326284f4afabd08516b5221d1a49e9fea5959804cde80c1dac11bcdd0e63c422"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "140938aaa083a22b4d9343607cca48ca80b4d1f095f8fdaa910086f23df9563c",
+    "cdc02ef78d547ff9366d7c3b914acd7a340e4a8f7dc296d99347a2e08357249d",
+    "a55af79e2906c6e5e34be916328d334a5499c42e66be7d5b3af3c87dbeae07ba",
+    "2b4572675bc25cc705fd341bd97bb661899d1356cb638b264c1fa2e4c3a44f78",
+    "4f3588dc291bb21275c4cfbb10661892303303078b13b8b185ea2ac8c2be4f0d",
+    "5f699813a7cda0772911a0e4564e4e14531d3c58160511dc15a18525f890b058",
+    "d1ac857824d80b1823467b096690728840dbaf97527cbab3567626f24b1968f6",
+    "1c6693ba1a984f1d4d32e3f88bd70f1449e9223dc8941ad608598f651687ed6c",
+    "dc7714ddcd6b55c511a05a1a51bb77ae1ab97a5f8e7fed29cb29a4b342c8bf6e",
+    "568d9f0596e3438e24dedc8daa586ab738cefc4f4b048346c8dc9b4c5658030c",
+    "b64c6ac8d92f17c9a942f07cc7b8d6b337318798a30de3adfcc13b63507a4bb0",
+    "038992717033dfdb68db4f68eb66e22f05a34fc1321700d5f89d331dfe30482f"
+  ],
+  "original_receipt_sha256": "140938aaa083a22b4d9343607cca48ca80b4d1f095f8fdaa910086f23df9563c",
+  "rank_output_inventory": [
+    [
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_r_wilson.dat",
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_i_wilson.dat"
+    ],
+    [
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_r_wilson.dat",
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_i_wilson.dat"
+    ],
+    [
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_r_wilson.dat",
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_i_wilson.dat"
+    ],
+    [
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_r_wilson.dat",
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_i_wilson.dat"
+    ],
+    [
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_r_wilson.dat",
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_i_wilson.dat"
+    ],
+    [
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_r_wilson.dat",
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_i_wilson.dat"
+    ],
+    [
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_r_wilson.dat",
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_i_wilson.dat"
+    ],
+    [
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_r_wilson.dat",
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_i_wilson.dat"
+    ],
+    [
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_r_wilson.dat",
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_i_wilson.dat"
+    ],
+    [
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_r_wilson.dat",
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_i_wilson.dat"
+    ],
+    [
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_r_wilson.dat",
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_i_wilson.dat"
+    ],
+    [
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_r_wilson.dat",
+      "kslice_quantum_hermitian_connection_wilson_loop/synthetic_demo_qhck_i_wilson.dat"
+    ]
+  ],
+  "ranks": 12,
+  "task_labels": [
+    "quantum_hermitian_connection/k_slice/wilson_loop"
+  ]
+}

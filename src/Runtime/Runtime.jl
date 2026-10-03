@@ -7,6 +7,7 @@ using SHA
 using ..Core
 using ..IO
 import ..IO: spectral_response_source_digest
+import ..IO: _read_wannier_tb_centers
 using ..MatrixElements
 using ..Responses
 using ..SymmetryFoundation: response_symmetry_group_report

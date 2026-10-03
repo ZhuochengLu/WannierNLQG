@@ -1,0 +1,102 @@
+{
+  "id": "write_wannierization_fixed_subspace_hdf5",
+  "ranks": [
+    {
+      "original_receipt_sha256": "7834f8fd775030b6c5845ea97935c6adae19fe205a401e6c6c4f8a5ce472eb82",
+      "rank": 0,
+      "science": {
+        "native_readback": {
+          "original_artifact_attestation": {
+            "bytes": 4243,
+            "sha256": "9d9c4b77b43fa23cddb6e2d9ad2842d2b478948ec2c35287c34c7062f4974d2d",
+            "verified": true
+          },
+          "report": {
+            "artifact_sha256": "9d9c4b77b43fa23cddb6e2d9ad2842d2b478948ec2c35287c34c7062f4974d2d",
+            "dataset_paths": [
+              "/@schema",
+              "/@schema_version",
+              "/@z_u_stage_semantics",
+              "/frozen_mask",
+              "/initial_frames",
+              "/invariant_residuals/@projector",
+              "/irreducible_indices",
+              "/projectors"
+            ],
+            "format": "hdf5",
+            "numeric_leaves": [
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/frozen_mask",
+                "sha256": "47dc540c94ceb704a23875c11273e16bb0b8a87aed84de911f2133568115f254",
+                "shape": [
+                  2,
+                  1
+                ],
+                "type": "Matrix{UInt8}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/initial_frames",
+                "sha256": "41e57a811ac9776a5931d1ac2f1f354df344c042329b13e20b4b516db8b78410",
+                "shape": [
+                  2,
+                  1,
+                  1
+                ],
+                "type": "Array{ComplexF64, 3}"
+              },
+              {
+                "finite": true,
+                "path": "native/invariant_residuals/@projector",
+                "payload": "0000000000000000",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/irreducible_indices",
+                "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+                "shape": [
+                  1
+                ],
+                "type": "Vector{Int64}"
+              },
+              {
+                "finite": true,
+                "max_abs": 1,
+                "max_abs_nonfinite_repr": null,
+                "path": "native/projectors",
+                "sha256": "193102fb2674025fa8eb7c45c183b77a90d87d59b612b7b8962d863abdd86668",
+                "shape": [
+                  2,
+                  2,
+                  1
+                ],
+                "type": "Array{ComplexF64, 3}"
+              }
+            ],
+            "raw_file_bytes": 4243,
+            "semantic_fields": {
+              "/@schema": "wanniernlqg.wannierization-fixed-subspace",
+              "/@schema_version": "2.0",
+              "/@z_u_stage_semantics": "disentanglement_localization_decoupled_v1"
+            }
+          }
+        },
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [],
+          "type": "String"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

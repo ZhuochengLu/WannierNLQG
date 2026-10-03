@@ -43,4 +43,13 @@ export generate_vasp_band_representation
 export read_band_representation_hdf5, write_band_representation_hdf5
 export band_representation_schema_version
 
+# Captured first-use declarations are specific to the frozen Julia trace.
+if WannierNLQG.FIRST_USE_TRACE_COMPATIBLE
+    include("SymmetryFoundationExtFirstUsePrecompile.jl")
+    include("Generated/SymmetryFoundationResponseWriterSignatures.jl")
+    include("Generated/NativeCanonicalBuilderInference.jl")
+
+    include("SymmetryFoundationTaskInferenceResidualCoverage.jl")
+end
+
 end

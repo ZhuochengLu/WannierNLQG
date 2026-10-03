@@ -1,0 +1,55 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__quantum_christoffel_symbol__conventional",
+  "native_science": {
+    "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3f6ed1fb4c66c640",
+        "3f6ed1fb4c66c640",
+        "3f6ed1fb4c66c640",
+        "3f6ed1fb4c66c640",
+        "bf70d975980e4ac8",
+        "bf70d975980e4ac8",
+        "bf70d975980e4ac8",
+        "bf70d975980e4ac8",
+        "3f72a7b2bb1b1b88",
+        "3f72a7b2bb1b1b88",
+        "3f72a7b2bb1b1b88",
+        "3f72a7b2bb1b1b88",
+        "bf7484070ff16950",
+        "bf7484070ff16950",
+        "bf7484070ff16950",
+        "bf7484070ff16950"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.005008723818799091,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat",
+      "sha256": "8a7358bd5bc72cd28d54b8bf28ee7d114f6b1b2e9bf8298f198329b924eef505"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "46138fa04e0d060d040a2034ba3d9fd4457743b08ba3268e10dd407fff5bf6cb"
+  ],
+  "original_receipt_sha256": "46138fa04e0d060d040a2034ba3d9fd4457743b08ba3268e10dd407fff5bf6cb",
+  "rank_output_inventory": [
+    [
+      "kslice_quantum_christoffel_symbol_conventional/synthetic_demo_qcsk_subspace_1_2_conv.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "quantum_christoffel_symbol/k_slice/conventional"
+  ]
+}

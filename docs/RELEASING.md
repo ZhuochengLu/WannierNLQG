@@ -1,9 +1,9 @@
 # Release procedure
 
 This document defines the reusable public release procedure for WannierNLQG.
-The current feature release is 1.1.0. It is not a
-historical checklist and does not assert that an unfinished candidate has
-passed any gate.
+The current locally promoted maintenance version is 1.1.1; no remote release is
+asserted. This procedure is not a historical checklist or evidence that a
+future candidate has passed any gate.
 
 ## Identities
 
@@ -67,6 +67,11 @@ short and version-specific. Do not add validation or integrity sections or
 checksum details to the Release description. Report CI and source-inventory
 checks in the Actions run summary and release preparation evidence instead.
 
+The public repository retains the automated Draft workflow described below.
+Synchronizing maintenance source and pushing a branch does not create a tag or
+a GitHub Release. A future release must verify the workflow at its actual
+publication target.
+
 After an exact successful main-push CI run exists for the release commit, push
 the approved version tag. The tag gate reuses that CI run before its second job
 selects the previous published ancestor, reads the tagged changelog, gathers
@@ -81,6 +86,17 @@ one-sentence positioning and compatibility TODOs, and remove every TODO before
 manually publishing the Draft. Confirm API, reader/writer formats, migration,
 numerical behavior, benchmarks, method correctness, and material or production
 limits from their own evidence; the workflow does not infer these claims.
+
+## Documentation-only revisions
+
+For a revision that changes only release documentation, preserve the frozen
+acceptance evidence and the complete pre-edit source inventory. Record the
+scoped diff, source commit, new source inventory and payload digest in a new
+revision receipt. Recheck affected links, version and schema statements, and
+manifest completeness. Prior runtime tests and first-use measurements apply
+only to the unchanged runtime, test, fixture, dependency and workload bytes;
+they are not measurements of the new whole-payload digest. A documentation
+revision does not grant additional numerical, physical or production eligibility.
 
 ## Promotion and remote publication
 

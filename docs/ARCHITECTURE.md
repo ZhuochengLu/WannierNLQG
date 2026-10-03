@@ -43,10 +43,15 @@ dependency declarations:
 
 | Extension | Project extension triggers | Additional direct source dependencies |
 |---|---|---|
-| `WannierNLQGOperatorBundleExt` | `HDF5`, `JSON3` | `Dates`, `SHA`, `WannierNLQG`, `Core`, `IO` |
+| `WannierNLQGOperatorBundleExt` | `MPI`, `HDF5`, `JSON3` | `Dates`, `SHA`, `WannierNLQG`, `Core`, `IO` |
 | `WannierNLQGSymmetryFoundationExt` | `Spglib`, `HDF5`, `JSON3` | `Dates`, `LinearAlgebra`, `Printf`, `SHA`, `WannierNLQG`, `Core`, `IO`, `SymmetryFoundation` |
 | `WannierNLQGSymmetrizationExt` | `HDF5`, `JSON3`, `EzXML` | `Dates`, `EzXML`, `LinearAlgebra`, `Printf`, `SHA`, `WannierNLQG`, `Core`, `IO`, `MatrixElements`, `Symmetrization`, `SymmetryFoundation`, `WannierProjection` |
-| `WannierNLQGWannierizationExt` | `HDF5`, `JSON3`, `EzXML` | `Dates`, `FFTW`, `LinearAlgebra`, `MPI`, `Printf`, `Random`, `SHA`, `WannierNLQG`, `Core`, `IO`, `MatrixElements`, `SymmetryFoundation`, `WannierProjection`, `Wannierization` |
+| `WannierNLQGWannierizationExt` | `MPI`, `HDF5`, `JSON3`, `EzXML` | `Dates`, `FFTW`, `LinearAlgebra`, `MPI`, `Printf`, `Random`, `SHA`, `WannierNLQG`, `Core`, `IO`, `MatrixElements`, `SymmetryFoundation`, `WannierProjection`, `Wannierization` |
+
+`WannierNLQGWannierizationPrecompileExt` is a compiler-only extension triggered by
+`MPI`, `HDF5`, `JSON3`, `EzXML`, and `Spglib`. Its captured cross-extension anchors
+are loaded only on the originating Julia 1.11.2 trace version. The complete
+installation trigger matrix is maintained in [PRECOMPILATION.md](PRECOMPILATION.md).
 
 The exact trigger lists and complete direct-source dependency sets are frozen in
 `test/contracts/wannierization_components.toml`; the structure gate rejects both
@@ -316,6 +321,19 @@ sources, symmetry types, or projection models. Those breaking-migration APIs are
 available only from `SymmetryFoundation` or `WannierProjection`.
 `IO/WannierHR.jl` owns the independent
 standard `_hr.dat` boundary used by the Hamiltonian-only stage.
+
+The shared-layer checker separates literal compiler Type operands from runtime
+integration edges using Julia ASTs and actual owner Type bindings. Only known
+recorders inside `@compile_workload` can use these operands; runtime calls,
+private imports, unverified symbols and arbitrary expressions remain rejected.
+Anonymous `var"#..."` Types are parsed as their real symbols, never as `var`.
+
+Compiler declarations use the explicitly imported `Symmetrization` and
+`SymmetryFoundation` module bindings, preserving exact function and anonymous
+Type identities without routing requests through the root facade. Workload
+preferences are queried on the same root package module through the declared
+PrecompileTools API. MPI lifecycle observations belong to the independent
+package import gate; this extension does not query or import MPI.
 
 The extension depends on `Core`, `IO`, `MatrixElements`, `SymmetryFoundation`,
 `WannierProjection`, and its own facade. It cannot depend on `Wannierization`,
@@ -992,3 +1010,32 @@ capabilities; the sixteen-capability container does not change. Optional orbital
 sources use the existing real-space operator inventory and a separate completion
 workspace. Runtime owns shared execution and static/frequency output coordination;
 IO owns serialization. See [response contracts](LINEAR_AND_ORBITAL_RESPONSES.md).
+
+### Bounded first-use compilation candidate
+
+`src/FirstUsePrecompileWorkload.jl` owns optional, bounded PrecompileTools workloads.
+It reads the shipped synthetic fixture, evaluates in-memory matrix assembly and public
+configuration normalization, and compiles orchestration signatures without running tasks.
+It does not initialize MPI, publish results, or retain numerical workspaces.
+
+`ext/WannierNLQGOperatorBundleExt/OperatorBundleExtFirstUsePrecompile.jl`,
+`ext/WannierNLQGSymmetryFoundationExt/SymmetryFoundationExtFirstUsePrecompile.jl`,
+`ext/WannierNLQGSymmetrizationExt/SymmetrizationExtFirstUsePrecompile.jl`, and
+`ext/WannierNLQGWannierizationExt/WannierizationExtFirstUsePrecompile.jl` compile
+expert entry signatures without executing result-writing or MPI lifecycles.
+`ext/WannierNLQGWannierizationExt/MultiStarOwnerFirstUseCoverage.jl` declares
+observed four-star Standard signatures at the Wannierization extension owner.
+`ext/WannierNLQGWannierizationPrecompileExt/MultiStarExternalFirstUseCoverage.jl`
+contains observed external signatures and executes no scientific task.
+The foundation-owned `ext/WannierNLQGSymmetryFoundationExt/ResponseGroupFirstUseCoverage.jl`
+executes a three-site in-memory group report with time reversal disabled and enabled.
+This covers classification and generator construction through the native symmetry backend;
+it writes no user files, initializes no MPI communicator, and retains no runtime resources.
+The operator-bundle workload additionally reads the shipped micro fixture, including
+buffered and mapped component representations; all mappings and handles remain local.
+The private `_first_use_foreign_call` bridge in the core workload anchors observed
+foreign method specializations by compilation only; it never invokes MPI operations.
+Workloads honor the package `precompile_workload` preference, including extensions.
+This broad trace-retention variant is experimental: measured cache growth and loading
+latency exceed its qualification gates. Coverage and latency qualification remain
+external experiment evidence; no default-release eligibility is implied.

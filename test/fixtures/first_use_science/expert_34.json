@@ -1,0 +1,1564 @@
+{
+  "id": "prepare_symmetry_covariant_wavefunctions",
+  "ranks": [
+    {
+      "original_receipt_sha256": "3ab4f7a25eb5fea4dfe5c16781a254d334c7edc9c10e6a6779e6f1960ffeeccf",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.target_band_range",
+              "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+              "shape": [
+                1
+              ],
+              "type": "UnitRange{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.parent_band_range",
+              "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+              "shape": [
+                1
+              ],
+              "type": "UnitRange{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.star_representatives",
+              "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+              "shape": [
+                1
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.extra_bands_per_star",
+              "sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+              "shape": [
+                1
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.alternative_path_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.block_partition_evidence_count",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.block_partition_evidence_orbit_count",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.block_partition_maximum_block_bands",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.block_partition_maximum_block_span_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.block_partition_maximum_evidence_coupling",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.block_partition_maximum_evidence_gap_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.block_partition_search_states",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.buffer_target_leakage",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.complement_to_target_leakage_weight",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.completed_generalized_norm",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.completed_paw_s_norm",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_alternative_path_residual_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_alternative_path_residual_threshold",
+              "payload": "f168e388b5f8f43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_alternative_path_residual_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_buffer_target_leakage_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_buffer_target_leakage_threshold",
+              "payload": "f168e388b5f8d43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_buffer_target_leakage_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_complement_to_target_leakage_weight_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_complement_to_target_leakage_weight_threshold",
+              "payload": "f168e388b5f8d43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_complement_to_target_leakage_weight_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_completed_paw_s_norm_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_completed_paw_s_norm_threshold",
+              "payload": "f168e388b5f8d43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_completed_paw_s_norm_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_hamiltonian_covariance_after_ev_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_hamiltonian_covariance_after_ev_threshold",
+              "payload": "48afbc9af2d77a3e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_hamiltonian_covariance_after_ev_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_hamiltonian_covariance_after_normalized_frobenius_ev_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_hamiltonian_covariance_after_normalized_frobenius_ev_threshold",
+              "payload": "48afbc9af2d77a3e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_hamiltonian_covariance_after_normalized_frobenius_ev_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_hamiltonian_covariance_after_operator_ev_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_hamiltonian_covariance_after_operator_ev_threshold",
+              "payload": "48afbc9af2d77a3e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_hamiltonian_covariance_after_operator_ev_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_hamiltonian_covariance_after_source_column_l2_ev_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_hamiltonian_covariance_after_source_column_l2_ev_threshold",
+              "payload": "48afbc9af2d77a3e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_hamiltonian_covariance_after_source_column_l2_ev_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_kramers_pair_residual_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_kramers_pair_residual_threshold",
+              "payload": "f168e388b5f8f43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_kramers_pair_residual_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_maximum_energy_shift_ev_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_maximum_energy_shift_ev_threshold",
+              "payload": "8dedb5a0f7c6b03e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_maximum_energy_shift_ev_value",
+              "payload": "000000000000f83c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_nondegenerate_block_leakage_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_nondegenerate_block_leakage_threshold",
+              "payload": "f168e388b5f8d43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_nondegenerate_block_leakage_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_normalized_polar_correction_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_normalized_polar_correction_threshold",
+              "payload": "f168e388b5f8d43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_normalized_polar_correction_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_parent_reconstruction_leakage_amplitude_audit_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_parent_reconstruction_leakage_amplitude_audit_threshold",
+              "payload": "f168e388b5f8d43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_parent_reconstruction_leakage_amplitude_audit_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_projected_eigen_residual_ev_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_projected_eigen_residual_ev_threshold",
+              "payload": "f168e388b5f8d43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_projected_eigen_residual_ev_value",
+              "payload": "000000000000f83c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_raw_unitarity_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_raw_unitarity_threshold",
+              "payload": "f168e388b5f8d43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_raw_unitarity_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_rms_energy_shift_ev_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_rms_energy_shift_ev_threshold",
+              "payload": "76830df4f521943e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_rms_energy_shift_ev_value",
+              "payload": "000000000000f83c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_target_reconstruction_leakage_weight_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_target_reconstruction_leakage_weight_threshold",
+              "payload": "f168e388b5f8d43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_target_reconstruction_leakage_weight_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_target_state_leakage_weight_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_target_state_leakage_weight_threshold",
+              "payload": "f168e388b5f8d43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_target_state_leakage_weight_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_target_to_complement_leakage_weight_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_target_to_complement_leakage_weight_threshold",
+              "payload": "f168e388b5f8d43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_target_to_complement_leakage_weight_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_wfc_rotation_reconstruction_failed",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_wfc_rotation_reconstruction_threshold",
+              "payload": "f168e388b5f8d43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.construction_wfc_rotation_reconstruction_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.controlled_far_rotation_generator_operator",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.controlled_far_rotation_normalized_frobenius",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.controlled_far_rotation_operator",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.controlled_hamiltonian_correction_frobenius_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.controlled_hamiltonian_correction_normalized_frobenius_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.controlled_hamiltonian_correction_operator_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.controlled_sylvester_offblock_residual_normalized_frobenius_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.controlled_sylvester_offblock_residual_operator_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.controlled_symmetrization_strict_maximum_ratio",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.controlled_symmetrization_strict_violation_count",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.controlled_total_rotation_operator_report_only",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.far_band_coupling",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.far_residual_count",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.hamiltonian_covariance_after_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.hamiltonian_covariance_after_frobenius_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.hamiltonian_covariance_after_normalized_frobenius_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.hamiltonian_covariance_after_operator_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.hamiltonian_covariance_after_source_column_l2_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.hamiltonian_covariance_before_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.hamiltonian_reynolds_residual_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.kramers_pair_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.maximum_bidirectional_leakage_weight",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.maximum_energy_shift_ev",
+              "payload": "000000000000f83c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.maximum_far_frobenius_residual_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.maximum_far_normalized_frobenius_residual_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.maximum_far_operator_residual_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.maximum_far_source_column_l2_residual_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.maximum_pair_hamiltonian_residual_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.native_fidelity_projected_eigen_residual_ev",
+              "payload": "000000000000f83c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.native_generalized_norm_before_lowdin",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.native_paw_s_norm_after_lowdin",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.native_paw_s_norm_before_lowdin",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.near_block_leakage",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.nondegenerate_block_leakage",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.normalized_polar_correction",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.parent_hamiltonian_covariance_after_ev_audit",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.parent_hamiltonian_covariance_after_normalized_frobenius_ev_audit",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.parent_hamiltonian_covariance_after_operator_ev_audit",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.parent_reconstruction_leakage_amplitude_audit",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_gauge_far_cumulative_diagnostic_exceeded",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_gauge_far_cumulative_maximum_ratio",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_symmetrization_augmentation_component_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_symmetrization_cancellation_condition_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_symmetrization_lowdin_paw_s_norm",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_symmetrization_normalized_polar_correction",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_symmetrization_pseudo_component_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_symmetrization_raw_alternative_path_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_symmetrization_raw_cocycle",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_symmetrization_raw_group_law",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_symmetrization_raw_near_block_leakage",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_symmetrization_raw_unitarity",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_symmetrization_reconstruction_leakage_amplitude_audit",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_symmetrization_target_reconstruction_leakage_weight",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_symmetrization_target_state_leakage_weight",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.pre_symmetrization_total_paw_component_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.projected_eigen_residual_ev",
+              "payload": "000000000000f83c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.raw_preflight_diagnostic_exceeded",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.raw_preflight_diagnostic_maximum_ratio",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.raw_unitarity",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.rms_energy_shift_ev",
+              "payload": "000000000000f83c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_audit_raw_direct_reconstruction_leakage_amplitude_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_audit_raw_direct_state_leakage_amplitude_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_audit_target_raw_direct_reconstruction_leakage_amplitude_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_audit_target_raw_direct_state_leakage_amplitude_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_augmentation_component_maximum_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_complement_to_target_leakage_amplitude_audit_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_complement_to_target_leakage_weight_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_far_band_coupling_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_frozen_raw_left_unitarity_residual_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_frozen_raw_right_unitarity_residual_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_maximum_bidirectional_leakage_weight_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_near_block_leakage_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_nondegenerate_block_leakage_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_normalized_polar_correction_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_parent_complement_normalized_polar_correction_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_pseudo_component_maximum_maximum",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_raw_cocycle",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_raw_group_law",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_raw_left_unitarity_residual_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_raw_right_unitarity_residual_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_reconstruction_leakage_amplitude_audit_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_state_leakage_amplitude_audit_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_target_generalized_norm_residual_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_target_normalized_polar_correction_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_target_raw_left_unitarity_residual_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_target_raw_right_unitarity_residual_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_target_reconstruction_leakage_weight_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_target_state_leakage_weight_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_target_to_complement_leakage_amplitude_audit_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_target_to_complement_leakage_weight_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.star1_strict_transformed_generalized_norm_residual_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.state_leakage_amplitude_audit",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_audit_raw_direct_reconstruction_leakage_amplitude",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_audit_raw_direct_state_leakage_amplitude",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_audit_target_raw_direct_reconstruction_leakage_amplitude",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_audit_target_raw_direct_state_leakage_amplitude",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_augmentation_component_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_complement_to_target_leakage_amplitude_audit",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_complement_to_target_leakage_weight",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_far_band_coupling",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_frozen_raw_left_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_frozen_raw_right_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_maximum_bidirectional_leakage_weight",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_near_block_leakage",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_nondegenerate_block_leakage",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_normalized_polar_correction",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_parent_complement_normalized_polar_correction",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_pseudo_component_maximum",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_raw_left_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_raw_right_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_reconstruction_leakage_amplitude_audit",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_state_leakage_amplitude_audit",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_target_generalized_norm_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_target_normalized_polar_correction",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_target_raw_left_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_target_raw_right_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_target_reconstruction_leakage_weight",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_target_state_leakage_weight",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_target_to_complement_leakage_amplitude_audit",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_target_to_complement_leakage_weight",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.strict_transformed_generalized_norm_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.symmetrized_hamiltonian_correction_frobenius_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.symmetrized_hamiltonian_correction_normalized_frobenius_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.symmetrized_hamiltonian_correction_operator_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.symmetrized_parent_formal_eigen_residual_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.symmetrized_parent_maximum_energy_shift_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.symmetrized_parent_rms_energy_shift_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.symmetrized_projected_eigen_residual_ev",
+              "payload": "000000000000f83c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.symmetrized_target_formal_eigen_residual_ev",
+              "payload": "000000000000f83c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.target_maximum_principal_angle_rad",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.target_projector_difference_frobenius",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.target_projector_difference_operator",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.target_reconstruction_leakage_weight",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.target_rms_sine_principal_angle",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.target_scoped_lowdin_paw_s_norm",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.target_state_leakage_weight",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.target_to_complement_leakage_weight",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.tolerated_far_residual_count",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maxima.wfc_rotation_reconstruction",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.scoped_production_eligible",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.target_scope_production_eligible",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.global_production_eligible",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.native_fidelity_metrics.native_fidelity_projected_eigen_residual_ev",
+              "payload": "000000000000f83c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.native_fidelity_metrics.native_generalized_norm_before_lowdin",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.native_fidelity_metrics.native_paw_s_norm_after_lowdin",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.native_fidelity_metrics.native_paw_s_norm_before_lowdin",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.native_fidelity_metrics.target_maximum_principal_angle_rad",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.native_fidelity_metrics.target_projector_difference_frobenius",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.native_fidelity_metrics.target_projector_difference_operator",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.native_fidelity_metrics.target_reconstruction_leakage_weight",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.native_fidelity_metrics.target_rms_sine_principal_angle",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.native_fidelity_metrics.target_scoped_lowdin_paw_s_norm",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.native_fidelity_metrics.target_state_leakage_weight",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.native_fidelity_metrics.target_to_complement_leakage_weight",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.controlled_far_rotation_generator_operator",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.controlled_far_rotation_normalized_frobenius",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.controlled_far_rotation_operator",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.controlled_hamiltonian_correction_frobenius_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.controlled_hamiltonian_correction_normalized_frobenius_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.controlled_hamiltonian_correction_operator_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.controlled_sylvester_offblock_residual_normalized_frobenius_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.controlled_sylvester_offblock_residual_operator_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.controlled_symmetrization_strict_maximum_ratio",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.controlled_symmetrization_strict_violation_count",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.controlled_total_rotation_operator_report_only",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.hamiltonian_covariance_after_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.hamiltonian_covariance_after_frobenius_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.hamiltonian_covariance_after_normalized_frobenius_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.hamiltonian_covariance_after_operator_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.hamiltonian_covariance_after_source_column_l2_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.symmetrized_hamiltonian_correction_frobenius_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.symmetrized_hamiltonian_correction_normalized_frobenius_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.symmetrized_hamiltonian_correction_operator_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.symmetrized_parent_formal_eigen_residual_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.symmetrized_parent_maximum_energy_shift_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.symmetrized_parent_rms_energy_shift_ev",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.symmetrized_projected_eigen_residual_ev",
+              "payload": "000000000000f83c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetrized_hamiltonian_metrics.symmetrized_target_formal_eigen_residual_ev",
+              "payload": "000000000000f83c",
+              "type": "Float64"
+            }
+          ],
+          "type": "WannierNLQG.Wannierization.SymmetryCovariantWavefunctionPreparationResult"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

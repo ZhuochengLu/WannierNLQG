@@ -1,0 +1,19 @@
+{
+  "id": "validate_public_band_representation_contract",
+  "ranks": [
+    {
+      "original_receipt_sha256": "71d8d71a52330b9702815996021461971eeea6a8f84c67812a4a56535ae1bc6a",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [],
+          "type": "Nothing"
+        },
+        "semantic_return": "nothing"
+      }
+    }
+  ],
+  "schema": 1
+}

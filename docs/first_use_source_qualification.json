@@ -1,0 +1,153 @@
+{
+  "original_raw_source_src_ext_sha256": "0da9fe95c0a06b4fd8ee7f13158603a3d52406920b43c76d824ccf3fe92d0e68",
+  "source_equivalence_certificate_sha256": "c7ca8e3ee861ef936b7254ac38ac1b4ccecde2aede54e31f6103cb10a3d694eb",
+  "source_equivalence_negative_cases": 23,
+  "compiler_only_appended_declarations": 182,
+  "optional_compiler_module_repairs": 2,
+  "qualification_only_naming_test_repair": true,
+  "full_loaded_modules_static_scan_sha256": "491ed53a36e79b6c6f92c077ed1b0e9cd7e483ec5ce0175f9101cddcd18edb0a",
+  "reviewed_guard_and_naming_AST_qualification_sha256": "55b705512830cd3dfe3ea4b208d9d39e8ad545a06f8c3b6341945a7cd8aaa495",
+  "precise_naming_gate_original_dates_semantics": true,
+  "physical_identifiers_negative_controls": 15,
+  "fresh_affected_MPI12_origins": 2,
+  "original_registered_observations_retained": true,
+  "schema": "wanniernlqg.first-use-source-qualification",
+  "schema_version": 2,
+  "source_src_ext_sha256": "9038179c0bc6949cbd306950bb2d447be68869bb79a4eeb9c65f276f99295543",
+  "project_sha256": "7f2fe186d44ccb69bd88f7b2a241527c71adb196d723e5ef40d215d6b09b12ce",
+  "manifest_sha256": "b088b1da3e98143b76142072bec56b1cd55a622505e0ef43d3b8471d81a602ce",
+  "julia": "1.11.2",
+  "retained_declarations": 9716,
+  "unowned_declarations": 0,
+  "registered_paths": 52,
+  "registered_source_ranks": [
+    1,
+    12
+  ],
+  "expert_launches": 68,
+  "expert_observations": 69,
+  "cache_supplement_observations": 3,
+  "original_input_source_supplement_observations": 3,
+  "total_expert_source_observations": 75,
+  "portable_source_supplement_scenes": 3,
+  "portable_source_supplement_focused_declarations": 6,
+  "portable_generator_original_source": "063",
+  "portable_generator_original_qualification_preserved": true,
+  "portable_current_candidate_cold_measurements_pending": true,
+  "source_expressions_unresolved": 0,
+  "trace_expression_parse_diagnostics_retained": 37,
+  "independent_write_check_complete": true,
+  "checkpoint_used": false,
+  "canonical_provenance_sha256": "15f20ab69e0d3988026a43c418b6fdca80bf514a33133c80e9c13fdefc3a8656",
+  "exact_actual_type_scope": 8,
+  "exact_runtime_thread_bindings": 4,
+  "source_receipts": {
+    "write_result.json": "fb9e20f213b0a05dc505a3e9bbc4cf331d6e5e4659fd0d3d4f02df1ce3009415",
+    "check_result.json": "fb9e20f213b0a05dc505a3e9bbc4cf331d6e5e4659fd0d3d4f02df1ce3009415",
+    "completion.json": "30d42d536f1e185d6442fc8b818577abda6c51e65d70e8d32d7c65821fd25b0b"
+  },
+  "qualification_scope": "Historical source attribution bound to source_src_ext_sha256 above. Current static guard/repack source has not been re-attributed or cold/runtime-qualified; all earlier results remain historical.",
+  "final_release_qualification_not_established_by_this_file": true,
+  "static_release_revision": {
+    "kind": "static_release_guard_HDF5_repack_and_typed_serialized_metadata_migration",
+    "current_source_src_ext_sha256": "f226388e2d795bad7689b837b1469ff3c8557a1757a48c439503fc56d3a50fe3",
+    "previous_accepted_source_src_ext_sha256": "9038179c0bc6949cbd306950bb2d447be68869bb79a4eeb9c65f276f99295543",
+    "tests": "NOT_RUN",
+    "precompilation": "NOT_RUN",
+    "cold_qualification": "NOT_RUN",
+    "source_attribution_recapture": "NOT_RUN",
+    "official_Julia_readback": "NOT_RUN",
+    "scientific_execution": "NOT_RUN",
+    "historical_results_not_new_measurements": true,
+    "physical_repacked_files": [
+      {
+        "file": "test/fixtures/first_use_portable/assets/frozen_solver/synthetic.wannierization.h5",
+        "fields": 614,
+        "datasets": 57,
+        "persisted_field_difference": [],
+        "dataset_creation_property_difference": [],
+        "original_sha256": "1b04f2a3eb34ec5f12a450e3e740fe3efc376d9a92fb7ff45eb97ad3b52f6ec7",
+        "repacked_sha256": "94cb21b92e1f99a09e45251799c6d0da90f9489675cca2d045c364e05386c2b6",
+        "original_bytes": 88446,
+        "repacked_bytes": 72802,
+        "private_home_bytes_after": 0
+      },
+      {
+        "file": "test/fixtures/first_use_portable/assets/group_2/synthetic.wannierization.h5",
+        "fields": 614,
+        "datasets": 57,
+        "persisted_field_difference": [],
+        "dataset_creation_property_difference": [],
+        "original_sha256": "0593a1f095d72eba5b7d5e46f47bbe272042157d545630442140922f8ff53007",
+        "repacked_sha256": "84b53f3699f20a6f15e91d387245b7e6106625b8cefefe6de376ba5f5ec36659",
+        "original_bytes": 88446,
+        "repacked_bytes": 72798,
+        "private_home_bytes_after": 0
+      },
+      {
+        "file": "test/fixtures/first_use_portable/assets/group_4/gauge.standard.h5",
+        "fields": 539,
+        "datasets": 36,
+        "persisted_field_difference": [],
+        "dataset_creation_property_difference": [],
+        "original_sha256": "53bfc3fce1423941271466c254846334e171ea6982236eb24b2a8e3ba0b86842",
+        "repacked_sha256": "a353e7af494d2d7359a1cce87db56f92c9e508f71bf70f7eefd9db51d9888984",
+        "original_bytes": 102351,
+        "repacked_bytes": 90939,
+        "private_home_bytes_after": 0
+      }
+    ],
+    "Julia_Serialization_data_maintenance": {
+      "status": "COMPLETED",
+      "Julia": "1.11.2",
+      "scientific_reader_invocations": "NOT_RUN",
+      "tests": "NOT_RUN",
+      "explicit_precompilation": "NOT_RUN",
+      "runtime_cache_hit_qualification": "NOT_RUN",
+      "scientific_execution": "NOT_RUN",
+      "typed_roundtrip_only_allowlisted_metadata_leaves_changed": true,
+      "SPN_provenance_dependency_rebound": true,
+      "files": [
+        {
+          "old_file": "test/fixtures/first_use_portable/assets/native_directory_2/.wannier_preparation/qe/band-frame/5c1ee904d5a1119faa946a2a6293c0845dc82246c372e0765f6c839f09128ed7.bin",
+          "new_file": "test/fixtures/first_use_portable/assets/native_directory_2/.wannier_preparation/qe/band-frame/7622139341a478c1fff97ffdc3e727a23d274ace118bc8e0d82ca0e0bffa17ad.bin",
+          "old_sha256": "b410b77ba1dd917434885fb908f52ddc4913a0a355a2d2ae74bd2425efba4d64",
+          "new_sha256": "0465fb66644134924ab6d4bb69a65969992e233a5d38c51c3b965cd0d139184f",
+          "changed_leaves": [
+            "/contract"
+          ]
+        },
+        {
+          "old_file": "test/fixtures/first_use_portable/assets/native_directory_2/.wannier_preparation/qe/qe-upf/3327f5b7f4e8cbcb6b434fd55a79eff80b9b9b771f62684458d08be018f3aa41.bin",
+          "new_file": "test/fixtures/first_use_portable/assets/native_directory_2/.wannier_preparation/qe/qe-upf/3327f5b7f4e8cbcb6b434fd55a79eff80b9b9b771f62684458d08be018f3aa41.bin",
+          "old_sha256": "e7e39373bc4dd68cb5b08c99187ca38022b14ff7b64de86536534a193e15f4db",
+          "new_sha256": "2940ddbbf49399ef6f060323905c09ba479fd58227b5e72a11638681ba00756c",
+          "changed_leaves": [
+            "/payload/\"X\"/filename"
+          ]
+        },
+        {
+          "old_file": "test/fixtures/first_use_portable/assets/native_directory_2/.wannier_preparation/spin-publication-blocks/408dc7bb17bc086ea300892e8c0af63fd015806748938c6894a1f1ba5aa02025/published-operators/qe-native.spn.SPN.bin",
+          "new_file": "test/fixtures/first_use_portable/assets/native_directory_2/.wannier_preparation/spin-publication-blocks/408dc7bb17bc086ea300892e8c0af63fd015806748938c6894a1f1ba5aa02025/published-operators/qe-native.spn.SPN.bin",
+          "old_sha256": "edb878f66008e6cd7d2d2095a1ebbc949dcc68f6df7caf84d4ccda03d601030c",
+          "new_sha256": "f70a60ba062ddd6cf159a7b1b21a2f45c1ba2132955a7b61e581194445cf9b99",
+          "changed_leaves": [
+            "/payload/provenance_sha256",
+            "/payload/result/blocks/directory",
+            "/payload/result/fields/6",
+            "/payload/result/fields/7/\"provenance_json\"",
+            "/payload/result/fields/7/\"spn\""
+          ]
+        }
+      ]
+    },
+    "formatting_repair": {
+      "files": [
+        "scripts/check_release_whitelist.jl",
+        "src/FirstUseWorkspaceTypes.jl"
+      ],
+      "parent_src_ext_sha256": "fc91026696c31ee598abf135ed521d0951006915d2c4530171390cdebc99f6a8",
+      "runtime_and_cold_qualification": "NOT_RUN"
+    }
+  }
+}

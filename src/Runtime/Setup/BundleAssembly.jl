@@ -100,6 +100,7 @@ function fourier_execution_summary(
                           sum(stat.extract_seconds for stat in active_stats),
         fft_calls = isempty(active_stats) ? 0 : sum(stat.fft_calls for stat in active_stats),
         cache_hits = isempty(active_stats) ? 0 : sum(stat.cache_hits for stat in active_stats),
+        evictions = isempty(active_stats) ? 0 : sum(stat.evictions for stat in active_stats),
     )
     return plan.symmetry_workload_enabled ?
            merge(

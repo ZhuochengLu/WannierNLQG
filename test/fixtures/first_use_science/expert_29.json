@@ -1,0 +1,26 @@
+{
+  "id": "maximum_real_space_covariance_error__original_projected_nonzero_input",
+  "ranks": [
+    {
+      "original_receipt_sha256": "57918af97a185da34afe7b82661b9e72a5082c5fd04fd2540f1c4c734067fd02",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            }
+          ],
+          "type": "Float64"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

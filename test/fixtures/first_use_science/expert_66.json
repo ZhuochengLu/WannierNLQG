@@ -1,0 +1,2915 @@
+{
+  "id": "construct_symmetry_adapted_wannier_functions__localization8",
+  "ranks": [
+    {
+      "original_receipt_sha256": "8d92cd2b33ed29be7bf5e2941f055cbf18affe4b312b27d906c28202ad53d3bb",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": false,
+          "leaves": [
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.v_matrix",
+              "sha256": "b37e50e36068dab1478b2c78513f2732c60abd448ca254d072ca202e93061e0a",
+              "shape": [
+                2,
+                1,
+                2
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.wannier_centers_cartesian",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                1,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.0009120576959615621,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.spreads_angstrom2",
+              "sha256": "6fbaee18169c0059b728602559a60b1de72950f4fdb73722ba89c5eb9a82840b",
+              "shape": [
+                1
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].iteration",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].spread_total",
+              "payload": "10f0c2acdaa6da3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].spread_standard_deviation",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].maximum_covariance_error",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.omega_total",
+              "payload": "10f0c2acdaa6da3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.projector_residual",
+              "payload": "000000000000b03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.z_residual",
+              "payload": "57159a892374c33f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.u_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.wcc_step_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.spread_step_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.little_group_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[1].diagnostics.z_boundary_gap",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.z_mix_ratio",
+              "payload": "000000000000e03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.u_mix_ratio",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.u_inner_sweeps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.anderson_used",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.anderson_fallback",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.rejected_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[1].diagnostics.projected_gradient_rms",
+              "payload": "000000000000f07f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.accepted_u_step_scale",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.localization_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[1].diagnostics.localization_directional_derivative",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[1].diagnostics.fixed_projector_drift",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.localization_base_objective",
+              "payload": "10f0c2acdaa6da3f",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[1].diagnostics.localization_required_change",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[1].diagnostics.localization_actual_change",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[1].diagnostics.minimum_diagonal_phase_margin",
+              "payload": "000000000000f07f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.minimum_phase_kpoint",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.minimum_phase_neighbor",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.minimum_phase_wannier",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[1].diagnostics.cg_beta",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.cg_restarted",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": false,
+              "path": "result.history[1].diagnostics.cg_descent_cosine",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[1].diagnostics.maximum_kstar_gradient_rms",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.maximum_kstar_gradient_index",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.omega_i",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[1].diagnostics.delta_omega_i",
+              "payload": "000000000000f07f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.z_stability_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[1].diagnostics.joint_z_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[1].diagnostics.joint_transport_minimum_singular_value",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[1].diagnostics.joint_transport_maximum_condition",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].iteration",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].spread_total",
+              "payload": "10f0c2acdaa6da3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].spread_standard_deviation",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].maximum_covariance_error",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.omega_total",
+              "payload": "10f0c2acdaa6da3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.projector_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.z_residual",
+              "payload": "000000000000803c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.u_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.wcc_step_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.spread_step_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.little_group_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[2].diagnostics.z_boundary_gap",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.z_mix_ratio",
+              "payload": "000000000000e03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.u_mix_ratio",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.u_inner_sweeps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.anderson_used",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.anderson_fallback",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.rejected_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[2].diagnostics.projected_gradient_rms",
+              "payload": "000000000000f07f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.accepted_u_step_scale",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.localization_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[2].diagnostics.localization_directional_derivative",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[2].diagnostics.fixed_projector_drift",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.localization_base_objective",
+              "payload": "10f0c2acdaa6da3f",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[2].diagnostics.localization_required_change",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[2].diagnostics.localization_actual_change",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[2].diagnostics.minimum_diagonal_phase_margin",
+              "payload": "000000000000f07f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.minimum_phase_kpoint",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.minimum_phase_neighbor",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.minimum_phase_wannier",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[2].diagnostics.cg_beta",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.cg_restarted",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": false,
+              "path": "result.history[2].diagnostics.cg_descent_cosine",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[2].diagnostics.maximum_kstar_gradient_rms",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.maximum_kstar_gradient_index",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.omega_i",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.delta_omega_i",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.z_stability_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[2].diagnostics.joint_z_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[2].diagnostics.joint_transport_minimum_singular_value",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[2].diagnostics.joint_transport_maximum_condition",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].iteration",
+              "payload": "0300000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].spread_total",
+              "payload": "31913ab5c130c43f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].spread_standard_deviation",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].maximum_covariance_error",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.omega_directional[1]",
+              "payload": "30913ab5c130c43f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.omega_directional[2]",
+              "payload": "57159a892374633c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.omega_directional[3]",
+              "payload": "57159a892374633c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.omega_total",
+              "payload": "31913ab5c130c43f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.projector_residual",
+              "payload": "000000000000c03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.z_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.u_residual",
+              "payload": "ddf0d71a7df2d83f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.wcc_step_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.spread_step_maximum",
+              "payload": "72a725d2798ed03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.little_group_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[3].diagnostics.z_boundary_gap",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.z_mix_ratio",
+              "payload": "000000000000e03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.u_mix_ratio",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.u_inner_sweeps",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.anderson_used",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.anderson_fallback",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.rejected_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.projected_gradient_rms",
+              "payload": "20c90bba8d2ed03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.accepted_u_step_scale",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.localization_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.localization_directional_derivative",
+              "payload": "2324d5b5659ad5bf",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.fixed_projector_drift",
+              "payload": "000000000000c03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.localization_base_objective",
+              "payload": "0cf0c2acdaa6da3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.localization_required_change",
+              "payload": "9d48876080b201bf",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.localization_actual_change",
+              "payload": "75a725d2798ed0bf",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.minimum_diagonal_phase_margin",
+              "payload": "1afa6b690cd4f13f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.minimum_phase_kpoint",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.minimum_phase_neighbor",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.minimum_phase_wannier",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[3].diagnostics.cg_beta",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.cg_restarted",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": false,
+              "path": "result.history[3].diagnostics.cg_descent_cosine",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.maximum_kstar_gradient_rms",
+              "payload": "20c90bba8d2ed03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.maximum_kstar_gradient_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.omega_i",
+              "payload": "0320674e352e8d3c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.delta_omega_i",
+              "payload": "0320674e352e8d3c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.z_stability_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.joint_z_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.joint_transport_minimum_singular_value",
+              "payload": "ffffffffffffef3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[3].diagnostics.joint_transport_maximum_condition",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].iteration",
+              "payload": "0400000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].spread_total",
+              "payload": "4f14a7b77e5ead3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].spread_standard_deviation",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].maximum_covariance_error",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.omega_directional[1]",
+              "payload": "5014a7b77e5ead3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.omega_directional[2]",
+              "payload": "1fc722622ff049bc",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.omega_directional[3]",
+              "payload": "1fc722622ff049bc",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.omega_total",
+              "payload": "4f14a7b77e5ead3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.projector_residual",
+              "payload": "000000000000c03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.z_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.u_residual",
+              "payload": "77e2bd4c08b3cf3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.wcc_step_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.spread_step_maximum",
+              "payload": "3a98a10e44b2b93f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.little_group_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[4].diagnostics.z_boundary_gap",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.z_mix_ratio",
+              "payload": "000000000000e03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.u_mix_ratio",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.u_inner_sweeps",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.anderson_used",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.anderson_fallback",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.rejected_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.projected_gradient_rms",
+              "payload": "ef26e85e3584c33f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.accepted_u_step_scale",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.localization_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.localization_directional_derivative",
+              "payload": "88bdece7a25dc0bf",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.fixed_projector_drift",
+              "payload": "000000000000b03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.localization_base_objective",
+              "payload": "2e913ab5c130c43f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.localization_required_change",
+              "payload": "2eb0c8d94cd0eabe",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.localization_actual_change",
+              "payload": "3698a10e44b2b9bf",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.minimum_diagonal_phase_margin",
+              "payload": "88f2d7f64a4dfe3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.minimum_phase_kpoint",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.minimum_phase_neighbor",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.minimum_phase_wannier",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[4].diagnostics.cg_beta",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.cg_restarted",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": false,
+              "path": "result.history[4].diagnostics.cg_descent_cosine",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.maximum_kstar_gradient_rms",
+              "payload": "ef26e85e3584c33f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.maximum_kstar_gradient_index",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.omega_i",
+              "payload": "1ec722622ff059bc",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.delta_omega_i",
+              "payload": "1ec722622ff0593c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.z_stability_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.joint_z_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.joint_transport_minimum_singular_value",
+              "payload": "ffffffffffffef3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[4].diagnostics.joint_transport_maximum_condition",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].iteration",
+              "payload": "0500000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].spread_total",
+              "payload": "e4408a10ecfd943f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].spread_standard_deviation",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].maximum_covariance_error",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.omega_directional[1]",
+              "payload": "e6408a10ecfd943f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.omega_directional[2]",
+              "payload": "1fc722622ff049bc",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.omega_directional[3]",
+              "payload": "1fc722622ff049bc",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.omega_total",
+              "payload": "e4408a10ecfd943f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.projector_residual",
+              "payload": "000000000000b83c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.z_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.u_residual",
+              "payload": "bce4c3d7055ec33f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.wcc_step_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.spread_step_maximum",
+              "payload": "ddf361af88dfa23f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.little_group_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[5].diagnostics.z_boundary_gap",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.z_mix_ratio",
+              "payload": "000000000000e03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.u_mix_ratio",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.u_inner_sweeps",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.anderson_used",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.anderson_fallback",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.rejected_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.projected_gradient_rms",
+              "payload": "be72ef539855b73f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.accepted_u_step_scale",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.localization_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.localization_directional_derivative",
+              "payload": "ee59b73243cea7bf",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.fixed_projector_drift",
+              "payload": "000000000000b03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.localization_base_objective",
+              "payload": "4f14a7b77e5ead3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.localization_required_change",
+              "payload": "99e83c7a6b80d3be",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.localization_actual_change",
+              "payload": "dcf361af88dfa2bf",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.minimum_diagonal_phase_margin",
+              "payload": "92b50385061d0340",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.minimum_phase_kpoint",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.minimum_phase_neighbor",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.minimum_phase_wannier",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[5].diagnostics.cg_beta",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.cg_restarted",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": false,
+              "path": "result.history[5].diagnostics.cg_descent_cosine",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.maximum_kstar_gradient_rms",
+              "payload": "bf72ef539855b73f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.maximum_kstar_gradient_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.omega_i",
+              "payload": "1fc722622ff059bc",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.delta_omega_i",
+              "payload": "1fc722622ff0593c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.z_stability_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.joint_z_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.joint_transport_minimum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[5].diagnostics.joint_transport_maximum_condition",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].iteration",
+              "payload": "0600000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].spread_total",
+              "payload": "d16c68b14fcf7d3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].spread_standard_deviation",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].maximum_covariance_error",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.omega_directional[1]",
+              "payload": "056d68b14fcf7d3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.omega_directional[2]",
+              "payload": "1fc722622ff079bc",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.omega_directional[3]",
+              "payload": "1fc722622ff079bc",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.omega_total",
+              "payload": "d16c68b14fcf7d3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.projector_residual",
+              "payload": "000000000000cc3c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.z_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.u_residual",
+              "payload": "0d0fde302245b73f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.wcc_step_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.spread_step_maximum",
+              "payload": "604b604830148b3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.little_group_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[6].diagnostics.z_boundary_gap",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.z_mix_ratio",
+              "payload": "000000000000e03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.u_mix_ratio",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.u_inner_sweeps",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.anderson_used",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.anderson_fallback",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.rejected_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.projected_gradient_rms",
+              "payload": "95ad5bfc84ceab3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.accepted_u_step_scale",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.localization_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.localization_directional_derivative",
+              "payload": "423bbbecef0391bf",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.fixed_projector_drift",
+              "payload": "000000000000c83c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.localization_base_objective",
+              "payload": "e4408a10ecfd943f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.localization_required_change",
+              "payload": "410a147cc4e0bbbe",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.localization_actual_change",
+              "payload": "614b604830148bbf",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.minimum_diagonal_phase_margin",
+              "payload": "2932fc3fc7880540",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.minimum_phase_kpoint",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.minimum_phase_neighbor",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.minimum_phase_wannier",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[6].diagnostics.cg_beta",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.cg_restarted",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": false,
+              "path": "result.history[6].diagnostics.cg_descent_cosine",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.maximum_kstar_gradient_rms",
+              "payload": "95ad5bfc84ceab3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.maximum_kstar_gradient_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.omega_i",
+              "payload": "73bc559d1d36a0bc",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.delta_omega_i",
+              "payload": "73bc559d1d36a03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.z_stability_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.joint_z_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.joint_transport_minimum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[6].diagnostics.joint_transport_maximum_condition",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].iteration",
+              "payload": "0700000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].spread_total",
+              "payload": "f4cfd934671d653f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].spread_standard_deviation",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].maximum_covariance_error",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.omega_directional[1]",
+              "payload": "dacfd934671d653f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.omega_directional[2]",
+              "payload": "1fc722622ff0593c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.omega_directional[3]",
+              "payload": "1fc722622ff0593c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.omega_total",
+              "payload": "f4cfd934671d653f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.projector_residual",
+              "payload": "000000000000cc3c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.z_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.u_residual",
+              "payload": "29bc737088c7ab3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.wcc_step_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.spread_step_maximum",
+              "payload": "d784fb169c40733f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.little_group_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[7].diagnostics.z_boundary_gap",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.z_mix_ratio",
+              "payload": "000000000000e03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.u_mix_ratio",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.u_inner_sweeps",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.anderson_used",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.anderson_fallback",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.rejected_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.projected_gradient_rms",
+              "payload": "28f2a7df528ca03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.accepted_u_step_scale",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.localization_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.localization_directional_derivative",
+              "payload": "037b343cb52978bf",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.fixed_projector_drift",
+              "payload": "000000000000b03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.localization_base_objective",
+              "payload": "226d68b14fcf7d3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.localization_required_change",
+              "payload": "dfd7d7fa54cba3be",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.localization_actual_change",
+              "payload": "2885fb169c4073bf",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.minimum_diagonal_phase_margin",
+              "payload": "1a130a6319fd0640",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.minimum_phase_kpoint",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.minimum_phase_neighbor",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.minimum_phase_wannier",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[7].diagnostics.cg_beta",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.cg_restarted",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": false,
+              "path": "result.history[7].diagnostics.cg_descent_cosine",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.maximum_kstar_gradient_rms",
+              "payload": "28f2a7df528ca03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.maximum_kstar_gradient_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.omega_i",
+              "payload": "1fc722622ff0893c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.delta_omega_i",
+              "payload": "1fc722622ff0893c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.z_stability_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.joint_z_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.joint_transport_minimum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[7].diagnostics.joint_transport_maximum_condition",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].iteration",
+              "payload": "0800000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].spread_total",
+              "payload": "13c7f4fce4e24d3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].spread_standard_deviation",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].maximum_covariance_error",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.omega_directional[1]",
+              "payload": "abc6f4fce4e24d3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.omega_directional[2]",
+              "payload": "1fc722622ff0593c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.omega_directional[3]",
+              "payload": "1fc722622ff0593c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.omega_total",
+              "payload": "13c7f4fce4e24d3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.projector_residual",
+              "payload": "000000000000a03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.z_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.u_residual",
+              "payload": "1347f87ad98aa03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.wcc_step_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.spread_step_maximum",
+              "payload": "5e3c39eb5b495b3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.little_group_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[8].diagnostics.z_boundary_gap",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.z_mix_ratio",
+              "payload": "000000000000e03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.u_mix_ratio",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.u_inner_sweeps",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.anderson_used",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.anderson_fallback",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.rejected_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.projected_gradient_rms",
+              "payload": "a00579f901b0933f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.accepted_u_step_scale",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.localization_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.localization_directional_derivative",
+              "payload": "0920476b741d61bf",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.fixed_projector_drift",
+              "payload": "000000000000b03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.localization_base_objective",
+              "payload": "48cfd934671d653f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.localization_required_change",
+              "payload": "b6e8c852930a8cbe",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.localization_actual_change",
+              "payload": "063b39eb5b495bbf",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.minimum_diagonal_phase_margin",
+              "payload": "fbb08da655db0740",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.minimum_phase_kpoint",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.minimum_phase_neighbor",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.minimum_phase_wannier",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": false,
+              "path": "result.history[8].diagnostics.cg_beta",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.cg_restarted",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": false,
+              "path": "result.history[8].diagnostics.cg_descent_cosine",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.maximum_kstar_gradient_rms",
+              "payload": "a00579f901b0933f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.maximum_kstar_gradient_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.omega_i",
+              "payload": "57159a892374833c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.delta_omega_i",
+              "payload": "57159a892374833c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.z_stability_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.joint_z_backtracking_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.joint_transport_minimum_singular_value",
+              "payload": "feffffffffffef3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.history[8].diagnostics.joint_transport_maximum_condition",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.wannier_chk.num_bands",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.wannier_chk.num_orbitals",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.wannier_chk.num_kpts",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.wannier_chk.mp_grid[1]",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.wannier_chk.mp_grid[2]",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.wannier_chk.mp_grid[3]",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.5,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.wannier_chk.kpt_red",
+              "sha256": "c3ef795130ae64dd5c975f1567fbdef361865bab663026ed1d3be0564e2514af",
+              "shape": [
+                2,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.wannier_chk.real_lattice",
+              "sha256": "1332df685c45a61a0ac008a6a653295b8c5655361c1d34b6304b22ec40235fb8",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 6.283185307179586,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.wannier_chk.recip_lattice",
+              "sha256": "a7bd7ebbf1f7479c3864a60faea5fed130808b61a7bd43712740d8cd0f5e91e2",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.wannier_chk.wannier_centers_cart",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                1,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.wannier_chk.v_matrix",
+              "sha256": "b37e50e36068dab1478b2c78513f2732c60abd448ca254d072ca202e93061e0a",
+              "shape": [
+                2,
+                1,
+                2
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.iteration",
+              "payload": "0800000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.frames",
+              "sha256": "b37e50e36068dab1478b2c78513f2732c60abd448ca254d072ca202e93061e0a",
+              "shape": [
+                2,
+                1,
+                2
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.15198177546350664,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.z_previous",
+              "sha256": "af1af62be344a15446ae19552bebd14a9937236e940fdc95c2f951c7c39876ce",
+              "shape": [
+                2,
+                2,
+                2
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.centers_cartesian",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                1,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.0009120576959615621,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.spreads_angstrom2",
+              "sha256": "6fbaee18169c0059b728602559a60b1de72950f4fdb73722ba89c5eb9a82840b",
+              "shape": [
+                1
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.0009120576959615621,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.convergence_values",
+              "sha256": "a8264aee3bfd4a1b2975626202ed8c5927e766eaca7236d0ce1f7239fbbec3b6",
+              "shape": [
+                4,
+                1
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.included_bands",
+              "sha256": "27ecd0a598e76f8a2fd264d427df0a119903e8eae384e478902541756f089dd1",
+              "shape": [
+                2,
+                2
+              ],
+              "type": "BitMatrix"
+            },
+            {
+              "finite": true,
+              "max_abs": 6.283185307179586,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.stencil.vectors_cartesian",
+              "sha256": "876132adb605fe5582bd2ae776b0e86ce0f18ff531696a7374f41760d6d31b01",
+              "shape": [
+                6,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 2,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.stencil.shell_ids",
+              "sha256": "05e8fdafcc9f501807340c92676d5fe5fe4f75d0de7cffa6653fe5067b82bfa4",
+              "shape": [
+                6
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.05066059182116888,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.stencil.weights",
+              "sha256": "3c1f5cbd104e41baff9dfd0a37ec050567e14a5770d54bd3d435dca856479959",
+              "shape": [
+                6
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.stencil.target_moment",
+              "sha256": "1332df685c45a61a0ac008a6a653295b8c5655361c1d34b6304b22ec40235fb8",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.stencil.completeness_residual",
+              "payload": "aa4c58e87ab6ab3c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.z_mix_ratio",
+              "payload": "000000000000e03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.u_mix_ratio",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.improvement_streak",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.rejected_steps",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.residual_reference[1]",
+              "payload": "000000000000c03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.residual_reference[2]",
+              "payload": "57159a892374c33f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.residual_reference[3]",
+              "payload": "ddf0d71a7df2d83f",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.restart_state.optimizer_state.residual_reference[4]",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.previous_merit",
+              "payload": "000000000000d03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.anderson_z_history",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0,
+                0
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.anderson_residual_history",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0,
+                0
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.z_stability_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.u_stability_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.z_steps",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.u_steps",
+              "payload": "0600000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.epoch",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.last_accepted_u_step_scale",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.gradient_fallback_active",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.gradient_steps",
+              "payload": "0600000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.9999999999999999,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.best_polar_frames",
+              "sha256": "c05ead547301115d1ff20ac13b9156d80bb709e3b78336f66652aa12c291d4c6",
+              "shape": [
+                2,
+                1,
+                2
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.best_polar_centers",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                1,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.41643397208440636,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.best_polar_spreads",
+              "sha256": "59b5bb7d9dcf1f5d79798fa9478b3bd548347f5ab20a22d07d2d6341b84b51e8",
+              "shape": [
+                1
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.best_polar_objective",
+              "payload": "10f0c2acdaa6da3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.disentanglement_objective_history",
+              "sha256": "374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb",
+              "shape": [
+                2
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.15773793553410925,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.localization_objective_history",
+              "sha256": "8f2299ae3796e915325e6cc4d4ce7b1c15047a87a3e517da31429652559530c3",
+              "shape": [
+                6
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.localization_trial_step_scales",
+              "sha256": "961e76f1c44f5ce8d5761ea1aa65e20225642a79548cbe995da4644fae5f8c11",
+              "shape": [
+                6
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.15773793553410925,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.localization_trial_objectives",
+              "sha256": "8f2299ae3796e915325e6cc4d4ce7b1c15047a87a3e517da31429652559530c3",
+              "shape": [
+                6
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 3.375486636837783e-05,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.localization_trial_required_changes",
+              "sha256": "877522ec89d3f48858756913dbf42a1094cb217dc405f322d9712c019c932741",
+              "shape": [
+                6
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.2586960365502969,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.localization_trial_actual_changes",
+              "sha256": "8d1ab597802f0dd15e1881c7fe61d8c821749e93962b28e228874d73db96047d",
+              "shape": [
+                6
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.3375486636837783,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.localization_trial_directional_derivatives",
+              "sha256": "d6371da0c5a4f1055e1541b26ceef6b94d96355fc447c5365e728862858953b5",
+              "shape": [
+                6
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 6.661338147750939e-16,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.localization_projector_drift_history",
+              "sha256": "9e54c80c7ad14c95fb9be0cd2791a62f0a4cbedcb0f0f086d08fd4475ff249ec",
+              "shape": [
+                6
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 8,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.localization_trial_iterations",
+              "sha256": "9b04a6f0f36e8eb38bb81f9154606fb7e1319d828fddb04044743bdea9dcf4e3",
+              "shape": [
+                6
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.localization_trial_sweeps",
+              "sha256": "334658f1779808c7acf39a60f38dda5c542e257f8355b64cde24238445927386",
+              "shape": [
+                6
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.localization_trial_accepted",
+              "sha256": "dfea2964b5deedea7b1ef077de529c3959e6788bdbb3441e70c77a1ae875bb48",
+              "shape": [
+                6
+              ],
+              "type": "Vector{Bool}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.previous_u_gradient",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0,
+                0,
+                0
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.previous_u_direction",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0,
+                0,
+                0
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.u_cg_iteration",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.u_cg_restart_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": false,
+              "path": "result.restart_state.optimizer_state.last_cg_beta",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.u_active_orbit_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.u_generalized_gradient_rms",
+              "payload": "a00579f901b0933f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.u_lbfgs_s_history",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "type": "Array{ComplexF64, 4}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.u_lbfgs_y_history",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "type": "Array{ComplexF64, 4}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.u_lbfgs_rho_history",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.restart_state.optimizer_state.u_lbfgs_restart_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.wannier90_reference_overlaps",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "type": "Array{ComplexF64, 4}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.optimizer_state.wannier90_reference_unitaries",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0,
+                0,
+                0
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": false,
+              "path": "result.restart_state.optimizer_state.wannier90_reference_omega_i",
+              "payload": "000000000000f87f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.fixed_subspace_projectors",
+              "sha256": "5615567a31f968d596a965a3471fc5ef203817b1cc29516e6748e58ab592e420",
+              "shape": [
+                2,
+                2,
+                2
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.fixed_subspace_frames",
+              "sha256": "4542fc31d028913284f517bc12cba0d399649a3be83759da18a98975d6d0b19b",
+              "shape": [
+                2,
+                1,
+                2
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.restart_state.localization_initial_frames",
+              "sha256": "950b9b40c43b0adc3ceb4b47dc4389becc8fda612a608c504d99885ff8aa9826",
+              "shape": [
+                2,
+                1,
+                2
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "path": "result.tb_symmetry_qualification.metrics[1].threshold",
+              "payload": "f168e388b5f8e43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.tb_symmetry_qualification.metrics[2].threshold",
+              "payload": "95d626e80b2e113e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.tb_symmetry_qualification.metrics[3].threshold",
+              "payload": "3a8c30e28e79453e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.tb_symmetry_qualification.metrics[4].threshold",
+              "payload": "bbbdd7d9df7cdb3d",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.tb_symmetry_qualification.metrics[5].threshold",
+              "payload": "bbbdd7d9df7cdb3d",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.tb_symmetry_qualification.metrics[6].threshold",
+              "payload": "3a8c30e28e79453e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.tb_symmetry_qualification.metrics[7].threshold",
+              "payload": "bbbdd7d9df7cdb3d",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.tb_symmetry_qualification.metrics[8].threshold",
+              "payload": "f168e388b5f8e43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.tb_symmetry_qualification.target_scope_production_eligible",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.tb_symmetry_qualification.target_leakage_threshold",
+              "payload": "f168e388b5f8d43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.tb_symmetry_qualification.scoped_production_eligible",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.tb_symmetry_qualification.global_production_eligible",
+              "payload": "00",
+              "type": "Bool"
+            }
+          ],
+          "type": "WannierNLQG.Wannierization.WannierizationResult"
+        },
+        "semantic_return": null
+      },
+      "solver_native_result": {
+        "status": "MAX_ITERATIONS",
+        "v_imag_bits": [
+          "1011111111101111110010110110001111000001111100001010010101001101",
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          "1011111111101111111111101001100001111110101101011000001110010010",
+          "0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "v_real_bits": [
+          "1011111110111100111101110111000100100001011100001011110100110000",
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          "1011111110010010111101011011010111010001111111101110011011000000",
+          "0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "v_shape": [
+          2,
+          1,
+          2
+        ]
+      },
+      "solver_native_result_original_sha256": "53efc3660fd37ca2ff292d10bac692e6c6bc3444155214e9b55dfd5cef7edae1"
+    }
+  ],
+  "schema": 1
+}

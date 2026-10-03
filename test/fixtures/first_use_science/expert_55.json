@@ -1,0 +1,80 @@
+{
+  "id": "validate_band_representation",
+  "ranks": [
+    {
+      "original_receipt_sha256": "60609c755f3e93f15da97113f859db7b65fc5193f191a1b9c89f1f5e3fbafc80",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.passed",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.absolute_tolerance",
+              "payload": "3a8c30e28e79453e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.oracle_excess_tolerance",
+              "payload": "3a8c30e28e79453e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maximum_group_law_residuals[1]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maximum_group_law_residuals[2]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maximum_group_law_residuals[3]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maximum_group_law_residuals[4]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maximum_reciprocal_shift_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maximum_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maximum_theta_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            }
+          ],
+          "type": "WannierNLQGSymmetryFoundationExt.BandRepresentationValidation"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

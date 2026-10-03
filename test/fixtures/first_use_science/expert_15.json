@@ -1,0 +1,119 @@
+{
+  "id": "evaluate_full_3d_wannier_spreads_nonzero_unitary_frames",
+  "ranks": [
+    {
+      "original_receipt_sha256": "383605cecd006733ecdfb8dee09661f22f89b0e84ab14126b73e40737c4fc910",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.centers_cartesian",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                1,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.009675312092750799,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.spreads_angstrom2",
+              "sha256": "628826708724ea9922da0ad95c8d0af478c3d8cba0f8b92b2a351f304964cf6d",
+              "shape": [
+                1
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.omega_directional[1]",
+              "payload": "e0ba2268a6d0833f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.omega_directional[2]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.omega_directional[3]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.omega_total",
+              "payload": "e0ba2268a6d0833f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "max_abs": 6.283185307179586,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.stencil.vectors_cartesian",
+              "sha256": "876132adb605fe5582bd2ae776b0e86ce0f18ff531696a7374f41760d6d31b01",
+              "shape": [
+                6,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 2,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.stencil.shell_ids",
+              "sha256": "05e8fdafcc9f501807340c92676d5fe5fe4f75d0de7cffa6653fe5067b82bfa4",
+              "shape": [
+                6
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.05066059182116888,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.stencil.weights",
+              "sha256": "3c1f5cbd104e41baff9dfd0a37ec050567e14a5770d54bd3d435dca856479959",
+              "shape": [
+                6
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.stencil.target_moment",
+              "sha256": "1332df685c45a61a0ac008a6a653295b8c5655361c1d34b6304b22ec40235fb8",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.stencil.completeness_residual",
+              "payload": "aa4c58e87ab6ab3c",
+              "type": "Float64"
+            }
+          ],
+          "type": "@NamedTuple{centers_cartesian::Matrix{Float64}, spreads_angstrom2::Vector{Float64}, omega_directional::Tuple{Float64, Float64, Float64}, omega_total::Float64, stencil::WannierNLQG.Wannierization.WannierizationFiniteDifferenceStencil}"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

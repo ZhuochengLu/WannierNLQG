@@ -1,10 +1,11 @@
 # Documentation
 
 This directory contains the public, English-language documentation for
-WannierNLQG 1.1.0. The version 1.0.0 documents remain the public API baseline.
+WannierNLQG 1.1.1 locally promoted maintenance version. The version 1.0.0 documents remain the public API baseline.
 
 ## Start here
 
+- [Precompilation and cache rebuilding](PRECOMPILATION.md): package setup, extension activation, workload preferences, and isolated depots.
 - [User guide](../USER_GUIDE.md): grouped `TaskConfig` reference, independent task parameters and task catalog.
 - [Storage schemas](STORAGE_SCHEMAS.md): wire identifiers and validation contracts.
 - [Public API overview](MIGRATION_1.0.0.md): the 1.0.0 configuration and

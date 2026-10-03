@@ -1,0 +1,502 @@
+{
+  "id": "response_symmetry_group_report",
+  "ranks": [
+    {
+      "original_receipt_sha256": "ea0c37529caa9f038eb20889d09def384677c5dd25d852bf2658d059bf2028c2",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.active_constraint_group.antiunitary_operation_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.active_constraint_group.basis_transform_to_input.denominator",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.active_constraint_group.basis_transform_to_input.numerator_rows[1]",
+              "sha256": "85526ba79728a470972be92942ef4de212630c9368703cb4ab3cb42dece95912",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.active_constraint_group.basis_transform_to_input.numerator_rows[2]",
+              "sha256": "87d82d155685fda42f606911efa50ac195bef4be188fcd1ecdb773d60e88ae5f",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.active_constraint_group.basis_transform_to_input.numerator_rows[3]",
+              "sha256": "32edb6022c0921d99aa347e9cda5dc2db413f5574eebaaa8592234308ffebd2b",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 3,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.active_constraint_group.basis_transform_to_input.shape",
+              "sha256": "0fec49e5cb80c80f848a00237963650b3d777cd7a75e6fadc16db41e7b6b92e1",
+              "shape": [
+                2
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "path": "result.active_constraint_group.equivalent_axis_notation",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.active_constraint_group.group_order",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.active_constraint_group.include_time_reversal",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.active_constraint_group.magnetic_point_group_number",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.active_constraint_group.seitz_translation_tolerance_fractional",
+              "payload": "3a8c30e28e79453e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.active_constraint_group.symprec_angstrom",
+              "payload": "f168e388b5f8e43e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.active_constraint_group.unitary_operation_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.active_constraint_group.uses_unitary_subgroup_only",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.active_point_group.antiunitary_operation_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.active_point_group.closure_verified",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.active_point_group.generator_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.active_point_group.group_order",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.active_point_group.reconstructed_group_order",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.active_point_group.unitary_operation_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.active_space_group.antiunitary_operation_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.active_space_group.closure_verified",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.active_space_group.generator_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.active_space_group.group_order",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.active_space_group.reconstructed_group_order",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.active_space_group.unitary_operation_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_point_group.antiunitary_operation_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_point_group.closure_verified",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_point_group.generator_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_point_group.generators[1].antiunitary",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_point_group.generators[1].sequence",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_point_group.generators[1].source_operation_index",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.generators.magnetic_point_group.generators[1].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_point_group.group_order",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_point_group.reconstructed_group_order",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_point_group.unitary_operation_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_space_group.antiunitary_operation_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_space_group.closure_verified",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_space_group.generator_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_space_group.generators[1].antiunitary",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_space_group.generators[1].sequence",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_space_group.generators[1].source_operation_index",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.generators.magnetic_space_group.generators[1].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_space_group.group_order",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_space_group.reconstructed_group_order",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.magnetic_space_group.unitary_operation_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.structural_point_group.antiunitary_operation_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.structural_point_group.closure_verified",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.structural_point_group.generator_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.structural_point_group.group_order",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.structural_point_group.reconstructed_group_order",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.structural_point_group.unitary_operation_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.structural_space_group.antiunitary_operation_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.structural_space_group.closure_verified",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.structural_space_group.generator_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.structural_space_group.group_order",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.structural_space_group.reconstructed_group_order",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generators.structural_space_group.unitary_operation_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.group_classification.full_magnetic_point_group.basis_transform_to_input.denominator",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.group_classification.full_magnetic_point_group.basis_transform_to_input.numerator_rows[1]",
+              "sha256": "85526ba79728a470972be92942ef4de212630c9368703cb4ab3cb42dece95912",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.group_classification.full_magnetic_point_group.basis_transform_to_input.numerator_rows[2]",
+              "sha256": "87d82d155685fda42f606911efa50ac195bef4be188fcd1ecdb773d60e88ae5f",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.group_classification.full_magnetic_point_group.basis_transform_to_input.numerator_rows[3]",
+              "sha256": "32edb6022c0921d99aa347e9cda5dc2db413f5574eebaaa8592234308ffebd2b",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 3,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.group_classification.full_magnetic_point_group.basis_transform_to_input.shape",
+              "sha256": "0fec49e5cb80c80f848a00237963650b3d777cd7a75e6fadc16db41e7b6b92e1",
+              "shape": [
+                2
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "path": "result.group_classification.full_magnetic_point_group.equivalent_axis_notation",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.group_classification.full_magnetic_point_group.group_order",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.group_classification.full_magnetic_point_group.magnetic_point_group_number",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.group_classification.magnetic_space_group.litvin_number",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.group_classification.magnetic_space_group.magnetic_point_group_number",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.group_classification.magnetic_space_group.parent_space_group_number",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.group_classification.magnetic_space_group.uni_number",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.group_classification.structural_space_group.hall_number",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.group_classification.structural_space_group.international_number",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            }
+          ],
+          "type": "Dict{String, Any}"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

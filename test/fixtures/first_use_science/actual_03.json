@@ -1,0 +1,336 @@
+{
+  "artifact": "artifact_03.h5",
+  "artifact_sha256": "2ee2cc69fc5c6b27d0af30265787557d3bc48172595ba2d4e282e2ef53bb22b0",
+  "dataset_paths": [
+    "/@qualification",
+    "/@schema",
+    "/@schema_version",
+    "/@status",
+    "/fourier/exported_mp_grid_tb/hamiltonian_r",
+    "/fourier/exported_mp_grid_tb/r_vectors",
+    "/fourier/exported_tb/hamiltonian_r",
+    "/fourier/exported_tb/r_vectors",
+    "/fourier/minimum_distance/hamiltonian_r",
+    "/fourier/minimum_distance/normalized_pair_weights",
+    "/fourier/minimum_distance/pair_center_distances_angstrom",
+    "/fourier/minimum_distance/r_vectors",
+    "/fourier/mp_grid/hamiltonian_r",
+    "/fourier/mp_grid/r_vectors",
+    "/input_sha256/@band_representation_hdf5",
+    "/input_sha256/@eig_file",
+    "/input_sha256/@mmn_file",
+    "/input_sha256/@wannierization_checkpoint_hdf5",
+    "/sawf/diagonal_modulus",
+    "/sawf/diagonal_phase_margin",
+    "/sawf/direct_hamiltonian_k",
+    "/sawf/link_invariant_defects",
+    "/sawf/link_minimum_singular_values",
+    "/sawf/offdiagonal_link_fraction",
+    "/sawf/omega_i_contributions",
+    "/summary/@construction_policy",
+    "/summary/@exported_matrix_roundtrip_residual",
+    "/summary/@exported_spectral_roundtrip_residual_ev",
+    "/summary/@finite_difference_completeness_residual",
+    "/summary/@finite_difference_stencil_sha256",
+    "/summary/@finite_difference_stencil_source",
+    "/summary/@fourier_roundtrip_tolerance",
+    "/summary/@input_identity",
+    "/summary/@minimum_distance_construction_authoritative_band_hamiltonian_algorithm_version",
+    "/summary/@minimum_distance_construction_authoritative_band_hamiltonian_digest",
+    "/summary/@minimum_distance_construction_authoritative_hamiltonian",
+    "/summary/@minimum_distance_construction_fourier_roundtrip_gate_tolerance",
+    "/summary/@minimum_distance_construction_hamiltonian_fourier_roundtrip_residual",
+    "/summary/@minimum_distance_construction_position_fourier_roundtrip_residual",
+    "/summary/@minimum_distance_construction_real_space_replica_policy",
+    "/summary/@mp_grid_construction_authoritative_band_hamiltonian_algorithm_version",
+    "/summary/@mp_grid_construction_authoritative_band_hamiltonian_digest",
+    "/summary/@mp_grid_construction_authoritative_hamiltonian",
+    "/summary/@mp_grid_construction_fourier_roundtrip_gate_tolerance",
+    "/summary/@mp_grid_construction_hamiltonian_fourier_roundtrip_residual",
+    "/summary/@mp_grid_construction_position_fourier_roundtrip_residual",
+    "/summary/@mp_grid_construction_real_space_replica_policy",
+    "/summary/@mp_matrix_roundtrip_residual",
+    "/summary/@mp_spectral_roundtrip_residual_ev",
+    "/summary/@qualification",
+    "/summary/@sawf_maximum_invariant_defect",
+    "/summary/@sawf_minimum_link_singular_value",
+    "/summary/@sawf_omega_i",
+    "/summary/@sawf_top_one_percent_concentration",
+    "/summary/@schema",
+    "/summary/@schema_version",
+    "/summary/@status",
+    "/summary/@support_radius_0.9999_angstrom",
+    "/summary/@support_radius_0.999_angstrom",
+    "/summary/@support_radius_0.99_angstrom",
+    "/summary/@support_radius_0.9_angstrom",
+    "/summary/@tail_radius_angstrom",
+    "/summary/@tail_weight",
+    "/summary/@wigner_seitz_matrix_roundtrip_residual",
+    "/summary/@wigner_seitz_spectral_roundtrip_residual_ev"
+  ],
+  "format": "hdf5",
+  "numeric_leaves": [
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/fourier/exported_mp_grid_tb/hamiltonian_r",
+      "sha256": "e0ff64e6dbf30610ac72ce4542393c75edcc0f4ffd3459bdfa16f3fcafef483d",
+      "shape": [
+        1,
+        1,
+        2
+      ],
+      "type": "Array{ComplexF64, 3}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/fourier/exported_mp_grid_tb/r_vectors",
+      "sha256": "b7b22422a6bd293f1eaaf44eabeaaaea522b2b5f6aad65cb4b4e13b68650718b",
+      "shape": [
+        3,
+        2
+      ],
+      "type": "Matrix{Int64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/fourier/exported_tb/hamiltonian_r",
+      "sha256": "7add653f411a2a8cb98b4059f91404b15d0450700c3167b29ff372bcb67cff94",
+      "shape": [
+        1,
+        1,
+        3
+      ],
+      "type": "Array{ComplexF64, 3}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/fourier/exported_tb/r_vectors",
+      "sha256": "76a991b8d2c4fbf02a7a1dcad31523f13ef0eb567c919beddf901986bf57d3ca",
+      "shape": [
+        3,
+        3
+      ],
+      "type": "Matrix{Int64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/fourier/minimum_distance/hamiltonian_r",
+      "sha256": "7add653f411a2a8cb98b4059f91404b15d0450700c3167b29ff372bcb67cff94",
+      "shape": [
+        1,
+        1,
+        3
+      ],
+      "type": "Array{ComplexF64, 3}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/fourier/minimum_distance/normalized_pair_weights",
+      "sha256": "5e12ea5537d2868d4cad36bc8278cd2db83f01ffe6cdec79509a6b1b60e8f010",
+      "shape": [
+        1,
+        1,
+        3
+      ],
+      "type": "Array{Float64, 3}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/fourier/minimum_distance/pair_center_distances_angstrom",
+      "sha256": "68f962b48b11fe16e782b2e07047abb2dfbfdc78a67e39410e00508331a5d1e7",
+      "shape": [
+        1,
+        1,
+        3
+      ],
+      "type": "Array{Float64, 3}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/fourier/minimum_distance/r_vectors",
+      "sha256": "76a991b8d2c4fbf02a7a1dcad31523f13ef0eb567c919beddf901986bf57d3ca",
+      "shape": [
+        3,
+        3
+      ],
+      "type": "Matrix{Int64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/fourier/mp_grid/hamiltonian_r",
+      "sha256": "e0ff64e6dbf30610ac72ce4542393c75edcc0f4ffd3459bdfa16f3fcafef483d",
+      "shape": [
+        1,
+        1,
+        2
+      ],
+      "type": "Array{ComplexF64, 3}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/fourier/mp_grid/r_vectors",
+      "sha256": "b7b22422a6bd293f1eaaf44eabeaaaea522b2b5f6aad65cb4b4e13b68650718b",
+      "shape": [
+        3,
+        2
+      ],
+      "type": "Matrix{Int64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/sawf/diagonal_modulus",
+      "sha256": "cf966f1001f075103e2ad0cde70f9210aac46a0b382bea72d41d2ac724cf6f20",
+      "shape": [
+        6,
+        2
+      ],
+      "type": "Matrix{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 3.141592653589793,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/sawf/diagonal_phase_margin",
+      "sha256": "351e7e7dc4db8d7ded98a290ac4aaede3d0bff71d14d6a385af0687b889075cd",
+      "shape": [
+        6,
+        2
+      ],
+      "type": "Matrix{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/sawf/direct_hamiltonian_k",
+      "sha256": "cbbfe5de56848ce19d9603d583cdd7bb490b18d4c2710caf49155d2b100c81d5",
+      "shape": [
+        1,
+        1,
+        2
+      ],
+      "type": "Array{ComplexF64, 3}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/sawf/link_invariant_defects",
+      "sha256": "2ea9ab9198d1638007400cd2c3bef1cc745b864b76011a0e1bc52180ac6452d4",
+      "shape": [
+        6,
+        2
+      ],
+      "type": "Matrix{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/sawf/link_minimum_singular_values",
+      "sha256": "cf966f1001f075103e2ad0cde70f9210aac46a0b382bea72d41d2ac724cf6f20",
+      "shape": [
+        6,
+        2
+      ],
+      "type": "Matrix{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/sawf/offdiagonal_link_fraction",
+      "sha256": "2ea9ab9198d1638007400cd2c3bef1cc745b864b76011a0e1bc52180ac6452d4",
+      "shape": [
+        6,
+        2
+      ],
+      "type": "Matrix{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/sawf/omega_i_contributions",
+      "sha256": "2ea9ab9198d1638007400cd2c3bef1cc745b864b76011a0e1bc52180ac6452d4",
+      "shape": [
+        6,
+        2
+      ],
+      "type": "Matrix{Float64}"
+    }
+  ],
+  "raw_file_bytes": 15617,
+  "semantic_fields": {
+    "/@qualification": "STANDARD",
+    "/@schema": "WannierNLQG.wannier_gauge_chain_diagnostic",
+    "/@schema_version": "1.0",
+    "/@status": "PASS_DIAGNOSTIC",
+    "/input_sha256/@band_representation_hdf5": "647a59b544fdb98681a299df1a62691b992337c7f5d4b1871a467d1a53ccd152",
+    "/input_sha256/@eig_file": "ac686efc3efc59bf886f988c8e3978c2fc139c1bc3395bb8db8ae8906842d8b9",
+    "/input_sha256/@mmn_file": "8988bcaca70cad3f1987a2d41f97e896bb3064efbb04e1200f74fab9d6d37445",
+    "/input_sha256/@wannierization_checkpoint_hdf5": "0593a1f095d72eba5b7d5e46f47bbe272042157d545630442140922f8ff53007",
+    "/summary/@construction_policy": "strict",
+    "/summary/@exported_matrix_roundtrip_residual": "6.123233995736766e-17",
+    "/summary/@exported_spectral_roundtrip_residual_ev": "0.0",
+    "/summary/@finite_difference_completeness_residual": "1.9229626863835638e-16",
+    "/summary/@finite_difference_stencil_sha256": "a26c03f931567c69297d84317ed03515c17c1fb95904b056b95848d7565065ea",
+    "/summary/@finite_difference_stencil_source": "checkpoint",
+    "/summary/@fourier_roundtrip_tolerance": "1.0e-10",
+    "/summary/@input_identity": "PASS",
+    "/summary/@minimum_distance_construction_authoritative_band_hamiltonian_algorithm_version": "authoritative-band-hamiltonian-v3-physical-frame-transform",
+    "/summary/@minimum_distance_construction_authoritative_band_hamiltonian_digest": "fa63815e840c0670a3958fe981a46a9d2f087c7e8bca64f21a8f82eb2cfaf0d6",
+    "/summary/@minimum_distance_construction_authoritative_hamiltonian": "native_dft",
+    "/summary/@minimum_distance_construction_fourier_roundtrip_gate_tolerance": "1.0e-10",
+    "/summary/@minimum_distance_construction_hamiltonian_fourier_roundtrip_residual": "6.123233995736766e-17",
+    "/summary/@minimum_distance_construction_position_fourier_roundtrip_residual": "0.0",
+    "/summary/@minimum_distance_construction_real_space_replica_policy": "minimum_distance",
+    "/summary/@mp_grid_construction_authoritative_band_hamiltonian_algorithm_version": "authoritative-band-hamiltonian-v3-physical-frame-transform",
+    "/summary/@mp_grid_construction_authoritative_band_hamiltonian_digest": "fa63815e840c0670a3958fe981a46a9d2f087c7e8bca64f21a8f82eb2cfaf0d6",
+    "/summary/@mp_grid_construction_authoritative_hamiltonian": "native_dft",
+    "/summary/@mp_grid_construction_fourier_roundtrip_gate_tolerance": "1.0e-10",
+    "/summary/@mp_grid_construction_hamiltonian_fourier_roundtrip_residual": "NaN",
+    "/summary/@mp_grid_construction_position_fourier_roundtrip_residual": "NaN",
+    "/summary/@mp_grid_construction_real_space_replica_policy": "mp_grid",
+    "/summary/@mp_matrix_roundtrip_residual": "6.123233995736766e-17",
+    "/summary/@mp_spectral_roundtrip_residual_ev": "0.0",
+    "/summary/@qualification": "STANDARD",
+    "/summary/@sawf_maximum_invariant_defect": "0.0",
+    "/summary/@sawf_minimum_link_singular_value": "1.0",
+    "/summary/@sawf_omega_i": "0.0",
+    "/summary/@sawf_top_one_percent_concentration": "0.0",
+    "/summary/@schema": "WannierNLQG.wannier_gauge_chain_diagnostic",
+    "/summary/@schema_version": "1.0",
+    "/summary/@status": "PASS_DIAGNOSTIC",
+    "/summary/@support_radius_0.9999_angstrom": "0.0",
+    "/summary/@support_radius_0.999_angstrom": "0.0",
+    "/summary/@support_radius_0.99_angstrom": "0.0",
+    "/summary/@support_radius_0.9_angstrom": "0.0",
+    "/summary/@tail_radius_angstrom": "14.4",
+    "/summary/@tail_weight": "0.0",
+    "/summary/@wigner_seitz_matrix_roundtrip_residual": "6.123233995736766e-17",
+    "/summary/@wigner_seitz_spectral_roundtrip_residual_ev": "0.0"
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "id": "audit_paw_block_partitions",
+  "ranks": [
+    {
+      "original_receipt_sha256": "2f236c9da1674d4f8d44d99ec838d2149a9c6bc22f0bf3976e2ae06a6a6db94d",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.violation_count",
+              "payload": "5000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.maximum_gap_ev",
+              "payload": "8c7805384ddd9b3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maximum_coupling",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.far_residual_count",
+              "payload": "5000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.tolerated_far_residual_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.maximum_pair_hamiltonian_residual_ev",
+              "payload": "8c7805384ddd9b3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maximum_far_operator_residual_ev",
+              "payload": "8e7805384ddd9b3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maximum_far_source_column_l2_residual_ev",
+              "payload": "8c7805384ddd9b3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maximum_far_normalized_frobenius_residual_ev",
+              "payload": "8b7805384ddd9b3f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maximum_far_frobenius_residual_ev",
+              "payload": "5553898601b4a33f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.maximum_cancellation_condition",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            }
+          ],
+          "type": "WannierNLQG.Wannierization.PAWBlockPartitionAuditResult"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

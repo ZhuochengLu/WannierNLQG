@@ -1,0 +1,260 @@
+{
+  "expected_nonzero": true,
+  "id": "kpath__band_structure__conventional",
+  "native_science": {
+    "band_structure/synthetic_demo_bands.dat": {
+      "headers": [
+        "#### WannierNLQG band structure",
+        "# energy_reference_E_ref_eV = 0.00000000000000000e+00",
+        "# energy_convention = ascending_eigenvalues_minus_E_ref",
+        "# energy_unit = eV",
+        "# distance_A^-1 k1_fractional k2_fractional k3_fractional band_1_minus_E_ref_eV band_2_minus_E_ref_eV band_3_minus_E_ref_eV band_4_minus_E_ref_eV"
+      ],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "bff60f4a0f065115",
+        "bfdd781205d15638",
+        "3fbf81b4d53230dd",
+        "3ff37533432783ac",
+        "3ff921fb54442d1a",
+        "3fd0000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "bff4461b9bb33cc3",
+        "bfe0da72e2e5df80",
+        "3fccddeb9912bbd8",
+        "3ff117979a03d51c",
+        "400921fb54442d18",
+        "3fe0000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "bff285922521bba5",
+        "bfe373f7eda857fe",
+        "3fd57a3c7cecbf53",
+        "3fedc1fdf9756fcd",
+        "4012d97c7f3321d2",
+        "3fe0000000000000",
+        "3fd0000000000000",
+        "0000000000000000",
+        "bff285922521bba5",
+        "bfe373f7eda857fe",
+        "3fd57a3c7cecbf53",
+        "3fedc1fdf9756fcd",
+        "401921fb54442d18",
+        "3fe0000000000000",
+        "3fe0000000000000",
+        "0000000000000000",
+        "bff285922521bba5",
+        "bfe373f7eda857fe",
+        "3fd57a3c7cecbf53",
+        "3fedc1fdf9756fcd",
+        "401f6a7a2955385e",
+        "3fd0000000000000",
+        "3fe0000000000000",
+        "0000000000000000",
+        "bff4461b9bb33cc3",
+        "bfe0da72e2e5df80",
+        "3fccddeb9912bbd8",
+        "3ff117979a03d51c",
+        "4022d97c7f3321d2",
+        "0000000000000000",
+        "3fe0000000000000",
+        "0000000000000000",
+        "bff60f4a0f065115",
+        "bfdd781205d15638",
+        "3fbf81b4d53230dd",
+        "3ff37533432783ac",
+        "4025fdbbe9bba777",
+        "0000000000000000",
+        "3fd0000000000000",
+        "0000000000000000",
+        "bff60f4a0f065115",
+        "bfdd781205d15638",
+        "3fbf81b4d53230dd",
+        "3ff37533432783ac",
+        "402921fb54442d17",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "bff60f4a0f065115",
+        "bfdd781205d15638",
+        "3fbf81b4d53230dd",
+        "3ff37533432783ac"
+      ],
+      "nonzero_scientific_values": 36,
+      "science_skip_columns": 4,
+      "scientific_max_abs": 1.378732737245689,
+      "scientific_value_count": 36,
+      "shape": [
+        9,
+        8
+      ]
+    },
+    "band_structure/synthetic_demo_kpath.json": {
+      "json_science": {
+        "distance_unit": "A^-1",
+        "fractional_coordinates_folded": false,
+        "lattice_convention": "row-lattice",
+        "node_chain": [
+          {
+            "cumulative_distance_A_inverse": {
+              "float64_bits": "0000000000000000"
+            },
+            "fractional_coordinates": [
+              {
+                "float64_bits": "0000000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              }
+            ],
+            "label": "\u0393",
+            "point_index_one_based": 1
+          },
+          {
+            "cumulative_distance_A_inverse": {
+              "float64_bits": "400921fb54442d18"
+            },
+            "fractional_coordinates": [
+              {
+                "float64_bits": "3fe0000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              }
+            ],
+            "label": "X",
+            "point_index_one_based": 3
+          },
+          {
+            "cumulative_distance_A_inverse": {
+              "float64_bits": "401921fb54442d18"
+            },
+            "fractional_coordinates": [
+              {
+                "float64_bits": "3fe0000000000000"
+              },
+              {
+                "float64_bits": "3fe0000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              }
+            ],
+            "label": "S",
+            "point_index_one_based": 5
+          },
+          {
+            "cumulative_distance_A_inverse": {
+              "float64_bits": "4022d97c7f3321d2"
+            },
+            "fractional_coordinates": [
+              {
+                "float64_bits": "0000000000000000"
+              },
+              {
+                "float64_bits": "3fe0000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              }
+            ],
+            "label": "Y",
+            "point_index_one_based": 7
+          },
+          {
+            "cumulative_distance_A_inverse": {
+              "float64_bits": "402921fb54442d18"
+            },
+            "fractional_coordinates": [
+              {
+                "float64_bits": "0000000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              }
+            ],
+            "label": "\u0393",
+            "point_index_one_based": 9
+          }
+        ],
+        "reciprocal_lattice_convention": "B=2pi*A^(-T)",
+        "schema": "wanniernlqg.kpath",
+        "schema_version": "1.0",
+        "segments": [
+          {
+            "end_node_index_one_based": 2,
+            "end_point_index_one_based": 3,
+            "kpoints_including_endpoints": 3,
+            "segment_index_one_based": 1,
+            "start_node_index_one_based": 1,
+            "start_point_index_one_based": 1
+          },
+          {
+            "end_node_index_one_based": 3,
+            "end_point_index_one_based": 5,
+            "kpoints_including_endpoints": 3,
+            "segment_index_one_based": 2,
+            "start_node_index_one_based": 2,
+            "start_point_index_one_based": 3
+          },
+          {
+            "end_node_index_one_based": 4,
+            "end_point_index_one_based": 7,
+            "kpoints_including_endpoints": 3,
+            "segment_index_one_based": 3,
+            "start_node_index_one_based": 3,
+            "start_point_index_one_based": 5
+          },
+          {
+            "end_node_index_one_based": 5,
+            "end_point_index_one_based": 9,
+            "kpoints_including_endpoints": 3,
+            "segment_index_one_based": 4,
+            "start_node_index_one_based": 4,
+            "start_point_index_one_based": 7
+          }
+        ],
+        "shared_segment_endpoints_written_once": true,
+        "total_kpoints": 9
+      }
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "band_structure/synthetic_demo_bands.dat",
+      "sha256": "0fffe93d4bb55a2fdfe63fc69809143734f2bd1f68f839a3750c1eba7192399d"
+    },
+    {
+      "file": "band_structure/synthetic_demo_kpath.json",
+      "sha256": "68f8279ebd0929e1bf004bc0bfe5701546992326b402efe277112a467cd3bb67"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "c820445a3d504570a6db7865981be46ae1d9bc919cbf7e0c4587fb00688b65ac"
+  ],
+  "original_receipt_sha256": "c820445a3d504570a6db7865981be46ae1d9bc919cbf7e0c4587fb00688b65ac",
+  "rank_output_inventory": [
+    [
+      "band_structure/synthetic_demo_bands.dat",
+      "band_structure/synthetic_demo_kpath.json"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "band_structure/k_path/conventional"
+  ]
+}

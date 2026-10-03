@@ -1,0 +1,55 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__interband_berry_curvature__conventional",
+  "native_science": {
+    "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "bf5936dd5df1a438",
+        "bf5936dd5df1a438",
+        "bf5936dd5df1a438",
+        "bf5936dd5df1a438",
+        "bc06089a6b169560",
+        "bc06089a6b169560",
+        "bc06089a6b169560",
+        "bc06089a6b169560",
+        "3f5936dd5df1a438",
+        "3f5936dd5df1a438",
+        "3f5936dd5df1a438",
+        "3f5936dd5df1a438"
+      ],
+      "nonzero_scientific_values": 12,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0015389596735764354,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat",
+      "sha256": "d66c98efb5d6e87c7effa341c1511c75420b2afc4b2a8ee7da276bd4b39d56f0"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "b05b0ce82285894666db036154d73c36b2b13608105b45844f88d9bb32dd33d3"
+  ],
+  "original_receipt_sha256": "b05b0ce82285894666db036154d73c36b2b13608105b45844f88d9bb32dd33d3",
+  "rank_output_inventory": [
+    [
+      "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "interband_berry_curvature/k_slice/conventional"
+  ]
+}

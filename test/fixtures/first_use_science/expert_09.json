@@ -1,0 +1,103 @@
+{
+  "id": "detect_magnetic_symmetry_inventory__type1",
+  "ranks": [
+    {
+      "original_receipt_sha256": "a81652443cf61f43048098b7d4be0734f66f239085eb810cfe20fbf9d4c8f518",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[1].rotation_fractional",
+              "sha256": "234930f5a7e15b61732ca7a2c16d5a50382f3e2329e68f54f7ac1eb7cd6fc832",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[1].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[1].rotation_cartesian",
+              "sha256": "acbb78ba110f24c2c9038365f99cb7605ec18ce94becfca5de2bbe3a9993a777",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[1].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.magnetic",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.msg_type",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.uni_number",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.hall_number",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.unitary_operation_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.antiunitary_operation_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetry_tolerance",
+              "payload": "f168e388b5f8e43e",
+              "type": "Float64"
+            }
+          ],
+          "type": "WannierNLQG.SymmetryFoundation.MagneticSymmetryInventory"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

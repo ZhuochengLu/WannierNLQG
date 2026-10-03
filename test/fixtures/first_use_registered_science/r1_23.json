@@ -1,0 +1,89 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__injection_spin_current__conventional",
+  "native_science": {
+    "kslice_injection_spin_current_conventional/synthetic_demo_isck_i_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "c4f0206708b38241",
+        "c4f0206708b38241",
+        "c4f0206708b38241",
+        "c4f0206708b38241",
+        "c4d69f861b7ecc4a",
+        "c4d69f861b7ecc4a",
+        "c4d69f861b7ecc4a",
+        "c4d69f861b7ecc4a",
+        "c4e0b2f08f55d73f",
+        "c4e0b2f08f55d73f",
+        "c4e0b2f08f55d73f",
+        "c4e0b2f08f55d73f",
+        "c4e7e3e7d8388bf9",
+        "c4e7e3e7d8388bf9",
+        "c4e7e3e7d8388bf9",
+        "c4e7e3e7d8388bf9"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 1.2184893426820923e+24,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_injection_spin_current_conventional/synthetic_demo_isck_r_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "c5141ce8fcd4b199",
+        "c5141ce8fcd4b199",
+        "c5141ce8fcd4b199",
+        "c5141ce8fcd4b199",
+        "c4f3334ce593ae4d",
+        "c4f3334ce593ae4d",
+        "c4f3334ce593ae4d",
+        "c4f3334ce593ae4d",
+        "44f97c10fb2e162d",
+        "44f97c10fb2e162d",
+        "44f97c10fb2e162d",
+        "44f97c10fb2e162d",
+        "4511f0dfa0192b0a",
+        "4511f0dfa0192b0a",
+        "4511f0dfa0192b0a",
+        "4511f0dfa0192b0a"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 6.078760129204924e+24,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_injection_spin_current_conventional/synthetic_demo_isck_r_conv.dat",
+      "sha256": "266621ee06a420436756976297134a63ca9b079bf42141c08deb95ab48641a02"
+    },
+    {
+      "file": "kslice_injection_spin_current_conventional/synthetic_demo_isck_i_conv.dat",
+      "sha256": "732e818d7a3ef8041025b05cf54c9430e9219af33a76b8e5725cd4e6512fdfc6"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "15bd95937257cb3a747c51c5d504656bb3a1eb1b159d2312fab397493da8551d"
+  ],
+  "original_receipt_sha256": "15bd95937257cb3a747c51c5d504656bb3a1eb1b159d2312fab397493da8551d",
+  "rank_output_inventory": [
+    [
+      "kslice_injection_spin_current_conventional/synthetic_demo_isck_r_conv.dat",
+      "kslice_injection_spin_current_conventional/synthetic_demo_isck_i_conv.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "injection_spin_current/k_slice/conventional"
+  ]
+}

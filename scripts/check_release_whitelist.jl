@@ -4,6 +4,7 @@ const ROOT = normpath(joinpath(@__DIR__, ".."))
 const ALLOWED_TOP_LEVEL = Set([
     ".JuliaFormatter.toml",
     ".github",
+    ".agents",
     ".gitignore",
     "API_BREAKING_CHANGES.md",
     "AGENTS.md",
@@ -50,10 +51,76 @@ const ALLOWED_SCRIPT_FILES = Set([
     "check_tag_ci_reuse.py",
     "generate_release_draft.py",
     "run_tests.py",
+    "development_runner.py",
+    "development_runner_identity.json",
+    "development/common_runner/runner.py",
+    "development/common_runner/identity.py",
+    "development/common_runner/process_resources.py",
+    "development/common_runner/darwin_process_resources.py",
+    "development/common_runner/adapters.py",
+    "development/common_runner/resource_policy.py",
+    "development/common_runner/comparison_contract.py",
+    "development/common_runner/integration.py",
+    "development/common_runner/README.md",
+    "development/common_runner/fixture_task.py",
+    "development/common_runner/smoke.py",
+    "development/common_runner/package_release.py",
     "check_user_guide_examples.jl",
     "check_version_consistency.jl",
     "check_wannierization_documentation.jl",
     "format.jl",
+    "first_use/registry.jl",
+    "first_use/path_registry.json",
+    "first_use/audit_signatures.jl",
+    "first_use/compiler_append_contract.jl",
+    "first_use/source_equivalence.jl",
+    "first_use/run_case.jl",
+    "first_use/verify_results.py",
+    "first_use/campaign.py",
+    "first_use/expert_campaign.py",
+    "first_use/verify_experts.jl",
+    "first_use/check_no_side_effects.jl",
+    "first_use/collect_traces.py",
+    "first_use/collect_expert_traces.py",
+    "first_use/expert_wannierization.jl",
+    "first_use/expert_paw_audit.jl",
+    "first_use/expert_paths.json",
+    "first_use/trace_rank.sh",
+    "first_use/NativeInferenceEvidence.jl",
+    "first_use/capture_dependency_handles.jl",
+    "first_use/capture_type_printer_failures.jl",
+    "first_use/comparison_contract.py",
+    "first_use/darwin_process_resources.py",
+    "first_use/describe_runtime_bindings.jl",
+    "first_use/expert_cache_entry.jl",
+    "first_use/expert_cache_scene.jl",
+    "first_use/expert_custom_probe.jl",
+    "first_use/expert_entry.jl",
+    "first_use/expert_probe.jl",
+    "first_use/fixture_bundle.py",
+    "first_use/source_supplements.py",
+    "first_use/prepare_replay_string_fixture.jl",
+    "first_use/localization_campaign.py",
+    "first_use/localization_parallel_entry.jl",
+    "first_use/inventory_checkpoint_bits.jl",
+    "first_use/test_localization_contract.py",
+    "first_use/guarded_process.py",
+    "first_use/native_science_contract.py",
+    "first_use/process_resources.py",
+    "first_use/provenance_shards.py",
+    "first_use/qualify_expert_scene.py",
+    "first_use/qualify_registered_scene.py",
+    "first_use/registered_science.py",
+    "first_use/release_inventory.py",
+    "first_use/test_registered_qualification.py",
+    "first_use/reduce_actual_types.jl",
+    "first_use/source_identity.py",
+    "first_use/source_proofs.py",
+    "first_use/test_maintenance_tools.py",
+    "first_use/test_native_science_contract.py",
+    "first_use/test_expert_qualification.py",
+    "first_use/test_source_proofs.jl",
+    "first_use/verify_native_integrity.jl",
     "generate_response_symmetry_catalog.jl",
     "generate_vasp_paw_spn.jl",
     "plot_band_structure.jl",
@@ -159,6 +226,16 @@ const SECRET_PATTERNS = (
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
 )
 
+# Inspect raw bytes too: HDF5 can retain deleted private attributes outside its
+# current logical metadata, and text-extension checks cannot see those remnants.
+function contains_release_bytes(data::AbstractVector{UInt8}, needle::AbstractVector{UInt8})
+    length(data) < length(needle) && return false
+    for start in 1:(length(data) - length(needle) + 1)
+        all(offset -> data[start + offset - 1] == needle[offset], eachindex(needle)) && return true
+    end
+    return false
+end
+
 function check_release_whitelist(root::AbstractString = ROOT)
     project_text = read(joinpath(root, "Project.toml"), String)
     is_dev_candidate = occursin(r"^version\s*=\s*\"[^\"]+-DEV\"$"m, project_text)
@@ -209,6 +286,8 @@ function check_release_whitelist(root::AbstractString = ROOT)
     for path in paths
         full_path = joinpath(root, path)
         isfile(full_path) || continue
+        contains_release_bytes(read(full_path), codeunits(LOCAL_HOME_PREFIX)) &&
+            error("local absolute path bytes remain in release file: $(path)")
         lowercase(splitext(path)[2]) in TEXT_EXTENSIONS || continue
         text = read(full_path, String)
         occursin(LOCAL_HOME_PREFIX, text) &&

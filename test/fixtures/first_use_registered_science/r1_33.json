@@ -1,0 +1,89 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__photon_drag_shift_current__geometric_loop",
+  "native_science": {
+    "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000"
+      ],
+      "nonzero_scientific_values": 0,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "3c49290c380abe34",
+        "3c49290c380abe34",
+        "3c49290c380abe34",
+        "3c49290c380abe34",
+        "3deac0e566ac3b0e",
+        "3deac0e566ac3b0e",
+        "3deac0e566ac3b0e",
+        "3deac0e566ac3b0e",
+        "3c484b3eb646f9be",
+        "3c484b3eb646f9be",
+        "3c484b3eb646f9be",
+        "3c484b3eb646f9be"
+      ],
+      "nonzero_scientific_values": 12,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 1.9465733481388932e-10,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat",
+      "sha256": "893559e74734065efb6bc458492b039df035044d9f20f32e7d185c146eb69cf3"
+    },
+    {
+      "file": "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat",
+      "sha256": "39578347d52ff34250fbfb8ea28ae027caae3bfcd694cfb812b1c40656a8c997"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "ab407c959243446dba2c67aa23830aef9e49d8c6d97a59df0327e0f376e404c6"
+  ],
+  "original_receipt_sha256": "ab407c959243446dba2c67aa23830aef9e49d8c6d97a59df0327e0f376e404c6",
+  "rank_output_inventory": [
+    [
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat",
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "photon_drag_shift_current/k_slice/geometric_loop"
+  ]
+}

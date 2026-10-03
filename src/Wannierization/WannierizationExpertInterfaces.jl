@@ -7,6 +7,11 @@ checkpoint path is stable across terminal statuses; convergence and production
 eligibility remain explicit file metadata.
 """
 function construct_symmetry_adapted_wannier_functions(config::SymmetryAdaptedWannierizationConfig)
+    # Symmetry-adapted solve needs this backend. Activate it before crossing the
+    # existing latest-world call boundary, avoiding invalidation inside the solver.
+    if config.input.wannierization_mode === :symmetry_adapted
+        Base.require(Base.PkgId(Base.UUID("f761d5c5-86db-4880-b97f-9680a7cccfb5"), "Spglib"))
+    end
     return _call_wannierization_extension(:construct_symmetry_adapted_wannier_functions, config)
 end
 
@@ -123,6 +128,9 @@ It is independently restartable and never enters the SAWF Z/U solver.
 function prepare_symmetry_covariant_wavefunctions(
     config::SymmetryCovariantWavefunctionPreparationConfig,
 )
+    if config.wavefunction_gauge_backend isa StarCovariantPAWGauge
+        Base.require(Base.PkgId(Base.UUID("f761d5c5-86db-4880-b97f-9680a7cccfb5"), "Spglib"))
+    end
     return _call_wannierization_extension(:prepare_symmetry_covariant_wavefunctions, config)
 end
 

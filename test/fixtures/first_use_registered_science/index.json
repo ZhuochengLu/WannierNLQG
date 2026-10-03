@@ -1,0 +1,633 @@
+{
+  "schema": 1,
+  "records": [
+    {
+      "id": "integral__injection_current__conventional",
+      "ranks": 1,
+      "file": "r1_01.json",
+      "sha256": "8b8ad201543c8ba58a45cc9cf71bbc8f9f87716f5314c19030b716c68e194cce"
+    },
+    {
+      "id": "integral__injection_spin_current__conventional",
+      "ranks": 1,
+      "file": "r1_02.json",
+      "sha256": "1cf0ce2fd10ff83eec02f3a28c9d14aaf3d88e981f401a6163ebf55cab5cdee2"
+    },
+    {
+      "id": "integral__linear_optical_response__conventional",
+      "ranks": 1,
+      "file": "r1_03.json",
+      "sha256": "91f8d5bfb8d8002079cdcecd53563dadbdf3460d49e0505549a0b7d7b6be7159"
+    },
+    {
+      "id": "integral__linear_optical_response__projector",
+      "ranks": 1,
+      "file": "r1_04.json",
+      "sha256": "c52938d0b41f43e41c640255fbdb86f58d35411b885d9c41d49ebfea5e2b6e70"
+    },
+    {
+      "id": "integral__linear_transport__conventional",
+      "ranks": 1,
+      "file": "r1_05.json",
+      "sha256": "dba43a1f16fa450ca2bcdb9b21f42a905b2ffcbd3b86b9e69c89edaeb0384697"
+    },
+    {
+      "id": "integral__linear_transport__projector",
+      "ranks": 1,
+      "file": "r1_06.json",
+      "sha256": "7337124d2d1101ddd9027fdca13b7d79d4b7629ebb83bf8caefb6c35f815c253"
+    },
+    {
+      "id": "integral__orbital_magnetization__conventional",
+      "ranks": 1,
+      "file": "r1_07.json",
+      "sha256": "1543481602b9015d7eff24bc479d976ccc38c00a2ef6372ccfad436ce2e71e8e"
+    },
+    {
+      "id": "integral__orbital_magnetization__projector",
+      "ranks": 1,
+      "file": "r1_08.json",
+      "sha256": "47c5c916b59cc7bacbfdbaa7316ed74bafa291971964fb28f5f3c9218f5c5574"
+    },
+    {
+      "id": "integral__photon_drag_injection_current__conventional",
+      "ranks": 1,
+      "file": "r1_09.json",
+      "sha256": "f49a18c491c2272a5c59881476e1dc7f847f46b8d4ad28f3358ae934e97e4fe0"
+    },
+    {
+      "id": "integral__photon_drag_shift_current__geometric_loop",
+      "ranks": 1,
+      "file": "r1_10.json",
+      "sha256": "181b98b028d0d1f23aaf31aabc08cac922ade287e6f62991aec6ca620604daeb"
+    },
+    {
+      "id": "integral__second_harmonic_generation__conventional",
+      "ranks": 1,
+      "file": "r1_11.json",
+      "sha256": "90df1e2361596c31b4310c9ae589d4343fe8d49febbaf4ca092bbe4403d4eb39"
+    },
+    {
+      "id": "integral__shift_current__conventional",
+      "ranks": 1,
+      "file": "r1_12.json",
+      "sha256": "2354d26e6b2a57b746f29470514103567c28be31aec46ee05eca8def5d7c60bb"
+    },
+    {
+      "id": "integral__shift_current__geometric_loop",
+      "ranks": 1,
+      "file": "r1_13.json",
+      "sha256": "62cfd701fb3ae38f2944bc23674e797992586a621d2fb102d6ab50bb14150f29"
+    },
+    {
+      "id": "integral__shift_current__projector",
+      "ranks": 1,
+      "file": "r1_14.json",
+      "sha256": "12a042ac69f10ec9934bda8e1334a4f9159bcebaf153fbd063203708d4be4b8c"
+    },
+    {
+      "id": "integral__shift_current__wilson_loop",
+      "ranks": 1,
+      "file": "r1_15.json",
+      "sha256": "c3cd7fd986a06647d7b214a478d183d127f54e1cfc22fc19c0802412fce7fc5b"
+    },
+    {
+      "id": "integral__shift_spin_current__conventional",
+      "ranks": 1,
+      "file": "r1_16.json",
+      "sha256": "1c84ff28ae6cc0f6eeaa17b7be148be9bbe41de53152b083e797f0028dd481d0"
+    },
+    {
+      "id": "kpath__band_structure__conventional",
+      "ranks": 1,
+      "file": "r1_17.json",
+      "sha256": "878eb04fa14ba17c87a9c9e263131f464fa72ac5dcec727a8eb32c3f8adead4b"
+    },
+    {
+      "id": "kslice__berry_curvature__conventional",
+      "ranks": 1,
+      "file": "r1_18.json",
+      "sha256": "598f318f7d4cdde35a2b2445bfc679b3cf82d2ed607728f12373f3ed10d272f9"
+    },
+    {
+      "id": "kslice__berry_curvature_dipole__conventional",
+      "ranks": 1,
+      "file": "r1_19.json",
+      "sha256": "840e869ff2f7dbe527d99bf2c76dec6af67e03b71632d8be14fa5e3704bf949c"
+    },
+    {
+      "id": "kslice__berry_curvature_quadrupole__conventional",
+      "ranks": 1,
+      "file": "r1_20.json",
+      "sha256": "ab03b2f13ecdac3b73159f8a0952c101170ea17dc177205c659a1738ecffb6a7"
+    },
+    {
+      "id": "kslice__hermitian_curvature_tensor__conventional",
+      "ranks": 1,
+      "file": "r1_21.json",
+      "sha256": "87ce119a1ab13d234d96632caaf39db180219cc8446b5d26380e4946a91ea018"
+    },
+    {
+      "id": "kslice__injection_current__conventional",
+      "ranks": 1,
+      "file": "r1_22.json",
+      "sha256": "ba9d23c16c33b7951cfbe81d87daddee5af89b89cf57f80eb5c5bc5fdcd58c07"
+    },
+    {
+      "id": "kslice__injection_spin_current__conventional",
+      "ranks": 1,
+      "file": "r1_23.json",
+      "sha256": "7dce95cb592cc01e4ee9124722a805237bdc23e599611c84e5501676d73d6819"
+    },
+    {
+      "id": "kslice__interband_berry_curvature__conventional",
+      "ranks": 1,
+      "file": "r1_24.json",
+      "sha256": "d2ed73e4c1c357fd953435eadfa8e787eca0e0ac341301550811ec571d2be93e"
+    },
+    {
+      "id": "kslice__interband_quantum_metric__conventional",
+      "ranks": 1,
+      "file": "r1_25.json",
+      "sha256": "8a53e09efc16d23110be07bbdafa66af0bef2d6a59edc4edd0c6689fd7a139e3"
+    },
+    {
+      "id": "kslice__linear_optical_response__conventional",
+      "ranks": 1,
+      "file": "r1_26.json",
+      "sha256": "eda809ea293991cbf997c1d2dd5aa2c43630acf1d0b4349211f22c18a47562f5"
+    },
+    {
+      "id": "kslice__linear_optical_response__projector",
+      "ranks": 1,
+      "file": "r1_27.json",
+      "sha256": "b806079a02ea081a31d50c065467e1768f5503b81028ec79208e0adc55bead6c"
+    },
+    {
+      "id": "kslice__linear_transport__conventional",
+      "ranks": 1,
+      "file": "r1_28.json",
+      "sha256": "3650d95c84cf4083e4b8f677f1017cc46381f10495468440b06321f298bf8f44"
+    },
+    {
+      "id": "kslice__linear_transport__projector",
+      "ranks": 1,
+      "file": "r1_29.json",
+      "sha256": "2d950821037a323f00876fbbdedd1d18164ecb38ee8bb51e9e7939bd3515f266"
+    },
+    {
+      "id": "kslice__orbital_magnetization__conventional",
+      "ranks": 1,
+      "file": "r1_30.json",
+      "sha256": "f6cbe0f34ef5c524c420ead56e51ac70c3b05c4ee5666624e234a7b653c35e9c"
+    },
+    {
+      "id": "kslice__orbital_magnetization__projector",
+      "ranks": 1,
+      "file": "r1_31.json",
+      "sha256": "abc0a57cf976d2a7a4afb30061fe1410e6e0358632bee4494cc68b5abab8de66"
+    },
+    {
+      "id": "kslice__photon_drag_injection_current__conventional",
+      "ranks": 1,
+      "file": "r1_32.json",
+      "sha256": "ea3919e57b06b4d11a1bf7209967fe9e71c6df5746befe01a68e96b4bc62e10a"
+    },
+    {
+      "id": "kslice__photon_drag_shift_current__geometric_loop",
+      "ranks": 1,
+      "file": "r1_33.json",
+      "sha256": "c35e4a4d3a8288c707a391bc4fef31e9f809afa1b9a7ff3993810ef8b0215588"
+    },
+    {
+      "id": "kslice__quantum_christoffel_symbol__conventional",
+      "ranks": 1,
+      "file": "r1_34.json",
+      "sha256": "c7c1d3efcc4fd49e2c531c8037c913b374f33ea848ee505f30b9293986433bd6"
+    },
+    {
+      "id": "kslice__quantum_hermitian_connection__conventional",
+      "ranks": 1,
+      "file": "r1_35.json",
+      "sha256": "cbe571526be3c07b02a9cabb395a367fa5103413d4db9c29b19860ed58c94c4e"
+    },
+    {
+      "id": "kslice__quantum_hermitian_connection__geometric_loop",
+      "ranks": 1,
+      "file": "r1_36.json",
+      "sha256": "a4b9dfebc6e5fc965fbab41fbd59447a4903b0cc016c83d426f3a164579e1bd4"
+    },
+    {
+      "id": "kslice__quantum_hermitian_connection__projector",
+      "ranks": 1,
+      "file": "r1_37.json",
+      "sha256": "53bf9e3450d7f1e4b6824cb4a28ca1fc38e20ec48ae91d586d93c7d2a7c888d4"
+    },
+    {
+      "id": "kslice__quantum_hermitian_connection__wilson_loop",
+      "ranks": 1,
+      "file": "r1_38.json",
+      "sha256": "e1bf157c24d875f655a7cf8f5173388ca1ba2311cbb47112d08062e14861472a"
+    },
+    {
+      "id": "kslice__quantum_metric__conventional",
+      "ranks": 1,
+      "file": "r1_39.json",
+      "sha256": "f8f669d44f55d4d92a35a25afaf479ba47f7b60d00fe67732e8640478a81dda3"
+    },
+    {
+      "id": "kslice__quantum_metric_dipole__conventional",
+      "ranks": 1,
+      "file": "r1_40.json",
+      "sha256": "18dc05ae02e9abb7f4ee941767b27701756bc3884659246a53a6b592afe38208"
+    },
+    {
+      "id": "kslice__quantum_metric_quadrupole__conventional",
+      "ranks": 1,
+      "file": "r1_41.json",
+      "sha256": "5852b1b544526135d961b30a248bed493da62025135035e160a941e7cc2c44a7"
+    },
+    {
+      "id": "kslice__second_harmonic_generation__conventional",
+      "ranks": 1,
+      "file": "r1_42.json",
+      "sha256": "9740de9fa11399976dfbbf70ab2766b6659b4f75b644c4aa7b554d6878bf4316"
+    },
+    {
+      "id": "kslice__shift_current__conventional",
+      "ranks": 1,
+      "file": "r1_43.json",
+      "sha256": "f2dbfa3788ddb8196355f34126104d4cc7f93139893ee2d9a837724ca3b0f245"
+    },
+    {
+      "id": "kslice__shift_current__geometric_loop",
+      "ranks": 1,
+      "file": "r1_44.json",
+      "sha256": "6ce2052a75002949f18fb1ed1ce29cf7d8bbff2b47f2787be617f337022eddc6"
+    },
+    {
+      "id": "kslice__shift_current__projector",
+      "ranks": 1,
+      "file": "r1_45.json",
+      "sha256": "545ec411daf2af7aadd8e2b58e15d8710728bdc73f304a3f6311fb0583be094c"
+    },
+    {
+      "id": "kslice__shift_current__wilson_loop",
+      "ranks": 1,
+      "file": "r1_46.json",
+      "sha256": "233933f87689ef4689c44468f4670fac22d79756e0a2f6d21bde948ea1e50a44"
+    },
+    {
+      "id": "kslice__shift_spin_current__conventional",
+      "ranks": 1,
+      "file": "r1_47.json",
+      "sha256": "d5ee9b707564c5f45a5ef698738f5b43ee362e4f03a3dd47d4842c83000855d2"
+    },
+    {
+      "id": "kslice__shift_vector__geometric_loop",
+      "ranks": 1,
+      "file": "r1_48.json",
+      "sha256": "639bdede956bfee94e830671c9d81f5a521a3b9fc2e324a312d0173a437ee20b"
+    },
+    {
+      "id": "kslice__shift_vector__wilson_loop",
+      "ranks": 1,
+      "file": "r1_49.json",
+      "sha256": "ad3260fc1ffb643960046885718dca8dbd2e308d39d1d62136767b9c1d07ec37"
+    },
+    {
+      "id": "kslice__triple_phase_product__conventional",
+      "ranks": 1,
+      "file": "r1_50.json",
+      "sha256": "51917c88c1b1b96f9faf43bad25b54e8725937539002f7f8d90335db2bf9b664"
+    },
+    {
+      "id": "kslice__zeeman_interband_berry_curvature__conventional",
+      "ranks": 1,
+      "file": "r1_51.json",
+      "sha256": "de6ff19a15cb6b9fe013e679b02567856cd15241e9c518f073f9b3e487a66e3e"
+    },
+    {
+      "id": "kslice__zeeman_interband_quantum_metric__conventional",
+      "ranks": 1,
+      "file": "r1_52.json",
+      "sha256": "51103789a9035fec06d2f52bc4320d2fa33c5d9c93a28cbf3b95177cc31950c8"
+    },
+    {
+      "id": "integral__injection_current__conventional",
+      "ranks": 12,
+      "file": "r12_01.json",
+      "sha256": "b4178200c6dfd1cb3eacecf4af7839e2a461c8f6d84b5b04bb8fc2e91cff1016"
+    },
+    {
+      "id": "integral__injection_spin_current__conventional",
+      "ranks": 12,
+      "file": "r12_02.json",
+      "sha256": "2ded7b6bf851127c6d99bf9869a7b1fc76336e5437ca8bc160ff8d3da48221e0"
+    },
+    {
+      "id": "integral__linear_optical_response__conventional",
+      "ranks": 12,
+      "file": "r12_03.json",
+      "sha256": "8350bead5db05e1aa31272faf552087f4e2c9ce105dcb0f8ed60fd5eaf4ebfba"
+    },
+    {
+      "id": "integral__linear_optical_response__projector",
+      "ranks": 12,
+      "file": "r12_04.json",
+      "sha256": "a72520da4a6b646334ac1bda33e6c8b89e0d23d053ed4ec148b2ac56fdf34166"
+    },
+    {
+      "id": "integral__linear_transport__conventional",
+      "ranks": 12,
+      "file": "r12_05.json",
+      "sha256": "360d7c677e5265ddf86b37674204dcbca368228c4bb0e696764397a12bb2b4a9"
+    },
+    {
+      "id": "integral__linear_transport__projector",
+      "ranks": 12,
+      "file": "r12_06.json",
+      "sha256": "fa8bb24b1febb854ad9140f32faab918d2f99505b49303aac74f2be0d1444a1f"
+    },
+    {
+      "id": "integral__orbital_magnetization__conventional",
+      "ranks": 12,
+      "file": "r12_07.json",
+      "sha256": "2121e560f60681bcfc6ebdb7eefdfe689f879e13af6fcca3ca2633efe03708f0"
+    },
+    {
+      "id": "integral__orbital_magnetization__projector",
+      "ranks": 12,
+      "file": "r12_08.json",
+      "sha256": "39411c161dedb7f15839f9244cfe66ae8f9172c28d850b8c8a86440cc011d6d5"
+    },
+    {
+      "id": "integral__photon_drag_injection_current__conventional",
+      "ranks": 12,
+      "file": "r12_09.json",
+      "sha256": "f9b27d7ddaec5f805ed01f0feab3d4f0b489256af3c386b3e86529c3f12f5016"
+    },
+    {
+      "id": "integral__photon_drag_shift_current__geometric_loop",
+      "ranks": 12,
+      "file": "r12_10.json",
+      "sha256": "864ebc14d657654fbb638f5e6be323bdbe645cc5abbe7d6bc8fe8e9184c89ff0"
+    },
+    {
+      "id": "integral__second_harmonic_generation__conventional",
+      "ranks": 12,
+      "file": "r12_11.json",
+      "sha256": "a73b265d370b74b3f63687e8b5bb572ed421499eb17e97c759dab9abf4022ce6"
+    },
+    {
+      "id": "integral__shift_current__conventional",
+      "ranks": 12,
+      "file": "r12_12.json",
+      "sha256": "2a3d91213718e7c235af17a678b52d366d3e454c906b1f937796b8f68552c059"
+    },
+    {
+      "id": "integral__shift_current__geometric_loop",
+      "ranks": 12,
+      "file": "r12_13.json",
+      "sha256": "34222b305f7573c0c8f26fd3289ae752afa0a38a80975011744dafda7663c3b8"
+    },
+    {
+      "id": "integral__shift_current__projector",
+      "ranks": 12,
+      "file": "r12_14.json",
+      "sha256": "eb2c184a50ab3f2a83b949d9aeac9dac20969b4054fb68e39cd5d369c86b0a36"
+    },
+    {
+      "id": "integral__shift_current__wilson_loop",
+      "ranks": 12,
+      "file": "r12_15.json",
+      "sha256": "173b15848c08253e4694cdbaf9077111c46deb4de031dfcea8981394f6333c75"
+    },
+    {
+      "id": "integral__shift_spin_current__conventional",
+      "ranks": 12,
+      "file": "r12_16.json",
+      "sha256": "7fce41ac0c763d137e5059939483bf3319294ecdd05cacf82c5cb308d1a76c7d"
+    },
+    {
+      "id": "kpath__band_structure__conventional",
+      "ranks": 12,
+      "file": "r12_17.json",
+      "sha256": "1495208a14e4a3285f5f0ddde6f123ed2b4aeaaddfb7c35ffa20c47354c92e65"
+    },
+    {
+      "id": "kslice__berry_curvature__conventional",
+      "ranks": 12,
+      "file": "r12_18.json",
+      "sha256": "f6dde175b97b5db38a17507f187443058302a61d9530fa56989930045052065b"
+    },
+    {
+      "id": "kslice__berry_curvature_dipole__conventional",
+      "ranks": 12,
+      "file": "r12_19.json",
+      "sha256": "1a7b2c0075007c7294f641df9e184c3000e25cb6735aed047bd8354d7c1781d0"
+    },
+    {
+      "id": "kslice__berry_curvature_quadrupole__conventional",
+      "ranks": 12,
+      "file": "r12_20.json",
+      "sha256": "c3525f52aa7efe7b316a6e3f9f20714210647850541878b44d1c7b677a761618"
+    },
+    {
+      "id": "kslice__hermitian_curvature_tensor__conventional",
+      "ranks": 12,
+      "file": "r12_21.json",
+      "sha256": "8fdf9ce8ec9a958ec37b53f20ffa53f8a3d42bdf30b611b065bbc9e0e05958ee"
+    },
+    {
+      "id": "kslice__injection_current__conventional",
+      "ranks": 12,
+      "file": "r12_22.json",
+      "sha256": "8767cdb84eb984e9a2cfe5c0238b1e57f625cb1c56ad814847de828c352a187e"
+    },
+    {
+      "id": "kslice__injection_spin_current__conventional",
+      "ranks": 12,
+      "file": "r12_23.json",
+      "sha256": "dd1855cf402aaf79f3e2017adc07d4721c71809633fba66053d86939dc2f73c6"
+    },
+    {
+      "id": "kslice__interband_berry_curvature__conventional",
+      "ranks": 12,
+      "file": "r12_24.json",
+      "sha256": "2c78dad32dd2ba7cd2c13ec84c008daa2e2a92a652dce08221dfe8fd6811efd1"
+    },
+    {
+      "id": "kslice__interband_quantum_metric__conventional",
+      "ranks": 12,
+      "file": "r12_25.json",
+      "sha256": "aa5aa9b9598c32acff74f24c581cf3381436e9622dafec633d34f8ac33db2089"
+    },
+    {
+      "id": "kslice__linear_optical_response__conventional",
+      "ranks": 12,
+      "file": "r12_26.json",
+      "sha256": "00825d99838f3be3d233eff8267f2fbbfd47e1f947410ff3db87493d68225fec"
+    },
+    {
+      "id": "kslice__linear_optical_response__projector",
+      "ranks": 12,
+      "file": "r12_27.json",
+      "sha256": "0457e7b7e7ed72857bd0bc425f93c1a7360a82a0f1004884045440d2f678ae7b"
+    },
+    {
+      "id": "kslice__linear_transport__conventional",
+      "ranks": 12,
+      "file": "r12_28.json",
+      "sha256": "f38cd3f184b673ea341a5d0bfde60d29c2b35d7189e28199f8f3b25893263d03"
+    },
+    {
+      "id": "kslice__linear_transport__projector",
+      "ranks": 12,
+      "file": "r12_29.json",
+      "sha256": "4601f29f2cde98593d33251f3318cd7e15e2700df49617cc289fb594dca7ec54"
+    },
+    {
+      "id": "kslice__orbital_magnetization__conventional",
+      "ranks": 12,
+      "file": "r12_30.json",
+      "sha256": "3a8a9da261e22b027b88919d1efcfe429db922e8545f8c7df5a9efe38299ef57"
+    },
+    {
+      "id": "kslice__orbital_magnetization__projector",
+      "ranks": 12,
+      "file": "r12_31.json",
+      "sha256": "25059e8d66601f6a6fdeb35fb49b383c12d20d99cbcbb564a6f5822d9f75d9cc"
+    },
+    {
+      "id": "kslice__photon_drag_injection_current__conventional",
+      "ranks": 12,
+      "file": "r12_32.json",
+      "sha256": "88746294263e0b0cff7d3b5686c2acf49917b8a77bcf46d534ae6e8ef3d0f39b"
+    },
+    {
+      "id": "kslice__photon_drag_shift_current__geometric_loop",
+      "ranks": 12,
+      "file": "r12_33.json",
+      "sha256": "bb446f7518f80ec2d9cac444a7843985937b86b2ef397d01759837f3acece4d9"
+    },
+    {
+      "id": "kslice__quantum_christoffel_symbol__conventional",
+      "ranks": 12,
+      "file": "r12_34.json",
+      "sha256": "c21f264df3ca43ef390ba87388b07e9e1e5488c57fa9e3e78e2cbf45aaf771f1"
+    },
+    {
+      "id": "kslice__quantum_hermitian_connection__conventional",
+      "ranks": 12,
+      "file": "r12_35.json",
+      "sha256": "9539771de8a512fbdd5d87c141697d2728acb3a108619e7252452ee52c3a2340"
+    },
+    {
+      "id": "kslice__quantum_hermitian_connection__geometric_loop",
+      "ranks": 12,
+      "file": "r12_36.json",
+      "sha256": "42eff7920389209bd2eee3dd5b72155a27c659b73ad733e1fff7c5895a9c7935"
+    },
+    {
+      "id": "kslice__quantum_hermitian_connection__projector",
+      "ranks": 12,
+      "file": "r12_37.json",
+      "sha256": "232afb0b285f22e4a1181bcaf2e08d284bece0a53a850fe08706d2911afe9aa9"
+    },
+    {
+      "id": "kslice__quantum_hermitian_connection__wilson_loop",
+      "ranks": 12,
+      "file": "r12_38.json",
+      "sha256": "81c709e69b63fa954007edbbf47e73830516798dbb230afa13164ed95dd94f9f"
+    },
+    {
+      "id": "kslice__quantum_metric__conventional",
+      "ranks": 12,
+      "file": "r12_39.json",
+      "sha256": "46bc52cc589c791bd447011878af856a9399a7606fc93814f68fdd8061f88014"
+    },
+    {
+      "id": "kslice__quantum_metric_dipole__conventional",
+      "ranks": 12,
+      "file": "r12_40.json",
+      "sha256": "cc5f6de1cb95e81e3f873d8f8838a37c3ed60c89eb3e51a4f32e3638e9046f0c"
+    },
+    {
+      "id": "kslice__quantum_metric_quadrupole__conventional",
+      "ranks": 12,
+      "file": "r12_41.json",
+      "sha256": "b8798da9ee15cb9ac67313a7f94ccf730f4057704eaf6e13da123a055fcc9397"
+    },
+    {
+      "id": "kslice__second_harmonic_generation__conventional",
+      "ranks": 12,
+      "file": "r12_42.json",
+      "sha256": "5351a4ccb59fc798aceffd80803f65479b8b59c24a896a5d7c5439ee15720cf4"
+    },
+    {
+      "id": "kslice__shift_current__conventional",
+      "ranks": 12,
+      "file": "r12_43.json",
+      "sha256": "36e92553587f82d46b99acbb0dba6edfcdec1f91968d87b6617f0ea5f61ccd07"
+    },
+    {
+      "id": "kslice__shift_current__geometric_loop",
+      "ranks": 12,
+      "file": "r12_44.json",
+      "sha256": "d1c6b7f44eb85ba7cb3985e52f935a3fc08e5a9885a2f82510a2fdda53af112c"
+    },
+    {
+      "id": "kslice__shift_current__projector",
+      "ranks": 12,
+      "file": "r12_45.json",
+      "sha256": "0b0367ed99c615a8598ccc7909bd702f93d65fd74585da8eb081f9e09d8ef980"
+    },
+    {
+      "id": "kslice__shift_current__wilson_loop",
+      "ranks": 12,
+      "file": "r12_46.json",
+      "sha256": "782da73ce6f3ba13edbe597c2e451927b974b426e82988bd3689e84301d28c80"
+    },
+    {
+      "id": "kslice__shift_spin_current__conventional",
+      "ranks": 12,
+      "file": "r12_47.json",
+      "sha256": "defed91f51dd473e22e6f860d8002656c9dba1bb2e3f56b8cf9c438492d0272d"
+    },
+    {
+      "id": "kslice__shift_vector__geometric_loop",
+      "ranks": 12,
+      "file": "r12_48.json",
+      "sha256": "a806bd2a26f652d22171633d7dda86087bb4eec2a9853c17f423d69dc831bccc"
+    },
+    {
+      "id": "kslice__shift_vector__wilson_loop",
+      "ranks": 12,
+      "file": "r12_49.json",
+      "sha256": "2fb18c7d825294b47cd812b057de806cdb5caf35abb3a82d72014e1209a8b69d"
+    },
+    {
+      "id": "kslice__triple_phase_product__conventional",
+      "ranks": 12,
+      "file": "r12_50.json",
+      "sha256": "af772eac242d8e3a1fe3fd3716c7f671c529f25383ec148eeef957d1826fff17"
+    },
+    {
+      "id": "kslice__zeeman_interband_berry_curvature__conventional",
+      "ranks": 12,
+      "file": "r12_51.json",
+      "sha256": "3b776161d5385b4b9636feb0cfa08da6f9671052a2600e80bf14577254b720c0"
+    },
+    {
+      "id": "kslice__zeeman_interband_quantum_metric__conventional",
+      "ranks": 12,
+      "file": "r12_52.json",
+      "sha256": "d745ec0ed55309552b5b235b5a19254b59c3d4a0866468f7aa5b2a610b8f8381"
+    }
+  ],
+  "original_scientific_source_sha256": "3eabdfc65f01e33559328004af3bd1c751e0ac04a25b323373a007d924b5cf45",
+  "predeclared_samples_per_final_path": 2,
+  "compile_limit_seconds": 0.5,
+  "final_pass": false
+}

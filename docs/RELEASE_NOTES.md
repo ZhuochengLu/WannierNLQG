@@ -1,4 +1,37 @@
-# WannierNLQG 1.1.0 release notes
+# WannierNLQG 1.1.1 local maintenance notes
+
+The Mixed-FFT cache retains multiple blocks within the existing memory limit
+and reports evictions. The maintained tree also includes the source-owned
+first-use precompile coverage and attribution work. This version was promoted
+locally from the frozen maintenance candidate; no v1.1.1 tag or remote release
+is asserted. Software regression and first-use evidence do not establish
+material convergence or solver-quality qualification.
+
+The latest static release revision guards captured compiler signatures by their
+originating Julia 1.11.2 version and repacks three HDF5 fixtures to remove
+unreachable private path bytes without changing active metadata or numerical
+bits. It also extends raw-byte privacy inspection and corrects maintenance
+documentation, including the workload guard's explicit parent-module binding.
+Tests, explicit precompilation, official scientific Julia readback and new cold/runtime
+qualification have not been run for this source identity; prior acceptance
+remains historical. No remote release is asserted.
+
+Three Julia-serialized preparation caches were migrated in an external copy
+with Julia 1.11.2 and their actual types. Only allowlisted metadata strings
+changed; the band-frame filename follows the SHA-256 of its new contract.
+Relative locators resolve from the portable fixture root, which is also the
+expert probe's working directory. Scientific bits, UPF/SPN blocks, status
+fields and scientific input hashes remain unchanged. The outer SPN
+provenance-file digest, sidecars and manifests bind the migrated metadata bytes.
+Module loading and normal JIT for
+this data-only Serialization migration do not establish current runtime cache
+hits, cold performance or scientific qualification. Historical code/input
+bindings and fail-closed checks remain intact; runtime qualification is
+`NOT_RUN`. This local maintenance step does not publish a release.
+
+The following capability sections describe the preceding 1.1.0 release.
+
+## WannierNLQG 1.1.0 release notes
 
 ## Vector chemical-potential transport and orbital magnetization
 
@@ -81,7 +114,7 @@ delivery gauge only after transform replay and q-to-R roundtrip validation.
 
 ## Current compatibility and identities
 
-- The Julia package software version is 1.1.0; writer software provenance is
+- The Julia package software version is 1.1.1; writer software provenance is
   separate from each wire-schema contract.
 - Wannierization checkpoint HDF5 writes `1.2` and reads `1.1`, `1.2`.
 - Packed real-space operator bundle HDF5 writes `1.1` and reads `1.1`.

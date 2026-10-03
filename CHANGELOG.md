@@ -4,6 +4,39 @@ This changelog records user-visible differences between public WannierNLQG
 releases. Version 1.0.0 establishes the public baseline; each later entry will
 describe changes relative to the preceding public tag.
 
+## 1.1.1 — Local maintenance
+
+- Retain multiple operator/offset/block FFT results within the existing
+  per-workspace memory limit. Least-recently-used eviction reuses a compatible
+  FFT buffer and plan when possible. Integral k-point order, response formulas,
+  and deterministic reduction lanes remain unchanged.
+- Report Mixed-FFT cache evictions alongside FFT calls, hits, and peak memory.
+
+- Include source-owned first-use precompile coverage and attribution maintenance.
+- Guard captured compiler signatures by their originating Julia 1.11.2 version,
+  retaining the declared Julia 1.10 support and portable bounded workloads.
+  Use an explicit parent-module binding at the affected workload boundary.
+- Repack three HDF5 fixtures to remove unreachable private path bytes while
+  preserving all active fields and numerical bits; bind their new physical hashes.
+- Migrate three Julia-serialized preparation caches with their actual types in
+  an external Julia 1.11.2 copy. Change only allowlisted string locators and the
+  coupled band-frame contract filename; root relative paths and the expert
+  probe's working directory in the portable fixture. Preserve UPF/SPN blocks,
+  scientific bits, status fields, input hashes and historical code/input bindings.
+- Extend release privacy checks to raw binary bytes and exclude OS metadata.
+- Correct independent storage-format documentation and historical release
+  identities; adopt the maintained Release description template.
+
+This maintenance tree is promoted locally; it does not assert publication of
+a v1.1.1 tag or release. Earlier documentation-only revisions retain their frozen
+runtime acceptance scope. The latest static guard/privacy revision has not run
+tests, explicit precompilation, cold qualification or scientific calculations;
+official scientific Julia readback of the repacked HDF5 inputs also remains
+`NOT_RUN`. The data-only Serialization migration required module loading and
+could perform normal JIT work; it does not establish runtime cache hits or
+runtime qualification. Fail-closed checks remain intact. Earlier PASS results
+remain historical and do not qualify this new source identity.
+
 ## 1.1.0 — Second-harmonic generation and Standard Wannierization
 
 - Consolidate linear transport and linear optical exports into three response

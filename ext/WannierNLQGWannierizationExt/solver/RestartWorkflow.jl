@@ -1463,11 +1463,15 @@ function _raw_z_field(
         end
     end
     if parallel == :mpi
-        if effective_backend == :contiguous
-            MPI.Allreduce!(something(z_contiguous), +, something(mpi_comm))
-        else
-            for matrix in z_raw
-                MPI.Allreduce!(matrix, +, something(mpi_comm))
+        # Each active k-point has exactly one writer. A sum with zero-filled
+        # non-owner buffers changes the sign bit of a computed -0.0, which
+        # changes the persisted restart Z field across serial/MPI runs.
+        for (index, kpoint) in enumerate(active_kpoints)
+            owner = (index - 1) % mpi_size
+            if effective_backend == :contiguous
+                MPI.Bcast!(@view(something(z_contiguous)[:, :, kpoint]), owner, something(mpi_comm))
+            else
+                MPI.Bcast!(z_raw[kpoint], owner, something(mpi_comm))
             end
         end
     end

@@ -1,0 +1,564 @@
+{
+  "schema": 1,
+  "records": [
+    {
+      "id": "audit_paw_block_partitions",
+      "reference": "expert_01.json",
+      "reference_sha256": "01a1f9feda9eef7099bce9b6fda82dc708866198d0a9a10fb150158cf98db8ee",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "authoritative_band_hamiltonian",
+      "reference": "expert_02.json",
+      "reference_sha256": "0ef1152a3bf94ab36187fb1ae25c7ddfbe086bc233f45cfabfe8553b592b6302",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "band_representation_schema_version",
+      "reference": "expert_03.json",
+      "reference_sha256": "ad32a81caf2507b6c53ae5814824255af179dfa120041dcb67643ebb67ce1f94",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "build_band_product_table",
+      "reference": "expert_04.json",
+      "reference_sha256": "358db750d76a28fc88771f72ecffe3c548463402d0732998cf95d4fab29aa919",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "build_wannier_tight_binding_model",
+      "reference": "expert_05.json",
+      "reference_sha256": "b0e16ee1127ac6e0a3da69f00613669dfc0be47139dfee6fef64e996cf01f696",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "classify_wannierization_u_periodicity",
+      "reference": "expert_06.json",
+      "reference_sha256": "f29a408040f6e88150cc2383f4757b80f1a2517409dea64840717b958aeda79c",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "configure_band_qualification_window!",
+      "reference": "expert_07.json",
+      "reference_sha256": "b6da486d0bf56ce9309829a20c0cd5e35a06e4d46917f37bdee125137e7297f7",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "construct_symmetry_adapted_wannier_functions",
+      "reference": "expert_08.json",
+      "reference_sha256": "d99d588fb968ab8bba6412e08642f7f9e11e8d69bd5597fffc6bc1f3f237ec9b",
+      "ranks": 1,
+      "excluded_return_fields": [
+        "result.restart_state.elapsed_seconds"
+      ],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "detect_magnetic_symmetry_inventory__type1",
+      "reference": "expert_09.json",
+      "reference_sha256": "1f4f20a43e52c48f66f7419647ef41c653cb902f4f1fba4529b025e03c8bc561",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "detect_magnetic_symmetry_inventory__type3",
+      "reference": "expert_10.json",
+      "reference_sha256": "964cee3026d78422506f206ab5fba08850467adca9328db5c00e26964a381477",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "detect_symmetry_operations",
+      "reference": "expert_11.json",
+      "reference_sha256": "452871694e9342ad01a1b74e244e5a3e61f705a2a0871562935e8e5690fb1ace",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "detect_tb_compatibility_symmetry_operations",
+      "reference": "expert_12.json",
+      "reference_sha256": "38043c2bb4ce80386ba1929f35788b1b23d8a0f81d8d7dd08ff256836a6de298",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "diagnose_wannier_gauge_chain",
+      "reference": "expert_13.json",
+      "reference_sha256": "729c8fcd697a8aa6fdf3a3429a686cb1c3cbd573b4964c0bdc3a9d90f7ab154e",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": true
+    },
+    {
+      "id": "evaluate_full_3d_wannier_spreads",
+      "reference": "expert_14.json",
+      "reference_sha256": "00790d2cfe09485dd9b80409e49be8a16790ee53114d118df59aecdc8c133d15",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "evaluate_full_3d_wannier_spreads_nonzero_unitary_frames",
+      "reference": "expert_15.json",
+      "reference_sha256": "543126ca1d5f32f430c167562578330f9aa5a3553d31d36cff0d7ee12e5caf2b",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "generate_qe_paw_matrix_elements",
+      "reference": "expert_16.json",
+      "reference_sha256": "d48565e88a2f63d01ec2223b6fb5315bdc61ace77dbc7fdb059ce79a1b54319d",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "generate_qe_paw_spn",
+      "reference": "expert_17.json",
+      "reference_sha256": "623f1e3c944894f0fa13c36abc28c8df66fbd6c558d674cddbc5708befd0ea4f",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "generate_symmetry_completed_qe_paw_matrix_elements",
+      "reference": "expert_18.json",
+      "reference_sha256": "2bc8089170f95ea60be22400ba100c050ebd3fd5f73bdeb0ed4ae1367137bc19",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "generate_vasp_band_representation",
+      "reference": "expert_19.json",
+      "reference_sha256": "86320b21fb5446a2bc0f6df1a5facf769c92549a030a113ecb3a2a4d512cc7c3",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "generate_vasp_paw_matrix_elements",
+      "reference": "expert_20.json",
+      "reference_sha256": "3d90bc947461140f0edf06d68bad7391568cdbdc819550e59ab68c6e4006c0c3",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "generate_vasp_paw_spn",
+      "reference": "expert_21.json",
+      "reference_sha256": "8d37f2b6d2a31de3a1b0971845a482e3fdab07aa37b63b649c69b1f5c775a709",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "generate_wannier_amn",
+      "reference": "expert_22.json",
+      "reference_sha256": "84ca21f3cbbd496b8268fb7d2a193bc1be0ebb47565cfae53b685c65c81db309",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "generate_wannier_shu",
+      "reference": "expert_23.json",
+      "reference_sha256": "a7037fcf8bc5446504b4632a9621f20acb8c2792c905c5b11b2ae1e7aad662d8",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "generate_wannier_siu",
+      "reference": "expert_24.json",
+      "reference_sha256": "bde0bf73f343bee03b3bc687529216aeacc1ff2f6bca2a11bb248c3a4ee4b229",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "generate_wannier_uhu",
+      "reference": "expert_25.json",
+      "reference_sha256": "9a6d6e32924fc9d4524b39af29205450d85bda4e530a379eee9b301a9f6c498f",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "generate_wannier_uiu",
+      "reference": "expert_26.json",
+      "reference_sha256": "10d30a8ea06436e3dc361cc9a57357e2572f799a051a59c41774550fbf5a2d53",
+      "ranks": 1,
+      "excluded_return_fields": [
+        "result.peak_memory_bytes"
+      ],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "materialize_projection_basis",
+      "reference": "expert_27.json",
+      "reference_sha256": "76b22c39b6e0e7c756482f694f920913b1d45e69703d3404052ddbc4b7ed06bf",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "materialize_symmetry_adapted_wannierization_config",
+      "reference": "expert_28.json",
+      "reference_sha256": "6133516f4aa15071a521d076bcaa16cbf89ce6999c6d7824adfd0edeabdb7e55",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "maximum_real_space_covariance_error__original_projected_nonzero_input",
+      "reference": "expert_29.json",
+      "reference_sha256": "dac283a3417b8e7cec2fca98f4afb6993f7929f965071680fb67391d35b047d4",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "maximum_real_space_covariance_error__antiunitary_broken_nonzero",
+      "reference": "expert_30.json",
+      "reference_sha256": "fbae0c400c395953949da6c282da45a4d5b3d3f5da485883b726009de90d05e5",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "prepare_band_representation",
+      "reference": "expert_31.json",
+      "reference_sha256": "f3109936aa0a8d0ad26db64f8050bbbd1ef4406cf1ce3f5b1dd7c9df358a59c6",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "prepare_exact_wannier_operator_bundle",
+      "reference": "expert_32.json",
+      "reference_sha256": "2ddfe49b9f168273cb143f867dacd9786a6b158ec64988f18aa50b7a28176e3b",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "prepare_paw_scdm_input_artifact",
+      "reference": "expert_33.json",
+      "reference_sha256": "6f2d12eb27791a229624ef4f6ba027e5d2e9c4d9e967f21ed9637a4cb0d3d64d",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "prepare_symmetry_covariant_wavefunctions",
+      "reference": "expert_34.json",
+      "reference_sha256": "7d982def637a4449a258ecacf4051b05446569ed0953c459753984b5fc600219",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "prepare_wannier_operator_target_contract",
+      "reference": "expert_35.json",
+      "reference_sha256": "b66050ff2c3929b57788c1a91f46edaf7af3ea5ad885829b4639ec94ef0798ec",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "qualify_exported_wannierization_tb",
+      "reference": "expert_36.json",
+      "reference_sha256": "ec846e80b02a50447b04b6e411d31ce3c159ef3a8001456a8479a8466bc94d06",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "qualify_response_symmetry_wannier90",
+      "reference": "expert_37.json",
+      "reference_sha256": "795f953a6446e84b8c8de1378d6ea78fedec2c1b9d7ea4092ff79ace971e7df3",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "read_band_representation_hdf5",
+      "reference": "expert_38.json",
+      "reference_sha256": "1ade575a36a6aaac758d3a23c2506f21c072c2f42fb8d021cbbc50ee52bb3ed7",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "read_band_representation_preparation_hdf5",
+      "reference": "expert_39.json",
+      "reference_sha256": "a037fba819236ad777461fcc529ce2c7868734d2ed2b13080e8d318d9c715f63",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "read_paw_scdm_input_artifact",
+      "reference": "expert_40.json",
+      "reference_sha256": "8ab62ff88c62741a425b3bf6cb675cb7949874b09dada8fda1bfc472076041e3",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "read_projection_representation_search_hdf5",
+      "reference": "expert_41.json",
+      "reference_sha256": "8d2ca1c5c699fb5492c933967c0f38f63f50b66e89da36abcb8baac636309361",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "read_qe_paw_spn_provenance",
+      "reference": "expert_42.json",
+      "reference_sha256": "266176767d4ff47fa67d11a7dd165d074abadfa61951c2cd0f59b8d821cdbf63",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "read_vasp_paw_spn_provenance",
+      "reference": "expert_43.json",
+      "reference_sha256": "ec73206ec6e841c1be1989cfe44a536802684a2d95018b05292d18441803ccd6",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "read_wannierization_checkpoint_hdf5",
+      "reference": "expert_44.json",
+      "reference_sha256": "150f4a8b4440ecef1486e74f53a90129e536cbdb2d60a693108d13e3c58c4bd2",
+      "ranks": 1,
+      "excluded_return_fields": [
+        "result.restart_state.elapsed_seconds"
+      ],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "read_wannierization_fixed_subspace_hdf5",
+      "reference": "expert_45.json",
+      "reference_sha256": "3c876b62398b2ba1b39cb6f84d46bdb40a4568aebdb0e30a61c266896456fb10",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "response_symmetry_group_report",
+      "reference": "expert_46.json",
+      "reference_sha256": "acbc85082199d1a8f232e3816a56d27c9bd0081407284e408f3b941fd8ce8014",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "screen_wannier_mesh",
+      "reference": "expert_47.json",
+      "reference_sha256": "c5064d6ee15afebdf0eed5ba53bf063cee21b662fdce838c2f83add18cff2fe6",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "search_projection_representations",
+      "reference": "expert_48.json",
+      "reference_sha256": "a67d87aca646c9f35c59c4f584aca87cda092d542b1b77ac50c8336d8de3a355",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "smv_fletcher_reeves_two_stage_audit",
+      "reference": "expert_49.json",
+      "reference_sha256": "6f24fe756f2fccb2184f730559f6ca48f5095bfdad44e161ccdef26c03289dd0",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "smv_fletcher_reeves_two_stage_audit_contract_sha256",
+      "reference": "expert_50.json",
+      "reference_sha256": "ffdafe30800930c19cd97f2ec1d6e5d38a74149c05c4a1ad4b43450e0fcce263",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "symmetrize_existing_wannier_model",
+      "reference": "expert_51.json",
+      "reference_sha256": "858485bae934dafec41fe7c9ed31583da3bc156d8352776e75eb6c451b64aee8",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "symmetrize_real_space_operator",
+      "reference": "expert_52.json",
+      "reference_sha256": "76c96cbff9e1539500123976e2c536865d9fa7d5ca325eae4ffc16bc26e3c0ed",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "symmetrize_wannier_operators",
+      "reference": "expert_53.json",
+      "reference_sha256": "a10913588d6456345db7326e451e5a07c86330783926673adb63a9bad2765f35",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "symmetry_detection_backend_provenance",
+      "reference": "expert_54.json",
+      "reference_sha256": "b2ed9b0882cb39d96f1f7e5faba7bb224478763018f93877b7f2cc7bd65902c3",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "validate_band_representation",
+      "reference": "expert_55.json",
+      "reference_sha256": "5d1a767318f4f56aff88261591afd60efbbec26aa4c70671e8165c1b72fb9bb2",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "validate_band_representation_compatibility",
+      "reference": "expert_56.json",
+      "reference_sha256": "2fee7c48853cb1306b970b3417c9f0b6d413e863d52e0f4a53ab5f0dec4681d7",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "validate_public_band_representation_contract",
+      "reference": "expert_57.json",
+      "reference_sha256": "db4ba47ddc6b1d2e5f30a279bd20d1617d92429aa7099f43bea0d53d78551302",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "validate_unified_representation_mode_contract",
+      "reference": "expert_58.json",
+      "reference_sha256": "aabf7efe6c92fc7f9df2a5efe7d83ea43dbbf447d12ef1f2e1ed2f771a8e516b",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "write_band_representation_hdf5",
+      "reference": "expert_59.json",
+      "reference_sha256": "655b2808ee93809e3bd30e6846ced8e94b83577e2ac29f5924b46e8500d464b9",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "write_band_representation_summary",
+      "reference": "expert_60.json",
+      "reference_sha256": "f98e37f664aeab5f671c10969011bb65abaf351194608a590a62441c2cdbbc51",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "write_projection_representation_search_hdf5",
+      "reference": "expert_61.json",
+      "reference_sha256": "309944aece9ce126473ec678deb048479b837ce2ce0e8488878976a79ad39991",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "write_response_symmetry_artifact",
+      "reference": "expert_62.json",
+      "reference_sha256": "4a7195751a0e1aac9f6b3db1109640d3ab7a8b98bb28acd496c316898342a5f5",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "write_wannierization_checkpoint_hdf5",
+      "reference": "expert_63.json",
+      "reference_sha256": "eec70fd3ddb4bfc9b9b5afdacc736e1d460229e7ea95962b5a866b02693e4f5d",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "write_wannierization_fixed_subspace_hdf5",
+      "reference": "expert_64.json",
+      "reference_sha256": "b27574c491974def665539578c54823fdcfe379ab10c3cf061e5934569260a8d",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "write_wannierization_u_convergence_diagnostics_hdf5",
+      "reference": "expert_65.json",
+      "reference_sha256": "0291cc2b23f9e2f9b54f166c79246f0be7f644a36f7591f9a3483c757b5a71e8",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "construct_symmetry_adapted_wannier_functions__localization8",
+      "reference": "expert_66.json",
+      "reference_sha256": "81e0a92ff1503a8608f9014c982282f4e7eb8e282fcd3b82f982a707e20ad0ec",
+      "ranks": 1,
+      "excluded_return_fields": [
+        "result.restart_state.elapsed_seconds"
+      ],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "construct_symmetry_adapted_wannier_functions__localization8__mpi12",
+      "reference": "expert_67.json",
+      "reference_sha256": "2dbef9cad8d63e1ca07a922983bb9e52e146860a0449838f3eee40979af2ca2a",
+      "ranks": 12,
+      "excluded_return_fields": [
+        "result.restart_state.elapsed_seconds"
+      ],
+      "semantic_output_transport": false
+    },
+    {
+      "id": "prepare_band_representation__augmentation_required_pipeline",
+      "reference": "expert_68.json",
+      "reference_sha256": "0309cba7657337b50c1fba10e965af9aa3d4edae805f504cf2393c382f942978",
+      "ranks": 1,
+      "excluded_return_fields": [],
+      "semantic_output_transport": false
+    }
+  ],
+  "original_scenes": 68,
+  "original_rank_records": 79,
+  "same_source_sha256": "3eabdfc65f01e33559328004af3bd1c751e0ac04a25b323373a007d924b5cf45",
+  "scientific_numbers_or_shapes_normalized": false,
+  "final_pass": false
+}

@@ -1,0 +1,479 @@
+{
+    "provenance": {
+        "qe_magnetic_input": null,
+        "cartesian_rotation_policy": "group_invariant_metric",
+        "vasp_incar_magnetism": null,
+        "model": {
+            "sha256": "cf57019d7378e230db3f391aba65750bb0dd4b771921f90ab6387bf47fd851f6",
+            "path": "tiny_tb.dat"
+        },
+        "spglib_symprec_unit": "angstrom",
+        "fractional_mapping_tolerance": 1.0e-5,
+        "include_time_reversal": false,
+        "magnetic_moment_semantics": null,
+        "symmetry_tolerance_legacy_alias_angstrom": 1.0e-5,
+        "structure": {
+            "format": "poscar",
+            "sha256": "9dc005268246e067b3aad1f3956f7486c1f8421556ea200794538460897a180a",
+            "path": "POSCAR"
+        },
+        "spglib_version": "1.2.0",
+        "magnetic_moment_source": "none",
+        "spglib_symprec_angstrom": 1.0e-5,
+        "vasp_magnetic_input": null
+    },
+    "qualification": {
+        "status": "PHYSICS_HOLD",
+        "engineering_status": "STRUCTURE_PASS",
+        "gates": {
+            "hamiltonian_covariance": {
+                "status": "NOT_RUN_DOWNSTREAM_BLOCKED"
+            },
+            "full_grid_consistency": {
+                "status": "NOT_RUN_DOWNSTREAM_BLOCKED"
+            },
+            "wannier90_gauge": {
+                "status": "NOT_RUN"
+            },
+            "structure_magnetic_symmetry": {
+                "status": "PASS"
+            },
+            "mmn_covariance": {
+                "status": "NOT_RUN_DOWNSTREAM_BLOCKED"
+            },
+            "integrand_covariance": {
+                "contract": "streamed_all_operations_kpoints_frequencies_components_no_extra_conjugation",
+                "status": "NOT_RUN",
+                "maximum_relative_residual": null,
+                "external_claim": {
+                    "status": "NOT_RUN",
+                    "maximum_relative_residual": null,
+                    "authority": "external_unverified_claim",
+                    "grants_production_eligibility": false,
+                    "tolerance": 1.0e-10
+                },
+                "reason": "WRITER_DOES_NOT_EXECUTE_INTEGRAND_GATE",
+                "tolerance": 1.0e-10
+            }
+        },
+        "warnings": [
+        ],
+        "integrand_covariance": {
+            "contract": "streamed_all_operations_kpoints_frequencies_components_no_extra_conjugation",
+            "status": "NOT_RUN",
+            "maximum_relative_residual": null,
+            "external_claim": {
+                "status": "NOT_RUN",
+                "maximum_relative_residual": null,
+                "authority": "external_unverified_claim",
+                "grants_production_eligibility": false,
+                "tolerance": 1.0e-10
+            },
+            "reason": "WRITER_DOES_NOT_EXECUTE_INTEGRAND_GATE",
+            "tolerance": 1.0e-10
+        },
+        "production_eligible": false,
+        "external_claims": {
+            "integrand_covariance": {
+                "status": "NOT_RUN",
+                "maximum_relative_residual": null,
+                "authority": "external_unverified_claim",
+                "grants_production_eligibility": false,
+                "tolerance": 1.0e-10
+            }
+        },
+        "seal": {
+            "sealed": false,
+            "status": "UNSEALED",
+            "reason": "PHYSICAL_QUALIFICATION_NOT_COMPLETE",
+            "production_eligible": false
+        }
+    },
+    "symmetry": {
+        "checks": {
+            "atom_mapping": {
+                "maximum_cartesian_residual_angstrom": 0,
+                "cartesian_tolerance_angstrom": 1.0e-5,
+                "bijection": true,
+                "magnetic_moment_pass": "NOT_APPLICABLE",
+                "maximum_magnetic_absolute_residual": null,
+                "operations": [
+                    {
+                        "maximum_fractional_residual": 0,
+                        "maximum_magnetic_relative_residual": null,
+                        "maximum_cartesian_residual_angstrom": 0,
+                        "position_pass": true,
+                        "bijection": true,
+                        "magnetic_moment_pass": "NOT_APPLICABLE",
+                        "source_to_target_one_based": [
+                            1,
+                            2
+                        ],
+                        "pass": true,
+                        "operation_index": 1,
+                        "maximum_magnetic_absolute_residual": null
+                    }
+                ],
+                "status": "PASS",
+                "position_pass": true,
+                "magnetic_relative_tolerance": 1.0e-8,
+                "pass": true,
+                "fractional_tolerance": 1.0e-5,
+                "maximum_fractional_residual": 0,
+                "magnetic_transform": "(-1)^antiunitary * det(R_effective) * R_effective * m",
+                "maximum_magnetic_relative_residual": null,
+                "magnetic_absolute_tolerance": 1.0e-8
+            },
+            "cartesian_rotation": {
+                "maximum_cartesian_matrix_correction": 2.7755575615628914e-17,
+                "symmetrized_metric": [
+                    [
+                        1.7161000000000002,
+                        0.2489,
+                        0.1441
+                    ],
+                    [
+                        0.2489,
+                        1.4049999999999998,
+                        0.3368
+                    ],
+                    [
+                        0.1441,
+                        0.3368,
+                        2.1298999999999997
+                    ]
+                ],
+                "production_pass": true,
+                "status": "PASS",
+                "effective_lattice_rows_angstrom": [
+                    [
+                        1.31,
+                        -3.469446951953614e-17,
+                        0.0
+                    ],
+                    [
+                        0.18999999999999997,
+                        1.17,
+                        0.0
+                    ],
+                    [
+                        0.10999999999999999,
+                        0.27,
+                        1.4300000000000002
+                    ]
+                ],
+                "pass": true,
+                "maximum_effective_orthogonality_residual": 2.7755575615628914e-17,
+                "maximum_effective_cartesian_closure_residual": 2.7755575615628914e-17,
+                "maximum_cartesian_matrix_correction_limit": 1.0e-6,
+                "policy": "group_invariant_metric",
+                "maximum_raw_orthogonality_residual": 0,
+                "input_metric": [
+                    [
+                        1.7161000000000002,
+                        0.2489,
+                        0.1441
+                    ],
+                    [
+                        0.2489,
+                        1.4049999999999998,
+                        0.3368
+                    ],
+                    [
+                        0.1441,
+                        0.3368,
+                        2.1298999999999997
+                    ]
+                ],
+                "relative_metric_change": 0,
+                "worst_effective_cartesian_closure_pair": [
+                    1,
+                    1
+                ],
+                "effective_residual_tolerance": 1.0e-12
+            },
+            "tolerance_stability": {
+                "operation_identity": "full_Seitz_rotation_translation_antiunitary",
+                "central_spglib_symprec_angstrom": 1.0e-5,
+                "status": "PASS",
+                "samples": [
+                    {
+                        "matches_central": true,
+                        "msg_type": 1,
+                        "unitary_operation_count": 1,
+                        "uni_number": null,
+                        "spglib_symprec_angstrom": 5.0e-6,
+                        "num_operations": 1,
+                        "hall_number": 1,
+                        "antiunitary_operation_count": 0,
+                        "operation_set_sha256": "8cab2392b428b13c31af334c7d4fa64f810bb446068b1e86348ac5828dcb1d4c"
+                    },
+                    {
+                        "matches_central": true,
+                        "msg_type": 1,
+                        "unitary_operation_count": 1,
+                        "uni_number": null,
+                        "spglib_symprec_angstrom": 1.0e-5,
+                        "num_operations": 1,
+                        "hall_number": 1,
+                        "antiunitary_operation_count": 0,
+                        "operation_set_sha256": "8cab2392b428b13c31af334c7d4fa64f810bb446068b1e86348ac5828dcb1d4c"
+                    },
+                    {
+                        "matches_central": true,
+                        "msg_type": 1,
+                        "unitary_operation_count": 1,
+                        "uni_number": null,
+                        "spglib_symprec_angstrom": 2.0e-5,
+                        "num_operations": 1,
+                        "hall_number": 1,
+                        "antiunitary_operation_count": 0,
+                        "operation_set_sha256": "8cab2392b428b13c31af334c7d4fa64f810bb446068b1e86348ac5828dcb1d4c"
+                    }
+                ],
+                "pass": true
+            },
+            "space_group": {
+                "identity_indices": [
+                    1
+                ],
+                "translation_tolerance_fractional": 1.0e-5,
+                "worst_matched_translation_context": "none",
+                "closure": true,
+                "inverse": true,
+                "closure_missing_pairs": [
+                ],
+                "identity": true,
+                "maximum_matched_translation_residual_fractional": 0,
+                "pass": true,
+                "inverse_missing_operation_indices": [
+                ]
+            },
+            "closure": true,
+            "inverse": true,
+            "point_group": {
+                "closure": true,
+                "inverse": true,
+                "identity": true,
+                "pass": true,
+                "algebra": "exact_integer_fractional_rotation_and_antiunitary_parity"
+            },
+            "identity": true
+        },
+        "space_group_operations": [
+            {
+                "rotation_fractional": [
+                    [
+                        1,
+                        0,
+                        0
+                    ],
+                    [
+                        0,
+                        1,
+                        0
+                    ],
+                    [
+                        0,
+                        0,
+                        1
+                    ]
+                ],
+                "rotation_cartesian_raw": [
+                    [
+                        1,
+                        0,
+                        0
+                    ],
+                    [
+                        0,
+                        1,
+                        0
+                    ],
+                    [
+                        0,
+                        0,
+                        1
+                    ]
+                ],
+                "translation_fractional": [
+                    0,
+                    0,
+                    0
+                ],
+                "cartesian_matrix_correction_max_abs": 2.7755575615628914e-17,
+                "cartesian_rotation_use": "group_invariant_metric",
+                "source_space_group_indices": [
+                    1
+                ],
+                "antiunitary": false,
+                "rotation_cartesian_effective": [
+                    [
+                        1,
+                        0,
+                        0
+                    ],
+                    [
+                        3.0814879110195774e-33,
+                        1.0,
+                        -2.7755575615628914e-17
+                    ],
+                    [
+                        0,
+                        0,
+                        1
+                    ]
+                ],
+                "raw_cartesian_orthogonality_residual": 0,
+                "rotation_cartesian": [
+                    [
+                        1,
+                        0,
+                        0
+                    ],
+                    [
+                        3.0814879110195774e-33,
+                        1.0,
+                        -2.7755575615628914e-17
+                    ],
+                    [
+                        0,
+                        0,
+                        1
+                    ]
+                ],
+                "effective_cartesian_orthogonality_residual": 2.7755575615628914e-17
+            }
+        ],
+        "msg_type": 1,
+        "unitary_operation_count": 1,
+        "uni_number": null,
+        "magnetic": false,
+        "hall_number": 1,
+        "antiunitary_operation_count": 0,
+        "point_group_operations": [
+            {
+                "rotation_fractional": [
+                    [
+                        1,
+                        0,
+                        0
+                    ],
+                    [
+                        0,
+                        1,
+                        0
+                    ],
+                    [
+                        0,
+                        0,
+                        1
+                    ]
+                ],
+                "rotation_cartesian_raw": [
+                    [
+                        1,
+                        0,
+                        0
+                    ],
+                    [
+                        0,
+                        1,
+                        0
+                    ],
+                    [
+                        0,
+                        0,
+                        1
+                    ]
+                ],
+                "translation_fractional": [
+                    0,
+                    0,
+                    0
+                ],
+                "cartesian_matrix_correction_max_abs": 2.7755575615628914e-17,
+                "cartesian_rotation_use": "group_invariant_metric",
+                "source_space_group_indices": [
+                    1
+                ],
+                "antiunitary": false,
+                "rotation_cartesian_effective": [
+                    [
+                        1,
+                        0,
+                        0
+                    ],
+                    [
+                        3.0814879110195774e-33,
+                        1.0,
+                        -2.7755575615628914e-17
+                    ],
+                    [
+                        0,
+                        0,
+                        1
+                    ]
+                ],
+                "raw_cartesian_orthogonality_residual": 0,
+                "rotation_cartesian": [
+                    [
+                        1,
+                        0,
+                        0
+                    ],
+                    [
+                        3.0814879110195774e-33,
+                        1.0,
+                        -2.7755575615628914e-17
+                    ],
+                    [
+                        0,
+                        0,
+                        1
+                    ]
+                ],
+                "effective_cartesian_orthogonality_residual": 2.7755575615628914e-17
+            }
+        ]
+    },
+    "generated_at_utc": "2026-10-01T04:51:05Z",
+    "structure": {
+        "positions_fractional_columns": [
+            [
+                0.13,
+                0.27,
+                0.39
+            ],
+            [
+                0.22,
+                0.41,
+                0.58
+            ]
+        ],
+        "lattice_rows_angstrom": [
+            [
+                1.31,
+                0.0,
+                0.0
+            ],
+            [
+                0.19,
+                1.17,
+                0.0
+            ],
+            [
+                0.11,
+                0.27,
+                1.43
+            ]
+        ],
+        "elements": [
+            "X",
+            "Y"
+        ],
+        "magnetic_moments_cartesian_columns": null,
+        "atomic_type_labels": null
+    },
+    "schema": "wanniernlqg.response-symmetry/1.0"
+}

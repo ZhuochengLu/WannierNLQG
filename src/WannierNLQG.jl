@@ -1,5 +1,9 @@
 module WannierNLQG
 
+# Captured compiler signatures and anonymous bindings belong to this trace version.
+# Other supported Julia versions retain portable bounded workloads and normal JIT.
+const FIRST_USE_TRACE_COMPATIBLE = VERSION == v"1.11.2"
+
 include(joinpath(@__DIR__, "Core", "Core.jl"))
 include(joinpath(@__DIR__, "SymmetryFoundation", "SymmetryFoundation.jl"))
 include(joinpath(@__DIR__, "WannierProjection", "WannierProjection.jl"))
@@ -91,5 +95,7 @@ export TaskConfig,
     FullTensor,
     KSliceSelection
 export read_linear_transport_result, read_orbital_magnetization_result
+
+include("FirstUsePrecompileWorkload.jl")
 
 end

@@ -32,4 +32,6 @@ export read_band_representation_hdf5, write_band_representation_hdf5
 export generate_vasp_band_representation
 export symmetrize_real_space_operator, maximum_real_space_covariance_error
 
+include("SymmetryFoundationFirstUsePrecompile.jl")
+
 end

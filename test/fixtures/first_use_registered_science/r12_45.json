@@ -1,0 +1,144 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__shift_current__projector",
+  "native_science": {
+    "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000"
+      ],
+      "nonzero_scientific_values": 0,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "3c55d9583603fcf8",
+        "3c55d9583603fcf8",
+        "3c55d9583603fcf8",
+        "3c55d9583603fcf8",
+        "3dee0e09ae361723",
+        "3dee0e09ae361723",
+        "3dee0e09ae361723",
+        "3dee0e09ae361723",
+        "3c55d9583603fd0c",
+        "3c55d9583603fd0c",
+        "3c55d9583603fd0c",
+        "3c55d9583603fd0c"
+      ],
+      "nonzero_scientific_values": 12,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 2.1867770711035447e-10,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat",
+      "sha256": "408d4b88ece84b1fc3438c63ad9afa62e02202a77347a02d886b856f504bdb3c"
+    },
+    {
+      "file": "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat",
+      "sha256": "39578347d52ff34250fbfb8ea28ae027caae3bfcd694cfb812b1c40656a8c997"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "4b8ddacfe85d59d8af50d1f027684e4aa050a34c16994442c56dd59fd96b9c04",
+    "2fabc878383f561a9021e42c4e5b17c9873da70facb39f8d8e5e5f31a99be61b",
+    "5986ca2c6006ecfbf37cd443a993d2646dc3c4dc54e9effbbd1c9ac02d938b19",
+    "3129ee577dcf4dbbe203e61a621b4f9c21c7bd894907d6441a5bb7b1891294e1",
+    "78b03a6f891350fb9d9eb1cbb65c1792cf6f89cb63b2fa22e73c74f7028bf6b1",
+    "26ad8915870e0167c1fb638ce20f5290ce63bd5ac1ab94b7d234e3207fe4cf5e",
+    "f2fe632566f34ee772a9cadcc8e75747474c6cb16d9a47fb110f13ed6c0d4e8c",
+    "c5512a2ed1714fd8729b74159d5542773ccb1f9ea81e19d7fca3d9ad2484789c",
+    "909326586fab3875362ce42302ee9b3966344635803bb694ee89f191277d73b0",
+    "b089cf3a6398b7e64643df3a23fa0a5b93cca8bc36e5d903e41b938d4cfaa0e3",
+    "643e2fad094c30367234adba2cf91a0fe88a13e5eadbf874b91affc643624386",
+    "7102a0dc1c09bac8edb00a4898b434404f6239d843aaedbeb8ece0520ea684c7"
+  ],
+  "original_receipt_sha256": "4b8ddacfe85d59d8af50d1f027684e4aa050a34c16994442c56dd59fd96b9c04",
+  "rank_output_inventory": [
+    [
+      "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat",
+      "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat"
+    ],
+    [
+      "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat",
+      "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat"
+    ],
+    [
+      "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat",
+      "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat"
+    ],
+    [
+      "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat",
+      "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat"
+    ],
+    [
+      "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat",
+      "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat"
+    ],
+    [
+      "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat",
+      "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat"
+    ],
+    [
+      "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat",
+      "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat"
+    ],
+    [
+      "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat",
+      "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat"
+    ],
+    [
+      "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat",
+      "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat"
+    ],
+    [
+      "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat",
+      "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat"
+    ],
+    [
+      "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat",
+      "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat"
+    ],
+    [
+      "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat",
+      "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat"
+    ]
+  ],
+  "ranks": 12,
+  "task_labels": [
+    "shift_current/k_slice/projector"
+  ]
+}

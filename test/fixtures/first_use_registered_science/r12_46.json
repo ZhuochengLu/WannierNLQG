@@ -1,0 +1,144 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__shift_current__wilson_loop",
+  "native_science": {
+    "kslice_shift_current_wilson_loop/synthetic_demo_sck_i_wilson.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000"
+      ],
+      "nonzero_scientific_values": 0,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_shift_current_wilson_loop/synthetic_demo_sck_r_wilson.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "3c55d95836363a46",
+        "3c55d95836363a46",
+        "3c55d95836363a46",
+        "3c55d95836363a46",
+        "3dee0e09ae7b3326",
+        "3dee0e09ae7b3326",
+        "3dee0e09ae7b3326",
+        "3dee0e09ae7b3326",
+        "3c55d95836363a46",
+        "3c55d95836363a46",
+        "3c55d95836363a46",
+        "3c55d95836363a46"
+      ],
+      "nonzero_scientific_values": 12,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 2.1867770722743038e-10,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_shift_current_wilson_loop/synthetic_demo_sck_r_wilson.dat",
+      "sha256": "865e05dab5b001d61d8ada05cb0ace27e2e7b3d61fbea4e892cc3523fe4eeb26"
+    },
+    {
+      "file": "kslice_shift_current_wilson_loop/synthetic_demo_sck_i_wilson.dat",
+      "sha256": "39578347d52ff34250fbfb8ea28ae027caae3bfcd694cfb812b1c40656a8c997"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "2ff957994d9d20c191b1508e99c50a2ad6a7c6493c7e6a1f3e8232052e28fdc4",
+    "3c2eb2446613300cd9537790212d635acfa7c3fc6883fdbc1103da26e92bed22",
+    "ef4c6718ef1f569f3c35ba54d7cfcf479c70e77af87d3d2a6336c8acca8159fb",
+    "d881c8da0d6068bb21c59e1fac0dbb00f8394c4a14aa750ad98dff53de09065c",
+    "33610f528de7a959d0872d25e3b63ffb78eed25802bf51c94bf7d3eb3274a7fa",
+    "4f827afa7548762bc40e1daf1f7b56fdfd402c4b9698658a9921907178157cfd",
+    "9406261b2b8a0f58636727d8f58d1a56dfd25e294f668c8bf4c262f2b9f11d36",
+    "1523645949159f4e5c83d6f63f19e1acc0eef2fea5961d80867d71779ce12246",
+    "52d946ed8d7cc8806197f4009103f7b53975df1aae049fea6305af25a7ad28e6",
+    "80a9d96c4870ea36aad64ca270aa3b22d568bf300a139ba779b3bfd50ba64506",
+    "d91c4bb1e659cabc07d808c565d58ab6f075b4278b62f557fc26b1c23c555034",
+    "365da138627df4dbd8929daa1854e7c35eea200277cd0d3f36ae81e28e75676c"
+  ],
+  "original_receipt_sha256": "2ff957994d9d20c191b1508e99c50a2ad6a7c6493c7e6a1f3e8232052e28fdc4",
+  "rank_output_inventory": [
+    [
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_r_wilson.dat",
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_i_wilson.dat"
+    ],
+    [
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_r_wilson.dat",
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_i_wilson.dat"
+    ],
+    [
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_r_wilson.dat",
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_i_wilson.dat"
+    ],
+    [
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_r_wilson.dat",
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_i_wilson.dat"
+    ],
+    [
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_r_wilson.dat",
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_i_wilson.dat"
+    ],
+    [
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_r_wilson.dat",
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_i_wilson.dat"
+    ],
+    [
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_r_wilson.dat",
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_i_wilson.dat"
+    ],
+    [
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_r_wilson.dat",
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_i_wilson.dat"
+    ],
+    [
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_r_wilson.dat",
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_i_wilson.dat"
+    ],
+    [
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_r_wilson.dat",
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_i_wilson.dat"
+    ],
+    [
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_r_wilson.dat",
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_i_wilson.dat"
+    ],
+    [
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_r_wilson.dat",
+      "kslice_shift_current_wilson_loop/synthetic_demo_sck_i_wilson.dat"
+    ]
+  ],
+  "ranks": 12,
+  "task_labels": [
+    "shift_current/k_slice/wilson_loop"
+  ]
+}

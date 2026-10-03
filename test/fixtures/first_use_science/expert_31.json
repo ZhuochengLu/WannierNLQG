@@ -1,0 +1,1083 @@
+{
+  "id": "prepare_band_representation",
+  "ranks": [
+    {
+      "original_receipt_sha256": "05e19b10ded1644cbf5e85c22c25f7056b5ba5de7af3e281065b9cb466a07329",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": false,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.representation.spinor",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.representation.real_lattice",
+              "sha256": "1332df685c45a61a0ac008a6a653295b8c5655361c1d34b6304b22ec40235fb8",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 6.283185307179586,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.representation.reciprocal_lattice",
+              "sha256": "a7bd7ebbf1f7479c3864a60faea5fed130808b61a7bd43712740d8cd0f5e91e2",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.representation.mp_grid[1]",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.representation.mp_grid[2]",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.representation.mp_grid[3]",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.5,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.representation.kpoints_fractional",
+              "sha256": "c3ef795130ae64dd5c975f1567fbdef361865bab663026ed1d3be0564e2514af",
+              "shape": [
+                2,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.representation.energies_ev",
+              "sha256": "ac44b3214636dc7a21e80ed87ddef6ccf8b4988fcf2e69f045dd6e6e3a320c55",
+              "shape": [
+                2,
+                2
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.representation.operations[1].rotation_fractional",
+              "sha256": "234930f5a7e15b61732ca7a2c16d5a50382f3e2329e68f54f7ac1eb7cd6fc832",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.representation.operations[1].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.representation.operations[1].rotation_cartesian",
+              "sha256": "1332df685c45a61a0ac008a6a653295b8c5655361c1d34b6304b22ec40235fb8",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.representation.operations[1].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 2,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.representation.kpoint_map",
+              "sha256": "0c730b69905c5ef7a4ca5269f72365400bde2dd2c04eaf9bbb3d1c4a265a0131",
+              "shape": [
+                1,
+                2
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.representation.reciprocal_shifts",
+              "sha256": "17b0761f87b081d5cf10757ccc89f12be355c70e2e29df288b65b30710dcbcd1",
+              "shape": [
+                3,
+                1,
+                2
+              ],
+              "type": "Array{Int64, 3}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.representation.sewing_matrices",
+              "sha256": "1d36957e9063a2072fc2544441ffde8bcf80e2a9188054927da5b8edd24413c2",
+              "shape": [
+                2,
+                2,
+                1,
+                2
+              ],
+              "type": "Array{ComplexF64, 4}"
+            },
+            {
+              "finite": true,
+              "max_abs": 2,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.representation.band_block_labels",
+              "sha256": "60cb1131bd82441237f153b62397d13966681fa269ce80e4fcedfffc7fd8dd92",
+              "shape": [
+                2,
+                2
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 2,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.representation.irreducible_indices",
+              "sha256": "0c730b69905c5ef7a4ca5269f72365400bde2dd2c04eaf9bbb3d1c4a265a0131",
+              "shape": [
+                2
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 2,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.representation.full_to_irreducible",
+              "sha256": "0c730b69905c5ef7a4ca5269f72365400bde2dd2c04eaf9bbb3d1c4a265a0131",
+              "shape": [
+                2
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.representation.full_to_operation",
+              "sha256": "814dd7b9784d57c15b9c2972e9b4fd6cf7e164f8162a934bdb2452a413dab1f7",
+              "shape": [
+                2
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[1].operation_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[1].source_kpoint",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[1].target_kpoint",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[1].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[1].source_band_count",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[1].target_band_count",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[1].required_rank",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[1].numerical_rank",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[1].rank_threshold",
+              "payload": "000000000000c03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[1].minimum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[1].maximum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[1].condition_estimate",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[1].left_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[1].right_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[2].operation_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[2].source_kpoint",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[2].target_kpoint",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[2].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[2].source_band_count",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[2].target_band_count",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[2].required_rank",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[2].numerical_rank",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[2].rank_threshold",
+              "payload": "000000000000c03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[2].minimum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[2].maximum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[2].condition_estimate",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[2].left_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[2].right_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[3].operation_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[3].source_kpoint",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[3].target_kpoint",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[3].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[3].source_band_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[3].target_band_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[3].required_rank",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[3].numerical_rank",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[3].rank_threshold",
+              "payload": "000000000000b03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[3].minimum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[3].maximum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[3].condition_estimate",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[3].left_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[3].right_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[4].operation_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[4].source_kpoint",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[4].target_kpoint",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[4].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[4].source_band_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[4].target_band_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[4].required_rank",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[4].numerical_rank",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[4].rank_threshold",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[4].minimum_singular_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[4].maximum_singular_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.raw_diagnostics[4].condition_estimate",
+              "payload": "000000000000f07f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[4].left_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[4].right_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[5].operation_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[5].source_kpoint",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[5].target_kpoint",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[5].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[5].source_band_count",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[5].target_band_count",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[5].required_rank",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[5].numerical_rank",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[5].rank_threshold",
+              "payload": "000000000000c03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[5].minimum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[5].maximum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[5].condition_estimate",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[5].left_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[5].right_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[6].operation_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[6].source_kpoint",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[6].target_kpoint",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[6].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[6].source_band_count",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[6].target_band_count",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[6].required_rank",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[6].numerical_rank",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[6].rank_threshold",
+              "payload": "000000000000c03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[6].minimum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[6].maximum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[6].condition_estimate",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[6].left_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[6].right_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[7].operation_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[7].source_kpoint",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[7].target_kpoint",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[7].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[7].source_band_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[7].target_band_count",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[7].required_rank",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[7].numerical_rank",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[7].rank_threshold",
+              "payload": "000000000000b03c",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[7].minimum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[7].maximum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[7].condition_estimate",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[7].left_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[7].right_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[8].operation_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[8].source_kpoint",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[8].target_kpoint",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[8].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[8].source_band_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[8].target_band_count",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[8].required_rank",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[8].numerical_rank",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[8].rank_threshold",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[8].minimum_singular_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[8].maximum_singular_value",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": false,
+              "path": "result.raw_diagnostics[8].condition_estimate",
+              "payload": "000000000000f07f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[8].left_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.raw_diagnostics[8].right_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.qualification_scope.outer_mask",
+              "sha256": "27ecd0a598e76f8a2fd264d427df0a119903e8eae384e478902541756f089dd1",
+              "shape": [
+                2,
+                2
+              ],
+              "type": "BitMatrix"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.qualification_scope.frozen_mask",
+              "sha256": "507503b51960cceda8d924904fb85377fe7d177fb8dfcf56b24e4557644ed486",
+              "shape": [
+                2,
+                2
+              ],
+              "type": "BitMatrix"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.supported_contract",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.passed",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.tolerance",
+              "payload": "3a8c30e28e79453e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.product_table.identity_index",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.compatibility_report.product_table.spin_actions",
+              "sha256": "3239b05c38b825ebb79f103172438292a22a0951351a6b81be1df5d44776cc65",
+              "shape": [
+                1,
+                1,
+                1
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.compatibility_report.product_table.product_indices",
+              "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+              "shape": [
+                1,
+                1
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.compatibility_report.product_table.translation_differences",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3,
+                1,
+                1
+              ],
+              "type": "Array{Int64, 3}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.compatibility_report.product_table.spinor_factors",
+              "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+              "shape": [
+                1,
+                1
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.maximum_group_law_residuals[1]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.maximum_group_law_residuals[2]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.maximum_group_law_residuals[3]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.maximum_group_law_residuals[4]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.band_group_law_residuals[1]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.band_group_law_residuals[2]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.band_group_law_residuals[3]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.band_group_law_residuals[4]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.target_group_law_residuals[1]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.target_group_law_residuals[2]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.target_group_law_residuals[3]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.target_group_law_residuals[4]",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.maximum_reciprocal_shift_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.theta_squared_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.maximum_kramers_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.compatibility_report.maximum_required_block_unitarity_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            }
+          ],
+          "type": "WannierNLQG.Wannierization.BandRepresentationPreparationResult"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

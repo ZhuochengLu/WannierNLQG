@@ -1,0 +1,14 @@
+{"stage":"qe-upf","event":"BUILD_STARTED","unit":null,"wall_seconds":0.0,"time_unix":1.790784609063485e9}
+{"stage":"qe-upf","event":"BUILD_COMMITTED","unit":null,"wall_seconds":0.015459060668945312,"time_unix":1.790784609078767e9}
+{"stage":"qe-projector-plan","event":"BUILD_STARTED","unit":null,"wall_seconds":0.0,"time_unix":1.790784609078812e9}
+{"stage":"qe-projector-plan","event":"BUILD_COMMITTED","unit":null,"wall_seconds":0.0003669261932373047,"time_unix":1.790784609079173e9}
+{"stage":"qe-beta","event":"BUILD_STARTED","unit":1,"wall_seconds":0.0,"time_unix":1.790784609105491e9}
+{"stage":"qe-beta","event":"BUILD_COMMITTED","unit":1,"wall_seconds":0.0006010532379150391,"time_unix":1.790784609106024e9}
+{"stage":"qe-beta","event":"BUILD_STARTED","unit":2,"wall_seconds":0.0,"time_unix":1.790784609115727e9}
+{"stage":"qe-beta","event":"BUILD_COMMITTED","unit":2,"wall_seconds":0.00034689903259277344,"time_unix":1.790784609116057e9}
+{"stage":"qe-beta","event":"BUILD_STARTED","unit":3,"wall_seconds":0.0,"time_unix":1.790784609117562e9}
+{"stage":"qe-beta","event":"BUILD_COMMITTED","unit":3,"wall_seconds":0.00025200843811035156,"time_unix":1.790784609117808e9}
+{"stage":"qe-generalized-norm","event":"BUILD_STARTED","unit":null,"wall_seconds":0.0,"time_unix":1.790784609118157e9}
+{"stage":"qe-generalized-norm","event":"BUILD_COMMITTED","unit":null,"wall_seconds":0.003962039947509766,"time_unix":1.790784609122115e9}
+{"stage":"band-frame","event":"BUILD_STARTED","unit":null,"wall_seconds":0.0,"time_unix":1.790784609134284e9}
+{"stage":"band-frame","event":"BUILD_COMMITTED","unit":null,"wall_seconds":0.0005948543548583984,"time_unix":1.790784609134858e9}

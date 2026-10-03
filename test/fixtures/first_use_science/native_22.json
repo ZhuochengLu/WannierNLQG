@@ -1,0 +1,90 @@
+{
+  "original_artifact_attestation": null,
+  "original_report_sha256": "1cc7dbafcd14da0c3d02159b81a71e2b5cf41a9e115fadfe0ebd8b1197f58454",
+  "report": {
+    "all_finite": true,
+    "leaves": [
+      {
+        "finite": true,
+        "path": "result.original_mp_grid[1]",
+        "payload": "0200000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.original_mp_grid[2]",
+        "payload": "0200000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.original_mp_grid[3]",
+        "payload": "0200000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.recommended_grid[1]",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.recommended_grid[2]",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.recommended_grid[3]",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.original_grid_is_symmetry_closed",
+        "payload": "01",
+        "type": "Bool"
+      },
+      {
+        "finite": true,
+        "max_abs": 48.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result.operation_indices",
+        "sha256": "7fe787bb4624f1055bb825af35776ec814951fcf6fcc0ef913fe9259a307add2",
+        "shape": [
+          48
+        ],
+        "type": "Vector{Int64}"
+      },
+      {
+        "finite": true,
+        "path": "result.selected_operation_count",
+        "payload": "3000000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.density_products[1]",
+        "payload": "000000000000f03f",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "result.density_products[2]",
+        "payload": "000000000000f03f",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "result.density_products[3]",
+        "payload": "000000000000f03f",
+        "type": "Float64"
+      }
+    ],
+    "numeric_leaf_count": 12,
+    "numeric_sha256": "68b021e55dcb789190e40f5092a32d040993a32de6dd78ff6883ebd914c31221",
+    "type": "@NamedTuple{original_mp_grid::Tuple{Int64, Int64, Int64}, recommended_grid::Tuple{Int64, Int64, Int64}, original_grid_is_symmetry_closed::Bool, operation_indices::Vector{Int64}, selected_operation_count::Int64, density_products::Tuple{Float64, Float64, Float64}}"
+  },
+  "schema": 1
+}

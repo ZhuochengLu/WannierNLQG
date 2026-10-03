@@ -1,0 +1,144 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__photon_drag_shift_current__geometric_loop",
+  "native_science": {
+    "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000"
+      ],
+      "nonzero_scientific_values": 0,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "3c49290c380abe34",
+        "3c49290c380abe34",
+        "3c49290c380abe34",
+        "3c49290c380abe34",
+        "3deac0e566ac3b0e",
+        "3deac0e566ac3b0e",
+        "3deac0e566ac3b0e",
+        "3deac0e566ac3b0e",
+        "3c484b3eb646f9be",
+        "3c484b3eb646f9be",
+        "3c484b3eb646f9be",
+        "3c484b3eb646f9be"
+      ],
+      "nonzero_scientific_values": 12,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 1.9465733481388932e-10,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat",
+      "sha256": "893559e74734065efb6bc458492b039df035044d9f20f32e7d185c146eb69cf3"
+    },
+    {
+      "file": "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat",
+      "sha256": "39578347d52ff34250fbfb8ea28ae027caae3bfcd694cfb812b1c40656a8c997"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "269d3023cfe05d16d10446259d46fa290958126df42c10bd66356f68027fbe2e",
+    "a9facfdce70c43e77ac05c448e082f47116792d6c54c4f85f7bc6dd20159192c",
+    "ab6e4e589166976dcace300c7450ff1ca32f2720111971faf564752359688907",
+    "28d24da82ab17c3a1b59b771fa4288903523ce1f32bf2932a51dd4f3906d2edc",
+    "7f82dece858ab1ecde25cbd34cf49807c1979c0c6885b5bb24e8b18ab4265d7c",
+    "6bad0541d0989ee22048dcb5b9e8103df65940001831b0da8552619ff43dd7ad",
+    "edccff0c4174448b08a9e85e19e756ae9d19418a6c1f1e40c9b5984fb4da3116",
+    "c60b7388de630f5e33c27606c472b1e5e31fbfbf590c38eb2e415cf41034e543",
+    "2be32330503efe8971ce17da4934ee93627fd694df787c35767fe7e7ed3fe46c",
+    "5bb2955cf3efe28128126c50e614b6d01586530e63269f1ffdc886a83d7bd6fd",
+    "47b45954f4df958c0127e6266b9ae7dca71c0fabe86450327f615e4c5b5c78e0",
+    "d8723fef2b9e3a4a9aa4a2d16cc698ffb50e74d222308d60f59686b0483cd553"
+  ],
+  "original_receipt_sha256": "269d3023cfe05d16d10446259d46fa290958126df42c10bd66356f68027fbe2e",
+  "rank_output_inventory": [
+    [
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat",
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat"
+    ],
+    [
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat",
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat"
+    ],
+    [
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat",
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat"
+    ],
+    [
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat",
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat"
+    ],
+    [
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat",
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat"
+    ],
+    [
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat",
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat"
+    ],
+    [
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat",
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat"
+    ],
+    [
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat",
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat"
+    ],
+    [
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat",
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat"
+    ],
+    [
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat",
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat"
+    ],
+    [
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat",
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat"
+    ],
+    [
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_r_geo.dat",
+      "kslice_photon_drag_shift_current_geometric_loop/synthetic_demo_pdsck_i_geo.dat"
+    ]
+  ],
+  "ranks": 12,
+  "task_labels": [
+    "photon_drag_shift_current/k_slice/geometric_loop"
+  ]
+}

@@ -1,0 +1,150 @@
+# Bundled common development runner
+
+This directory is the single canonical implementation. It ships with the complete
+WannierNLQG source package; no parent workspace, global skill, installation or
+service is required. The package entrypoint is `scripts/development_runner.py`.
+Repository `Code/development/common-runner` modules only forward to this source;
+they contain no second implementation. The launcher checks seven core hashes and
+the integration hash in `scripts/development_runner_identity.json` before use.
+After an authorized implementation change, update those pins and the release
+inventories together. Never update pins to hide a mismatch in a retained run.
+
+See [the package development guide](../../../docs/DEVELOPMENT.md) for four typed
+entrypoints. Full constructs seven task selections and an inherited process group;
+MPI/cold/source-audit require a matching qualification contract, explicit argv,
+complete env and native/source reference inputs. Exit0 alone is not scientific
+PASS. The default limits guard three consecutive RSS-over-limit observations,
+any increase in host Swapouts and a 10 GiB disk floor. CPU is a declared budget
+implemented in argv/thread settings. RSS is sampled, not an OS high-water mark.
+
+Run `python3 scripts/development/common_runner/smoke.py --output-dir /absolute/new/evidence`
+from the package root for seconds-only Python engineering fixtures. It exercises
+all four actual typed entrypoints plus raw core failure/recovery paths; it never
+executes Julia/MPI or attributes simulated receipts to scientific measurements.
+Use a new external directory. All attempts remain there. Host resource sensing
+is required and errors fail closed.
+
+Core API: put this directory on sys.path; call `runner.submit(spec, runs_root)`,
+`runner.reconcile(run_directory)`, `runner.resume(run_directory)` and
+`adapters.qualify(run_directory)`. Requests use `nlqg.local-run/1`, explicit
+foreground_owned_group, unique run_id, absolute executable/cwd, complete env,
+input hashes, output names and limits. Multi-stage prerequisites need explicit
+completion gates and final matching typed qualification in the package submit
+entrypoint. Downstream stages do not run after a gate failure.
+
+The independent controller/waiter/monitor persist PID/start/PGID, logs, incremental
+resources, real waitpid exit and an atomic final receipt. Same-ID same-spec submit
+is idempotent. status is read-only; reconcile can rebuild the final receipt only
+from valid sealed original evidence; missing exit is UNKNOWN. resume advances
+never-started pending stages and does not rerun failed/ambiguous/completed stages.
+Input/tool/output tampering is rejected. No arbitrary PID cancellation or importing
+foreign processes exists. Signals use owned start identities and verified ancestry.
+
+Supported contract: foreground tasks that retain their group and wait for children.
+Observed daemon/PGID escapes fail; unobserved fast reparent escape cannot be ruled
+out on macOS. Kernel complete-tree containment remains UNKNOWN. Linux code exists
+but execution is not independently qualified. Simultaneous waiter/monitor loss,
+power loss, instantaneous RSS spikes and disk exhaustion cannot yield invented
+PASS or guessed exits. Evidence is retained; a repeat check is explicit, never automatic.
+
+The last sentence means an explicit new request is required to repeat a failed
+or ambiguous stage. These engineering limits do not change package science,
+solver-quality or production qualification.
+
+`package_release.py` assembles a deterministic source zip strictly from the
+verified positive SOURCE_MANIFEST plus SHA256SUMS/SOURCE_MANIFEST. It excludes
+Git metadata and requires output outside the package. Repeated builds must have
+identical archive hashes. No publication is performed.
+
+## Typed request examples
+
+Full uses the package guide's `full` command and constructs its seven task gates.
+For the other families, save an argv JSON array, an output-name JSON array and
+one qualification JSON object, then invoke this from the package root:
+
+```sh
+python3 scripts/development_runner.py mpi --run-id mpi001 --runs-root /absolute/runs --request-out /absolute/mpi001.request.json --argv-json /absolute/argv.json --cwd /absolute/work --env-json /absolute/env.json --outputs-json /absolute/outputs.json --qualification-json /absolute/qualification.json --cpu-budget 2 --timeout 60 --input /absolute/reference.dat
+```
+
+Replace `mpi` with `cold` or `source-audit` as appropriate. Use absolute real paths,
+complete environment values and explicit thread settings. `--input` may repeat.
+Reference/certificate files must exist before submission; the integration pins
+these files plus the complete current package inventory. Qualification paths below
+are relative to the stage directory unless absolute. Replace every placeholder;
+these examples describe contracts, not scientific observations.
+
+MPI requires one native first-call receipt per rank, the expected backend/library
+and thread state, and output comparison pairs. The `outputs.json` array must include
+all rank receipts and native output files. Example `qualification.json`:
+
+```json
+{
+  "kind": "mpi",
+  "source_manifest": "/absolute/package/SOURCE_MANIFEST.tsv",
+  "source_manifest_sha256": "CURRENT_MANIFEST_SHA256",
+  "package_root": "/absolute/package",
+  "rank_files": ["rank_0.json", "rank_1.json"],
+  "rank_count": 2,
+  "path": "EXPECTED_MEASURED_PATH",
+  "compile_limit_seconds": 0.5,
+  "mpi_library_contains": ["EXPECTED_MPI_LIBRARY"],
+  "julia_version": "EXPECTED_JULIA_VERSION",
+  "task_labels": ["EXPECTED_TASK"],
+  "output_inventory": {"0": ["native.dat"], "1": ["native.dat"]},
+  "science_pairs": [{"actual": "native.dat", "reference": "/absolute/reference.dat", "format": "bytes"}]
+}
+```
+
+Cold-call qualification compares a retained native first-call receipt with an
+independent reference, including return payload and requested semantic fields:
+
+```json
+{
+  "kind": "cold",
+  "source_manifest": "/absolute/package/SOURCE_MANIFEST.tsv",
+  "source_manifest_sha256": "CURRENT_MANIFEST_SHA256",
+  "package_root": "/absolute/package",
+  "receipt": "cold.json",
+  "reference": "/absolute/reference.json",
+  "contract": {
+    "required_absent_backends": ["WannierNLQGWannierizationPrecompileExt", "WannierNLQGWannierizationExt", "WannierNLQGOperatorBundleExt", "WannierNLQGSymmetryFoundationExt", "WannierNLQGSymmetrizationExt"],
+    "excluded_return_fields": [],
+    "native_kind": "reader",
+    "compile_limit_seconds": 0.5,
+    "compare_semantic_return": true,
+    "ignored_json_top_level_metadata": []
+  },
+  "science_pairs": [{"actual": "cold.json", "reference": "/absolute/reference.json", "format": "native_return"}]
+}
+```
+
+Select the actual required absent backends and native kind for the task; the
+example does not authorize omitting other required backend checks. Source audit
+requires separately retained preflight/write/check records, provenance TSVs and
+an independently established source-equivalence certificate:
+
+```json
+{
+  "kind": "source_audit",
+  "source_manifest": "/absolute/package/SOURCE_MANIFEST.tsv",
+  "source_manifest_sha256": "CURRENT_MANIFEST_SHA256",
+  "source_root": "/absolute/package",
+  "source_sha256": "EXPECTED_SOURCE_SHA256",
+  "certificate_file": "/absolute/certificate.json",
+  "certificate_sha256": "EXPECTED_CERTIFICATE_SHA256",
+  "preflight": "preflight.json",
+  "write": "write.json",
+  "check": "check.json",
+  "write_tsv": "write.tsv",
+  "check_tsv": "check.tsv",
+  "expected_counts": {"retained": 2, "legacy_retained": 1, "additional_retained": 1, "additional_actual_type_sources": 1}
+}
+```
+
+Use measured expected counts, not the illustrative numbers. The executable
+[smoke fixtures](smoke.py) generate complete synthetic contracts and matching
+native-shaped receipts for all four families in the requested evidence directory.
+They are engineering examples only. Adapter field checks are implemented in
+[adapters.py](adapters.py); review a real task's native receipt against those
+checks before migrating its producer. Query with `status`, rebuild sealed evidence
+with `reconcile`, advance pending stages with `resume`, then call `qualify`.

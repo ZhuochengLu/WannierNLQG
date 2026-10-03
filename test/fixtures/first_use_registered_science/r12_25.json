@@ -1,0 +1,99 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__interband_quantum_metric__conventional",
+  "native_science": {
+    "kslice_interband_quantum_metric_conventional/synthetic_demo_iqmk_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3f52ab2be4c93120",
+        "3f52ab2be4c93120",
+        "3f52ab2be4c93120",
+        "3f52ab2be4c93120",
+        "3f4f6894b6050261",
+        "3f4f6894b6050261",
+        "3f4f6894b6050261",
+        "3f4f6894b6050261",
+        "3f4521a24e1b0bc2",
+        "3f4521a24e1b0bc2",
+        "3f4521a24e1b0bc2",
+        "3f4521a24e1b0bc2",
+        "3f4f6894b6050261",
+        "3f4f6894b6050261",
+        "3f4f6894b6050261",
+        "3f4f6894b6050261"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0011394432687153525,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_interband_quantum_metric_conventional/synthetic_demo_iqmk_conv.dat",
+      "sha256": "5231a7c30d8f72559e10993eac28823d57a2ed29422a7e090cc20245df0cffcb"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "86c7aeb7b32cef5d6ea07782c248acba8c7667f74c195db96886f9980f35e5e2",
+    "eebae8d75eb7226625221ca84c95dcf8c054cbf6e753ad68d60cd0cd19364602",
+    "45fce44cd469d54129822f97dada870f7cf351b1a7fe274ddc822f50e371f581",
+    "bb70b10d9770c3dba0e95a301a7e36327840fe280f721ac4341c905cb1027794",
+    "305f474749addfe9fd46ac98b6bbf4723c739b8feff819bb928601d86362cdf7",
+    "c5a9659dd5b49b96b77f6198f8f17a4d44ac301bb9703eca6764bc26def6b116",
+    "776f6addc0ab0f789d089caaeb5962ae3938a212579357e15cb374fad5540ebd",
+    "9e303a6d9e230d4edba48e1b79aa9723ed0f519e932d8f4c6bd83bd30a6b0208",
+    "b11049f208039f54fb5f5006b6f2aa161de38d196cb263fcdfb2a0afa2833a96",
+    "be7e8619932c4cdcf83d3766de6a5148841e74f987ac30669b9328ec8d2ae7b6",
+    "f03ff6b41f788be9be8abc5a9452b98cdb12973a5d250080bfe6b831a5a29259",
+    "a028cd39ec5fd9de9ff685c476c0d344fa4a73127a7a52b59bd3e9d807ca829a"
+  ],
+  "original_receipt_sha256": "86c7aeb7b32cef5d6ea07782c248acba8c7667f74c195db96886f9980f35e5e2",
+  "rank_output_inventory": [
+    [
+      "kslice_interband_quantum_metric_conventional/synthetic_demo_iqmk_conv.dat"
+    ],
+    [
+      "kslice_interband_quantum_metric_conventional/synthetic_demo_iqmk_conv.dat"
+    ],
+    [
+      "kslice_interband_quantum_metric_conventional/synthetic_demo_iqmk_conv.dat"
+    ],
+    [
+      "kslice_interband_quantum_metric_conventional/synthetic_demo_iqmk_conv.dat"
+    ],
+    [
+      "kslice_interband_quantum_metric_conventional/synthetic_demo_iqmk_conv.dat"
+    ],
+    [
+      "kslice_interband_quantum_metric_conventional/synthetic_demo_iqmk_conv.dat"
+    ],
+    [
+      "kslice_interband_quantum_metric_conventional/synthetic_demo_iqmk_conv.dat"
+    ],
+    [
+      "kslice_interband_quantum_metric_conventional/synthetic_demo_iqmk_conv.dat"
+    ],
+    [
+      "kslice_interband_quantum_metric_conventional/synthetic_demo_iqmk_conv.dat"
+    ],
+    [
+      "kslice_interband_quantum_metric_conventional/synthetic_demo_iqmk_conv.dat"
+    ],
+    [
+      "kslice_interband_quantum_metric_conventional/synthetic_demo_iqmk_conv.dat"
+    ],
+    [
+      "kslice_interband_quantum_metric_conventional/synthetic_demo_iqmk_conv.dat"
+    ]
+  ],
+  "ranks": 12,
+  "task_labels": [
+    "interband_quantum_metric/k_slice/conventional"
+  ]
+}

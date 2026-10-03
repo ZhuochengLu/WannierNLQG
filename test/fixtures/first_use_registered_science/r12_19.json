@@ -1,0 +1,99 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__berry_curvature_dipole__conventional",
+  "native_science": {
+    "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3f56273fd9358260",
+        "3f56273fd9358260",
+        "3f56273fd9358260",
+        "3f56273fd9358260",
+        "bf5a29bbfcf4ec90",
+        "bf5a29bbfcf4ec90",
+        "bf5a29bbfcf4ec90",
+        "bf5a29bbfcf4ec90",
+        "bf619392ffd789a8",
+        "bf619392ffd789a8",
+        "bf619392ffd789a8",
+        "bf619392ffd789a8",
+        "3f63b8ba3440c3f0",
+        "3f63b8ba3440c3f0",
+        "3f63b8ba3440c3f0",
+        "3f63b8ba3440c3f0"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0024074208067976707,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat",
+      "sha256": "d0b582b95b48a88915e590f35047f28daf221ce8fb7c01fde87ca8ecfd319cb9"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "61c9fb507a2a941c15321ac23dbc35a6b4e426a0abbbb5f28043658d89c21ffc",
+    "56a169daa331cb98a3bb0e3a8a0c0336e6b3af868d629de9f153461ca628a684",
+    "a5edb2cdb7a2df36297ee9ea12bb1193cb98046e1b85ff50e609d92321c04556",
+    "d75d5381e3c798bd2228e377c3806571d1e7819c1fb3252d257572e51b758133",
+    "6be649d27e6dc68fb50a50cf1d43db8f9c2d7ba2e11570042a218b202ad630d9",
+    "7aa32936949c71ba55845c19abd0b924eae00cfb92098e6f8267b7531a58861d",
+    "8da64304c68ef7c8c1812e11f2230e92bb32b16cf173ee30bd1e8d81910bef0e",
+    "f8137db02ccc68e1c944d06d8f2710589984380f82be743120c06c1236ff3591",
+    "69e0318c1577f9eeb3eb067f5a374380a4c7141b2332a245fe657222888ea215",
+    "ed65c2e424c8217371dbdaaa2250f8f756e3031e2f90cd46365b0e345d8da9e5",
+    "ca0cef93fe6f1d3e948c51d54767857215ec34871231d7b2bf524998ed453822",
+    "78383961789a2763e89a0eb242512f929e1e5b6831ab276d2a9f797b4a60b79e"
+  ],
+  "original_receipt_sha256": "61c9fb507a2a941c15321ac23dbc35a6b4e426a0abbbb5f28043658d89c21ffc",
+  "rank_output_inventory": [
+    [
+      "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat"
+    ]
+  ],
+  "ranks": 12,
+  "task_labels": [
+    "berry_curvature_dipole/k_slice/conventional"
+  ]
+}

@@ -11,8 +11,15 @@ end
 """Import the weak-dependency triggers that activate the shared extension."""
 function _import_symmetry_foundation_extension_triggers!()
     Base.require(SYMMETRY_FOUNDATION_SPGLIB_PKG_ID)
-    Base.eval(@__MODULE__, :(import HDF5))
-    Base.eval(@__MODULE__, :(import JSON3))
+    if ccall(:jl_generating_output, Cint, ()) == 1
+        # During cache generation the parent module is closed. Load the declared
+        # triggers without mutating its bindings; keep normal runtime loading below.
+        Base.require(Base.PkgId(Base.UUID("f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"), "HDF5"))
+        Base.require(Base.PkgId(Base.UUID("0f8b85d8-7281-11e9-16c2-39a750bddbf1"), "JSON3"))
+    else
+        Base.eval(@__MODULE__, :(import HDF5))
+        Base.eval(@__MODULE__, :(import JSON3))
+    end
     return nothing
 end
 

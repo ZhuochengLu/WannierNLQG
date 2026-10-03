@@ -1,0 +1,144 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__shift_spin_current__conventional",
+  "native_science": {
+    "kslice_shift_spin_current_conventional/synthetic_demo_ssck_i_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000"
+      ],
+      "nonzero_scientific_values": 0,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_shift_spin_current_conventional/synthetic_demo_ssck_r_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "4082bbdce05feece",
+        "4082bbdce05feece",
+        "4082bbdce05feece",
+        "4082bbdce05feece",
+        "41e00e2487fe7ab3",
+        "41e00e2487fe7ab3",
+        "41e00e2487fe7ab3",
+        "41e00e2487fe7ab3",
+        "4082bbdce05feece",
+        "4082bbdce05feece",
+        "4082bbdce05feece",
+        "4082bbdce05feece"
+      ],
+      "nonzero_scientific_values": 12,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 2154898495.952478,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_shift_spin_current_conventional/synthetic_demo_ssck_r_conv.dat",
+      "sha256": "78ae9c4bc74f8e4e74a9b7007feac0f73fc340879fb7abcf4e03194f367c7ee0"
+    },
+    {
+      "file": "kslice_shift_spin_current_conventional/synthetic_demo_ssck_i_conv.dat",
+      "sha256": "39578347d52ff34250fbfb8ea28ae027caae3bfcd694cfb812b1c40656a8c997"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "fff071bdc3399d7a62df5f23bdef7f983dfe3debdef54157732d341a98e9e5b5",
+    "4ed4acf771d2373eed72d389267e60d1ab36ac70427f00448e3b63b89c1ba673",
+    "1f4ef8f4ba21b7ab53003f8a1aaddd0291cd4b2a11c5f8d45779606af7c2798f",
+    "945bdfac50a757e6582d3eaf6955ff2349aa8ff5d3e8d8b096b253fc92f04468",
+    "46956ea11fab3dfca1aef13ef0b9c80fc5eaea2108eae2ccafa67432803714b5",
+    "306e0b1de06cb0aaaada1aa21f3ce9740e35f629a45498601a7c89207dc0b49b",
+    "e499bc119e7dca737ee9f00c2cee0aea558162e22e977efca9f9c1a1a3d45c2e",
+    "749c92f53f039e124c972e213bb5c6173898649a5f56759bcf4476601103a648",
+    "866753767c203a048bf893500f07094ce5623b942e429f79fd6ae1457d2c5d0f",
+    "29d29a6002653fe9a6c8cf15036a821798fb2d2cbb66508407e501f765699cbe",
+    "9d6bda21ef63f052e8d2eba0bd4b19fe0f84a7b3a76b8dff9d9758debe19b195",
+    "ea290f5eef0406ff8a38ac6a2d03aab02989baf66bb6b53486d6435b7d39d271"
+  ],
+  "original_receipt_sha256": "fff071bdc3399d7a62df5f23bdef7f983dfe3debdef54157732d341a98e9e5b5",
+  "rank_output_inventory": [
+    [
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_r_conv.dat",
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_i_conv.dat"
+    ],
+    [
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_r_conv.dat",
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_i_conv.dat"
+    ],
+    [
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_r_conv.dat",
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_i_conv.dat"
+    ],
+    [
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_r_conv.dat",
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_i_conv.dat"
+    ],
+    [
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_r_conv.dat",
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_i_conv.dat"
+    ],
+    [
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_r_conv.dat",
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_i_conv.dat"
+    ],
+    [
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_r_conv.dat",
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_i_conv.dat"
+    ],
+    [
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_r_conv.dat",
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_i_conv.dat"
+    ],
+    [
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_r_conv.dat",
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_i_conv.dat"
+    ],
+    [
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_r_conv.dat",
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_i_conv.dat"
+    ],
+    [
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_r_conv.dat",
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_i_conv.dat"
+    ],
+    [
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_r_conv.dat",
+      "kslice_shift_spin_current_conventional/synthetic_demo_ssck_i_conv.dat"
+    ]
+  ],
+  "ranks": 12,
+  "task_labels": [
+    "shift_spin_current/k_slice/conventional"
+  ]
+}

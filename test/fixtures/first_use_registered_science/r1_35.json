@@ -1,0 +1,89 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__quantum_hermitian_connection__conventional",
+  "native_science": {
+    "kslice_quantum_hermitian_connection_conventional/synthetic_demo_qhck_i_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3efe54d52e17e7da",
+        "3efe54d52e17e7da",
+        "3efe54d52e17e7da",
+        "3efe54d52e17e7da",
+        "3eec93a21bc5e073",
+        "3eec93a21bc5e073",
+        "3eec93a21bc5e073",
+        "3eec93a21bc5e073",
+        "3ec72d9a1cf915b0",
+        "3ec72d9a1cf915b0",
+        "3ec72d9a1cf915b0",
+        "3ec72d9a1cf915b0",
+        "3eec93a21bc5e073",
+        "3eec93a21bc5e073",
+        "3eec93a21bc5e073",
+        "3eec93a21bc5e073"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 2.8926256055307336e-05,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_quantum_hermitian_connection_conventional/synthetic_demo_qhck_r_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000"
+      ],
+      "nonzero_scientific_values": 0,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_quantum_hermitian_connection_conventional/synthetic_demo_qhck_r_conv.dat",
+      "sha256": "39578347d52ff34250fbfb8ea28ae027caae3bfcd694cfb812b1c40656a8c997"
+    },
+    {
+      "file": "kslice_quantum_hermitian_connection_conventional/synthetic_demo_qhck_i_conv.dat",
+      "sha256": "be3aa9d1071494e9d8d45eca08d9dc44325fd06aeddcaaed3e298c55895cf7f1"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "ea57c2700701a3d8976779c9e6eb8b3253717d3525077ac9cb35a2d132b9a47f"
+  ],
+  "original_receipt_sha256": "ea57c2700701a3d8976779c9e6eb8b3253717d3525077ac9cb35a2d132b9a47f",
+  "rank_output_inventory": [
+    [
+      "kslice_quantum_hermitian_connection_conventional/synthetic_demo_qhck_r_conv.dat",
+      "kslice_quantum_hermitian_connection_conventional/synthetic_demo_qhck_i_conv.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "quantum_hermitian_connection/k_slice/conventional"
+  ]
+}

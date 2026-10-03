@@ -1,0 +1,266 @@
+{
+  "records": [
+    {
+      "id": "detect_magnetic_symmetry_inventory__type1",
+      "native_report": "native_magnetic_inventory.json",
+      "actual": "actual_01.json",
+      "actual_sha256": "f9ef85871f6f01f540aeee2fd8583e15a334f723655ec7b7079b1e546095a36f",
+      "integrity": null,
+      "original_actual_report_sha256": "8a976b3ce3de42e2f09ce73891a858ec51b7aac0ea2ce8cca9d40c54841db9e8"
+    },
+    {
+      "id": "detect_magnetic_symmetry_inventory__type3",
+      "native_report": "native_magnetic_inventory.json",
+      "actual": "actual_02.json",
+      "actual_sha256": "d27b95c95d85d058a8ea95ddf9e94ab1f8e5f631f1d69056c38b61b1e16a764b",
+      "integrity": null,
+      "original_actual_report_sha256": "3491f0a4919840b2a92378128069c08b0d3daa4fb0e36de5e7b50d46d790ccdf"
+    },
+    {
+      "id": "diagnose_wannier_gauge_chain",
+      "native_report": "native_gauge_chain_hdf5.json",
+      "actual": "actual_03.json",
+      "actual_sha256": "052450ca5e342a975c8ea525b938f37fedc41380476f4fbb61d160f22dce849a",
+      "integrity": null,
+      "original_actual_report_sha256": "95b4d08c4643e7c186cba68fe61bc75fc0da7f9ca08e21c33af5667d10daf690"
+    },
+    {
+      "id": "diagnose_wannier_gauge_chain",
+      "native_report": "native_gauge_chain_json_bits.json",
+      "actual": "actual_04.json",
+      "actual_sha256": "3ae01c1c9f3204ff57b6330baad4629c6619e85f445962d457f265c0bbf031b6",
+      "integrity": null,
+      "original_actual_report_sha256": "fd3a143b45d483558b00c1367149d3102b6c4fba46465605298d63032e3417df"
+    },
+    {
+      "id": "generate_qe_paw_matrix_elements",
+      "native_report": "native_science.json",
+      "actual": "actual_05.json",
+      "actual_sha256": "1fec008acb1056c4f12bdab97e1b90245cae8a6b8fb1673da3759d2dd4ac442a",
+      "integrity": null,
+      "original_actual_report_sha256": "8cdff852c73ab8ce32697fedf04ee611b58081bff67ace01a94d658a72a77543"
+    },
+    {
+      "id": "generate_qe_paw_spn",
+      "native_report": "native_science.json",
+      "actual": "actual_06.json",
+      "actual_sha256": "630d4426881014d0afe6af3ee3903b37f4eeeafa584ce0ddbecab9392eab6c30",
+      "integrity": null,
+      "original_actual_report_sha256": "476b819f416386e8d599467ee048ee21b69a54d5dd8d5b785d16e4d3f3a7f706"
+    },
+    {
+      "id": "generate_symmetry_completed_qe_paw_matrix_elements",
+      "native_report": "native_science.json",
+      "actual": "actual_07.json",
+      "actual_sha256": "1fec008acb1056c4f12bdab97e1b90245cae8a6b8fb1673da3759d2dd4ac442a",
+      "integrity": null,
+      "original_actual_report_sha256": "8cdff852c73ab8ce32697fedf04ee611b58081bff67ace01a94d658a72a77543"
+    },
+    {
+      "id": "generate_vasp_band_representation",
+      "native_report": "native_vasp_band_hdf5.json",
+      "actual": "actual_08.json",
+      "actual_sha256": "3f5e234c8b72110e2116cdd722857c3f3c12b9ad5e824a950376528beb4a9077",
+      "integrity": null,
+      "original_actual_report_sha256": "4a9059bff0931db318bd959f2e4612be75d49a64d7357bc19568c71de5774f27"
+    },
+    {
+      "id": "generate_vasp_paw_matrix_elements",
+      "native_report": "native_vasp_matrix_bits.json",
+      "actual": "actual_09.json",
+      "actual_sha256": "f1c54c833742add7c72ed5b059ade418c67915fb64cb3215919b80a03cc5ebab",
+      "integrity": null,
+      "original_actual_report_sha256": "13e82aa910500555b89e5c394dc7707ee375c8e44d44eeccafee867f7f8b99bb"
+    },
+    {
+      "id": "generate_vasp_paw_matrix_elements",
+      "native_report": "native_vasp_matrix_provenance.json",
+      "actual": "actual_10.json",
+      "actual_sha256": "df7afb259f583e5fad7c56e6644b45e3253b0f6ee01a003e93cf0be1311462f5",
+      "integrity": null,
+      "original_actual_report_sha256": "6abda4c062d72020d86a88208f595222ee721c98f217dd2c758b9ffd96d29b9b"
+    },
+    {
+      "id": "generate_vasp_paw_spn",
+      "native_report": "native_vasp_spn_bits.json",
+      "actual": "actual_11.json",
+      "actual_sha256": "e457c09eac6c2764991bec5a9544e2730a06d93e40c4ec56c4dd25b64c5aa1e8",
+      "integrity": null,
+      "original_actual_report_sha256": "03c3c7d1510ee1d306e589e8b509b0b686c862fb4358d277fbd28aba39d6bc34"
+    },
+    {
+      "id": "generate_vasp_paw_spn",
+      "native_report": "native_vasp_spn_provenance.json",
+      "actual": "actual_12.json",
+      "actual_sha256": "fdf49ea38b3557efa40b05ec3f12ca21ccf3fd1b59ae0139d08b7c1631920618",
+      "integrity": {
+        "kind": "vasp_spn",
+        "side": "portable",
+        "artifact_sha256": "7ce56ab9aa9eebd65e9775e83a7a4ca38a648f6d2b0cbe2cc77d66e4f3e6e177",
+        "official_digest_and_readback": true,
+        "verified_digest_fields": [
+          {
+            "field": [
+              "semantic_fields",
+              "/@payload_sha256"
+            ],
+            "value": "eab037325d6032324b5f2fd9685b94b7f482837dadb1617b27035dc5e2246bd7"
+          }
+        ]
+      },
+      "original_actual_report_sha256": "1427348ee80829dffda7ec017e84d3f8289cb5a67a86276d178336473049bb52"
+    },
+    {
+      "id": "generate_wannier_amn",
+      "native_report": "native_science.json",
+      "actual": "actual_13.json",
+      "actual_sha256": "7eb960a63332fb2a13f6e6489cb7a8aeb341611ef2c4813766a77fd66f5d9647",
+      "integrity": null,
+      "original_actual_report_sha256": "d60eff732c0a9dd8d3e14144d166e5c117736ef4d5b6dff2a85d128a1c5435a8"
+    },
+    {
+      "id": "generate_wannier_shu",
+      "native_report": "native_operator_blocks.json",
+      "actual": "actual_14.json",
+      "actual_sha256": "00bbed2c6bc4dc4a3e45f2dbd5fb3c411e4540b6f32265e67d58d6e4cc38f52c",
+      "integrity": null,
+      "original_actual_report_sha256": "8112362ffe05a1387d101c64442743fcf50bba20e21bdddfdffbb83b714a04dd"
+    },
+    {
+      "id": "generate_wannier_siu",
+      "native_report": "native_operator_blocks.json",
+      "actual": "actual_15.json",
+      "actual_sha256": "f8f9cea1e94dfd632666fb0902fe9d07424a2c180122657064bba650b350c9ba",
+      "integrity": null,
+      "original_actual_report_sha256": "ea7fca0829791b5b7077b5105ce3e593ea6b67c2fe30afc586f30c88ef608bbe"
+    },
+    {
+      "id": "generate_wannier_uhu",
+      "native_report": "native_science.json",
+      "actual": "actual_16.json",
+      "actual_sha256": "8a22efa12c7e7f66058b707546c8c0edd7aa16fefdd7c4456b89e5bb19ae7231",
+      "integrity": null,
+      "original_actual_report_sha256": "faa2d24f41deb2d7ffaf48f598fc22285543e7a447ce5e0e5c65a42f3983e42c"
+    },
+    {
+      "id": "generate_wannier_uiu",
+      "native_report": "native_science.json",
+      "actual": "actual_17.json",
+      "actual_sha256": "411c979ef8c08a01b2ed5a5ac9105a8969c7ec9ce7a91a21afdb5c708530521d",
+      "integrity": null,
+      "original_actual_report_sha256": "ea875d3a75d2a79fb716c03bec03fbf163b4564dc25c80c8235046723f8bd812"
+    },
+    {
+      "id": "prepare_exact_wannier_operator_bundle",
+      "native_report": "native_science.json",
+      "actual": "actual_18.json",
+      "actual_sha256": "442ecbf44ac2f79307df97d30314e2bd3d10e97072009a1dcf0462a7489597cd",
+      "integrity": null,
+      "original_actual_report_sha256": "8c2e0d0e86d68f149b9aff464806e7670ab877ccbe2903d50b258d12d8b6252a"
+    },
+    {
+      "id": "prepare_paw_scdm_input_artifact",
+      "native_report": "native_science.json",
+      "actual": "actual_19.json",
+      "actual_sha256": "1bc6a1edafd7b2e2ccf1f8347d6102578910cc55024d947427b64cd671a0ab22",
+      "integrity": null,
+      "original_actual_report_sha256": "675422add48ef4a15b1059e812047a6adbda00162360800017934b5606642444"
+    },
+    {
+      "id": "prepare_symmetry_covariant_wavefunctions",
+      "native_report": "native_science.json",
+      "actual": "actual_20.json",
+      "actual_sha256": "4bc4d0d2dc3aa333970130a1c4817f884db92a641207ee279698c1b71658a1b7",
+      "integrity": {
+        "kind": "star_gauge",
+        "side": "portable",
+        "artifact_sha256": "f46463b573054f34466b856d3f251f8fc1eeb7962c7a15e79712c97df8b31e92",
+        "official_digest_and_readback": true,
+        "verified_digest_fields": [
+          {
+            "field": [
+              "semantic_fields",
+              "/@payload_sha256"
+            ],
+            "value": "4f522763302f664a88948d9f192283ca1bae0d904029862275a434ce9114c756"
+          },
+          {
+            "field": [
+              "semantic_fields",
+              "/source_metadata/@source_replay_descriptor_sha256"
+            ],
+            "value": "555e90767e3752e3f9077bac0865b242727e56085f15c7e445c6fd3021675737"
+          }
+        ]
+      },
+      "original_actual_report_sha256": "bb362b7569a02517cc945d0b775b9fc251748e5b0e5f321d8af87e2ce9146426"
+    },
+    {
+      "id": "qualify_exported_wannierization_tb",
+      "native_report": "native_qualified_tb_hdf5.json",
+      "actual": "actual_21.json",
+      "actual_sha256": "740273f7bf7c613ff0d4d366126815e05c05db69d23c29029d360d469875dd04",
+      "integrity": null,
+      "original_actual_report_sha256": "f205eda26c93f5cf2dd13582eb8c8c4cfc9a03a209a8babb8e5c584b8bbe99ee"
+    },
+    {
+      "id": "screen_wannier_mesh",
+      "native_report": "native_science.json",
+      "actual": "actual_22.json",
+      "actual_sha256": "74d7c996d3822fa2a49ccdbff40a546bc44ec5a7bc14ac44767d744171a7761e",
+      "integrity": null,
+      "original_actual_report_sha256": "1cc7dbafcd14da0c3d02159b81a71e2b5cf41a9e115fadfe0ebd8b1197f58454"
+    },
+    {
+      "id": "symmetrize_existing_wannier_model",
+      "native_report": "native_science.json",
+      "actual": "actual_23.json",
+      "actual_sha256": "eda6100399dc469f1f399d6073239b6882c19693de2057bdaad3748f8d3d7f8e",
+      "integrity": null,
+      "original_actual_report_sha256": "8b0c4a74a873524751f4666624f8a1f5b63302fcb69b4cef630200f1b7f9eaa5"
+    },
+    {
+      "id": "symmetrize_wannier_operators",
+      "native_report": "native_symmetrized_bundle.json",
+      "actual": "actual_24.json",
+      "actual_sha256": "8af0df08c148bf279b3e224b52485de1f4399bab7fd68e9e7b30a5229c9bd347",
+      "integrity": null,
+      "original_actual_report_sha256": "aee1ac29964af422d6076fff80fdaa0ee8bf0c82ea3b4da2311d8a067a7b688b"
+    },
+    {
+      "id": "symmetrize_wannier_operators",
+      "native_report": "native_symmetrized_tb_bits.json",
+      "actual": "actual_25.json",
+      "actual_sha256": "67357b8bcd22b9b8a01751caaac7f46bb88b612b31e18f6205617734110785d2",
+      "integrity": null,
+      "original_actual_report_sha256": "e51522a9d9fb27db2384e219cfb47f42fac244240388d6cea79ea1dc9aef18c5"
+    },
+    {
+      "id": "write_projection_representation_search_hdf5",
+      "native_report": "native_science.json",
+      "actual": "actual_26.json",
+      "actual_sha256": "5f1ad31eda0f2cb6e034e0f069c22d59d7cc1c9432bf33d6276c06ec9ad2e627",
+      "integrity": null,
+      "original_actual_report_sha256": "6e8d05332cbabb92e245cde495d7dc52e5eeb55ccdfbb278711507f302d3c18f"
+    },
+    {
+      "id": "write_response_symmetry_artifact",
+      "native_report": "native_output.json",
+      "actual": "actual_27.json",
+      "actual_sha256": "0d69ffa3572d0f82ed00bea11afb3c1b578bb58b337776c5665939c39763ba0d",
+      "integrity": null,
+      "original_actual_report_sha256": "d069b16de0d967242bbffd203b0bd63fabbf72fb92fdff3b95931544c6427abf"
+    },
+    {
+      "id": "prepare_band_representation__augmentation_required_pipeline",
+      "native_report": "native_science.json",
+      "actual": "actual_28.json",
+      "actual_sha256": "ebbcc1abb8388d04ad8c7ef142afa36943377e8b77cd88d0a38d7d9cca432330",
+      "integrity": null,
+      "original_actual_report_sha256": "dda35d14a97f95c8052abbaf200dd7d44c501908f1ff21c9487257c950fae30e"
+    }
+  ],
+  "exact_metadata_relocation_for_test_only": true,
+  "raw_artifacts_unchanged": true,
+  "official_field_readback_qualification_sha256": "4045356984bff376b772e250e58e58b8eeae8ef47c93a553d462ed61e888a498"
+}

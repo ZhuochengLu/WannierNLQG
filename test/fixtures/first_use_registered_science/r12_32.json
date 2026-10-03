@@ -1,0 +1,144 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__photon_drag_injection_current__conventional",
+  "native_science": {
+    "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "414d0e93e0769560",
+        "414d0e93e0769560",
+        "414d0e93e0769560",
+        "414d0e93e0769560",
+        "412fda12f8d01758",
+        "412fda12f8d01758",
+        "412fda12f8d01758",
+        "412fda12f8d01758",
+        "4137fb34779c31bc",
+        "4137fb34779c31bc",
+        "4137fb34779c31bc",
+        "4137fb34779c31bc",
+        "4145e1a87b8e2aad",
+        "4145e1a87b8e2aad",
+        "4145e1a87b8e2aad",
+        "4145e1a87b8e2aad"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 3808551.753618881,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "41720c86b38e2a72",
+        "41720c86b38e2a72",
+        "41720c86b38e2a72",
+        "41720c86b38e2a72",
+        "4149f1013c0cc51e",
+        "4149f1013c0cc51e",
+        "4149f1013c0cc51e",
+        "4149f1013c0cc51e",
+        "c1519a836715baf1",
+        "c1519a836715baf1",
+        "c1519a836715baf1",
+        "c1519a836715baf1",
+        "c1706c04cd573172",
+        "c1706c04cd573172",
+        "c1706c04cd573172",
+        "c1706c04cd573172"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 18925675.222208448,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat",
+      "sha256": "dbb12e14114dcc4539b44d74fa43dc0090f88a0e6fc7a6249935cc32fd72c796"
+    },
+    {
+      "file": "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat",
+      "sha256": "0b59134bc1f3f551773b9dc60605b5d658132657ac3543c70924d1d3c4b1ca59"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "7c5912ca9cdf092552782e8d86cabcd9080e6235b015d2d63f351816121a9be0",
+    "95359195c8699a3e2546cab244a6665501062051e66edf9ad94ce31201834246",
+    "4830aafed765c3967138249096937efb0c4119157151e9e14fbd7917e1ac4b98",
+    "8c49357f18e11e5096437cc8eb020a91463c471a6bb6c9f993f316413d028738",
+    "b6a9507d1eb023ab07a2619d051c7e1779c06d7984091d3cd4d0bd6c21a50db0",
+    "f3c6eb0b037b98d043bfada673e847b4bf5b62fe5f49af76c17b2b90c1f6e0f6",
+    "398e3d82ce93ec3713f1a8141f2d3ddab9f42ded162d590a72c28383d93a6f5f",
+    "27c404f9649f508d06dacfabf38433257870823a40784290e1636eb75ef8d22d",
+    "81a5765ba77a20c9370c7a42ac66ef3dbb911c19a1ef090252add4e2ff9ad619",
+    "e8f3ca0d395118e40558293213463951483dcebc9b285bb53b3142af3af0846f",
+    "2a0a1eb6777eb56bc80374d254b8d9732f82f297b7503903b04fbeb39dff8cbb",
+    "f7016d01876573a0b184878d6531558ec9330dab3a40fb7acf7ccc4f833c7a78"
+  ],
+  "original_receipt_sha256": "7c5912ca9cdf092552782e8d86cabcd9080e6235b015d2d63f351816121a9be0",
+  "rank_output_inventory": [
+    [
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat",
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat"
+    ],
+    [
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat",
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat"
+    ],
+    [
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat",
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat"
+    ],
+    [
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat",
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat"
+    ],
+    [
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat",
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat"
+    ],
+    [
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat",
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat"
+    ],
+    [
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat",
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat"
+    ],
+    [
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat",
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat"
+    ],
+    [
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat",
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat"
+    ],
+    [
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat",
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat"
+    ],
+    [
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat",
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat"
+    ],
+    [
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_r_conv.dat",
+      "kslice_photon_drag_injection_current_conventional/synthetic_demo_pdick_i_conv.dat"
+    ]
+  ],
+  "ranks": 12,
+  "task_labels": [
+    "photon_drag_injection_current/k_slice/conventional"
+  ]
+}

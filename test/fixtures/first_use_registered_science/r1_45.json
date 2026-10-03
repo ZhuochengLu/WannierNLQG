@@ -1,0 +1,89 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__shift_current__projector",
+  "native_science": {
+    "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000"
+      ],
+      "nonzero_scientific_values": 0,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "3c55d9583603fcf8",
+        "3c55d9583603fcf8",
+        "3c55d9583603fcf8",
+        "3c55d9583603fcf8",
+        "3dee0e09ae361723",
+        "3dee0e09ae361723",
+        "3dee0e09ae361723",
+        "3dee0e09ae361723",
+        "3c55d9583603fd0c",
+        "3c55d9583603fd0c",
+        "3c55d9583603fd0c",
+        "3c55d9583603fd0c"
+      ],
+      "nonzero_scientific_values": 12,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 2.1867770711035447e-10,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat",
+      "sha256": "408d4b88ece84b1fc3438c63ad9afa62e02202a77347a02d886b856f504bdb3c"
+    },
+    {
+      "file": "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat",
+      "sha256": "39578347d52ff34250fbfb8ea28ae027caae3bfcd694cfb812b1c40656a8c997"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "b62216e5d7532be723b38f678a00cde9e97acb63be9cff46f4f27f870a17b602"
+  ],
+  "original_receipt_sha256": "b62216e5d7532be723b38f678a00cde9e97acb63be9cff46f4f27f870a17b602",
+  "rank_output_inventory": [
+    [
+      "kslice_shift_current_projector/synthetic_demo_sck_r_proj.dat",
+      "kslice_shift_current_projector/synthetic_demo_sck_i_proj.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "shift_current/k_slice/projector"
+  ]
+}

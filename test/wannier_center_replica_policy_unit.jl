@@ -325,3 +325,150 @@ end
         @test manifest.geometry_content_sha256 !== nothing
     end
 end
+
+function reference_replica_search(
+    residue::NTuple{3, Int},
+    center_shift::AbstractVector{<:Real},
+    lattice::AbstractMatrix{<:Real},
+    mp_grid::NTuple{3, Int};
+    tolerance::Real,
+    search_size::Integer,
+)
+    isfinite(tolerance) && tolerance > 0.0 ||
+        throw(ArgumentError("minimum-distance tolerance must be finite and positive"))
+    search_size > 0 || throw(ArgumentError("minimum-distance search_size must be positive"))
+    candidates = NTuple{3, Int}[]
+    distances = Float64[]
+    for i in (-search_size):search_size,
+        j in (-search_size):search_size,
+        k in (-search_size):search_size
+
+        candidate =
+            (residue[1] + i * mp_grid[1], residue[2] + j * mp_grid[2], residue[3] + k * mp_grid[3])
+        push!(candidates, candidate)
+        push!(distances, norm((collect(candidate) .+ center_shift)' * lattice))
+    end
+    minimum_distance = minimum(distances)
+    return [
+        candidate for (candidate, distance) in zip(candidates, distances) if
+        abs(distance - minimum_distance) <= tolerance
+    ]
+end
+@testset "Replica search scratch and invocation-local memoization" begin
+    me = WannierNLQG.MatrixElements
+    for lattice in (Matrix{Float64}(I, 3, 3), [1.0 0.2 0.1; 0.1 1.3 0.3; 0.2 0.1 0.9]),
+        center in ([0.0, 0.0, 0.0], [0.5, 0.0, 0.5], [0.17, -0.29, 0.31]),
+        residue in ((0, 0, 0), (1, 2, 1), (3, 1, 2))
+
+        @test me.nearest_wigner_seitz_images(
+            residue,
+            center,
+            lattice,
+            (4, 4, 3);
+            tolerance = 1e-5,
+            search_size = 3,
+        ) == reference_replica_search(
+            residue,
+            center,
+            lattice,
+            (4, 4, 3);
+            tolerance = 1e-5,
+            search_size = 3,
+        )
+    end
+    rv=Int[0 4 0 4; 0 0 4 4; 0 0 0 0];
+    centers=[0.0 0.0 0.0; 0.25 0.125 0.0]
+    first_map=me.minimum_distance_real_space_replica_map(
+        rv,
+        ones(Int, 4),
+        Matrix{Float64}(I, 3, 3),
+        (4, 4, 3),
+        centers;
+        tolerance = 1e-5,
+        search_size = 3,
+    )
+    @test first_map.images[1, 2, 1] == first_map.images[1, 2, 2]
+    @test first_map.images[1, 2, 1] !== first_map.images[1, 2, 2]
+    for left in 1:2, right in 1:2, i in 1:4
+        expected=sort!(
+            unique(
+                reference_replica_search(
+                    me.real_space_mp_residue(rv[:, i], (4, 4, 3)),
+                    centers[right, :]-centers[left, :],
+                    Matrix{Float64}(I, 3, 3),
+                    (4, 4, 3);
+                    tolerance = 1e-5,
+                    search_size = 3,
+                ),
+            ),
+        )
+        @test first_map.images[left, right, i] == expected
+    end
+end
+
+@testset "Reusable replica search scratch matches original arithmetic" begin
+    me=WannierNLQG.MatrixElements
+    scratch=(Vector{NTuple{3, Int}}(undef, 343), zeros(343), zeros(3), zeros(3))
+    for residue in ((0, 0, 0), (1, 2, 1), (3, 1, 2)),
+        center in ([0.0, 0.0, 0.0], [0.5, 0.0, 0.5], [0.17, -0.29, 0.31]),
+        lattice in (Matrix{Float64}(I, 3, 3), [1.0 0.2 0.1; 0.1 1.3 0.3; 0.2 0.1 0.9])
+
+        @test me._nearest_wigner_seitz_images!(
+            scratch,
+            residue,
+            center,
+            lattice,
+            (4, 4, 3);
+            tolerance = 1e-5,
+            search_size = 3,
+        ) == reference_replica_search(
+            residue,
+            center,
+            lattice,
+            (4, 4, 3);
+            tolerance = 1e-5,
+            search_size = 3,
+        )
+    end
+    @test_throws ArgumentError me.minimum_distance_real_space_replica_map(
+        zeros(Int, 3, 1),
+        [1],
+        Matrix{Float64}(I, 3, 3),
+        (2, 2, 2),
+        zeros(1, 3);
+        tolerance = -1.0,
+        search_size = 3,
+    )
+end
+
+@testset "Batched replica components retain normalization and independent outputs" begin
+    me=WannierNLQG.MatrixElements
+    rv=Int[0 1; 0 0; 0 0]
+    degeneracies=[1, 2]
+    map=me.minimum_distance_real_space_replica_map(
+        rv,
+        degeneracies,
+        Matrix{Float64}(I, 3, 3),
+        (2, 1, 1),
+        zeros(1, 3);
+        tolerance = 1e-12,
+        search_size = 2,
+    )
+    values=reshape(ComplexF64[2 + im, 4 - 2im], 1, 1, 2)
+    backup=copy(values)
+    components=Dict(:H=>Dict((Int8(0), Int8(0))=>values), :A=>Dict((Int8(1), Int8(0))=>values))
+    for normalization in (me.SerializedWannier90ReplicaValues(), me.PredividedReplicaValues())
+        prepared=me.materialize_replica_components(components, degeneracies, map, normalization)
+        expected=me.materialize_replica_component(values, degeneracies, map, normalization)
+        @test prepared[:H][(0, 0)] == expected
+        @test prepared[:A][(1, 0)] == expected
+        @test prepared[:H][(0, 0)] !== prepared[:A][(1, 0)]
+        @test values == backup
+    end
+    @test_throws ArgumentError me.materialize_replica_components(
+        components,
+        [1, 1],
+        map,
+        me.SerializedWannier90ReplicaValues(),
+    )
+end

@@ -1091,6 +1091,11 @@ function _accept_solver_iteration(state::NamedTuple)
                     localization_convergence = input_summary["localization_convergence"],
                     localization_qualification = input_summary["localization_qualification"],
                     model_qualification = input_summary["model_qualification"],
+                    initializer_algorithm_version = get(
+                        input_summary,
+                        "initializer_algorithm_version",
+                        "NOT_RECORDED",
+                    ),
                     z_steps = z_steps,
                     u_steps = u_steps,
                     gradient_steps = gradient_steps,

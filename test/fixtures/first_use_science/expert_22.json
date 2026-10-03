@@ -1,0 +1,51 @@
+{
+  "id": "generate_wannier_amn",
+  "ranks": [
+    {
+      "original_receipt_sha256": "bfb8e230f411106b1ed0236d519d98fd0464e3d19aacb569fb9516e22321c6fc",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.num_bands",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.num_kpts",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.num_wannier",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 5.013256549261996,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.data",
+              "sha256": "b1068a309c011e2a03e61949f10122e8454aa52f5ec2fadce185504f6f84520e",
+              "shape": [
+                1,
+                1,
+                1
+              ],
+              "type": "Array{ComplexF64, 3}"
+            }
+          ],
+          "type": "WannierNLQG.IO.WannierAMN"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

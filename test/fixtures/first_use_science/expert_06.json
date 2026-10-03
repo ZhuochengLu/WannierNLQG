@@ -1,0 +1,19 @@
+{
+  "id": "classify_wannierization_u_periodicity",
+  "ranks": [
+    {
+      "original_receipt_sha256": "9bee983b99becd56bc7818e71b22e29bf190772487e02d85c72cc567b969c601",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [],
+          "type": "Symbol"
+        },
+        "semantic_return": ":PERIOD_2_CONFIRMED"
+      }
+    }
+  ],
+  "schema": 1
+}

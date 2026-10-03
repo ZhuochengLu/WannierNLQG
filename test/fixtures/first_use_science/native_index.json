@@ -1,0 +1,342 @@
+{
+  "schema": 1,
+  "records": [
+    {
+      "id": "detect_magnetic_symmetry_inventory__type1",
+      "native_report": "native_magnetic_inventory.json",
+      "reference": "native_01.json",
+      "reference_sha256": "4b780e2d399df908f4942f57506e688d8936ae6a0cbce6944f90eb62bca87b4e",
+      "original_report_sha256": "8a976b3ce3de42e2f09ce73891a858ec51b7aac0ea2ce8cca9d40c54841db9e8",
+      "contract": {}
+    },
+    {
+      "id": "detect_magnetic_symmetry_inventory__type3",
+      "native_report": "native_magnetic_inventory.json",
+      "reference": "native_02.json",
+      "reference_sha256": "4caf4fa48207e8f29e0876a8620cb90e3e25cd1523a5dcf93ab2619e05333311",
+      "original_report_sha256": "3491f0a4919840b2a92378128069c08b0d3daa4fb0e36de5e7b50d46d790ccdf",
+      "contract": {}
+    },
+    {
+      "id": "diagnose_wannier_gauge_chain",
+      "native_report": "native_gauge_chain_hdf5.json",
+      "reference": "native_03.json",
+      "reference_sha256": "7a011ea4b43fe93730b749e35588bfd479af4fd394d4367afc5c40998d5cf1d8",
+      "original_report_sha256": "7061d519634cdc7c0ae3c8946ddeabf9cab54e69e1061276edde536334f923d7",
+      "contract": {
+        "input_digest_bindings": [
+          {
+            "field": [
+              "semantic_fields",
+              "/input_sha256/@wannierization_checkpoint_hdf5"
+            ],
+            "original_sha256": "318680737a37516ffc4aeab36e2267133ec94aeb35dd7d27d743477e968a0722",
+            "portable_sha256": "84b53f3699f20a6f15e91d387245b7e6106625b8cefefe6de376ba5f5ec36659",
+            "historical_portable_sha256": "0593a1f095d72eba5b7d5e46f47bbe272042157d545630442140922f8ff53007"
+          }
+        ]
+      }
+    },
+    {
+      "id": "diagnose_wannier_gauge_chain",
+      "native_report": "native_gauge_chain_json_bits.json",
+      "reference": "native_04.json",
+      "reference_sha256": "73a3bc3bf763b5fc042ac53546e15afd2b04ece2e2221afc25c227d34d1cb348",
+      "original_report_sha256": "6318e0d5acd1da41b24d312411ee8aa90c26147323136926934a623d0ea98335",
+      "contract": {
+        "input_digest_bindings": [
+          {
+            "field": [
+              "science_semantics",
+              "input_sha256",
+              "wannierization_checkpoint_hdf5"
+            ],
+            "original_sha256": "318680737a37516ffc4aeab36e2267133ec94aeb35dd7d27d743477e968a0722",
+            "portable_sha256": "84b53f3699f20a6f15e91d387245b7e6106625b8cefefe6de376ba5f5ec36659",
+            "historical_portable_sha256": "0593a1f095d72eba5b7d5e46f47bbe272042157d545630442140922f8ff53007"
+          }
+        ]
+      }
+    },
+    {
+      "id": "generate_qe_paw_matrix_elements",
+      "native_report": "native_science.json",
+      "reference": "native_05.json",
+      "reference_sha256": "69fc3f2070cc6ba6f31e43aa7b256ffa81350b0999899ecfe6d1ab73df86396f",
+      "original_report_sha256": "8cdff852c73ab8ce32697fedf04ee611b58081bff67ace01a94d658a72a77543",
+      "contract": {}
+    },
+    {
+      "id": "generate_qe_paw_spn",
+      "native_report": "native_science.json",
+      "reference": "native_06.json",
+      "reference_sha256": "1d052ac6bf6e5754300eecb884150266bfc03cb5e6b7e7f0800b8dd11f11a71c",
+      "original_report_sha256": "476b819f416386e8d599467ee048ee21b69a54d5dd8d5b785d16e4d3f3a7f706",
+      "contract": {}
+    },
+    {
+      "id": "generate_symmetry_completed_qe_paw_matrix_elements",
+      "native_report": "native_science.json",
+      "reference": "native_07.json",
+      "reference_sha256": "69fc3f2070cc6ba6f31e43aa7b256ffa81350b0999899ecfe6d1ab73df86396f",
+      "original_report_sha256": "8cdff852c73ab8ce32697fedf04ee611b58081bff67ace01a94d658a72a77543",
+      "contract": {}
+    },
+    {
+      "id": "generate_vasp_band_representation",
+      "native_report": "native_vasp_band_hdf5.json",
+      "reference": "native_08.json",
+      "reference_sha256": "75cfc9199fc32e9180bee188118677251140835da93306b86fd74ff2bde967e7",
+      "original_report_sha256": "0ad8a49aa9e17edf56e3f739021a494a845cfd6b05d50bc90382ecd762da77fe",
+      "contract": {
+        "generated_time_fields": [
+          [
+            "semantic_fields",
+            "/environment/@generated_at_utc"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "generate_vasp_paw_matrix_elements",
+      "native_report": "native_vasp_matrix_bits.json",
+      "reference": "native_09.json",
+      "reference_sha256": "55222a3cacd6851c8766bc2d62f42f71fcddc6cb01d11f9a9911b6f5634b939c",
+      "original_report_sha256": "13e82aa910500555b89e5c394dc7707ee375c8e44d44eeccafee867f7f8b99bb",
+      "contract": {}
+    },
+    {
+      "id": "generate_vasp_paw_matrix_elements",
+      "native_report": "native_vasp_matrix_provenance.json",
+      "reference": "native_10.json",
+      "reference_sha256": "4e347c3ccc6a65a71d103ac2f1d67c5d5ef9c45b91160421bcefd2d86ed4cda1",
+      "original_report_sha256": "071d1b4cd6ffd76bc6e5ca2ef910543a6cddcf35b0d21c58b7c6a8c901012140",
+      "contract": {}
+    },
+    {
+      "id": "generate_vasp_paw_spn",
+      "native_report": "native_vasp_spn_bits.json",
+      "reference": "native_11.json",
+      "reference_sha256": "852516787bf11703d5d3ca03932f77ea25c6fbd4a9a02f4178ddd4706ec7fecd",
+      "original_report_sha256": "03c3c7d1510ee1d306e589e8b509b0b686c862fb4358d277fbd28aba39d6bc34",
+      "contract": {}
+    },
+    {
+      "id": "generate_vasp_paw_spn",
+      "native_report": "native_vasp_spn_provenance.json",
+      "reference": "native_12.json",
+      "reference_sha256": "02bf8745ef70d5a855b82e66c33964d93d319427d866c74f18200d1f7e73cd84",
+      "original_report_sha256": "0fb725d6528362bed469c24621d7b3ee618de1c208a1a8c24e853c19d7411eb3",
+      "contract": {
+        "temporary_output_pair": [
+          {
+            "field": [
+              "semantic_fields",
+              "/artifacts/@spn"
+            ],
+            "basename": "native.spn"
+          },
+          {
+            "field": [
+              "semantic_fields",
+              "/artifacts/@provenance_hdf5"
+            ],
+            "basename": "native.spn.h5"
+          }
+        ],
+        "official_path_bound_digest_fields": [
+          [
+            "semantic_fields",
+            "/@payload_sha256"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "generate_wannier_amn",
+      "native_report": "native_science.json",
+      "reference": "native_13.json",
+      "reference_sha256": "c8fbc77bd8e2a1cc044b065bf2a183a67780ed8ac00658d9a341c2e72a28adaa",
+      "original_report_sha256": "d60eff732c0a9dd8d3e14144d166e5c117736ef4d5b6dff2a85d128a1c5435a8",
+      "contract": {}
+    },
+    {
+      "id": "generate_wannier_shu",
+      "native_report": "native_operator_blocks.json",
+      "reference": "native_14.json",
+      "reference_sha256": "2c538e96e094f23a8a265254da26f052ed40ccd2a730f3dde5042e3747f29801",
+      "original_report_sha256": "8112362ffe05a1387d101c64442743fcf50bba20e21bdddfdffbb83b714a04dd",
+      "contract": {}
+    },
+    {
+      "id": "generate_wannier_siu",
+      "native_report": "native_operator_blocks.json",
+      "reference": "native_15.json",
+      "reference_sha256": "a2c546fc9345c7c23015709593ff0776e8b57fa4c03df5a5f956160586194c59",
+      "original_report_sha256": "ea7fca0829791b5b7077b5105ce3e593ea6b67c2fe30afc586f30c88ef608bbe",
+      "contract": {}
+    },
+    {
+      "id": "generate_wannier_uhu",
+      "native_report": "native_science.json",
+      "reference": "native_16.json",
+      "reference_sha256": "375477871c943ac8bf29b29cccdd2a932b0109f434dd3182f6ef70ffb7356784",
+      "original_report_sha256": "faa2d24f41deb2d7ffaf48f598fc22285543e7a447ce5e0e5c65a42f3983e42c",
+      "contract": {}
+    },
+    {
+      "id": "generate_wannier_uiu",
+      "native_report": "native_science.json",
+      "reference": "native_17.json",
+      "reference_sha256": "96e5b2d6494700f45fce33b359283cf415f7bf580a4d6007423d777eb3b3e83b",
+      "original_report_sha256": "ea875d3a75d2a79fb716c03bec03fbf163b4564dc25c80c8235046723f8bd812",
+      "contract": {}
+    },
+    {
+      "id": "prepare_exact_wannier_operator_bundle",
+      "native_report": "native_science.json",
+      "reference": "native_18.json",
+      "reference_sha256": "85f681ac1ed7813755dd397651e46de72d8e5881f5b24bb4ba45295d5e7ef742",
+      "original_report_sha256": "8c2e0d0e86d68f149b9aff464806e7670ab877ccbe2903d50b258d12d8b6252a",
+      "contract": {}
+    },
+    {
+      "id": "prepare_paw_scdm_input_artifact",
+      "native_report": "native_science.json",
+      "reference": "native_19.json",
+      "reference_sha256": "e720faf3b8851eaebe82246b7f195c2061761ce5858ea0c3952eff76811cbb82",
+      "original_report_sha256": "675422add48ef4a15b1059e812047a6adbda00162360800017934b5606642444",
+      "contract": {}
+    },
+    {
+      "id": "prepare_symmetry_covariant_wavefunctions",
+      "native_report": "native_science.json",
+      "reference": "native_20.json",
+      "reference_sha256": "5bd0a121abf5368abc3e15e61e3a7f5abbfbbfacc18c1cdd356c7535ddcc5dc0",
+      "original_report_sha256": "c8e7ec402f42c4038900b829d4a9801b12713485b6d26db2e45437ef9366c49b",
+      "contract": {
+        "input_locator_bindings": [
+          {
+            "field": [
+              "semantic_fields",
+              "/source_metadata/@source_replay_save_directory"
+            ],
+            "relative": "assets/group_7/fixture.save",
+            "original": "fixture:assets/group_7/fixture.save"
+          }
+        ],
+        "official_path_bound_digest_fields": [
+          [
+            "semantic_fields",
+            "/@payload_sha256"
+          ],
+          [
+            "semantic_fields",
+            "/source_metadata/@source_replay_descriptor_sha256"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "qualify_exported_wannierization_tb",
+      "native_report": "native_qualified_tb_hdf5.json",
+      "reference": "native_21.json",
+      "reference_sha256": "1ae1157d10f6b7b8c6fba9d02290ed2d64c7a49bbb72be6bac3939145caba848",
+      "original_report_sha256": "f911ea598be80bb57406b06cf1a3ed6a5697bf42e2246bddecd154fd707959aa",
+      "contract": {}
+    },
+    {
+      "id": "screen_wannier_mesh",
+      "native_report": "native_science.json",
+      "reference": "native_22.json",
+      "reference_sha256": "0c1753ef01246fa10f36517ce3d195973f3d3db0d6acdd52bf6dc87d72d6812a",
+      "original_report_sha256": "1cc7dbafcd14da0c3d02159b81a71e2b5cf41a9e115fadfe0ebd8b1197f58454",
+      "contract": {}
+    },
+    {
+      "id": "symmetrize_existing_wannier_model",
+      "native_report": "native_science.json",
+      "reference": "native_23.json",
+      "reference_sha256": "3a9d56b8cadf1f8d087650bcc8bab68e544797d961f526d7c22b09bf0772d17d",
+      "original_report_sha256": "8b0c4a74a873524751f4666624f8a1f5b63302fcb69b4cef630200f1b7f9eaa5",
+      "contract": {}
+    },
+    {
+      "id": "symmetrize_wannier_operators",
+      "native_report": "native_symmetrized_bundle.json",
+      "reference": "native_24.json",
+      "reference_sha256": "24301a2cc6f7845f921936086e68d05f9e61bf32b23349377365ec8494f7dc8d",
+      "original_report_sha256": "537b5964f6669bbca7febef3fd4a616ea52144e7e67ad6dce1bc9132fae61e1d",
+      "contract": {
+        "generated_time_fields": [
+          [
+            "semantic_fields",
+            "/@generated_at_utc"
+          ]
+        ],
+        "input_locator_bindings": [
+          {
+            "field": [
+              "semantic_fields",
+              "/provenance/input_files/tb_file/@path"
+            ],
+            "relative": "assets/additional_44/synthetic_tb.dat",
+            "original": "fixture:assets/additional_44/synthetic_tb.dat"
+          },
+          {
+            "field": [
+              "semantic_fields",
+              "/provenance/input_files/win_file/@path"
+            ],
+            "relative": "assets/additional_43/synthetic.win",
+            "original": "fixture:assets/additional_43/synthetic.win"
+          }
+        ]
+      }
+    },
+    {
+      "id": "symmetrize_wannier_operators",
+      "native_report": "native_symmetrized_tb_bits.json",
+      "reference": "native_25.json",
+      "reference_sha256": "b9496041511a35524a7ed0bcf6413ec429006495ce587b43203cab7de423d354",
+      "original_report_sha256": "e51522a9d9fb27db2384e219cfb47f42fac244240388d6cea79ea1dc9aef18c5",
+      "contract": {}
+    },
+    {
+      "id": "write_projection_representation_search_hdf5",
+      "native_report": "native_science.json",
+      "reference": "native_26.json",
+      "reference_sha256": "1f7ed383814ac08d8eb4061942b1a5c040954dd643ede0fd68cf0b472dd3a0d6",
+      "original_report_sha256": "6e8d05332cbabb92e245cde495d7dc52e5eeb55ccdfbb278711507f302d3c18f",
+      "contract": {}
+    },
+    {
+      "id": "write_response_symmetry_artifact",
+      "native_report": "native_output.json",
+      "reference": "native_27.json",
+      "reference_sha256": "a0e6529cb2a9c04fe60f8651cd2aadaeaf00bee927745778369074e741caf61f",
+      "original_report_sha256": "8a2206e6fac4804a44a8bcb808c7cdaf970ce35e78b5e5004da1c34c02a04c88",
+      "contract": {
+        "generated_time_fields": [
+          [
+            "generated_at_utc"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "prepare_band_representation__augmentation_required_pipeline",
+      "native_report": "native_science.json",
+      "reference": "native_28.json",
+      "reference_sha256": "9775e6b43a29a6e11928a1eb9c8dfeb78f6303da7e1afa19db1fe2483a78c877",
+      "original_report_sha256": "dda35d14a97f95c8052abbaf200dd7d44c501908f1ff21c9487257c950fae30e",
+      "contract": {}
+    }
+  ],
+  "native_reports": 28,
+  "scientific_numbers_and_shapes_unchanged": true,
+  "original_artifact_bytes_attested_before_sealing": true,
+  "original_locator_transport_explicit": true,
+  "original_to_portable_qualification_sha256": "007b1016440e4d134cc9417a8823446928fd3248b008455c2d95c91c1409fb72",
+  "final_pass": false
+}

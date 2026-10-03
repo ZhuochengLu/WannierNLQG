@@ -1,0 +1,5 @@
+{
+  "bundle_file": "pauli_bundle.h5",
+  "bundle_sha256": "6ebee808461d3dcce6556002fea9c8ec8b7f6afe199c6cf13c1697438de6e365",
+  "scope": "Immutable nonzero Pauli input for two registered Zeeman paths; exact captured original data"
+}

@@ -1,0 +1,39 @@
+    Synthetic NNKP for native QE matrix-element tests
+
+    begin real_lattice
+      1.058354421806 0.0 0.0
+      0.0 1.058354421806 0.0
+      0.0 0.0 1.058354421806
+    end real_lattice
+
+    begin recip_lattice
+      5.936749710421029 0.0 0.0
+      0.0 5.936749710421029 0.0
+      0.0 0.0 5.936749710421029
+    end recip_lattice
+
+    begin kpoints
+      3
+      0.0 0.0 0.0
+      0.3333333333333333 0.0 0.0
+      0.6666666666666666 0.0 0.0
+    end kpoints
+
+    begin spinor_projections
+      1
+      0.0 0.0 0.0 0 1 1
+      0.0 0.0 1.0 1.0 0.0 0.0 1.0
+      1 0.0 0.0 1.0
+    end spinor_projections
+
+    begin nnkpts
+      1
+      1 1 0 0 0
+      2 2 0 0 0
+      3 3 0 0 0
+    end nnkpts
+
+    begin exclude_bands
+      0
+    end exclude_bands
+    

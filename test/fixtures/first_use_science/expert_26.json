@@ -1,0 +1,103 @@
+{
+  "id": "generate_wannier_uiu",
+  "ranks": [
+    {
+      "original_receipt_sha256": "7f9ef2bdbb188b81e3e0f18b0a11485ffcade52ff8ea17f2d0a96e98bb9cc7cc",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.num_bands",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.num_kpts",
+              "payload": "0300000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.num_neighbors",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.generalized_norm_max_absolute",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.mmn_parity.max_absolute",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.mmn_parity.root_mean_square",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.mmn_parity.relative_l2",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.mmn_parity.worst_index",
+              "sha256": "5e4ffd7d196e150659e625599778aa9c37538bb184fce71b42b1d5b339f2aeec",
+              "shape": [
+                4
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "path": "result.mmn_parity.finite",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.diagonal_identity_max_absolute",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.exchange_hermiticity_max_absolute",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.passed",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.resumed_from_kpoint",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            }
+          ],
+          "type": "WannierNLQG.Wannierization.WannierUIUGenerationResult"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

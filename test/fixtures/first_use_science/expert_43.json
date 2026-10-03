@@ -1,0 +1,122 @@
+{
+  "id": "read_vasp_paw_spn_provenance",
+  "ranks": [
+    {
+      "original_receipt_sha256": "f9d00e7d4e9feb4a084824d25bb4f7480db5934a4e60307cbc542605ba8d43a7",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.passed",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.euclidean_nonunitarity_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.legacy",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.maximum_condition_number",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.minimum_singular_value",
+              "payload": "000000000000f03f",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.physical_isometry_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.physical_isometry_tolerance",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.replay_maximum",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.replay_tolerance",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.num_bands",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.num_kpts",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.num_kpoints",
+              "payload": "0200000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.target_generalized_norm_max_absolute",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.parent_generalized_norm_max_absolute",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.spinor",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.5,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.kpoints_fractional",
+              "sha256": "c3ef795130ae64dd5c975f1567fbdef361865bab663026ed1d3be0564e2514af",
+              "shape": [
+                2,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            }
+          ],
+          "type": "@NamedTuple{schema::String, schema_version::String, source_code::Symbol, passed::Bool, source_band_gauge::String, target_band_gauge::String, transform_sha256::String, contract_sha256::String, frame_contract::Dict{String, Any}, rotation_sha256::String, gauge_artifact_sha256::String, num_bands::Int64, num_kpts::Int64, num_kpoints::Int64, physical_metric::String, target_authority::String, parent_audit_policy::String, parent_audit_status::String, target_generalized_norm_max_absolute::Float64, parent_generalized_norm_max_absolute::Float64, operator_target_contract_sha256::String, qualification_scope::Nothing, spinor::Bool, kpoints_fractional::Matrix{Float64}, payload_sha256::String, input_sha256::Dict{String, String}, artifacts::Dict{String, String}, diagnostics::Vector{String}}"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

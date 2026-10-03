@@ -1,4 +1,5 @@
 outputs/**
+.DS_Store
 logs/**
 log.txt
 time.txt
@@ -8,3 +9,9 @@ time.txt
 /*.dat
 /test/Manifest.toml
 /examples/symmetrization/outputs/
+
+# Source-only package: keep development evidence and Python caches external.
+**/__pycache__/
+**/*.py[cod]
+/scripts/development/common_runner/evidence/
+/scripts/development/common_runner/runs/

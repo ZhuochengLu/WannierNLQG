@@ -74,6 +74,39 @@ function nearest_wigner_seitz_images(
     ]
 end
 
+# Reuse search buffers across residues; retain the original candidate enumeration and norm.
+function _nearest_wigner_seitz_images!(
+    scratch,
+    residue,
+    center_shift,
+    lattice,
+    mp_grid;
+    tolerance,
+    search_size,
+)
+    candidates, distances, displacement, cartesian = scratch
+    index = 0
+    for i in (-search_size):search_size,
+        j in (-search_size):search_size,
+        k in (-search_size):search_size
+
+        index += 1
+        candidate =
+            (residue[1] + i * mp_grid[1], residue[2] + j * mp_grid[2], residue[3] + k * mp_grid[3])
+        candidates[index] = candidate
+        for axis in 1:3
+            displacement[axis] = candidate[axis] + center_shift[axis]
+        end
+        mul!(cartesian, transpose(lattice), displacement)
+        distances[index] = norm(cartesian)
+    end
+    minimum_distance = minimum(distances)
+    return [
+        candidate for (candidate, distance) in zip(candidates, distances) if
+        abs(distance - minimum_distance) <= tolerance
+    ]
+end
+
 # Measure one center-aware real-space link in Cartesian coordinates.
 function _replica_link_length(
     r_vector::NTuple{3, Int},
@@ -374,29 +407,61 @@ function minimum_distance_real_space_replica_map(
         throw(ArgumentError("Wannier centers must have three columns"))
     all(isfinite, wannier_centers_fractional) ||
         throw(ArgumentError("Wannier centers contain non-finite values"))
+    isfinite(tolerance) && tolerance > 0.0 ||
+        throw(ArgumentError("minimum-distance tolerance must be finite and positive"))
+    search_size > 0 || throw(ArgumentError("minimum-distance search_size must be positive"))
+    # Non-Float64 expert inputs retain the existing generic arithmetic path.
+    scratch =
+        eltype(lattice) === Float64 && eltype(wannier_centers_fractional) === Float64 ?
+        (
+            Vector{NTuple{3, Int}}(undef, (2 * search_size + 1)^3),
+            zeros(Float64, (2 * search_size + 1)^3),
+            zeros(Float64, 3),
+            zeros(Float64, 3),
+        ) : nothing
     images = Array{Vector{NTuple{3, Int}}, 3}(undef, num_wannier, num_wannier, size(r_vectors, 2))
     for left in 1:num_wannier, right in 1:num_wannier
         center_shift =
             @view(wannier_centers_fractional[right, :]) .-
             @view(wannier_centers_fractional[left, :])
+        images_by_residue = Dict{NTuple{3, Int}, Vector{NTuple{3, Int}}}()
         for source_r_index in axes(r_vectors, 2)
             residue = real_space_mp_residue(@view(r_vectors[:, source_r_index]), mp_grid)
-            target_images = nearest_wigner_seitz_images(
-                residue,
-                center_shift,
-                lattice,
-                mp_grid;
-                tolerance,
-                search_size,
-            )
-            sort!(target_images)
-            unique!(target_images)
-            isempty(target_images) && error("Minimum distance produced no replica")
-            images[left, right, source_r_index] = target_images
+            target_images = get!(images_by_residue, residue) do
+                selected = if scratch === nothing
+                    nearest_wigner_seitz_images(
+                        residue,
+                        center_shift,
+                        lattice,
+                        mp_grid;
+                        tolerance,
+                        search_size,
+                    )
+                else
+                    _nearest_wigner_seitz_images!(
+                        scratch,
+                        residue,
+                        center_shift,
+                        lattice,
+                        mp_grid;
+                        tolerance,
+                        search_size,
+                    )
+                end
+                sort!(selected)
+                unique!(selected)
+                isempty(selected) && error("Minimum distance produced no replica")
+                selected
+            end
+            images[left, right, source_r_index] = copy(target_images)
         end
     end
     return _real_space_replica_map(:recomputed, r_vectors, degeneracies, images)
 end
+
+# Shared immutable lookup for all operator components in one preparation call.
+_replica_target_indices(map::RealSpaceReplicaMap) =
+    Dict(Tuple(map.target_r_vectors[:, index]) => index for index in axes(map.target_r_vectors, 2))
 
 """Materialize one selected Cartesian component through a shared replica map."""
 function materialize_replica_component(
@@ -404,6 +469,23 @@ function materialize_replica_component(
     input_degeneracies::Vector{Int},
     map::RealSpaceReplicaMap,
     normalization::Union{SerializedWannier90ReplicaValues, PredividedReplicaValues},
+)
+    return _materialize_replica_component(
+        source,
+        input_degeneracies,
+        map,
+        normalization,
+        _replica_target_indices(map),
+    )
+end
+
+# Accumulate one operator component using the caller-owned, typed target lookup.
+function _materialize_replica_component(
+    source::AbstractArray{ComplexF64, 3},
+    input_degeneracies::Vector{Int},
+    map::RealSpaceReplicaMap,
+    normalization::Union{SerializedWannier90ReplicaValues, PredividedReplicaValues},
+    target_indices::Dict{NTuple{3, Int}, Int},
 )
     size(source, 3) == size(map.source_r_vectors, 2) ||
         throw(ArgumentError("replica component does not match source R support"))
@@ -416,9 +498,6 @@ function materialize_replica_component(
     size(source, 1) == size(source, 2) == size(map.images, 1) == size(map.images, 2) ||
         throw(ArgumentError("replica component orbital dimensions do not match the map"))
     output = zeros(ComplexF64, size(source, 1), size(source, 2), size(map.target_r_vectors, 2))
-    target_indices = Dict(
-        Tuple(map.target_r_vectors[:, index]) => index for index in axes(map.target_r_vectors, 2)
-    )
     for left in axes(source, 1), right in axes(source, 2), source_r_index in axes(source, 3)
         targets = map.images[left, right, source_r_index]
         scalar_weight =

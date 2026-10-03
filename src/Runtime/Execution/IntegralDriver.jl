@@ -5,6 +5,7 @@ function _run_integral_bundle_fused!(
     specs::Vector{NormalizedTaskSpec},
     controls::NormalizedRunControls;
     prepare_only::Bool = false,
+    block_local_order::Bool = false,
     progress_owner::Bool = true,
     shared_sources = nothing,
     mixed_memory_limit_bytes::Int = mixed_fourier_memory_limit(),
@@ -53,6 +54,7 @@ function _run_integral_bundle_fused!(
             specs,
             controls;
             prepare_only = prepare_only,
+            block_local_order = block_local_order,
             progress_owner = progress_owner,
             shared_sources = shared_sources,
             mixed_memory_limit_bytes = mixed_memory_limit_bytes,
@@ -76,6 +78,7 @@ function _run_integral_bundle_owned!(
     loaded_sources_ref,
     cleanup!,
     prepare_only::Bool = false,
+    block_local_order::Bool = false,
     progress_owner::Bool = true,
     shared_sources = nothing,
     mixed_memory_limit_bytes::Int = mixed_fourier_memory_limit(),
@@ -157,7 +160,19 @@ function _run_integral_bundle_owned!(
     for (worker_index, thread_id) in pairs(default_thread_ids)
         worker_index_by_thread_id[thread_id] = worker_index
     end
-    num_reduction_lanes = _deterministic_integral_lane_count(num_evaluation_kpoints)
+    block_local_requested =
+        block_local_order &&
+        cfg.fourier_backend == "mixed" &&
+        cfg.NKdiv !== nothing &&
+        cfg.NKFFT !== nothing &&
+        numerical_response_symmetry_plan === nothing &&
+        length(specs) == 1 &&
+        only(specs).quantity == :shift_current &&
+        only(specs).method == :conventional &&
+        !nonzero_photon_momentum(cfg.photon_momentum)
+    num_reduction_lanes = _deterministic_integral_lane_count(
+        block_local_requested ? prod(cfg.NKdiv) : num_evaluation_kpoints,
+    )
     shared_matrix_plan = bundle_matrix_element_plan(specs, cfg)
     matrix_sources = MatrixElementSources(
         spin = spin_velocity_real_space === nothing ? spin_real_space : nothing,
@@ -445,18 +460,30 @@ function _run_integral_bundle_owned!(
         )
     end
     mixed_grid = fourier_plan.grid
+    # Restrict this experimental traversal to the tested single-task, full-mesh SC path.
+    use_block_order = block_local_requested && mixed_grid !== nothing
+    block_indices = use_block_order ? mixed_fourier_local_k_indices(mixed_grid, 0, 1) : nothing
+    point_order =
+        block_indices === nothing ? nothing :
+        Dict{Int, Int}(point => ordinal for (ordinal, point) in enumerate(block_indices))
     per_workspace_memory_limit = fourier_plan.memory_limit_bytes
-    local_lane_ids = _local_deterministic_integral_lanes(num_reduction_lanes, rank, size)
-    local_total_k = sum(
-        length(
-            _deterministic_integral_lane_range(
+    # Whole-block boundaries avoid recomputing the same FFT on different ranks.
+    function point_lane_indices(lane_id)
+        if block_indices === nothing
+            return _deterministic_integral_lane_range(
                 num_evaluation_kpoints,
                 num_reduction_lanes,
                 lane_id,
-            ),
-        ) for lane_id in local_lane_ids;
-        init = 0,
-    )
+            )
+        end
+        block_points = prod(mixed_grid.nkfft)
+        return [
+            index for block in lane_id:num_reduction_lanes:prod(mixed_grid.nkdiv) for
+            index in ((block - 1) * block_points + 1):(block * block_points)
+        ]
+    end
+    local_lane_ids = _local_deterministic_integral_lanes(num_reduction_lanes, rank, size)
+    local_total_k = sum(length(point_lane_indices(lane_id)) for lane_id in local_lane_ids; init = 0)
     bundle_debug_log(
         debug_lock,
         "[fourier] backend=$(fourier_plan.backend) " *
@@ -474,6 +501,8 @@ function _run_integral_bundle_owned!(
                 mixed_grid;
                 memory_limit_bytes = per_workspace_memory_limit,
             )
+            use_block_order &&
+                MatrixElements.reuse_completed_mixed_blocks!(shared_matrix_workspaces[worker_id])
         end
     end
     initial_fourier_summary = fourier_execution_summary(cfg, fourier_plan, shared_matrix_workspaces)
@@ -694,8 +723,8 @@ function _run_integral_bundle_owned!(
     end
     units = NTuple{3, Int}[]
     for lane_id in local_lane_ids
-        for evaluation_index in
-            _deterministic_integral_lane_range(num_evaluation_kpoints, num_reduction_lanes, lane_id)
+        for ordinal in point_lane_indices(lane_id)
+            evaluation_index = block_indices === nothing ? ordinal : block_indices[ordinal]
             index =
                 numerical_response_symmetry_plan === nothing ? evaluation_index :
                 numerical_response_symmetry_plan.representatives[evaluation_index]
@@ -790,7 +819,7 @@ function _run_integral_bundle_owned!(
             cleanup!()
         end
     end
-    prepared = PreparedResponseTask(units, execute_point!, finish!, cleanup!)
+    prepared = PreparedResponseTask(units, execute_point!, finish!, cleanup!, point_order)
     prepare_only && return prepared
     try
         execute_prepared_tasks!([prepared])

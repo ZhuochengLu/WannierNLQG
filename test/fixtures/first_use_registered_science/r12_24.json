@@ -1,0 +1,99 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__interband_berry_curvature__conventional",
+  "native_science": {
+    "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "bf5936dd5df1a438",
+        "bf5936dd5df1a438",
+        "bf5936dd5df1a438",
+        "bf5936dd5df1a438",
+        "bc06089a6b169560",
+        "bc06089a6b169560",
+        "bc06089a6b169560",
+        "bc06089a6b169560",
+        "3f5936dd5df1a438",
+        "3f5936dd5df1a438",
+        "3f5936dd5df1a438",
+        "3f5936dd5df1a438"
+      ],
+      "nonzero_scientific_values": 12,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0015389596735764354,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat",
+      "sha256": "d66c98efb5d6e87c7effa341c1511c75420b2afc4b2a8ee7da276bd4b39d56f0"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "1027155fdd34ac130720e39c38ecebc9de4ef9cba0771d4f8a8cfe2ebd25eee6",
+    "a4148f1ce606fc799d897c7965ac5a8547e122db1885f544b70a97d191f8b1d5",
+    "55d7e1b6653b50af48955c54332c32b9f676b18fe67e1169854bef9ff53840e4",
+    "c1b2b389354761f2cbc78a7e7c0dea798da874fde17148f8911cbe0b9310d9b5",
+    "f0b12b131d27850443f1c17adaca428ffeaddac7992ac9a825dd7e8335fadf3c",
+    "d91553518291e8a6a29fb807637b8048c5dc4dde7242e75e23d035fa965f1fe8",
+    "3f2cb7974741e5a903f0f5dd1717a6c1eb04cddfd090a51788c285ccf534e7d4",
+    "940e5d903387f8e73dce85303eddffe88c7647ce4794a61f1f17d9afd6874410",
+    "37275a6ef32e9cff24b2a2ac9d9c7b8b53f469798d401ada9cf1534b3ded0cc5",
+    "5eb2de85ae787f66d8f1f88af7a54454a4cd5c755f4c25446f5e813df2f9ce96",
+    "de31eed5e14a806e7f21d59001482d396f17dca2e0dcc952a5043c45c5bf50c2",
+    "e79681d4d2967b866b7da76766f73c071875ea0a59175fa430dc98439295541e"
+  ],
+  "original_receipt_sha256": "1027155fdd34ac130720e39c38ecebc9de4ef9cba0771d4f8a8cfe2ebd25eee6",
+  "rank_output_inventory": [
+    [
+      "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat"
+    ],
+    [
+      "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat"
+    ],
+    [
+      "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat"
+    ],
+    [
+      "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat"
+    ],
+    [
+      "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat"
+    ],
+    [
+      "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat"
+    ],
+    [
+      "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat"
+    ],
+    [
+      "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat"
+    ],
+    [
+      "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat"
+    ],
+    [
+      "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat"
+    ],
+    [
+      "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat"
+    ],
+    [
+      "kslice_interband_berry_curvature_conventional/synthetic_demo_ibck_conv.dat"
+    ]
+  ],
+  "ranks": 12,
+  "task_labels": [
+    "interband_berry_curvature/k_slice/conventional"
+  ]
+}

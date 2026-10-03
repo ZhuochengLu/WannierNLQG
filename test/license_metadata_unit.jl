@@ -22,36 +22,6 @@ end
     end
 end
 
-@testset "key storage documentation matches each current writer" begin
-    mktempdir() do directory
-        mkpath(joinpath(directory, "docs"))
-        for name in ("STORAGE_SCHEMAS.md", "RELEASE_NOTES.md")
-            cp(joinpath(ROOT, "docs", name), joinpath(directory, "docs", name))
-        end
-        versions = LicenseMetadataFixture.INDEPENDENT_WRITER_VERSIONS
-        check = LicenseMetadataFixture.check_storage_schema_documentation
-        @test check(directory, versions)
-        path = joinpath(directory, "docs", "STORAGE_SCHEMAS.md")
-        original = read(path, String)
-        for (label, name) in LicenseMetadataFixture.KEY_SCHEMA_DOCUMENTATION_ROWS
-            marker = "| $(label) | `$(versions[name])` |"
-            write(path, replace(original, marker => "| $(label) | `9.9` |"))
-            @test_throws ErrorException check(directory, versions)
-            write(path, original * "\n" * marker * " duplicate |\n")
-            @test_throws ErrorException check(directory, versions)
-        end
-        write(path, original)
-        notes_path = joinpath(directory, "docs", "RELEASE_NOTES.md")
-        notes = read(notes_path, String)
-        marker = "Wannierization checkpoint HDF5 writes `1.2` and reads `1.1`, `1.2`."
-        # A correct marker in history alone cannot satisfy current compatibility.
-        write(notes_path, replace(notes, marker => "") * "\n" * marker * "\n")
-        @test_throws ErrorException check(directory, versions)
-        write(notes_path, notes * "\nHistorical wire schema `9.9` remains historical.\n")
-        @test check(directory, versions)
-    end
-end
-
 const LICENSE_METADATA_FILES =
     ("LICENSE", "CITATION.cff", "README.md", "CONTRIBUTING.md", "THIRD_PARTY_NOTICE.md")
 

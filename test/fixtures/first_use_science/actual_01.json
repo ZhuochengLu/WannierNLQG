@@ -1,0 +1,29 @@
+{
+  "antiunitary": [
+    false
+  ],
+  "antiunitary_operation_count": 0,
+  "msg_type": 1,
+  "rotations": [
+    [
+      1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      1
+    ]
+  ],
+  "translations": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "uni_number": 1,
+  "unitary_operation_count": 1
+}

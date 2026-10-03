@@ -23,6 +23,8 @@ const MATRIX_ELEMENTS_INTEGRATION_API = (
     :matrix_element_axis_required,
     :matrix_element_pair_required,
     :materialize_replica_component,
+    :materialize_replica_components,
+    :reuse_completed_mixed_blocks!,
     :minimum_distance_real_space_replica_map,
     :mp_residue_grid,
     :projector_block_velocity,
@@ -214,4 +216,46 @@ function compute_spin_velocity_real_space_streaming_with_transform(
         stencil_completeness_tolerance,
         search_supercell,
     )
+end
+
+"""
+Materialize a dictionary of selected operator components through one replica map.
+
+The target-index lookup is shared only within this call. Each component keeps its
+original replica normalization and accumulation order and owns its output array.
+Neither the source components nor the map are mutated.
+"""
+function materialize_replica_components(
+    components::Dict{K, V},
+    input_degeneracies::Vector{Int},
+    map::RealSpaceReplicaMap,
+    normalization::Union{SerializedWannier90ReplicaValues, PredividedReplicaValues},
+) where {K, V}
+    target_indices = _replica_target_indices(map)
+    prepared = Dict{K, Dict{NTuple{2, Int8}, AbstractArray{ComplexF64, 3}}}()
+    for (kind, component_views) in components
+        selected = Dict{NTuple{2, Int8}, AbstractArray{ComplexF64, 3}}()
+        for (component, values) in component_views
+            selected[component] = _materialize_replica_component(
+                values,
+                input_degeneracies,
+                map,
+                normalization,
+                target_indices,
+            )
+        end
+        prepared[kind] = selected
+    end
+    return prepared
+end
+
+"""
+Allow a mixed workspace to recycle same-group buffers when moving to a new block.
+
+Runtime uses this hint only for whole-block ownership. Revisited blocks remain
+correct: recycling invalidates the previous key, so a revisit is recomputed by
+the normal miss path. This changes storage retention, never interpolation values.
+"""
+function reuse_completed_mixed_blocks!(workspace::MatrixElementWorkspace)
+    return _reuse_completed_mixed_blocks!(workspace)
 end

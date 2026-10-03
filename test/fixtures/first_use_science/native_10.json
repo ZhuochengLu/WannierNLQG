@@ -1,0 +1,633 @@
+{
+  "original_artifact_attestation": {
+    "bytes": 26938,
+    "sha256": "076fb0b0a05ef86f6bf792d4978cb0129fa1d1e781e9132ef762296d37663243",
+    "verified": true
+  },
+  "original_report_sha256": "071d1b4cd6ffd76bc6e5ca2ef910543a6cddcf35b0d21c58b7c6a8c901012140",
+  "report": {
+    "artifact_sha256": "076fb0b0a05ef86f6bf792d4978cb0129fa1d1e781e9132ef762296d37663243",
+    "dataset_paths": [
+      "/@amn_max_principal_angle_rad",
+      "/@amn_projector_max_absolute",
+      "/@amn_q0_metric_backend",
+      "/@amn_raw_array_sha256",
+      "/@amn_raw_file_sha256",
+      "/@amn_solver_array_sha256",
+      "/@atomic_phase_convention",
+      "/@coefficient_normalization",
+      "/@construction",
+      "/@finite_b_expansion",
+      "/@generalized_norm_max_absolute",
+      "/@mmn_augmentation_backend",
+      "/@parent_audit_policy",
+      "/@passed",
+      "/@projection_basis_sha256",
+      "/@projection_cutoff_ev",
+      "/@projection_radial_backend",
+      "/@qualification_authority",
+      "/@radial_grid_unit",
+      "/@radial_q_max_absolute",
+      "/@reciprocal_vector_unit",
+      "/@schema",
+      "/@schema_version",
+      "/@solver_center_phase_convention",
+      "/@solver_gauge_formula",
+      "/@solver_spin_basis_convention",
+      "/@vasp_version",
+      "/component_norms/amn/@augmentation_max_absolute",
+      "/component_norms/amn/@normalization_factor_maximum",
+      "/component_norms/amn/@normalization_factor_minimum",
+      "/component_norms/amn/@normalization_residual_maximum",
+      "/component_norms/amn/@pseudo_max_absolute",
+      "/component_norms/amn/@q0_metric_tabulated_vs_integrated_max_absolute",
+      "/component_norms/mmn/@augmentation_max_absolute",
+      "/component_norms/mmn/@pseudo_max_absolute",
+      "/diagnostics",
+      "/input_sha256/@INCAR",
+      "/input_sha256/@ORACLE_AMN",
+      "/input_sha256/@ORACLE_MMN",
+      "/input_sha256/@OUTCAR",
+      "/input_sha256/@POSCAR",
+      "/input_sha256/@POTCAR",
+      "/input_sha256/@TOPOLOGY_MMN",
+      "/input_sha256/@WAVECAR",
+      "/parent_audit/@amn_max_principal_angle_rad",
+      "/parent_audit/@amn_minimum_rank",
+      "/parent_audit/@amn_projector_max_absolute",
+      "/parent_audit/@amn_worst_condition",
+      "/parent_audit/@finite",
+      "/parent_audit/@generalized_norm_max_absolute",
+      "/parent_audit/@policy",
+      "/parent_audit/@status",
+      "/parent_audit/generalized_norm_worst_index",
+      "/parity_metrics/@scope",
+      "/paw_channels/angular_momentum",
+      "/paw_channels/atom_index",
+      "/paw_channels/radial_channel",
+      "/paw_channels/real_harmonic_row",
+      "/paw_channels/species",
+      "/projection_contract/angular_momentum",
+      "/projection_contract/center_fractional_vasp_image",
+      "/projection_contract/center_integer_translation",
+      "/projection_contract/local_x_cartesian",
+      "/projection_contract/local_z_cartesian",
+      "/projection_contract/magnetic_index",
+      "/projection_contract/principal_quantum_number",
+      "/projection_contract/radial_scale_inverse_angstrom",
+      "/projection_contract/spin_index",
+      "/projection_contract/spin_qaxis_cartesian",
+      "/projection_contract/wannier_index",
+      "/qualification_scope/@diagnostic_status",
+      "/qualification_scope/@frozen_mask_sha256",
+      "/qualification_scope/@outer_mask_sha256",
+      "/qualification_scope/frozen_mask",
+      "/qualification_scope/outer_mask",
+      "/solver_gauge_adapter/@maximum_condition_number",
+      "/solver_gauge_adapter/@maximum_projector_absolute",
+      "/solver_gauge_adapter/@maximum_raw_solver_absolute",
+      "/solver_gauge_adapter/@maximum_roundtrip_absolute",
+      "/solver_gauge_adapter/@maximum_unitarity_residual",
+      "/solver_gauge_adapter/@minimum_singular_value",
+      "/solver_gauge_adapter/@nonzero_translation_count",
+      "/solver_gauge_adapter/@spinor_pair_count",
+      "/thresholds/@amn_max_absolute",
+      "/thresholds/@amn_max_principal_angle_rad",
+      "/thresholds/@amn_projector_max_absolute",
+      "/thresholds/@amn_relative_l2",
+      "/thresholds/@amn_rms",
+      "/thresholds/@generalized_norm_max_absolute",
+      "/thresholds/@mmn_max_absolute",
+      "/thresholds/@mmn_relative_l2",
+      "/thresholds/@mmn_rms",
+      "/thresholds/@radial_q_max_absolute",
+      "/trial_normalization/augmentation_norm",
+      "/trial_normalization/factor",
+      "/trial_normalization/normalized_residual",
+      "/trial_normalization/pseudo_norm"
+    ],
+    "format": "hdf5",
+    "numeric_leaves": [
+      {
+        "finite": false,
+        "path": "native/@amn_max_principal_angle_rad",
+        "payload": "000000000000f87f",
+        "type": "Float64"
+      },
+      {
+        "finite": false,
+        "path": "native/@amn_projector_max_absolute",
+        "payload": "000000000000f87f",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/@generalized_norm_max_absolute",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/@passed",
+        "payload": "01",
+        "type": "Bool"
+      },
+      {
+        "finite": true,
+        "path": "native/@projection_cutoff_ev",
+        "payload": "0000000000001440",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/@radial_q_max_absolute",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/component_norms/amn/@augmentation_max_absolute",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/component_norms/amn/@normalization_factor_maximum",
+        "payload": "acd9ba2ede620040",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/component_norms/amn/@normalization_factor_minimum",
+        "payload": "0144b6579d94fc3f",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/component_norms/amn/@normalization_residual_maximum",
+        "payload": "000000000000b03c",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/component_norms/amn/@pseudo_max_absolute",
+        "payload": "000000000000f03f",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/component_norms/amn/@q0_metric_tabulated_vs_integrated_max_absolute",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/component_norms/mmn/@augmentation_max_absolute",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/component_norms/mmn/@pseudo_max_absolute",
+        "payload": "000000000000f03f",
+        "type": "Float64"
+      },
+      {
+        "finite": false,
+        "path": "native/parent_audit/@amn_max_principal_angle_rad",
+        "payload": "000000000000f87f",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/parent_audit/@amn_minimum_rank",
+        "payload": "0000000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": false,
+        "path": "native/parent_audit/@amn_projector_max_absolute",
+        "payload": "000000000000f87f",
+        "type": "Float64"
+      },
+      {
+        "finite": false,
+        "path": "native/parent_audit/@amn_worst_condition",
+        "payload": "000000000000f87f",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/parent_audit/@finite",
+        "payload": "01",
+        "type": "Bool"
+      },
+      {
+        "finite": true,
+        "path": "native/parent_audit/@generalized_norm_max_absolute",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/parent_audit/generalized_norm_worst_index",
+        "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+        "shape": [
+          3
+        ],
+        "type": "Vector{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/paw_channels/angular_momentum",
+        "sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+        "shape": [
+          1
+        ],
+        "type": "Vector{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/paw_channels/atom_index",
+        "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+        "shape": [
+          1
+        ],
+        "type": "Vector{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/paw_channels/radial_channel",
+        "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+        "shape": [
+          1
+        ],
+        "type": "Vector{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/paw_channels/real_harmonic_row",
+        "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+        "shape": [
+          1
+        ],
+        "type": "Vector{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/projection_contract/angular_momentum",
+        "sha256": "374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb",
+        "shape": [
+          2
+        ],
+        "type": "Vector{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/projection_contract/center_fractional_vasp_image",
+        "sha256": "17b0761f87b081d5cf10757ccc89f12be355c70e2e29df288b65b30710dcbcd1",
+        "shape": [
+          3,
+          2
+        ],
+        "type": "Matrix{Float64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/projection_contract/center_integer_translation",
+        "sha256": "17b0761f87b081d5cf10757ccc89f12be355c70e2e29df288b65b30710dcbcd1",
+        "shape": [
+          3,
+          2
+        ],
+        "type": "Matrix{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/projection_contract/local_x_cartesian",
+        "sha256": "4787a52766c2d47c0d1ba11d22ddb34a2beee258c82364eb9a6fbb8754c63d20",
+        "shape": [
+          3,
+          2
+        ],
+        "type": "Matrix{Float64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/projection_contract/local_z_cartesian",
+        "sha256": "b76a51d51658b8961adb4b08f1563f132b3152f68e705e85cb3b0047239de35a",
+        "shape": [
+          3,
+          2
+        ],
+        "type": "Matrix{Float64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/projection_contract/magnetic_index",
+        "sha256": "814dd7b9784d57c15b9c2972e9b4fd6cf7e164f8162a934bdb2452a413dab1f7",
+        "shape": [
+          2
+        ],
+        "type": "Vector{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/projection_contract/principal_quantum_number",
+        "sha256": "814dd7b9784d57c15b9c2972e9b4fd6cf7e164f8162a934bdb2452a413dab1f7",
+        "shape": [
+          2
+        ],
+        "type": "Vector{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.8897259885789233,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/projection_contract/radial_scale_inverse_angstrom",
+        "sha256": "380c627844cf532a514bdc6749d75aee715bbb527dff4c0be7dbaac2138556f2",
+        "shape": [
+          2
+        ],
+        "type": "Vector{Float64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 2.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/projection_contract/spin_index",
+        "sha256": "0c730b69905c5ef7a4ca5269f72365400bde2dd2c04eaf9bbb3d1c4a265a0131",
+        "shape": [
+          2
+        ],
+        "type": "Vector{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/projection_contract/spin_qaxis_cartesian",
+        "sha256": "b76a51d51658b8961adb4b08f1563f132b3152f68e705e85cb3b0047239de35a",
+        "shape": [
+          3,
+          2
+        ],
+        "type": "Matrix{Float64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 2.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/projection_contract/wannier_index",
+        "sha256": "0c730b69905c5ef7a4ca5269f72365400bde2dd2c04eaf9bbb3d1c4a265a0131",
+        "shape": [
+          2
+        ],
+        "type": "Vector{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/qualification_scope/frozen_mask",
+        "sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+        "shape": [
+          2,
+          2
+        ],
+        "type": "Matrix{UInt8}"
+      },
+      {
+        "finite": true,
+        "max_abs": 1.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/qualification_scope/outer_mask",
+        "sha256": "27ecd0a598e76f8a2fd264d427df0a119903e8eae384e478902541756f089dd1",
+        "shape": [
+          2,
+          2
+        ],
+        "type": "Matrix{UInt8}"
+      },
+      {
+        "finite": true,
+        "path": "native/solver_gauge_adapter/@maximum_condition_number",
+        "payload": "000000000000f03f",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/solver_gauge_adapter/@maximum_projector_absolute",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/solver_gauge_adapter/@maximum_raw_solver_absolute",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/solver_gauge_adapter/@maximum_roundtrip_absolute",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/solver_gauge_adapter/@maximum_unitarity_residual",
+        "payload": "0000000000000000",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/solver_gauge_adapter/@minimum_singular_value",
+        "payload": "cc3b7f669ea0e63f",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/solver_gauge_adapter/@nonzero_translation_count",
+        "payload": "0000000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "native/solver_gauge_adapter/@spinor_pair_count",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@amn_max_absolute",
+        "payload": "f168e388b5f8e43e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@amn_max_principal_angle_rad",
+        "payload": "2d431cebe2361a3f",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@amn_projector_max_absolute",
+        "payload": "f168e388b5f8e43e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@amn_relative_l2",
+        "payload": "8dedb5a0f7c6b03e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@amn_rms",
+        "payload": "48afbc9af2d77a3e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@generalized_norm_max_absolute",
+        "payload": "f168e388b5f8d43e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@mmn_max_absolute",
+        "payload": "f168e388b5f8e43e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@mmn_relative_l2",
+        "payload": "8dedb5a0f7c6b03e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@mmn_rms",
+        "payload": "48afbc9af2d77a3e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "path": "native/thresholds/@radial_q_max_absolute",
+        "payload": "8dedb5a0f7c6a03e",
+        "type": "Float64"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/trial_normalization/augmentation_norm",
+        "sha256": "66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925",
+        "shape": [
+          2,
+          2
+        ],
+        "type": "Matrix{Float64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 2.0482753420612507,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/trial_normalization/factor",
+        "sha256": "70d55d26e4ae390681df39042191cc262634eadbfc4aa00e05e0de55c948335f",
+        "shape": [
+          2,
+          2
+        ],
+        "type": "Matrix{Float64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 2.220446049250313e-16,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/trial_normalization/normalized_residual",
+        "sha256": "7349f1c446096931cd20a8577c4b31a07a8f4bd3f7732816f7b25b665fb464d0",
+        "shape": [
+          2,
+          2
+        ],
+        "type": "Matrix{Float64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.31340039170633843,
+        "max_abs_nonfinite_repr": null,
+        "path": "native/trial_normalization/pseudo_norm",
+        "sha256": "5624c0986d1b325f4ee24c12bd5db2cef1c87a2c1f8826602eefe9a7ce081d6d",
+        "shape": [
+          2,
+          2
+        ],
+        "type": "Matrix{Float64}"
+      }
+    ],
+    "raw_file_bytes": 26938,
+    "semantic_fields": {
+      "/@amn_q0_metric_backend": "integrated_ae_minus_ps_partial_waves",
+      "/@amn_raw_array_sha256": "ecd4ce48f9e48dd850440c6b7353d61256c0090490351d2b4d7331c684e89587",
+      "/@amn_raw_file_sha256": "a579df56bec04553f726c3b8d9deafb3a6501a366a1d3bedbd7cdc66c17b2380",
+      "/@amn_solver_array_sha256": "ecd4ce48f9e48dd850440c6b7353d61256c0090490351d2b4d7331c684e89587",
+      "/@atomic_phase_convention": "absorbed by exp(+i G.R) projector rephasing; no duplicate outer phase",
+      "/@coefficient_normalization": "vasp_raw",
+      "/@construction": "operator-specific PAW matrix elements; no 3D AE wavefunction",
+      "/@finite_b_expansion": "real spherical harmonics; spherical Bessel; real Gaunt",
+      "/@mmn_augmentation_backend": "potcar_tabulated_finite_b",
+      "/@parent_audit_policy": "audit_only",
+      "/@projection_basis_sha256": "c55fafe5691866efc7fa29c20b070c3ef27d630b50191ab0b13d885d7a7e8429",
+      "/@projection_radial_backend": "vasp_log_simpson_spline",
+      "/@qualification_authority": "full_parent",
+      "/@radial_grid_unit": "angstrom",
+      "/@reciprocal_vector_unit": "angstrom^-1",
+      "/@schema": "WannierNLQG.vasp_paw_matrix_elements",
+      "/@schema_version": "1.0",
+      "/@solver_center_phase_convention": "D_T[n,n]=exp(+i*2*pi*k_fractional dot T_n); T=wrapped-WIN",
+      "/@solver_gauge_formula": "A_wannierization(k)=A_raw(k)*D_T(k)*U_q^dagger",
+      "/@solver_spin_basis_convention": "right multiply VASP spin_qaxis pairs by U_q^dagger into Cartesian-z Pauli basis",
+      "/@vasp_version": "6.3.0",
+      "/input_sha256/@INCAR": "a9f01ec9d7855d28eaa4c4b34585fa0c94ae7c665e46e34586f92c3a2d7b04e8",
+      "/input_sha256/@ORACLE_AMN": "NOT_PROVIDED",
+      "/input_sha256/@ORACLE_MMN": "NOT_PROVIDED",
+      "/input_sha256/@OUTCAR": "12839911f2a954f06df944fff050e2cfdb1904de570de6a4d7730c2111af6389",
+      "/input_sha256/@POSCAR": "d94e3f7c6052ab589b74ac3f17fa4ff885d6d80c005118f60e1aa62c245ec286",
+      "/input_sha256/@POTCAR": "c086989cce5af86c2bca01d8cf33647451d36b9ce8fd3004d3f394891887b6e0",
+      "/input_sha256/@TOPOLOGY_MMN": "63b9270cb964adfd0af4111ff472b86a6277199a54cb29ffa20a2292f982b003",
+      "/input_sha256/@WAVECAR": "7c43499b997814e8a80201d2bf21b76c01d74c7c5059b586d7afd11902a3ff14",
+      "/parent_audit/@policy": "audit_only",
+      "/parent_audit/@status": "AUDIT_NOT_AVAILABLE",
+      "/parity_metrics/@scope": "target_outer",
+      "/qualification_scope/@diagnostic_status": "AVAILABLE",
+      "/qualification_scope/@frozen_mask_sha256": "a0f020a43c77309c4f46958914437aaad6ea01def03d88ba5bcf55d39ebd666e",
+      "/qualification_scope/@outer_mask_sha256": "d15ac3da78b8a02a8f88316711d8a540838034f288c13960a539a9981a200ec8"
+    }
+  },
+  "schema": 1
+}

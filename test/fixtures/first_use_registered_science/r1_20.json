@@ -1,0 +1,55 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__berry_curvature_quadrupole__conventional",
+  "native_science": {
+    "kslice_berry_curvature_quadrupole_conventional/synthetic_demo_bcqk_subspace_1_2_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "bf7d43f183ade500",
+        "bf7d43f183ade500",
+        "bf7d43f183ade500",
+        "bf7d43f183ade500",
+        "3f6ef59fd399d900",
+        "3f6ef59fd399d900",
+        "3f6ef59fd399d900",
+        "3f6ef59fd399d900",
+        "bf6c03f42674f100",
+        "bf6c03f42674f100",
+        "bf6c03f42674f100",
+        "bf6c03f42674f100",
+        "3f7bb560fac6ad00",
+        "3f7bb560fac6ad00",
+        "3f7bb560fac6ad00",
+        "3f7bb560fac6ad00"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.007144874015346803,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_berry_curvature_quadrupole_conventional/synthetic_demo_bcqk_subspace_1_2_conv.dat",
+      "sha256": "de9b9d98e04ae12c42da23f2ebb145f92cf580d16683a96dc114fbd8970d8b09"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "92b78d73ce3efa9190ef5414ffe48e7cf0fac7417e6cf14650dde97b2fcc3d81"
+  ],
+  "original_receipt_sha256": "92b78d73ce3efa9190ef5414ffe48e7cf0fac7417e6cf14650dde97b2fcc3d81",
+  "rank_output_inventory": [
+    [
+      "kslice_berry_curvature_quadrupole_conventional/synthetic_demo_bcqk_subspace_1_2_conv.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "berry_curvature_quadrupole/k_slice/conventional"
+  ]
+}

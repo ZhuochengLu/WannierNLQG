@@ -1,0 +1,5422 @@
+{
+  "id": "write_response_symmetry_artifact",
+  "ranks": [
+    {
+      "original_receipt_sha256": "e5b373f25e1118153ddbeee53ff6de2e00636d0f2d5540a60d423da7f03b5988",
+      "rank": 0,
+      "science": {
+        "native_readback": {
+          "json_payload": {
+            "generated_at_utc": "2026-10-01T15:28:55Z",
+            "provenance": {
+              "cartesian_rotation_policy": "group_invariant_metric",
+              "fractional_mapping_tolerance": 1e-05,
+              "include_time_reversal": true,
+              "magnetic_moment_semantics": "initial_magmoms_not_scf_local_moments",
+              "magnetic_moment_source": "vasp_incar_initial_magmoms",
+              "model": {
+                "path": "model.dat",
+                "sha256": "42d308a7167427d23308cdbd3177003c5508033a3d357c5d0f9e197783d0f248"
+              },
+              "qe_magnetic_input": null,
+              "spglib_symprec_angstrom": 1e-05,
+              "spglib_symprec_unit": "angstrom",
+              "spglib_version": "1.2.0",
+              "structure": {
+                "format": "poscar",
+                "path": "POSCAR.vasp",
+                "sha256": "3068ebe0e1415f86566376660129688f8fd40385023e38025b4b4389bdf0eacb"
+              },
+              "symmetry_tolerance_legacy_alias_angstrom": 1e-05,
+              "vasp_incar_magnetism": {
+                "LNONCOLLINEAR": true,
+                "LSORBIT": true,
+                "SAXIS_input": [
+                  1,
+                  0,
+                  0
+                ],
+                "SAXIS_normalized": [
+                  1,
+                  0,
+                  0
+                ],
+                "collinear_axis_cartesian": null,
+                "expanded_MAGMOM_values": [
+                  0,
+                  0,
+                  1,
+                  0,
+                  0,
+                  0
+                ],
+                "expanded_magnetic_moments_cartesian_columns": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    0
+                  ]
+                ],
+                "interpretation": "initial_magmoms_not_scf_local_moments"
+              },
+              "vasp_magnetic_input": {
+                "path": "INCAR",
+                "sha256": "6cb14cb33f386c3ff68a8a80162d42abd56697adb495169b43e347e8f790e99c"
+              }
+            },
+            "qualification": {
+              "engineering_status": "STRUCTURE_PASS",
+              "external_claims": {
+                "integrand_covariance": {
+                  "authority": "external_unverified_claim",
+                  "grants_production_eligibility": false,
+                  "maximum_relative_residual": null,
+                  "status": "NOT_RUN",
+                  "tolerance": 1e-10
+                }
+              },
+              "gates": {
+                "full_grid_consistency": {
+                  "status": "NOT_RUN_DOWNSTREAM_BLOCKED"
+                },
+                "hamiltonian_covariance": {
+                  "status": "NOT_RUN_DOWNSTREAM_BLOCKED"
+                },
+                "integrand_covariance": {
+                  "contract": "streamed_all_operations_kpoints_frequencies_components_no_extra_conjugation",
+                  "external_claim": {
+                    "authority": "external_unverified_claim",
+                    "grants_production_eligibility": false,
+                    "maximum_relative_residual": null,
+                    "status": "NOT_RUN",
+                    "tolerance": 1e-10
+                  },
+                  "maximum_relative_residual": null,
+                  "reason": "WRITER_DOES_NOT_EXECUTE_INTEGRAND_GATE",
+                  "status": "NOT_RUN",
+                  "tolerance": 1e-10
+                },
+                "mmn_covariance": {
+                  "status": "NOT_RUN_DOWNSTREAM_BLOCKED"
+                },
+                "structure_magnetic_symmetry": {
+                  "status": "PASS"
+                },
+                "wannier90_gauge": {
+                  "status": "NOT_RUN"
+                }
+              },
+              "integrand_covariance": {
+                "contract": "streamed_all_operations_kpoints_frequencies_components_no_extra_conjugation",
+                "external_claim": {
+                  "authority": "external_unverified_claim",
+                  "grants_production_eligibility": false,
+                  "maximum_relative_residual": null,
+                  "status": "NOT_RUN",
+                  "tolerance": 1e-10
+                },
+                "maximum_relative_residual": null,
+                "reason": "WRITER_DOES_NOT_EXECUTE_INTEGRAND_GATE",
+                "status": "NOT_RUN",
+                "tolerance": 1e-10
+              },
+              "production_eligible": false,
+              "seal": {
+                "production_eligible": false,
+                "reason": "PHYSICAL_QUALIFICATION_NOT_COMPLETE",
+                "sealed": false,
+                "status": "UNSEALED"
+              },
+              "status": "PHYSICS_HOLD",
+              "warnings": []
+            },
+            "schema": "wanniernlqg.response-symmetry/1.0",
+            "structure": {
+              "atomic_type_labels": null,
+              "elements": [
+                "X",
+                "Y"
+              ],
+              "lattice_rows_angstrom": [
+                [
+                  3,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  3,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  3
+                ]
+              ],
+              "magnetic_moments_cartesian_columns": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0
+                ]
+              ],
+              "positions_fractional_columns": [
+                [
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0.5,
+                  0.5,
+                  0.5
+                ]
+              ]
+            },
+            "symmetry": {
+              "antiunitary_operation_count": 8,
+              "checks": {
+                "atom_mapping": {
+                  "bijection": true,
+                  "cartesian_tolerance_angstrom": 1e-05,
+                  "fractional_tolerance": 1e-05,
+                  "magnetic_absolute_tolerance": 1e-08,
+                  "magnetic_moment_pass": true,
+                  "magnetic_relative_tolerance": 1e-08,
+                  "magnetic_transform": "(-1)^antiunitary * det(R_effective) * R_effective * m",
+                  "maximum_cartesian_residual_angstrom": 0,
+                  "maximum_fractional_residual": 0,
+                  "maximum_magnetic_absolute_residual": 0,
+                  "maximum_magnetic_relative_residual": 0,
+                  "operations": [
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 1,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    },
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 2,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    },
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 3,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    },
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 4,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    },
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 5,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    },
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 6,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    },
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 7,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    },
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 8,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    },
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 9,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    },
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 10,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    },
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 11,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    },
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 12,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    },
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 13,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    },
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 14,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    },
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 15,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    },
+                    {
+                      "bijection": true,
+                      "magnetic_moment_pass": true,
+                      "maximum_cartesian_residual_angstrom": 0,
+                      "maximum_fractional_residual": 0,
+                      "maximum_magnetic_absolute_residual": 0,
+                      "maximum_magnetic_relative_residual": 0,
+                      "operation_index": 16,
+                      "pass": true,
+                      "position_pass": true,
+                      "source_to_target_one_based": [
+                        1,
+                        2
+                      ]
+                    }
+                  ],
+                  "pass": true,
+                  "position_pass": true,
+                  "status": "PASS"
+                },
+                "cartesian_rotation": {
+                  "effective_lattice_rows_angstrom": [
+                    [
+                      3,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      3,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      3
+                    ]
+                  ],
+                  "effective_residual_tolerance": 1e-12,
+                  "input_metric": [
+                    [
+                      9,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      9,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      9
+                    ]
+                  ],
+                  "maximum_cartesian_matrix_correction": 0,
+                  "maximum_cartesian_matrix_correction_limit": 1e-06,
+                  "maximum_effective_cartesian_closure_residual": 0,
+                  "maximum_effective_orthogonality_residual": 0,
+                  "maximum_raw_orthogonality_residual": 0,
+                  "pass": true,
+                  "policy": "group_invariant_metric",
+                  "production_pass": true,
+                  "relative_metric_change": 0,
+                  "status": "PASS",
+                  "symmetrized_metric": [
+                    [
+                      9,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      9,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      9
+                    ]
+                  ],
+                  "worst_effective_cartesian_closure_pair": [
+                    0,
+                    0
+                  ]
+                },
+                "closure": true,
+                "identity": true,
+                "inverse": true,
+                "point_group": {
+                  "algebra": "exact_integer_fractional_rotation_and_antiunitary_parity",
+                  "closure": true,
+                  "identity": true,
+                  "inverse": true,
+                  "pass": true
+                },
+                "space_group": {
+                  "closure": true,
+                  "closure_missing_pairs": [],
+                  "identity": true,
+                  "identity_indices": [
+                    1
+                  ],
+                  "inverse": true,
+                  "inverse_missing_operation_indices": [],
+                  "maximum_matched_translation_residual_fractional": 0,
+                  "pass": true,
+                  "translation_tolerance_fractional": 1e-05,
+                  "worst_matched_translation_context": "none"
+                },
+                "tolerance_stability": {
+                  "central_spglib_symprec_angstrom": 1e-05,
+                  "operation_identity": "full_Seitz_rotation_translation_antiunitary",
+                  "pass": true,
+                  "samples": [
+                    {
+                      "antiunitary_operation_count": 8,
+                      "hall_number": 400,
+                      "matches_central": true,
+                      "msg_type": 3,
+                      "num_operations": 16,
+                      "operation_set_sha256": "5ae8abac0d71d594c8b31e7b9a39132b0275f98c146853540463b144bcf14a85",
+                      "spglib_symprec_angstrom": 5e-06,
+                      "uni_number": 1005,
+                      "unitary_operation_count": 8
+                    },
+                    {
+                      "antiunitary_operation_count": 8,
+                      "hall_number": 400,
+                      "matches_central": true,
+                      "msg_type": 3,
+                      "num_operations": 16,
+                      "operation_set_sha256": "5ae8abac0d71d594c8b31e7b9a39132b0275f98c146853540463b144bcf14a85",
+                      "spglib_symprec_angstrom": 1e-05,
+                      "uni_number": 1005,
+                      "unitary_operation_count": 8
+                    },
+                    {
+                      "antiunitary_operation_count": 8,
+                      "hall_number": 400,
+                      "matches_central": true,
+                      "msg_type": 3,
+                      "num_operations": 16,
+                      "operation_set_sha256": "5ae8abac0d71d594c8b31e7b9a39132b0275f98c146853540463b144bcf14a85",
+                      "spglib_symprec_angstrom": 2e-05,
+                      "uni_number": 1005,
+                      "unitary_operation_count": 8
+                    }
+                  ],
+                  "status": "PASS"
+                }
+              },
+              "hall_number": 400,
+              "magnetic": true,
+              "msg_type": 3,
+              "point_group_operations": [
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    1
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    2
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    3
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    4
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    5
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    6
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    7
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    8
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    9
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    10
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    11
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    12
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    13
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    14
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    15
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    16
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                }
+              ],
+              "space_group_operations": [
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    1
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    2
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    3
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    4
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    5
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    6
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    7
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    8
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    9
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    10
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    11
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    12
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    13
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": true,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    14
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      -1
+                    ],
+                    [
+                      0,
+                      1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    15
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "antiunitary": false,
+                  "cartesian_matrix_correction_max_abs": 0,
+                  "cartesian_rotation_use": "group_invariant_metric",
+                  "effective_cartesian_orthogonality_residual": 0,
+                  "raw_cartesian_orthogonality_residual": 0,
+                  "rotation_cartesian": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_effective": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_cartesian_raw": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "rotation_fractional": [
+                    [
+                      -1,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      -1,
+                      0
+                    ]
+                  ],
+                  "source_space_group_indices": [
+                    16
+                  ],
+                  "translation_fractional": [
+                    0,
+                    0,
+                    0
+                  ]
+                }
+              ],
+              "uni_number": 1005,
+              "unitary_operation_count": 8
+            }
+          },
+          "original_artifact_attestation": {
+            "bytes": 95476,
+            "sha256": "8a2206e6fac4804a44a8bcb808c7cdaf970ce35e78b5e5004da1c34c02a04c88",
+            "verified": true
+          },
+          "report": {
+            "artifact_sha256": "8a2206e6fac4804a44a8bcb808c7cdaf970ce35e78b5e5004da1c34c02a04c88",
+            "format": "json",
+            "numeric_leaves": [
+              {
+                "finite": true,
+                "path": "native.provenance.fractional_mapping_tolerance",
+                "payload": "f168e388b5f8e43e",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.include_time_reversal",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.spglib_symprec_angstrom",
+                "payload": "f168e388b5f8e43e",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.symmetry_tolerance_legacy_alias_angstrom",
+                "payload": "f168e388b5f8e43e",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.LNONCOLLINEAR",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.LSORBIT",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.SAXIS_input[1]",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.SAXIS_input[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.SAXIS_input[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.SAXIS_normalized[1]",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.SAXIS_normalized[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.SAXIS_normalized[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.expanded_MAGMOM_values[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.expanded_MAGMOM_values[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.expanded_MAGMOM_values[3]",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.expanded_MAGMOM_values[4]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.expanded_MAGMOM_values[5]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.expanded_MAGMOM_values[6]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.expanded_magnetic_moments_cartesian_columns[1][1]",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.expanded_magnetic_moments_cartesian_columns[1][2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.expanded_magnetic_moments_cartesian_columns[1][3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.expanded_magnetic_moments_cartesian_columns[2][1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.expanded_magnetic_moments_cartesian_columns[2][2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.provenance.vasp_incar_magnetism.expanded_magnetic_moments_cartesian_columns[2][3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.qualification.external_claims.integrand_covariance.grants_production_eligibility",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.qualification.external_claims.integrand_covariance.tolerance",
+                "payload": "bbbdd7d9df7cdb3d",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.qualification.gates.integrand_covariance.external_claim.grants_production_eligibility",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.qualification.gates.integrand_covariance.external_claim.tolerance",
+                "payload": "bbbdd7d9df7cdb3d",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.qualification.gates.integrand_covariance.tolerance",
+                "payload": "bbbdd7d9df7cdb3d",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.qualification.integrand_covariance.external_claim.grants_production_eligibility",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.qualification.integrand_covariance.external_claim.tolerance",
+                "payload": "bbbdd7d9df7cdb3d",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.qualification.integrand_covariance.tolerance",
+                "payload": "bbbdd7d9df7cdb3d",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.qualification.production_eligible",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.qualification.seal.production_eligible",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.qualification.seal.sealed",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.lattice_rows_angstrom[1][1]",
+                "payload": "0300000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.lattice_rows_angstrom[1][2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.lattice_rows_angstrom[1][3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.lattice_rows_angstrom[2][1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.lattice_rows_angstrom[2][2]",
+                "payload": "0300000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.lattice_rows_angstrom[2][3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.lattice_rows_angstrom[3][1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.lattice_rows_angstrom[3][2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.lattice_rows_angstrom[3][3]",
+                "payload": "0300000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.magnetic_moments_cartesian_columns[1][1]",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.magnetic_moments_cartesian_columns[1][2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.magnetic_moments_cartesian_columns[1][3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.magnetic_moments_cartesian_columns[2][1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.magnetic_moments_cartesian_columns[2][2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.magnetic_moments_cartesian_columns[2][3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.positions_fractional_columns[1][1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.positions_fractional_columns[1][2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.positions_fractional_columns[1][3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.positions_fractional_columns[2][1]",
+                "payload": "000000000000e03f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.positions_fractional_columns[2][2]",
+                "payload": "000000000000e03f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.structure.positions_fractional_columns[2][3]",
+                "payload": "000000000000e03f",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.antiunitary_operation_count",
+                "payload": "0800000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.atom_mapping.bijection",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.atom_mapping.cartesian_tolerance_angstrom",
+                "payload": "f168e388b5f8e43e",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.atom_mapping.fractional_tolerance",
+                "payload": "f168e388b5f8e43e",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.atom_mapping.magnetic_absolute_tolerance",
+                "payload": "3a8c30e28e79453e",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.atom_mapping.magnetic_moment_pass",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.atom_mapping.magnetic_relative_tolerance",
+                "payload": "3a8c30e28e79453e",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.atom_mapping.maximum_cartesian_residual_angstrom",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.atom_mapping.maximum_fractional_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.atom_mapping.maximum_magnetic_absolute_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.atom_mapping.maximum_magnetic_relative_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.atom_mapping.pass",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.atom_mapping.position_pass",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.cartesian_rotation.effective_residual_tolerance",
+                "payload": "11ea2d819997713d",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.cartesian_rotation.maximum_cartesian_matrix_correction",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.cartesian_rotation.maximum_cartesian_matrix_correction_limit",
+                "payload": "8dedb5a0f7c6b03e",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.cartesian_rotation.maximum_effective_cartesian_closure_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.cartesian_rotation.maximum_effective_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.cartesian_rotation.maximum_raw_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.cartesian_rotation.pass",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.cartesian_rotation.production_pass",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.cartesian_rotation.relative_metric_change",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.cartesian_rotation.worst_effective_cartesian_closure_pair[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.cartesian_rotation.worst_effective_cartesian_closure_pair[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.closure",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.identity",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.inverse",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.point_group.closure",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.point_group.identity",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.point_group.inverse",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.point_group.pass",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.space_group.closure",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.space_group.identity",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.space_group.identity_indices[1]",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.space_group.inverse",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.space_group.maximum_matched_translation_residual_fractional",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.space_group.pass",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.space_group.translation_tolerance_fractional",
+                "payload": "f168e388b5f8e43e",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.tolerance_stability.central_spglib_symprec_angstrom",
+                "payload": "f168e388b5f8e43e",
+                "type": "Float64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.checks.tolerance_stability.pass",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.hall_number",
+                "payload": "9001000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.magnetic",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.msg_type",
+                "payload": "0300000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[1].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[1].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[1].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[1].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[1].source_space_group_indices[1]",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[1].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[1].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[1].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[2].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[2].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[2].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[2].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[2].source_space_group_indices[1]",
+                "payload": "0200000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[2].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[2].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[2].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[3].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[3].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[3].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[3].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[3].source_space_group_indices[1]",
+                "payload": "0300000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[3].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[3].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[3].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[4].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[4].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[4].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[4].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[4].source_space_group_indices[1]",
+                "payload": "0400000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[4].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[4].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[4].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[5].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[5].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[5].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[5].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[5].source_space_group_indices[1]",
+                "payload": "0500000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[5].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[5].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[5].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[6].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[6].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[6].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[6].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[6].source_space_group_indices[1]",
+                "payload": "0600000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[6].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[6].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[6].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[7].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[7].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[7].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[7].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[7].source_space_group_indices[1]",
+                "payload": "0700000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[7].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[7].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[7].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[8].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[8].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[8].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[8].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[8].source_space_group_indices[1]",
+                "payload": "0800000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[8].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[8].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[8].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[9].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[9].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[9].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[9].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[9].source_space_group_indices[1]",
+                "payload": "0900000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[9].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[9].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[9].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[10].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[10].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[10].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[10].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[10].source_space_group_indices[1]",
+                "payload": "0a00000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[10].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[10].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[10].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[11].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[11].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[11].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[11].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[11].source_space_group_indices[1]",
+                "payload": "0b00000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[11].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[11].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[11].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[12].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[12].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[12].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[12].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[12].source_space_group_indices[1]",
+                "payload": "0c00000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[12].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[12].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[12].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[13].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[13].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[13].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[13].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[13].source_space_group_indices[1]",
+                "payload": "0d00000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[13].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[13].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[13].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[14].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[14].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[14].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[14].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[14].source_space_group_indices[1]",
+                "payload": "0e00000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[14].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[14].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[14].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[15].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[15].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[15].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[15].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[15].source_space_group_indices[1]",
+                "payload": "0f00000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[15].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[15].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[15].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[16].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[16].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[16].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[16].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[16].source_space_group_indices[1]",
+                "payload": "1000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[16].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[16].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.point_group_operations[16].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[1].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[1].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[1].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[1].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[1].source_space_group_indices[1]",
+                "payload": "0100000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[1].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[1].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[1].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[2].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[2].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[2].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[2].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[2].source_space_group_indices[1]",
+                "payload": "0200000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[2].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[2].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[2].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[3].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[3].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[3].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[3].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[3].source_space_group_indices[1]",
+                "payload": "0300000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[3].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[3].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[3].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[4].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[4].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[4].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[4].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[4].source_space_group_indices[1]",
+                "payload": "0400000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[4].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[4].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[4].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[5].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[5].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[5].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[5].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[5].source_space_group_indices[1]",
+                "payload": "0500000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[5].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[5].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[5].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[6].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[6].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[6].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[6].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[6].source_space_group_indices[1]",
+                "payload": "0600000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[6].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[6].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[6].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[7].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[7].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[7].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[7].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[7].source_space_group_indices[1]",
+                "payload": "0700000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[7].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[7].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[7].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[8].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[8].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[8].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[8].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[8].source_space_group_indices[1]",
+                "payload": "0800000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[8].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[8].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[8].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[9].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[9].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[9].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[9].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[9].source_space_group_indices[1]",
+                "payload": "0900000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[9].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[9].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[9].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[10].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[10].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[10].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[10].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[10].source_space_group_indices[1]",
+                "payload": "0a00000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[10].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[10].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[10].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[11].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[11].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[11].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[11].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[11].source_space_group_indices[1]",
+                "payload": "0b00000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[11].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[11].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[11].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[12].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[12].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[12].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[12].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[12].source_space_group_indices[1]",
+                "payload": "0c00000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[12].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[12].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[12].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[13].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[13].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[13].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[13].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[13].source_space_group_indices[1]",
+                "payload": "0d00000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[13].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[13].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[13].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[14].antiunitary",
+                "payload": "01",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[14].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[14].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[14].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[14].source_space_group_indices[1]",
+                "payload": "0e00000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[14].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[14].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[14].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[15].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[15].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[15].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[15].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[15].source_space_group_indices[1]",
+                "payload": "0f00000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[15].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[15].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[15].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[16].antiunitary",
+                "payload": "00",
+                "type": "Bool"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[16].cartesian_matrix_correction_max_abs",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[16].effective_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[16].raw_cartesian_orthogonality_residual",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[16].source_space_group_indices[1]",
+                "payload": "1000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[16].translation_fractional[1]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[16].translation_fractional[2]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.space_group_operations[16].translation_fractional[3]",
+                "payload": "0000000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.uni_number",
+                "payload": "ed03000000000000",
+                "type": "Int64"
+              },
+              {
+                "finite": true,
+                "path": "native.symmetry.unitary_operation_count",
+                "payload": "0800000000000000",
+                "type": "Int64"
+              }
+            ],
+            "raw_file_bytes": 95476,
+            "top_level_keys": [
+              "generated_at_utc",
+              "provenance",
+              "qualification",
+              "schema",
+              "structure",
+              "symmetry"
+            ]
+          }
+        },
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [],
+          "type": "String"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

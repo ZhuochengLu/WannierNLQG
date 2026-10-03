@@ -1,0 +1,37 @@
+{
+  "id": "authoritative_band_hamiltonian",
+  "ranks": [
+    {
+      "original_receipt_sha256": "b963e92a3a3187e27da5be9eafe5e2d8867cd2e9ee6dba7c0d02feafd432277e",
+      "rank": 0,
+      "science": {
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "max_abs": 1.0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.matrices_ev",
+              "sha256": "d5759ef68d8325f2e05bd9799d91d8c771bac098c094b1185e84a3641ceec4a4",
+              "shape": [
+                2,
+                2,
+                2
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "path": "result.qualified",
+              "payload": "01",
+              "type": "Bool"
+            }
+          ],
+          "type": "WannierNLQGWannierizationExt.OperatorExport.AuthoritativeBandHamiltonian"
+        }
+      }
+    }
+  ],
+  "schema": 1
+}

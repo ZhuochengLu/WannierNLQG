@@ -1,0 +1,108 @@
+{
+  "id": "read_qe_paw_spn_provenance",
+  "ranks": [
+    {
+      "original_receipt_sha256": "f508aa2072ca41ba7b78138708a9ef3a5a377d6b94067f2af9d298657c36bb7b",
+      "rank": 0,
+      "science": {
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.passed",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.euclidean_nonunitarity_maximum",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.legacy",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.maximum_condition_number",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.minimum_singular_value",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.physical_isometry_maximum",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.physical_isometry_tolerance",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.replay_maximum",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.frame_contract.replay_tolerance",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.num_bands",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.num_kpoints",
+              "payload": "0300000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.num_kpts",
+              "payload": "0300000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.spinor",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 0.33333333333333337,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.kpoints_fractional",
+              "sha256": "8ea161bd1d4758e48b50811eac80d90b47cca65b925011c675a9091021e6df28",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            }
+          ],
+          "type": "@NamedTuple{schema::String, schema_version::String, source_code::Symbol, passed::Bool, source_band_gauge::String, target_band_gauge::String, transform_sha256::String, contract_sha256::String, frame_contract::Dict{String, Any}, rotation_sha256::String, num_bands::Int64, num_kpoints::Int64, num_kpts::Int64, physical_metric::String, spinor::Bool, kpoints_fractional::Matrix{Float64}, payload_sha256::String, input_sha256::Dict{String, String}, artifacts::Dict{String, String}, diagnostics::Vector{String}}"
+        }
+      }
+    }
+  ],
+  "schema": 1
+}

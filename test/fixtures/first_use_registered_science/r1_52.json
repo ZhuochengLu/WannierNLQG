@@ -1,0 +1,55 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__zeeman_interband_quantum_metric__conventional",
+  "native_science": {
+    "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3f51b886c827ebb8",
+        "3f51b886c827ebb8",
+        "3f51b886c827ebb8",
+        "3f51b886c827ebb8",
+        "3f22d5546d435e10",
+        "3f22d5546d435e10",
+        "3f22d5546d435e10",
+        "3f22d5546d435e10",
+        "bf2a1ca36839ce70",
+        "bf2a1ca36839ce70",
+        "bf2a1ca36839ce70",
+        "bf2a1ca36839ce70",
+        "bf51114d56e63ed3",
+        "bf51114d56e63ed3",
+        "bf51114d56e63ed3",
+        "bf51114d56e63ed3"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0010815922001927557,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat",
+      "sha256": "ab5e2a7273cf058605187ece2fe1e5f8a4fe50d693cec090773800cce9a12817"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "90f9d60a7ebc1b3fa01913b17c98b279948aa37d0bc3a590907c574cbdc5eb57"
+  ],
+  "original_receipt_sha256": "90f9d60a7ebc1b3fa01913b17c98b279948aa37d0bc3a590907c574cbdc5eb57",
+  "rank_output_inventory": [
+    [
+      "kslice_zeeman_interband_quantum_metric_conventional/synthetic_demo_ziqmk_conv.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "zeeman_interband_quantum_metric/k_slice/conventional"
+  ]
+}

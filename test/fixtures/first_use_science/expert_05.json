@@ -1,0 +1,94 @@
+{
+  "id": "build_wannier_tight_binding_model",
+  "ranks": [
+    {
+      "original_receipt_sha256": "72bebc4bc93da2c4d9ebcff96e1c9930483b8e24815cc83eaf9b897103eb3489",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.lattice",
+              "sha256": "1332df685c45a61a0ac008a6a653295b8c5655361c1d34b6304b22ec40235fb8",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.num_orbitals",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.num_r_vectors",
+              "payload": "0300000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.r_degeneracies",
+              "sha256": "605390e5a369ee568b19ead1733af824c7c1d286d7d24b86283238fc44a99334",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.r_vectors",
+              "sha256": "76a991b8d2c4fbf02a7a1dcad31523f13ef0eb567c919beddf901986bf57d3ca",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.hamiltonian_r",
+              "sha256": "7add653f411a2a8cb98b4059f91404b15d0450700c3167b29ff372bcb67cff94",
+              "shape": [
+                1,
+                1,
+                3
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.position_r",
+              "sha256": "81c611f35bff79491538b2f7cf201c7597a661a5c549633541c62bdc8af1613f",
+              "shape": [
+                1,
+                1,
+                3,
+                3
+              ],
+              "type": "Array{ComplexF64, 4}"
+            }
+          ],
+          "type": "WannierNLQG.Core.TightBindingModel{Array{ComplexF64, 3}, Array{ComplexF64, 4}}"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

@@ -1,0 +1,55 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__quantum_metric_quadrupole__conventional",
+  "native_science": {
+    "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "bf946494fd310a00",
+        "bf946494fd310a00",
+        "bf946494fd310a00",
+        "bf946494fd310a00",
+        "3f7d601f8ff41600",
+        "3f7d601f8ff41600",
+        "3f7d601f8ff41600",
+        "3f7d601f8ff41600",
+        "3f7252ae086dea00",
+        "3f7252ae086dea00",
+        "3f7252ae086dea00",
+        "3f7252ae086dea00",
+        "bf897e41d3411c00",
+        "bf897e41d3411c00",
+        "bf897e41d3411c00",
+        "bf897e41d3411c00"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.019914939836107592,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat",
+      "sha256": "22864ff26780a9ff66ca8308adb2452aa54d5c98bfa039225f81447fdd3a73a7"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "9ad5f42b2213651b46558a88f7bd8214adca895a6871aaa7d4595aac0dab4575"
+  ],
+  "original_receipt_sha256": "9ad5f42b2213651b46558a88f7bd8214adca895a6871aaa7d4595aac0dab4575",
+  "rank_output_inventory": [
+    [
+      "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "quantum_metric_quadrupole/k_slice/conventional"
+  ]
+}

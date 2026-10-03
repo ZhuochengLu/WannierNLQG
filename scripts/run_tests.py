@@ -112,7 +112,7 @@ def resource_record(usage: Any) -> dict[str, float | int | str]:
     }
 
 
-def run_suite(tasks: list[Task], julia: str, output: Path, jobs: int, cpu_budget: int) -> dict[str, Any]:
+def run_suite(tasks: list[Task], julia: str, output: Path, jobs: int, cpu_budget: int, owned_group: bool = False) -> dict[str, Any]:
     """Defer signals to safe points and protect cleanup from repeated signals."""
     interruption = [False]
 
@@ -121,13 +121,13 @@ def run_suite(tasks: list[Task], julia: str, output: Path, jobs: int, cpu_budget
 
     previous = {number: signal.signal(number, request_interrupt) for number in (signal.SIGINT, signal.SIGTERM)}
     try:
-        return _run_suite(tasks, julia, output, jobs, cpu_budget, interruption)
+        return _run_suite(tasks, julia, output, jobs, cpu_budget, interruption, owned_group)
     finally:
         for number, handler in previous.items():
             signal.signal(number, handler)
 
 
-def _run_suite(tasks: list[Task], julia: str, output: Path, jobs: int, cpu_budget: int, interruption: list[bool]) -> dict[str, Any]:
+def _run_suite(tasks: list[Task], julia: str, output: Path, jobs: int, cpu_budget: int, interruption: list[bool], owned_group: bool = False) -> dict[str, Any]:
     """Schedule bounded independent jobs, draining all outcomes even after failure."""
     if jobs < 1 or cpu_budget < 2:
         raise ValueError("jobs must be positive; cpu-budget must be at least 2")
@@ -204,7 +204,7 @@ def _run_suite(tasks: list[Task], julia: str, output: Path, jobs: int, cpu_budge
                     process = subprocess.Popen(
                         command, cwd=ROOT,
                         env=task_environment(task, directory, temporary_directory, 1 if jobs == 1 else 2),
-                        stdout=handle, stderr=subprocess.STDOUT, start_new_session=True,
+                        stdout=handle, stderr=subprocess.STDOUT, start_new_session=not owned_group,
                     )
                 except OSError as error:
                     handle.write(str(error).encode())
@@ -237,7 +237,7 @@ def _run_suite(tasks: list[Task], julia: str, output: Path, jobs: int, cpu_budge
         interrupted_groups = list(active)
         for pid in interrupted_groups:
             try:
-                os.killpg(pid, signal.SIGTERM)
+                (os.kill if owned_group else os.killpg)(pid, signal.SIGTERM)
             except ProcessLookupError:
                 pass
         deadline = time.monotonic() + 3
@@ -248,9 +248,9 @@ def _run_suite(tasks: list[Task], julia: str, output: Path, jobs: int, cpu_budge
                     collect(pid, status, usage)
             if active:
                 time.sleep(0.05)
-        for pid in interrupted_groups:
+        for pid in (list(active) if owned_group else interrupted_groups):
             try:
-                os.killpg(pid, signal.SIGKILL)
+                (os.kill if owned_group else os.killpg)(pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
         for pid in list(active):
@@ -262,7 +262,7 @@ def _run_suite(tasks: list[Task], julia: str, output: Path, jobs: int, cpu_budge
         "schema": "wanniernlqg.test-scheduler/1.0", "root": str(ROOT),
         "status": "PASS" if len(results) == len(tasks) and all(row["status"] == "PASS" for row in results.values()) else ("INTERRUPTED" if interrupted else "FAIL"),
         "jobs_requested": jobs, "jobs_effective": limit, "cpu_budget": cpu_budget,
-        "cpu_slots_per_task": {task.name: task_cpu_slots(task, jobs) for task in tasks}, "mpi_exclusive": True,
+        "cpu_slots_per_task": {task.name: task_cpu_slots(task, jobs) for task in tasks}, "mpi_exclusive": True, "owned_group": owned_group,
         "wall_seconds": time.monotonic() - started,
         "cpu_seconds": sum(row.get("cpu_seconds") or 0 for row in results.values()),
         "peak_rss_bytes": max((row.get("peak_rss_bytes") or 0 for row in results.values()), default=0),
@@ -282,6 +282,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--julia", default="julia")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--owned-group", action="store_true", help="inherit supervisor process group; development_runner supplies this")
     args = parser.parse_args(argv)
     if os.environ.get(NESTED_ENV):
         parser.error("Nested test scheduling is prohibited")
@@ -300,7 +301,7 @@ def main(argv: list[str] | None = None) -> int:
     output = output.expanduser().resolve()
     if output.exists():
         parser.error("--output-dir must be a new directory to preserve earlier evidence")
-    summary = run_suite(tasks, args.julia, output, args.jobs, args.cpu_budget)
+    summary = run_suite(tasks, args.julia, output, args.jobs, args.cpu_budget, args.owned_group)
     print(f"{summary['status']}: {output / 'summary.json'}")
     return 0 if summary["status"] == "PASS" else (130 if summary["status"] == "INTERRUPTED" else 1)
 

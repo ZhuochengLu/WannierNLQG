@@ -1,0 +1,44 @@
+{
+  "all_finite": true,
+  "leaves": [
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "result[1]",
+      "sha256": "3239b05c38b825ebb79f103172438292a22a0951351a6b81be1df5d44776cc65",
+      "shape": [
+        1,
+        1
+      ],
+      "type": "Matrix{ComplexF64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 2.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "result[2]",
+      "sha256": "d48b908d1d6ca42c0a573fd78626b6508904e1a44aab41682a843912901ead1f",
+      "shape": [
+        1,
+        1
+      ],
+      "type": "Matrix{ComplexF64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 3.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "result[3]",
+      "sha256": "453d352ce3e3806c2444d10209e909eac13166179f34b288d4beafc1e10d3b65",
+      "shape": [
+        1,
+        1
+      ],
+      "type": "Matrix{ComplexF64}"
+    }
+  ],
+  "numeric_leaf_count": 3,
+  "numeric_sha256": "6a461c361c5412876bfdf7aa884c5014dc0aed76401279a88f3b792c210d73c6",
+  "type": "Vector{Matrix{ComplexF64}}"
+}

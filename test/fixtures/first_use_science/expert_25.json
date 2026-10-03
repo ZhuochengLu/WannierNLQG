@@ -1,0 +1,56 @@
+{
+  "id": "generate_wannier_uhu",
+  "ranks": [
+    {
+      "original_receipt_sha256": "bb4c81fca003768e21b7b307dc92a929214e6e97d1e671aa4bcd3d2d9a6961b2",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.passed",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.source_generation_qualified",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.artifact_published",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.closure_residual",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.closure_tolerance",
+              "payload": "8dedb5a0f7c6b03e",
+              "type": "Float64"
+            },
+            {
+              "finite": true,
+              "path": "result.diagnostic_reference",
+              "payload": "8dedb5a0f7c6b03e",
+              "type": "Float64"
+            }
+          ],
+          "type": "WannierNLQG.Wannierization.WannierHamiltonianOperatorGenerationResult"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

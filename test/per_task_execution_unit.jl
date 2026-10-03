@@ -256,3 +256,18 @@ end
         @test task_instance_payload(second_result) == task_instance_payload(joined.task_results[2])
     end
 end
+
+@testset "Block traversal keeps physical identity and declared lane order" begin
+    rt=WannierNLQG.Runtime
+    task=rt.PreparedResponseTask(
+        [(1, 1, 1), (3, 3, 1), (2, 2, 2), (4, 4, 2)],
+        (args...)->nothing,
+        ()->nothing,
+        ()->nothing,
+        Dict(1=>1, 3=>2, 2=>3, 4=>4),
+    )
+    components, visits=rt.sampling_components([task])
+    @test components == [[1, 2], [3, 4]]
+    @test [only(v)[2] for v in visits] == [1, 3, 2, 4]
+    @test_throws ErrorException rt.sampling_components([task, task])
+end

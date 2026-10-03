@@ -129,6 +129,9 @@ From the package root:
 julia --project=. -e 'using Pkg; Pkg.instantiate(); using WannierNLQG'
 ```
 
+For explicit package precompilation, extension preparation, and safe isolated
+cache rebuilding, see [the precompilation guide](docs/PRECOMPILATION.md).
+
 ## Quick start
 
 The repository includes one validated synthetic input for every registered
@@ -187,7 +190,8 @@ calculations.
 - [Release notes](docs/RELEASE_NOTES.md)
 - [Changelog](CHANGELOG.md)
 
-Version 1.1.0 adds second-harmonic generation. The API documented for
+Version 1.1.1 is a locally promoted Mixed-FFT cache maintenance version. Version 1.1.0 adds
+second-harmonic generation. The API documented for
 version 1.0.0 remains the public baseline; changelog entries describe
 differences from the preceding public tag.
 

@@ -1,0 +1,75 @@
+{
+  "id": "read_wannierization_fixed_subspace_hdf5",
+  "ranks": [
+    {
+      "original_receipt_sha256": "5b368bd59d414fa0e98d186480885dbd53018c99183c4e95bb61922e225605e0",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.projectors",
+              "sha256": "193102fb2674025fa8eb7c45c183b77a90d87d59b612b7b8962d863abdd86668",
+              "shape": [
+                2,
+                2,
+                1
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.frames",
+              "sha256": "41e57a811ac9776a5931d1ac2f1f354df344c042329b13e20b4b516db8b78410",
+              "shape": [
+                2,
+                1,
+                1
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.irreducible_indices",
+              "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+              "shape": [
+                1
+              ],
+              "type": "Vector{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.frozen_mask",
+              "sha256": "47dc540c94ceb704a23875c11273e16bb0b8a87aed84de911f2133568115f254",
+              "shape": [
+                2,
+                1
+              ],
+              "type": "BitMatrix"
+            },
+            {
+              "finite": true,
+              "path": "result.invariant_residuals.projector",
+              "payload": "0000000000000000",
+              "type": "Float64"
+            }
+          ],
+          "type": "WannierNLQG.Wannierization.WannierizationFixedSubspace"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

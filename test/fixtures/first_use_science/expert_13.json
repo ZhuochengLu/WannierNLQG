@@ -1,0 +1,19 @@
+{
+  "id": "diagnose_wannier_gauge_chain",
+  "ranks": [
+    {
+      "original_receipt_sha256": "c9870b8c54d6d4a2f8539cbc63347c2214b2600fedcc3a160cb6da6458b081ba",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [],
+          "type": "WannierNLQG.Wannierization.WannierGaugeChainDiagnosticResult"
+        },
+        "semantic_return": "WannierNLQG.Wannierization.WannierGaugeChainDiagnosticResult(:PASS_DIAGNOSTIC, \"output/actual.gauge-chain.json\", \"output/actual.gauge-chain.h5\", Dict(\"mp_grid_construction_authoritative_band_hamiltonian_digest\" => \"fa63815e840c0670a3958fe981a46a9d2f087c7e8bca64f21a8f82eb2cfaf0d6\", \"minimum_distance_construction_real_space_replica_policy\" => \"minimum_distance\", \"mp_grid_construction_fourier_roundtrip_gate_tolerance\" => \"1.0e-10\", \"support_radius_0.9999_angstrom\" => \"0.0\", \"construction_policy\" => \"strict\", \"qualification\" => \"STANDARD\", \"sawf_minimum_link_singular_value\" => \"1.0\", \"exported_matrix_roundtrip_residual\" => \"6.123233995736766e-17\", \"status\" => \"PASS_DIAGNOSTIC\", \"mp_grid_construction_authoritative_band_hamiltonian_algorithm_version\" => \"authoritative-band-hamiltonian-v3-physical-frame-transform\", \"minimum_distance_construction_authoritative_band_hamiltonian_algorithm_version\" => \"authoritative-band-hamiltonian-v3-physical-frame-transform\", \"minimum_distance_construction_authoritative_hamiltonian\" => \"native_dft\", \"finite_difference_completeness_residual\" => \"1.9229626863835638e-16\", \"finite_difference_stencil_sha256\" => \"a26c03f931567c69297d84317ed03515c17c1fb95904b056b95848d7565065ea\", \"support_radius_0.99_angstrom\" => \"0.0\", \"minimum_distance_construction_hamiltonian_fourier_roundtrip_residual\" => \"6.123233995736766e-17\", \"minimum_distance_construction_authoritative_band_hamiltonian_digest\" => \"fa63815e840c0670a3958fe981a46a9d2f087c7e8bca64f21a8f82eb2cfaf0d6\", \"mp_grid_construction_authoritative_hamiltonian\" => \"native_dft\", \"fourier_roundtrip_tolerance\" => \"1.0e-10\", \"tail_weight\" => \"0.0\", \"sawf_maximum_invariant_defect\" => \"0.0\", \"mp_matrix_roundtrip_residual\" => \"6.123233995736766e-17\", \"mp_grid_construction_hamiltonian_fourier_roundtrip_residual\" => \"NaN\", \"sawf_top_one_percent_concentration\" => \"0.0\", \"schema\" => \"WannierNLQG.wannier_gauge_chain_diagnostic\", \"mp_grid_construction_real_space_replica_policy\" => \"mp_grid\", \"wigner_seitz_spectral_roundtrip_residual_ev\" => \"0.0\", \"finite_difference_stencil_source\" => \"checkpoint\", \"input_identity\" => \"PASS\", \"mp_grid_construction_position_fourier_roundtrip_residual\" => \"NaN\", \"minimum_distance_construction_fourier_roundtrip_gate_tolerance\" => \"1.0e-10\", \"tail_radius_angstrom\" => \"14.4\", \"minimum_distance_construction_position_fourier_roundtrip_residual\" => \"0.0\", \"support_radius_0.9_angstrom\" => \"0.0\", \"sawf_omega_i\" => \"0.0\", \"mp_spectral_roundtrip_residual_ev\" => \"0.0\", \"schema_version\" => \"1.0\", \"wigner_seitz_matrix_roundtrip_residual\" => \"6.123233995736766e-17\", \"exported_spectral_roundtrip_residual_ev\" => \"0.0\", \"support_radius_0.999_angstrom\" => \"0.0\"), String[])"
+      }
+    }
+  ],
+  "schema": 1
+}

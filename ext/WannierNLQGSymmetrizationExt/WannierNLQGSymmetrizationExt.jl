@@ -1,13 +1,19 @@
 module WannierNLQGSymmetrizationExt
 
+import PrecompileTools: @compile_workload, workload_enabled
+
 import Dates
 import Dates: @dateformat_str
 import EzXML
 import HDF5
 import JSON3
+import LinearAlgebra
 import LinearAlgebra: Diagonal, Hermitian, I, det, dot, eigvals, norm, opnorm, rank, svdvals
+import Printf
 import SHA
 import WannierNLQG
+import WannierNLQG.Symmetrization
+import WannierNLQG.SymmetryFoundation
 import WannierNLQG.Core:
     REAL_SPACE_AXIAL_DERIVATIVE_OVERLAP,
     REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR,
@@ -120,6 +126,12 @@ import WannierNLQG.WannierProjection:
     read_wannier_win,
     strip_input_comment
 
+import WannierNLQG.Core: real_space_operator_name
+
+import WannierNLQG.IO: OperatorBundleIndexEntry, OperatorBundleManifest
+
+import WannierNLQG.WannierProjection: WannierProjectionBlock
+
 include("components/ValidationComponent.jl")
 include("components/SewingComponent.jl")
 include("components/ProjectionComponent.jl")
@@ -129,5 +141,16 @@ include("components/WorkflowComponent.jl")
 export screen_wannier_mesh, symmetrize_wannier_operators
 export write_response_symmetry_artifact, qualify_response_symmetry_wannier90
 export symmetrize_existing_wannier_model
+
+# Captured first-use declarations are specific to the frozen Julia trace.
+if WannierNLQG.FIRST_USE_TRACE_COMPATIBLE
+    include("SymmetrizationExtFirstUsePrecompile.jl")
+    include("Generated/SymmetrizationResponseWriterSignatures.jl")
+    include("ResponseQualificationFirstUseCoverage.jl")
+
+    include("ExistingModelColdNativeCoverage.jl")
+
+    include("SymmetrizationTaskInferenceResidualCoverage.jl")
+end
 
 end

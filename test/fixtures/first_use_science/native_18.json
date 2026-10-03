@@ -1,0 +1,364 @@
+{
+  "original_artifact_attestation": null,
+  "original_report_sha256": "8c2e0d0e86d68f149b9aff464806e7670ab877ccbe2903d50b258d12d8b6252a",
+  "report": {
+    "all_finite": true,
+    "leaves": [
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_AXIAL_DERIVATIVE_OVERLAP.spec.cartesian_rank",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_AXIAL_DERIVATIVE_OVERLAP.spec.inversion_parity",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_AXIAL_DERIVATIVE_OVERLAP.spec.time_reversal_parity",
+        "payload": "ffffffffffffffff",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_AXIAL_DERIVATIVE_OVERLAP.spec.rotate_cartesian",
+        "payload": "01",
+        "type": "Bool"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result.REAL_SPACE_AXIAL_DERIVATIVE_OVERLAP.r_vectors",
+        "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+        "shape": [
+          3,
+          1
+        ],
+        "type": "Matrix{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result.REAL_SPACE_AXIAL_DERIVATIVE_OVERLAP.data",
+        "sha256": "17b0761f87b081d5cf10757ccc89f12be355c70e2e29df288b65b30710dcbcd1",
+        "shape": [
+          1,
+          1,
+          3,
+          1
+        ],
+        "type": "Array{ComplexF64, 4}"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR.spec.cartesian_rank",
+        "payload": "0200000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR.spec.inversion_parity",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR.spec.time_reversal_parity",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR.spec.rotate_cartesian",
+        "payload": "01",
+        "type": "Bool"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result.REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR.r_vectors",
+        "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+        "shape": [
+          3,
+          1
+        ],
+        "type": "Matrix{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result.REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR.data",
+        "sha256": "81c611f35bff79491538b2f7cf201c7597a661a5c549633541c62bdc8af1613f",
+        "shape": [
+          1,
+          1,
+          3,
+          3,
+          1
+        ],
+        "type": "Array{ComplexF64, 5}"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_HAMILTONIAN.spec.cartesian_rank",
+        "payload": "0000000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_HAMILTONIAN.spec.inversion_parity",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_HAMILTONIAN.spec.time_reversal_parity",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_HAMILTONIAN.spec.rotate_cartesian",
+        "payload": "01",
+        "type": "Bool"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result.REAL_SPACE_HAMILTONIAN.r_vectors",
+        "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+        "shape": [
+          3,
+          1
+        ],
+        "type": "Matrix{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.5,
+        "max_abs_nonfinite_repr": null,
+        "path": "result.REAL_SPACE_HAMILTONIAN.data",
+        "sha256": "898cbf30b93f86082996bca1fad83351f2040d030832bf45ff79f0720efa0fba",
+        "shape": [
+          1,
+          1,
+          1
+        ],
+        "type": "Array{ComplexF64, 3}"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_HAMILTONIAN_WEIGHTED_AXIAL_DERIVATIVE_OVERLAP.spec.cartesian_rank",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_HAMILTONIAN_WEIGHTED_AXIAL_DERIVATIVE_OVERLAP.spec.inversion_parity",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_HAMILTONIAN_WEIGHTED_AXIAL_DERIVATIVE_OVERLAP.spec.time_reversal_parity",
+        "payload": "ffffffffffffffff",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_HAMILTONIAN_WEIGHTED_AXIAL_DERIVATIVE_OVERLAP.spec.rotate_cartesian",
+        "payload": "01",
+        "type": "Bool"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result.REAL_SPACE_HAMILTONIAN_WEIGHTED_AXIAL_DERIVATIVE_OVERLAP.r_vectors",
+        "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+        "shape": [
+          3,
+          1
+        ],
+        "type": "Matrix{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result.REAL_SPACE_HAMILTONIAN_WEIGHTED_AXIAL_DERIVATIVE_OVERLAP.data",
+        "sha256": "17b0761f87b081d5cf10757ccc89f12be355c70e2e29df288b65b30710dcbcd1",
+        "shape": [
+          1,
+          1,
+          3,
+          1
+        ],
+        "type": "Array{ComplexF64, 4}"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION.spec.cartesian_rank",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION.spec.inversion_parity",
+        "payload": "ffffffffffffffff",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION.spec.time_reversal_parity",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION.spec.rotate_cartesian",
+        "payload": "01",
+        "type": "Bool"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result.REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION.r_vectors",
+        "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+        "shape": [
+          3,
+          1
+        ],
+        "type": "Matrix{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result.REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION.data",
+        "sha256": "17b0761f87b081d5cf10757ccc89f12be355c70e2e29df288b65b30710dcbcd1",
+        "shape": [
+          1,
+          1,
+          3,
+          1
+        ],
+        "type": "Array{ComplexF64, 4}"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_POSITION.spec.cartesian_rank",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_POSITION.spec.inversion_parity",
+        "payload": "ffffffffffffffff",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_POSITION.spec.time_reversal_parity",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_POSITION.spec.rotate_cartesian",
+        "payload": "01",
+        "type": "Bool"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result.REAL_SPACE_POSITION.r_vectors",
+        "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+        "shape": [
+          3,
+          1
+        ],
+        "type": "Matrix{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result.REAL_SPACE_POSITION.data",
+        "sha256": "17b0761f87b081d5cf10757ccc89f12be355c70e2e29df288b65b30710dcbcd1",
+        "shape": [
+          1,
+          1,
+          3,
+          1
+        ],
+        "type": "Array{ComplexF64, 4}"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_SYMMETRIC_DERIVATIVE_OVERLAP.spec.cartesian_rank",
+        "payload": "0200000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_SYMMETRIC_DERIVATIVE_OVERLAP.spec.inversion_parity",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_SYMMETRIC_DERIVATIVE_OVERLAP.spec.time_reversal_parity",
+        "payload": "0100000000000000",
+        "type": "Int64"
+      },
+      {
+        "finite": true,
+        "path": "result.REAL_SPACE_SYMMETRIC_DERIVATIVE_OVERLAP.spec.rotate_cartesian",
+        "payload": "01",
+        "type": "Bool"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result.REAL_SPACE_SYMMETRIC_DERIVATIVE_OVERLAP.r_vectors",
+        "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+        "shape": [
+          3,
+          1
+        ],
+        "type": "Matrix{Int64}"
+      },
+      {
+        "finite": true,
+        "max_abs": 0.0,
+        "max_abs_nonfinite_repr": null,
+        "path": "result.REAL_SPACE_SYMMETRIC_DERIVATIVE_OVERLAP.data",
+        "sha256": "81c611f35bff79491538b2f7cf201c7597a661a5c549633541c62bdc8af1613f",
+        "shape": [
+          1,
+          1,
+          3,
+          3,
+          1
+        ],
+        "type": "Array{ComplexF64, 5}"
+      }
+    ],
+    "numeric_leaf_count": 42,
+    "numeric_sha256": "cccfcaafd7a6672a2c997109bf977657e3ca18c69f9fd39b0593f9de6427accb",
+    "type": "Dict{WannierNLQG.Core.RealSpaceOperatorKind, WannierNLQG.Core.RealSpaceOperator}"
+  },
+  "schema": 1
+}

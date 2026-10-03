@@ -1,0 +1,26 @@
+{
+  "id": "prepare_exact_wannier_operator_bundle",
+  "ranks": [
+    {
+      "original_receipt_sha256": "44050c7b3e9068eb0a5494c9b2537fdf9e2afed5a8c490a6e8a35f4061a721b4",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.passed",
+              "payload": "01",
+              "type": "Bool"
+            }
+          ],
+          "type": "WannierNLQG.Wannierization.ExactWannierOperatorBundleResult"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

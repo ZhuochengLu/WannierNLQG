@@ -10,7 +10,12 @@ struct PreparedResponseTask{E, F, C}
     execute_point!::E
     finish!::F
     cleanup!::C
+    point_order::Union{Nothing, Dict{Int, Int}}
 end
+
+# Existing tasks retain their physical mesh ordering unless explicitly prepared otherwise.
+PreparedResponseTask(units, execute_point!, finish!, cleanup!) =
+    PreparedResponseTask(units, execute_point!, finish!, cleanup!, nothing)
 
 """Find a scheduling component without changing its deterministic root."""
 function sampling_component_root!(parents::Vector{Int}, index::Int)
@@ -29,7 +34,12 @@ on separate workers, while points within a component follow the original monoton
 mesh order. Task-specific MPI ownership is already encoded by each unit list.
 """
 function sampling_components(prepared)
-    points = sort!(unique([unit[1] for task in prepared for unit in task.units]))
+    selected_order = length(prepared) == 1 ? only(prepared).point_order : nothing
+    any(task -> task.point_order !== nothing, prepared) &&
+        length(prepared) != 1 &&
+        error("Block-local scheduling requires a single prepared task")
+    order(point) = selected_order === nothing ? point : selected_order[point]
+    points = sort!(unique([unit[1] for task in prepared for unit in task.units]); by = order)
     positions = Dict(point => index for (index, point) in enumerate(points))
     parents = collect(eachindex(points))
     visits = [Tuple{Int, Int, Int}[] for _ in points]
@@ -37,9 +47,9 @@ function sampling_components(prepared)
         lane_roots = Dict{Int, Int}()
         previous_by_lane = Dict{Int, Int}()
         for (point, evaluation, lane) in task.units
-            point > get(previous_by_lane, lane, 0) ||
-                error("Task lane must preserve increasing mesh indices")
-            previous_by_lane[lane] = point
+            order(point) > get(previous_by_lane, lane, 0) ||
+                error("Task lane must preserve its declared deterministic point order")
+            previous_by_lane[lane] = order(point)
             position = positions[point]
             push!(visits[position], (task_index, evaluation, lane))
             if haskey(lane_roots, lane)

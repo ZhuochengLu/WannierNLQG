@@ -1,0 +1,718 @@
+{
+  "id": "detect_magnetic_symmetry_inventory__type3",
+  "ranks": [
+    {
+      "original_receipt_sha256": "c6c229e6a5f53ecc3dad376ab4c1cd90d429470122cd1d3cae1ef88447d5cd33",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[1].rotation_fractional",
+              "sha256": "234930f5a7e15b61732ca7a2c16d5a50382f3e2329e68f54f7ac1eb7cd6fc832",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[1].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1.0000000000000002,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[1].rotation_cartesian",
+              "sha256": "ad5e0f4d1d1e359921470b3006b31a7f3b096c75a462aa6ae3e4983ed95e34d1",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[1].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[2].rotation_fractional",
+              "sha256": "c1936671eaa394de2bb0f37deaf13da07fdb702f57c0c1ed0c94b0b532092267",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[2].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1.0000000000000002,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[2].rotation_cartesian",
+              "sha256": "7f53c78c03125cb6f4ccc392e9beed866c6191760e00249fe8e096daa086aa15",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[2].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[3].rotation_fractional",
+              "sha256": "f5362f99196a39ebbef4e91239f59da5a8e5f54e700aa4659b02cccb3e3d8867",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[3].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1.0000000000000002,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[3].rotation_cartesian",
+              "sha256": "60f6fc12acd408070c93031322b865c7255cc9db1765a11688d7b66aa57072fe",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[3].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[4].rotation_fractional",
+              "sha256": "3160dc7125b613008e38bde84539622bb6ba0334d7de4c9f67ef9de4160e9528",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[4].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1.0000000000000002,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[4].rotation_cartesian",
+              "sha256": "2cbe7d942305372c2e84d32164f8416b48a7d5ae5b1dc71aee2c28675d731f51",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[4].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[5].rotation_fractional",
+              "sha256": "5b27ccb79550dc8909f5672a4a540c064a815b4dfbfd652751d1a1ae7aa83362",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[5].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1.0000000000000002,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[5].rotation_cartesian",
+              "sha256": "6c30224bb1a524d0ed4ea1e509b2e6a4e6b21daf89d9a6437826b850277b5bc9",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[5].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[6].rotation_fractional",
+              "sha256": "c206747d882220b68071d27c2f931b6174e665ad205e585c7cc9d5369f68ce5d",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[6].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1.0000000000000002,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[6].rotation_cartesian",
+              "sha256": "980fd9bc6b992dd969e1ab6a115e10495b6d68016dcf4d513d213e03441c3344",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[6].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[7].rotation_fractional",
+              "sha256": "6a16e647cfff10d3e32db3b367dd56b42c97876d8593d958323bada22339da02",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[7].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[7].rotation_cartesian",
+              "sha256": "34d14c7fd399ecc3bec7653754bf1ba779d44d038e4cf004b6eb9e4c53c2f73e",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[7].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[8].rotation_fractional",
+              "sha256": "a60d5bd0c630f01d98397fd7775de22828c86a32ca583e14c6662a30bbfeb519",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[8].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[8].rotation_cartesian",
+              "sha256": "65a920f67d230a710f56a862eede8117619f0d9c04d79f5f5b635cb6c56e1484",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[8].antiunitary",
+              "payload": "00",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[9].rotation_fractional",
+              "sha256": "9c961b7ebb3577f01eb80eaabb4da2bece913097a4f47d96bd7ada7aacf142f7",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[9].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[9].rotation_cartesian",
+              "sha256": "1267c3335636be8c857d0cdea425d7f3001612c544ff4ad0b7f21e690c56d03c",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[9].antiunitary",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[10].rotation_fractional",
+              "sha256": "7fdfb00c3b43cb858c0c9118adcbbb6eb8861ff311229da67d58b55d37c162df",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[10].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[10].rotation_cartesian",
+              "sha256": "6c05aeb9d8ecff0ab68b5f0e18af8a95ec34b400a327f07b9a950fdaacf6b50e",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[10].antiunitary",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[11].rotation_fractional",
+              "sha256": "9d054bb437e1d04bfa412065d6b77634665c72b9977d95724529e983c508d04d",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[11].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1.0000000000000002,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[11].rotation_cartesian",
+              "sha256": "e7c296016fd91f57df6afeb1b033556f281850cc1e9ad33d58c4d7605a721fc7",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[11].antiunitary",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[12].rotation_fractional",
+              "sha256": "971752f847904faed91af107bc9ff8c25825adf2eb7ec0a2978e4b5dd5074548",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[12].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1.0000000000000002,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[12].rotation_cartesian",
+              "sha256": "58a771d35ab680a43924b8f54d0fe9da32203b1458011ee7e959f902c4d5e6ce",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[12].antiunitary",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[13].rotation_fractional",
+              "sha256": "3022037d98e03edfc063cac436015728122e91ee9f597a28312a70095f79899f",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[13].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[13].rotation_cartesian",
+              "sha256": "fc8a7fcbf468e0a29d214a73161232ba7a17cc08662c361e122413c5f8a983e5",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[13].antiunitary",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[14].rotation_fractional",
+              "sha256": "c3151fe4fb43c94c31542a37dfa7eed730afb9d1d40f8ca8f7e1f426353f6527",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[14].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[14].rotation_cartesian",
+              "sha256": "4b45915a469ef8f74b365ebe3313d61089248880a64f8466908764e2fb12efce",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[14].antiunitary",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[15].rotation_fractional",
+              "sha256": "2057a7207e2e2f620aae6812495ef82f614d80b00227b02e28df383876b17d80",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[15].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1.0000000000000002,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[15].rotation_cartesian",
+              "sha256": "b19eb3746b0a6333e76f2bd70cc944fdbac5685e1cf060b11806b408cb0e9fa0",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[15].antiunitary",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 1,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[16].rotation_fractional",
+              "sha256": "647f4fa68a6f9d9a5564fdf259cb494994228d942d63591879b65b93d95bf175",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[16].translation_fractional",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3
+              ],
+              "type": "Vector{Float64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 1.0000000000000002,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operations[16].rotation_cartesian",
+              "sha256": "3cc290292a4e324bc3103e913510a8651d8bfe474fc21afc1b30b4b71ad749f8",
+              "shape": [
+                3,
+                3
+              ],
+              "type": "Matrix{Float64}"
+            },
+            {
+              "finite": true,
+              "path": "result.operations[16].antiunitary",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.magnetic",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "path": "result.msg_type",
+              "payload": "0300000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.uni_number",
+              "payload": "ad04000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.hall_number",
+              "payload": "a801000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.unitary_operation_count",
+              "payload": "0800000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.antiunitary_operation_count",
+              "payload": "0800000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.symmetry_tolerance",
+              "payload": "f168e388b5f8e43e",
+              "type": "Float64"
+            }
+          ],
+          "type": "WannierNLQG.SymmetryFoundation.MagneticSymmetryInventory"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

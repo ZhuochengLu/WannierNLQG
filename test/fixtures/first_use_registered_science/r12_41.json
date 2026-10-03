@@ -1,0 +1,99 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__quantum_metric_quadrupole__conventional",
+  "native_science": {
+    "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "bf946494fd310a00",
+        "bf946494fd310a00",
+        "bf946494fd310a00",
+        "bf946494fd310a00",
+        "3f7d601f8ff41600",
+        "3f7d601f8ff41600",
+        "3f7d601f8ff41600",
+        "3f7d601f8ff41600",
+        "3f7252ae086dea00",
+        "3f7252ae086dea00",
+        "3f7252ae086dea00",
+        "3f7252ae086dea00",
+        "bf897e41d3411c00",
+        "bf897e41d3411c00",
+        "bf897e41d3411c00",
+        "bf897e41d3411c00"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.019914939836107592,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat",
+      "sha256": "22864ff26780a9ff66ca8308adb2452aa54d5c98bfa039225f81447fdd3a73a7"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "2cf5a4867585c55b1b4542856a092ef425df738b0bb3618d5482ae3a17beac32",
+    "2e26e8a8e4efdcc83c11b020bf733414f4fde47c352a67c298607dca110c3581",
+    "0cc81ba0e126ad88ee360e9d2bc88387c3f369ba5189a73a8da37c8a3a0a3553",
+    "d40f8431534fd54c1eeca2b61828e8e887d76dbab2f369cac34b6dca7dfed1d6",
+    "93845296f9368259d6076b946d41c861d7d8e48531b4f2664b414c9d834410e4",
+    "f4da83ca745bb27460aa3b8bfecef66a11810b4787e97750b9de4d278aec785b",
+    "b5ee22ee685b9d8665147abe5400b48ac0492c881e92f55a06067ad43d6a851e",
+    "38dba7afaf2e1b0137a3d766309c12dada1d202ec715fbb836526a5c2da838d0",
+    "65e7a8407f855bc3bc78ac2225f4024c6474e6298c4fc61b48138ebc33af225d",
+    "fabe9abc3dc38977d90ebf08c8294803b733869dd392272dbabdab9af5cd82e2",
+    "17a4391dc9f9ee6de1762a562cff24a31ae8eccbc52d644456ceb36f87ce771e",
+    "65995d14f31ed5af4c2c95874c5820925c5d0bd0dde447c70b02e50b8ed8a47a"
+  ],
+  "original_receipt_sha256": "2cf5a4867585c55b1b4542856a092ef425df738b0bb3618d5482ae3a17beac32",
+  "rank_output_inventory": [
+    [
+      "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat"
+    ],
+    [
+      "kslice_quantum_metric_quadrupole_conventional/synthetic_demo_qmqk_subspace_1_2_conv.dat"
+    ]
+  ],
+  "ranks": 12,
+  "task_labels": [
+    "quantum_metric_quadrupole/k_slice/conventional"
+  ]
+}

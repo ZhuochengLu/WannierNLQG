@@ -1,0 +1,2594 @@
+{
+  "artifact": "artifact_20.h5",
+  "artifact_sha256": "f46463b573054f34466b856d3f251f8fc1eeb7962c7a15e79712c97df8b31e92",
+  "dataset_paths": [
+    "/@antiunitary_band_gauge_convention",
+    "/@authoritative_hamiltonian",
+    "/@authoritative_hamiltonian_sha256",
+    "/@auxiliary_parent_audit_status",
+    "/@auxiliary_parent_qualification",
+    "/@band_frame_contract_schema",
+    "/@band_frame_contract_schema_version",
+    "/@band_frame_contract_sha256",
+    "/@band_frame_contract_status",
+    "/@band_frame_euclidean_nonunitarity_maximum",
+    "/@band_frame_maximum_condition_number",
+    "/@band_frame_metric_kind",
+    "/@band_frame_minimum_singular_value",
+    "/@band_frame_physical_isometry_maximum",
+    "/@band_frame_physical_isometry_tolerance",
+    "/@band_frame_replay_maximum",
+    "/@band_frame_replay_tolerance",
+    "/@band_frame_source_gauge",
+    "/@band_frame_target_gauge",
+    "/@band_frame_transform_sha256",
+    "/@block_partition_policy",
+    "/@block_partition_policy_sha256",
+    "/@coefficient_row_convention",
+    "/@controlled_symmetrization_qualification_mode",
+    "/@diagnostic_only",
+    "/@discrete_hamiltonian_correction",
+    "/@discrete_hamiltonian_correction_sha256",
+    "/@energy_shift_qualification",
+    "/@global_production_eligible",
+    "/@has_symmetrized_hamiltonian_audit",
+    "/@maximum_energy_shift_audit_reference_ev",
+    "/@native_difference_audit_status",
+    "/@native_difference_qualification",
+    "/@native_fidelity_status",
+    "/@nonrepresentative_frame_storage",
+    "/@parent_band_start",
+    "/@parent_band_stop",
+    "/@payload_sha256",
+    "/@production_eligible",
+    "/@qualification_scope",
+    "/@raw_preflight_diagnostic_status",
+    "/@residual_gate_phase",
+    "/@rms_energy_shift_audit_reference_ev",
+    "/@root_cause",
+    "/@schema",
+    "/@schema_version",
+    "/@scoped_production_eligible",
+    "/@sewing_backend",
+    "/@source_code",
+    "/@spinor",
+    "/@status",
+    "/@symmetrized_hamiltonian_status",
+    "/@symmetrized_parent_energy_shift_audit_status",
+    "/@symmetrized_target_subspace_status",
+    "/@target_anchor",
+    "/@target_band_start",
+    "/@target_band_stop",
+    "/@target_complement_completion",
+    "/@target_complement_max_element_ev",
+    "/@target_energy_shift_audit_status",
+    "/@target_leakage_formula_sha256",
+    "/@target_leakage_semantics",
+    "/@target_leakage_threshold",
+    "/@target_scope_production_eligible",
+    "/@target_subspace_contract_sha256",
+    "/@wavefunction_gauge_backend",
+    "/canonical_operation_for_kpoint",
+    "/diagnostics",
+    "/extra_bands_per_star",
+    "/g_vectors_by_kpoint/kpoint_000001",
+    "/input_sha256/@AUTHORITATIVE_HAMILTONIAN_SHA256",
+    "/input_sha256/@BAND_FRAME_CONTRACT_SHA256",
+    "/input_sha256/@BAND_FRAME_TRANSFORM_SHA256",
+    "/input_sha256/@BLOCK_PARTITION_POLICY_SHA256",
+    "/input_sha256/@DISCRETE_HAMILTONIAN_CORRECTION_SHA256",
+    "/input_sha256/@TARGET_SUBSPACE_CONTRACT_SHA256",
+    "/input_sha256/@UPF:X:X.UPF",
+    "/input_sha256/@data-file-schema.xml",
+    "/input_sha256/@wfc1.hdf5",
+    "/kpoint_map",
+    "/kpoints_fractional",
+    "/maximum_contexts/@block_partition_maximum_block_bands",
+    "/maximum_contexts/@block_partition_search_states",
+    "/maximum_contexts/@completed_generalized_norm",
+    "/maximum_contexts/@construction_alternative_path_residual_failed",
+    "/maximum_contexts/@construction_alternative_path_residual_value",
+    "/maximum_contexts/@construction_buffer_target_leakage_failed",
+    "/maximum_contexts/@construction_buffer_target_leakage_value",
+    "/maximum_contexts/@construction_complement_to_target_leakage_weight_failed",
+    "/maximum_contexts/@construction_complement_to_target_leakage_weight_value",
+    "/maximum_contexts/@construction_completed_paw_s_norm_failed",
+    "/maximum_contexts/@construction_completed_paw_s_norm_value",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_ev_failed",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_ev_value",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_normalized_frobenius_ev_failed",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_normalized_frobenius_ev_value",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_operator_ev_failed",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_operator_ev_value",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_source_column_l2_ev_failed",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_source_column_l2_ev_value",
+    "/maximum_contexts/@construction_kramers_pair_residual_failed",
+    "/maximum_contexts/@construction_kramers_pair_residual_value",
+    "/maximum_contexts/@construction_maximum_energy_shift_ev_failed",
+    "/maximum_contexts/@construction_maximum_energy_shift_ev_value",
+    "/maximum_contexts/@construction_nondegenerate_block_leakage_failed",
+    "/maximum_contexts/@construction_nondegenerate_block_leakage_value",
+    "/maximum_contexts/@construction_normalized_polar_correction_failed",
+    "/maximum_contexts/@construction_normalized_polar_correction_value",
+    "/maximum_contexts/@construction_parent_reconstruction_leakage_amplitude_audit_failed",
+    "/maximum_contexts/@construction_parent_reconstruction_leakage_amplitude_audit_value",
+    "/maximum_contexts/@construction_projected_eigen_residual_ev_failed",
+    "/maximum_contexts/@construction_projected_eigen_residual_ev_value",
+    "/maximum_contexts/@construction_raw_unitarity_failed",
+    "/maximum_contexts/@construction_raw_unitarity_value",
+    "/maximum_contexts/@construction_rms_energy_shift_ev_failed",
+    "/maximum_contexts/@construction_rms_energy_shift_ev_value",
+    "/maximum_contexts/@construction_target_reconstruction_leakage_weight_failed",
+    "/maximum_contexts/@construction_target_reconstruction_leakage_weight_value",
+    "/maximum_contexts/@construction_target_state_leakage_weight_failed",
+    "/maximum_contexts/@construction_target_state_leakage_weight_value",
+    "/maximum_contexts/@construction_target_to_complement_leakage_weight_failed",
+    "/maximum_contexts/@construction_target_to_complement_leakage_weight_value",
+    "/maximum_contexts/@construction_wfc_rotation_reconstruction_failed",
+    "/maximum_contexts/@construction_wfc_rotation_reconstruction_value",
+    "/maximum_contexts/@hamiltonian_reynolds_residual_ev",
+    "/maximum_contexts/@maximum_energy_shift_ev",
+    "/maximum_contexts/@native_fidelity_projected_eigen_residual_ev",
+    "/maximum_contexts/@native_generalized_norm_before_lowdin",
+    "/maximum_contexts/@native_paw_s_norm_before_lowdin",
+    "/maximum_contexts/@parent_hamiltonian_covariance_after_ev_audit",
+    "/maximum_contexts/@parent_hamiltonian_covariance_after_normalized_frobenius_ev_audit",
+    "/maximum_contexts/@parent_hamiltonian_covariance_after_operator_ev_audit",
+    "/maximum_contexts/@pre_gauge_far_cumulative_diagnostic_exceeded",
+    "/maximum_contexts/@pre_gauge_far_cumulative_maximum_ratio",
+    "/maximum_contexts/@pre_symmetrization_lowdin_paw_s_norm",
+    "/maximum_contexts/@projected_eigen_residual_ev",
+    "/maximum_contexts/@rms_energy_shift_ev",
+    "/maximum_contexts/@star1_strict_audit_raw_direct_reconstruction_leakage_amplitude_maximum",
+    "/maximum_contexts/@star1_strict_audit_raw_direct_state_leakage_amplitude_maximum",
+    "/maximum_contexts/@star1_strict_audit_target_raw_direct_reconstruction_leakage_amplitude_maximum",
+    "/maximum_contexts/@star1_strict_audit_target_raw_direct_state_leakage_amplitude_maximum",
+    "/maximum_contexts/@star1_strict_augmentation_component_maximum_maximum",
+    "/maximum_contexts/@star1_strict_complement_to_target_leakage_amplitude_audit_maximum",
+    "/maximum_contexts/@star1_strict_complement_to_target_leakage_weight_maximum",
+    "/maximum_contexts/@star1_strict_far_band_coupling_maximum",
+    "/maximum_contexts/@star1_strict_frozen_raw_left_unitarity_residual_maximum",
+    "/maximum_contexts/@star1_strict_frozen_raw_right_unitarity_residual_maximum",
+    "/maximum_contexts/@star1_strict_maximum_bidirectional_leakage_weight_maximum",
+    "/maximum_contexts/@star1_strict_near_block_leakage_maximum",
+    "/maximum_contexts/@star1_strict_nondegenerate_block_leakage_maximum",
+    "/maximum_contexts/@star1_strict_normalized_polar_correction_maximum",
+    "/maximum_contexts/@star1_strict_parent_complement_normalized_polar_correction_maximum",
+    "/maximum_contexts/@star1_strict_pseudo_component_maximum_maximum",
+    "/maximum_contexts/@star1_strict_raw_cocycle",
+    "/maximum_contexts/@star1_strict_raw_group_law",
+    "/maximum_contexts/@star1_strict_raw_left_unitarity_residual_maximum",
+    "/maximum_contexts/@star1_strict_raw_right_unitarity_residual_maximum",
+    "/maximum_contexts/@star1_strict_reconstruction_leakage_amplitude_audit_maximum",
+    "/maximum_contexts/@star1_strict_state_leakage_amplitude_audit_maximum",
+    "/maximum_contexts/@star1_strict_target_generalized_norm_residual_maximum",
+    "/maximum_contexts/@star1_strict_target_normalized_polar_correction_maximum",
+    "/maximum_contexts/@star1_strict_target_raw_left_unitarity_residual_maximum",
+    "/maximum_contexts/@star1_strict_target_raw_right_unitarity_residual_maximum",
+    "/maximum_contexts/@star1_strict_target_reconstruction_leakage_weight_maximum",
+    "/maximum_contexts/@star1_strict_target_state_leakage_weight_maximum",
+    "/maximum_contexts/@star1_strict_target_to_complement_leakage_amplitude_audit_maximum",
+    "/maximum_contexts/@star1_strict_target_to_complement_leakage_weight_maximum",
+    "/maximum_contexts/@star1_strict_transformed_generalized_norm_residual_maximum",
+    "/maximum_contexts/@strict_audit_raw_direct_reconstruction_leakage_amplitude",
+    "/maximum_contexts/@strict_audit_raw_direct_state_leakage_amplitude",
+    "/maximum_contexts/@strict_audit_target_raw_direct_reconstruction_leakage_amplitude",
+    "/maximum_contexts/@strict_audit_target_raw_direct_state_leakage_amplitude",
+    "/maximum_contexts/@strict_augmentation_component_maximum",
+    "/maximum_contexts/@strict_complement_to_target_leakage_amplitude_audit",
+    "/maximum_contexts/@strict_complement_to_target_leakage_weight",
+    "/maximum_contexts/@strict_far_band_coupling",
+    "/maximum_contexts/@strict_frozen_raw_left_unitarity_residual",
+    "/maximum_contexts/@strict_frozen_raw_right_unitarity_residual",
+    "/maximum_contexts/@strict_maximum_bidirectional_leakage_weight",
+    "/maximum_contexts/@strict_near_block_leakage",
+    "/maximum_contexts/@strict_nondegenerate_block_leakage",
+    "/maximum_contexts/@strict_normalized_polar_correction",
+    "/maximum_contexts/@strict_pseudo_component_maximum",
+    "/maximum_contexts/@strict_raw_left_unitarity_residual",
+    "/maximum_contexts/@strict_raw_right_unitarity_residual",
+    "/maximum_contexts/@strict_reconstruction_leakage_amplitude_audit",
+    "/maximum_contexts/@strict_state_leakage_amplitude_audit",
+    "/maximum_contexts/@strict_target_generalized_norm_residual",
+    "/maximum_contexts/@strict_target_raw_left_unitarity_residual",
+    "/maximum_contexts/@strict_target_raw_right_unitarity_residual",
+    "/maximum_contexts/@strict_target_reconstruction_leakage_weight",
+    "/maximum_contexts/@strict_target_state_leakage_weight",
+    "/maximum_contexts/@strict_target_to_complement_leakage_amplitude_audit",
+    "/maximum_contexts/@strict_target_to_complement_leakage_weight",
+    "/maximum_contexts/@strict_transformed_generalized_norm_residual",
+    "/maximum_contexts/@symmetrized_parent_formal_eigen_residual_ev",
+    "/maximum_contexts/@symmetrized_projected_eigen_residual_ev",
+    "/maximum_contexts/@symmetrized_target_formal_eigen_residual_ev",
+    "/maximum_contexts/@target_scoped_lowdin_paw_s_norm",
+    "/native_to_completed_rotations",
+    "/operations/antiunitary",
+    "/operations/canonical_keys",
+    "/operations/rotation_cartesian",
+    "/operations/rotation_fractional",
+    "/operations/translation_fractional",
+    "/parsed_paw_metric/@kind",
+    "/parsed_paw_metric/@metric_kind",
+    "/parsed_paw_metric/@metric_sha256",
+    "/parsed_paw_metric/@spinorbit",
+    "/parsed_paw_metric/projector_plan/@fully_relativistic",
+    "/parsed_paw_metric/projector_plan/@has_augmentation",
+    "/parsed_paw_metric/projector_plan/@num_channels",
+    "/parsed_paw_metric/projector_plan/atom_000001/@atomic_type_label",
+    "/parsed_paw_metric/projector_plan/atom_000001/@channel_start",
+    "/parsed_paw_metric/projector_plan/atom_000001/@channel_stop",
+    "/parsed_paw_metric/projector_plan/atom_000001/@element",
+    "/parsed_paw_metric/projector_plan/atom_000001/channels",
+    "/parsed_paw_metric/projector_plan/atom_000001/position_fractional",
+    "/parsed_paw_metric/upf/type_000001/@augmentation_cutoff_index",
+    "/parsed_paw_metric/upf/type_000001/@augmentation_cutoff_radius_bohr",
+    "/parsed_paw_metric/upf/type_000001/@beta_integration_cutoff_index",
+    "/parsed_paw_metric/upf/type_000001/@element",
+    "/parsed_paw_metric/upf/type_000001/@filename",
+    "/parsed_paw_metric/upf/type_000001/@fully_relativistic",
+    "/parsed_paw_metric/upf/type_000001/@has_so",
+    "/parsed_paw_metric/upf/type_000001/@label",
+    "/parsed_paw_metric/upf/type_000001/@metric_kind",
+    "/parsed_paw_metric/upf/type_000001/@nqlc",
+    "/parsed_paw_metric/upf/type_000001/@q_with_l",
+    "/parsed_paw_metric/upf/type_000001/beta_angular_momenta",
+    "/parsed_paw_metric/upf/type_000001/beta_radial",
+    "/parsed_paw_metric/upf/type_000001/beta_total_angular_momenta",
+    "/parsed_paw_metric/upf/type_000001/dij",
+    "/parsed_paw_metric/upf/type_000001/q_integrals",
+    "/parsed_paw_metric/upf/type_000001/qfcoef",
+    "/parsed_paw_metric/upf/type_000001/radial_grid_bohr",
+    "/parsed_paw_metric/upf/type_000001/radial_weights_bohr",
+    "/parsed_paw_metric/upf/type_000001/rinner_bohr",
+    "/preflight_maxima/@alternative_path_residual",
+    "/preflight_maxima/@block_partition_evidence_count",
+    "/preflight_maxima/@block_partition_evidence_orbit_count",
+    "/preflight_maxima/@block_partition_maximum_block_bands",
+    "/preflight_maxima/@block_partition_maximum_block_span_ev",
+    "/preflight_maxima/@block_partition_maximum_evidence_coupling",
+    "/preflight_maxima/@block_partition_maximum_evidence_gap_ev",
+    "/preflight_maxima/@block_partition_search_states",
+    "/preflight_maxima/@buffer_target_leakage",
+    "/preflight_maxima/@complement_to_target_leakage_weight",
+    "/preflight_maxima/@completed_generalized_norm",
+    "/preflight_maxima/@completed_paw_s_norm",
+    "/preflight_maxima/@construction_alternative_path_residual_failed",
+    "/preflight_maxima/@construction_alternative_path_residual_threshold",
+    "/preflight_maxima/@construction_alternative_path_residual_value",
+    "/preflight_maxima/@construction_buffer_target_leakage_failed",
+    "/preflight_maxima/@construction_buffer_target_leakage_threshold",
+    "/preflight_maxima/@construction_buffer_target_leakage_value",
+    "/preflight_maxima/@construction_complement_to_target_leakage_weight_failed",
+    "/preflight_maxima/@construction_complement_to_target_leakage_weight_threshold",
+    "/preflight_maxima/@construction_complement_to_target_leakage_weight_value",
+    "/preflight_maxima/@construction_completed_paw_s_norm_failed",
+    "/preflight_maxima/@construction_completed_paw_s_norm_threshold",
+    "/preflight_maxima/@construction_completed_paw_s_norm_value",
+    "/preflight_maxima/@construction_hamiltonian_covariance_after_ev_failed",
+    "/preflight_maxima/@construction_hamiltonian_covariance_after_ev_threshold",
+    "/preflight_maxima/@construction_hamiltonian_covariance_after_ev_value",
+    "/preflight_maxima/@construction_hamiltonian_covariance_after_normalized_frobenius_ev_failed",
+    "/preflight_maxima/@construction_hamiltonian_covariance_after_normalized_frobenius_ev_threshold",
+    "/preflight_maxima/@construction_hamiltonian_covariance_after_normalized_frobenius_ev_value",
+    "/preflight_maxima/@construction_hamiltonian_covariance_after_operator_ev_failed",
+    "/preflight_maxima/@construction_hamiltonian_covariance_after_operator_ev_threshold",
+    "/preflight_maxima/@construction_hamiltonian_covariance_after_operator_ev_value",
+    "/preflight_maxima/@construction_hamiltonian_covariance_after_source_column_l2_ev_failed",
+    "/preflight_maxima/@construction_hamiltonian_covariance_after_source_column_l2_ev_threshold",
+    "/preflight_maxima/@construction_hamiltonian_covariance_after_source_column_l2_ev_value",
+    "/preflight_maxima/@construction_kramers_pair_residual_failed",
+    "/preflight_maxima/@construction_kramers_pair_residual_threshold",
+    "/preflight_maxima/@construction_kramers_pair_residual_value",
+    "/preflight_maxima/@construction_maximum_energy_shift_ev_failed",
+    "/preflight_maxima/@construction_maximum_energy_shift_ev_threshold",
+    "/preflight_maxima/@construction_maximum_energy_shift_ev_value",
+    "/preflight_maxima/@construction_nondegenerate_block_leakage_failed",
+    "/preflight_maxima/@construction_nondegenerate_block_leakage_threshold",
+    "/preflight_maxima/@construction_nondegenerate_block_leakage_value",
+    "/preflight_maxima/@construction_normalized_polar_correction_failed",
+    "/preflight_maxima/@construction_normalized_polar_correction_threshold",
+    "/preflight_maxima/@construction_normalized_polar_correction_value",
+    "/preflight_maxima/@construction_parent_reconstruction_leakage_amplitude_audit_failed",
+    "/preflight_maxima/@construction_parent_reconstruction_leakage_amplitude_audit_threshold",
+    "/preflight_maxima/@construction_parent_reconstruction_leakage_amplitude_audit_value",
+    "/preflight_maxima/@construction_projected_eigen_residual_ev_failed",
+    "/preflight_maxima/@construction_projected_eigen_residual_ev_threshold",
+    "/preflight_maxima/@construction_projected_eigen_residual_ev_value",
+    "/preflight_maxima/@construction_raw_unitarity_failed",
+    "/preflight_maxima/@construction_raw_unitarity_threshold",
+    "/preflight_maxima/@construction_raw_unitarity_value",
+    "/preflight_maxima/@construction_rms_energy_shift_ev_failed",
+    "/preflight_maxima/@construction_rms_energy_shift_ev_threshold",
+    "/preflight_maxima/@construction_rms_energy_shift_ev_value",
+    "/preflight_maxima/@construction_target_reconstruction_leakage_weight_failed",
+    "/preflight_maxima/@construction_target_reconstruction_leakage_weight_threshold",
+    "/preflight_maxima/@construction_target_reconstruction_leakage_weight_value",
+    "/preflight_maxima/@construction_target_state_leakage_weight_failed",
+    "/preflight_maxima/@construction_target_state_leakage_weight_threshold",
+    "/preflight_maxima/@construction_target_state_leakage_weight_value",
+    "/preflight_maxima/@construction_target_to_complement_leakage_weight_failed",
+    "/preflight_maxima/@construction_target_to_complement_leakage_weight_threshold",
+    "/preflight_maxima/@construction_target_to_complement_leakage_weight_value",
+    "/preflight_maxima/@construction_wfc_rotation_reconstruction_failed",
+    "/preflight_maxima/@construction_wfc_rotation_reconstruction_threshold",
+    "/preflight_maxima/@construction_wfc_rotation_reconstruction_value",
+    "/preflight_maxima/@controlled_far_rotation_generator_operator",
+    "/preflight_maxima/@controlled_far_rotation_normalized_frobenius",
+    "/preflight_maxima/@controlled_far_rotation_operator",
+    "/preflight_maxima/@controlled_hamiltonian_correction_frobenius_ev",
+    "/preflight_maxima/@controlled_hamiltonian_correction_normalized_frobenius_ev",
+    "/preflight_maxima/@controlled_hamiltonian_correction_operator_ev",
+    "/preflight_maxima/@controlled_sylvester_offblock_residual_normalized_frobenius_ev",
+    "/preflight_maxima/@controlled_sylvester_offblock_residual_operator_ev",
+    "/preflight_maxima/@controlled_symmetrization_strict_maximum_ratio",
+    "/preflight_maxima/@controlled_symmetrization_strict_violation_count",
+    "/preflight_maxima/@controlled_total_rotation_operator_report_only",
+    "/preflight_maxima/@far_band_coupling",
+    "/preflight_maxima/@far_residual_count",
+    "/preflight_maxima/@hamiltonian_covariance_after_ev",
+    "/preflight_maxima/@hamiltonian_covariance_after_frobenius_ev",
+    "/preflight_maxima/@hamiltonian_covariance_after_normalized_frobenius_ev",
+    "/preflight_maxima/@hamiltonian_covariance_after_operator_ev",
+    "/preflight_maxima/@hamiltonian_covariance_after_source_column_l2_ev",
+    "/preflight_maxima/@hamiltonian_covariance_before_ev",
+    "/preflight_maxima/@hamiltonian_reynolds_residual_ev",
+    "/preflight_maxima/@kramers_pair_residual",
+    "/preflight_maxima/@maximum_bidirectional_leakage_weight",
+    "/preflight_maxima/@maximum_energy_shift_ev",
+    "/preflight_maxima/@maximum_far_frobenius_residual_ev",
+    "/preflight_maxima/@maximum_far_normalized_frobenius_residual_ev",
+    "/preflight_maxima/@maximum_far_operator_residual_ev",
+    "/preflight_maxima/@maximum_far_source_column_l2_residual_ev",
+    "/preflight_maxima/@maximum_pair_hamiltonian_residual_ev",
+    "/preflight_maxima/@native_fidelity_projected_eigen_residual_ev",
+    "/preflight_maxima/@native_generalized_norm_before_lowdin",
+    "/preflight_maxima/@native_paw_s_norm_after_lowdin",
+    "/preflight_maxima/@native_paw_s_norm_before_lowdin",
+    "/preflight_maxima/@near_block_leakage",
+    "/preflight_maxima/@nondegenerate_block_leakage",
+    "/preflight_maxima/@normalized_polar_correction",
+    "/preflight_maxima/@parent_hamiltonian_covariance_after_ev_audit",
+    "/preflight_maxima/@parent_hamiltonian_covariance_after_normalized_frobenius_ev_audit",
+    "/preflight_maxima/@parent_hamiltonian_covariance_after_operator_ev_audit",
+    "/preflight_maxima/@parent_reconstruction_leakage_amplitude_audit",
+    "/preflight_maxima/@pre_gauge_far_cumulative_diagnostic_exceeded",
+    "/preflight_maxima/@pre_gauge_far_cumulative_maximum_ratio",
+    "/preflight_maxima/@pre_symmetrization_augmentation_component_maximum",
+    "/preflight_maxima/@pre_symmetrization_cancellation_condition_maximum",
+    "/preflight_maxima/@pre_symmetrization_lowdin_paw_s_norm",
+    "/preflight_maxima/@pre_symmetrization_normalized_polar_correction",
+    "/preflight_maxima/@pre_symmetrization_pseudo_component_maximum",
+    "/preflight_maxima/@pre_symmetrization_raw_alternative_path_residual",
+    "/preflight_maxima/@pre_symmetrization_raw_cocycle",
+    "/preflight_maxima/@pre_symmetrization_raw_group_law",
+    "/preflight_maxima/@pre_symmetrization_raw_near_block_leakage",
+    "/preflight_maxima/@pre_symmetrization_raw_unitarity",
+    "/preflight_maxima/@pre_symmetrization_reconstruction_leakage_amplitude_audit",
+    "/preflight_maxima/@pre_symmetrization_target_reconstruction_leakage_weight",
+    "/preflight_maxima/@pre_symmetrization_target_state_leakage_weight",
+    "/preflight_maxima/@pre_symmetrization_total_paw_component_maximum",
+    "/preflight_maxima/@projected_eigen_residual_ev",
+    "/preflight_maxima/@raw_preflight_diagnostic_exceeded",
+    "/preflight_maxima/@raw_preflight_diagnostic_maximum_ratio",
+    "/preflight_maxima/@raw_unitarity",
+    "/preflight_maxima/@rms_energy_shift_ev",
+    "/preflight_maxima/@star1_strict_audit_raw_direct_reconstruction_leakage_amplitude_maximum",
+    "/preflight_maxima/@star1_strict_audit_raw_direct_state_leakage_amplitude_maximum",
+    "/preflight_maxima/@star1_strict_audit_target_raw_direct_reconstruction_leakage_amplitude_maximum",
+    "/preflight_maxima/@star1_strict_audit_target_raw_direct_state_leakage_amplitude_maximum",
+    "/preflight_maxima/@star1_strict_augmentation_component_maximum_maximum",
+    "/preflight_maxima/@star1_strict_complement_to_target_leakage_amplitude_audit_maximum",
+    "/preflight_maxima/@star1_strict_complement_to_target_leakage_weight_maximum",
+    "/preflight_maxima/@star1_strict_far_band_coupling_maximum",
+    "/preflight_maxima/@star1_strict_frozen_raw_left_unitarity_residual_maximum",
+    "/preflight_maxima/@star1_strict_frozen_raw_right_unitarity_residual_maximum",
+    "/preflight_maxima/@star1_strict_maximum_bidirectional_leakage_weight_maximum",
+    "/preflight_maxima/@star1_strict_near_block_leakage_maximum",
+    "/preflight_maxima/@star1_strict_nondegenerate_block_leakage_maximum",
+    "/preflight_maxima/@star1_strict_normalized_polar_correction_maximum",
+    "/preflight_maxima/@star1_strict_parent_complement_normalized_polar_correction_maximum",
+    "/preflight_maxima/@star1_strict_pseudo_component_maximum_maximum",
+    "/preflight_maxima/@star1_strict_raw_cocycle",
+    "/preflight_maxima/@star1_strict_raw_group_law",
+    "/preflight_maxima/@star1_strict_raw_left_unitarity_residual_maximum",
+    "/preflight_maxima/@star1_strict_raw_right_unitarity_residual_maximum",
+    "/preflight_maxima/@star1_strict_reconstruction_leakage_amplitude_audit_maximum",
+    "/preflight_maxima/@star1_strict_state_leakage_amplitude_audit_maximum",
+    "/preflight_maxima/@star1_strict_target_generalized_norm_residual_maximum",
+    "/preflight_maxima/@star1_strict_target_normalized_polar_correction_maximum",
+    "/preflight_maxima/@star1_strict_target_raw_left_unitarity_residual_maximum",
+    "/preflight_maxima/@star1_strict_target_raw_right_unitarity_residual_maximum",
+    "/preflight_maxima/@star1_strict_target_reconstruction_leakage_weight_maximum",
+    "/preflight_maxima/@star1_strict_target_state_leakage_weight_maximum",
+    "/preflight_maxima/@star1_strict_target_to_complement_leakage_amplitude_audit_maximum",
+    "/preflight_maxima/@star1_strict_target_to_complement_leakage_weight_maximum",
+    "/preflight_maxima/@star1_strict_transformed_generalized_norm_residual_maximum",
+    "/preflight_maxima/@state_leakage_amplitude_audit",
+    "/preflight_maxima/@strict_audit_raw_direct_reconstruction_leakage_amplitude",
+    "/preflight_maxima/@strict_audit_raw_direct_state_leakage_amplitude",
+    "/preflight_maxima/@strict_audit_target_raw_direct_reconstruction_leakage_amplitude",
+    "/preflight_maxima/@strict_audit_target_raw_direct_state_leakage_amplitude",
+    "/preflight_maxima/@strict_augmentation_component_maximum",
+    "/preflight_maxima/@strict_complement_to_target_leakage_amplitude_audit",
+    "/preflight_maxima/@strict_complement_to_target_leakage_weight",
+    "/preflight_maxima/@strict_far_band_coupling",
+    "/preflight_maxima/@strict_frozen_raw_left_unitarity_residual",
+    "/preflight_maxima/@strict_frozen_raw_right_unitarity_residual",
+    "/preflight_maxima/@strict_maximum_bidirectional_leakage_weight",
+    "/preflight_maxima/@strict_near_block_leakage",
+    "/preflight_maxima/@strict_nondegenerate_block_leakage",
+    "/preflight_maxima/@strict_normalized_polar_correction",
+    "/preflight_maxima/@strict_parent_complement_normalized_polar_correction",
+    "/preflight_maxima/@strict_pseudo_component_maximum",
+    "/preflight_maxima/@strict_raw_left_unitarity_residual",
+    "/preflight_maxima/@strict_raw_right_unitarity_residual",
+    "/preflight_maxima/@strict_reconstruction_leakage_amplitude_audit",
+    "/preflight_maxima/@strict_state_leakage_amplitude_audit",
+    "/preflight_maxima/@strict_target_generalized_norm_residual",
+    "/preflight_maxima/@strict_target_normalized_polar_correction",
+    "/preflight_maxima/@strict_target_raw_left_unitarity_residual",
+    "/preflight_maxima/@strict_target_raw_right_unitarity_residual",
+    "/preflight_maxima/@strict_target_reconstruction_leakage_weight",
+    "/preflight_maxima/@strict_target_state_leakage_weight",
+    "/preflight_maxima/@strict_target_to_complement_leakage_amplitude_audit",
+    "/preflight_maxima/@strict_target_to_complement_leakage_weight",
+    "/preflight_maxima/@strict_transformed_generalized_norm_residual",
+    "/preflight_maxima/@symmetrized_hamiltonian_correction_frobenius_ev",
+    "/preflight_maxima/@symmetrized_hamiltonian_correction_normalized_frobenius_ev",
+    "/preflight_maxima/@symmetrized_hamiltonian_correction_operator_ev",
+    "/preflight_maxima/@symmetrized_parent_formal_eigen_residual_ev",
+    "/preflight_maxima/@symmetrized_parent_maximum_energy_shift_ev",
+    "/preflight_maxima/@symmetrized_parent_rms_energy_shift_ev",
+    "/preflight_maxima/@symmetrized_projected_eigen_residual_ev",
+    "/preflight_maxima/@symmetrized_target_formal_eigen_residual_ev",
+    "/preflight_maxima/@target_maximum_principal_angle_rad",
+    "/preflight_maxima/@target_projector_difference_frobenius",
+    "/preflight_maxima/@target_projector_difference_operator",
+    "/preflight_maxima/@target_reconstruction_leakage_weight",
+    "/preflight_maxima/@target_rms_sine_principal_angle",
+    "/preflight_maxima/@target_scoped_lowdin_paw_s_norm",
+    "/preflight_maxima/@target_state_leakage_weight",
+    "/preflight_maxima/@target_to_complement_leakage_weight",
+    "/preflight_maxima/@tolerated_far_residual_count",
+    "/preflight_maxima/@wfc_rotation_reconstruction",
+    "/reciprocal_shifts",
+    "/representative_for_kpoint",
+    "/representative_frames/kpoint_000001/@full_kpoint_index",
+    "/representative_frames/kpoint_000001/coefficients",
+    "/representative_frames/kpoint_000001/energies_ev",
+    "/representative_frames/kpoint_000001/g_vectors",
+    "/representative_frames/kpoint_000001/k_fractional",
+    "/source_metadata/@augmentation_backend",
+    "/source_metadata/@authoritative_hamiltonian",
+    "/source_metadata/@band_frame_contract_schema",
+    "/source_metadata/@band_frame_contract_schema_version",
+    "/source_metadata/@band_frame_contract_sha256",
+    "/source_metadata/@band_frame_contract_status",
+    "/source_metadata/@band_frame_euclidean_nonunitarity_maximum",
+    "/source_metadata/@band_frame_maximum_condition_number",
+    "/source_metadata/@band_frame_metric_kind",
+    "/source_metadata/@band_frame_minimum_singular_value",
+    "/source_metadata/@band_frame_physical_isometry_maximum",
+    "/source_metadata/@band_frame_physical_isometry_tolerance",
+    "/source_metadata/@band_frame_replay_maximum",
+    "/source_metadata/@band_frame_replay_tolerance",
+    "/source_metadata/@band_frame_source_gauge",
+    "/source_metadata/@band_frame_target_gauge",
+    "/source_metadata/@band_frame_transform_sha256",
+    "/source_metadata/@block_partition_max_gap_ev",
+    "/source_metadata/@block_partition_policy",
+    "/source_metadata/@coefficient_normalization",
+    "/source_metadata/@construction_policy",
+    "/source_metadata/@controlled_symmetrization_qualification_mode",
+    "/source_metadata/@discrete_hamiltonian_correction",
+    "/source_metadata/@global_production_eligible",
+    "/source_metadata/@kstar_count",
+    "/source_metadata/@magnetic_operation_count",
+    "/source_metadata/@native_fidelity_scope",
+    "/source_metadata/@nonrepresentative_frame_storage",
+    "/source_metadata/@parent_band_range",
+    "/source_metadata/@physical_overlap_available",
+    "/source_metadata/@pre_gauge_far_cumulative_status",
+    "/source_metadata/@qe_atomic_type_labels",
+    "/source_metadata/@qe_atomic_type_to_element",
+    "/source_metadata/@qe_element_authority",
+    "/source_metadata/@qe_metric_kind",
+    "/source_metadata/@qe_reader_purpose",
+    "/source_metadata/@qualification",
+    "/source_metadata/@sewing_construction",
+    "/source_metadata/@source_replay_band_start",
+    "/source_metadata/@source_replay_band_stop",
+    "/source_metadata/@source_replay_descriptor_sha256",
+    "/source_metadata/@source_replay_include_time_reversal",
+    "/source_metadata/@source_replay_kind",
+    "/source_metadata/@source_replay_magnetic_moments",
+    "/source_metadata/@source_replay_path_policy",
+    "/source_metadata/@source_replay_representation_cutoff_ev",
+    "/source_metadata/@source_replay_resource_manifest_sha256",
+    "/source_metadata/@source_replay_save_directory",
+    "/source_metadata/@source_replay_schema",
+    "/source_metadata/@source_replay_spin_channel",
+    "/source_metadata/@spin_channel",
+    "/source_metadata/@spin_mode",
+    "/source_metadata/@spinorbit",
+    "/source_metadata/@symmetrized_hamiltonian_is_pure_gauge",
+    "/source_metadata/@target_band_range",
+    "/source_metadata/@wavefunction_gauge_backend",
+    "/source_metadata/@wavefunction_gauge_preparation",
+    "/source_metadata/@wavefunction_gauge_schema",
+    "/star_representatives",
+    "/structure/@has_magnetic_moments",
+    "/structure/mp_grid",
+    "/structure/positions_fractional",
+    "/structure/real_lattice",
+    "/structure/reciprocal_lattice",
+    "/structure/species",
+    "/symmetry_completed_energies_ev"
+  ],
+  "format": "hdf5",
+  "numeric_leaves": [
+    {
+      "finite": true,
+      "path": "native/@diagnostic_only",
+      "payload": "01",
+      "type": "Bool"
+    },
+    {
+      "finite": true,
+      "path": "native/@global_production_eligible",
+      "payload": "00",
+      "type": "Bool"
+    },
+    {
+      "finite": true,
+      "path": "native/@has_symmetrized_hamiltonian_audit",
+      "payload": "00",
+      "type": "Bool"
+    },
+    {
+      "finite": true,
+      "path": "native/@parent_band_start",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "native/@parent_band_stop",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "native/@production_eligible",
+      "payload": "00",
+      "type": "Bool"
+    },
+    {
+      "finite": true,
+      "path": "native/@scoped_production_eligible",
+      "payload": "00",
+      "type": "Bool"
+    },
+    {
+      "finite": true,
+      "path": "native/@spinor",
+      "payload": "00",
+      "type": "Bool"
+    },
+    {
+      "finite": true,
+      "path": "native/@target_band_start",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "native/@target_band_stop",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "native/@target_scope_production_eligible",
+      "payload": "00",
+      "type": "Bool"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/canonical_operation_for_kpoint",
+      "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+      "shape": [
+        1
+      ],
+      "type": "Vector{Int64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/extra_bands_per_star",
+      "sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "shape": [
+        1
+      ],
+      "type": "Vector{Int64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/g_vectors_by_kpoint/kpoint_000001",
+      "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+      "shape": [
+        1,
+        3
+      ],
+      "type": "Matrix{Int64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/kpoint_map",
+      "sha256": "989fc25a5c180f7373d60461ae33ebfd356010bfbe160160621586716a57154c",
+      "shape": [
+        48,
+        1
+      ],
+      "type": "Matrix{Int64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/kpoints_fractional",
+      "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+      "shape": [
+        1,
+        3
+      ],
+      "type": "Matrix{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/native_to_completed_rotations",
+      "sha256": "3239b05c38b825ebb79f103172438292a22a0951351a6b81be1df5d44776cc65",
+      "shape": [
+        1,
+        1,
+        1
+      ],
+      "type": "Array{ComplexF64, 3}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/operations/antiunitary",
+      "sha256": "17b0761f87b081d5cf10757ccc89f12be355c70e2e29df288b65b30710dcbcd1",
+      "shape": [
+        48
+      ],
+      "type": "Vector{UInt8}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.9999999999999999,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/operations/rotation_cartesian",
+      "sha256": "30021b7a7365c2b9cb282debd16f69f51ef03afeaf12da70ca202419cf963cba",
+      "shape": [
+        3,
+        3,
+        48
+      ],
+      "type": "Array{Float64, 3}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/operations/rotation_fractional",
+      "sha256": "04dedbe2a77c7eb2a9da8476830a67bb71365f9057e38ca9c50f32a11cdeb598",
+      "shape": [
+        3,
+        3,
+        48
+      ],
+      "type": "Array{Int64, 3}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/operations/translation_fractional",
+      "sha256": "4cf9816ed1062189ff0c8d427fba5e912cc68fc9af76cf7f08fd255977de3b33",
+      "shape": [
+        3,
+        48
+      ],
+      "type": "Matrix{Float64}"
+    },
+    {
+      "finite": true,
+      "path": "native/parsed_paw_metric/@spinorbit",
+      "payload": "00",
+      "type": "Bool"
+    },
+    {
+      "finite": true,
+      "path": "native/parsed_paw_metric/projector_plan/@fully_relativistic",
+      "payload": "00",
+      "type": "Bool"
+    },
+    {
+      "finite": true,
+      "path": "native/parsed_paw_metric/projector_plan/@has_augmentation",
+      "payload": "00",
+      "type": "Bool"
+    },
+    {
+      "finite": true,
+      "path": "native/parsed_paw_metric/projector_plan/@num_channels",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "native/parsed_paw_metric/projector_plan/atom_000001/@channel_start",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "native/parsed_paw_metric/projector_plan/atom_000001/@channel_stop",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/parsed_paw_metric/projector_plan/atom_000001/channels",
+      "sha256": "f95f8eadc54fa71e640a67ff7e86733158e44683c7f77996ea3a0008397167ac",
+      "shape": [
+        3,
+        1
+      ],
+      "type": "Matrix{Int64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/parsed_paw_metric/projector_plan/atom_000001/position_fractional",
+      "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+      "shape": [
+        3
+      ],
+      "type": "Vector{Float64}"
+    },
+    {
+      "finite": true,
+      "path": "native/parsed_paw_metric/upf/type_000001/@augmentation_cutoff_index",
+      "payload": "0300000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "native/parsed_paw_metric/upf/type_000001/@augmentation_cutoff_radius_bohr",
+      "payload": "000000000000f03f",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/parsed_paw_metric/upf/type_000001/@beta_integration_cutoff_index",
+      "payload": "0300000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "native/parsed_paw_metric/upf/type_000001/@fully_relativistic",
+      "payload": "00",
+      "type": "Bool"
+    },
+    {
+      "finite": true,
+      "path": "native/parsed_paw_metric/upf/type_000001/@has_so",
+      "payload": "00",
+      "type": "Bool"
+    },
+    {
+      "finite": true,
+      "path": "native/parsed_paw_metric/upf/type_000001/@nqlc",
+      "payload": "0000000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "native/parsed_paw_metric/upf/type_000001/@q_with_l",
+      "payload": "01",
+      "type": "Bool"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/parsed_paw_metric/upf/type_000001/beta_angular_momenta",
+      "sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "shape": [
+        1
+      ],
+      "type": "Vector{Int64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/parsed_paw_metric/upf/type_000001/beta_radial",
+      "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+      "shape": [
+        3,
+        1
+      ],
+      "type": "Matrix{Float64}"
+    },
+    {
+      "finite": false,
+      "max_abs": null,
+      "max_abs_nonfinite_repr": "NaN",
+      "path": "native/parsed_paw_metric/upf/type_000001/beta_total_angular_momenta",
+      "sha256": "74999fd28ab18ccca2bee199f260d19764603a3c78353d773d16d215eebe8e19",
+      "shape": [
+        1
+      ],
+      "type": "Vector{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/parsed_paw_metric/upf/type_000001/dij",
+      "sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "shape": [
+        1,
+        1
+      ],
+      "type": "Matrix{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/parsed_paw_metric/upf/type_000001/q_integrals",
+      "sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "shape": [
+        1,
+        1
+      ],
+      "type": "Matrix{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/parsed_paw_metric/upf/type_000001/qfcoef",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "shape": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "type": "Array{Float64, 4}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/parsed_paw_metric/upf/type_000001/radial_grid_bohr",
+      "sha256": "9536689a4941c84ded438e9002674c39b2d5d1024a7b34232ee82e4cd4664931",
+      "shape": [
+        3
+      ],
+      "type": "Vector{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.5,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/parsed_paw_metric/upf/type_000001/radial_weights_bohr",
+      "sha256": "75c7e2477c75b7dc28dfde0c6e9cb69069bdbd3539f33fcfc2903aa94c9d1f59",
+      "shape": [
+        3
+      ],
+      "type": "Vector{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/parsed_paw_metric/upf/type_000001/rinner_bohr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "shape": [
+        0
+      ],
+      "type": "Vector{Float64}"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@alternative_path_residual",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@block_partition_evidence_count",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@block_partition_evidence_orbit_count",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@block_partition_maximum_block_bands",
+      "payload": "000000000000f03f",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@block_partition_maximum_block_span_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@block_partition_maximum_evidence_coupling",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@block_partition_maximum_evidence_gap_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@block_partition_search_states",
+      "payload": "000000000000f03f",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@buffer_target_leakage",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@complement_to_target_leakage_weight",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@completed_generalized_norm",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@completed_paw_s_norm",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_alternative_path_residual_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_alternative_path_residual_threshold",
+      "payload": "f168e388b5f8f43e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_alternative_path_residual_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_buffer_target_leakage_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_buffer_target_leakage_threshold",
+      "payload": "f168e388b5f8d43e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_buffer_target_leakage_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_complement_to_target_leakage_weight_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_complement_to_target_leakage_weight_threshold",
+      "payload": "f168e388b5f8d43e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_complement_to_target_leakage_weight_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_completed_paw_s_norm_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_completed_paw_s_norm_threshold",
+      "payload": "f168e388b5f8d43e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_completed_paw_s_norm_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_hamiltonian_covariance_after_ev_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_hamiltonian_covariance_after_ev_threshold",
+      "payload": "48afbc9af2d77a3e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_hamiltonian_covariance_after_ev_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_hamiltonian_covariance_after_normalized_frobenius_ev_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_hamiltonian_covariance_after_normalized_frobenius_ev_threshold",
+      "payload": "48afbc9af2d77a3e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_hamiltonian_covariance_after_normalized_frobenius_ev_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_hamiltonian_covariance_after_operator_ev_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_hamiltonian_covariance_after_operator_ev_threshold",
+      "payload": "48afbc9af2d77a3e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_hamiltonian_covariance_after_operator_ev_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_hamiltonian_covariance_after_source_column_l2_ev_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_hamiltonian_covariance_after_source_column_l2_ev_threshold",
+      "payload": "48afbc9af2d77a3e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_hamiltonian_covariance_after_source_column_l2_ev_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_kramers_pair_residual_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_kramers_pair_residual_threshold",
+      "payload": "f168e388b5f8f43e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_kramers_pair_residual_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_maximum_energy_shift_ev_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_maximum_energy_shift_ev_threshold",
+      "payload": "8dedb5a0f7c6b03e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_maximum_energy_shift_ev_value",
+      "payload": "000000000000f83c",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_nondegenerate_block_leakage_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_nondegenerate_block_leakage_threshold",
+      "payload": "f168e388b5f8d43e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_nondegenerate_block_leakage_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_normalized_polar_correction_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_normalized_polar_correction_threshold",
+      "payload": "f168e388b5f8d43e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_normalized_polar_correction_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_parent_reconstruction_leakage_amplitude_audit_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_parent_reconstruction_leakage_amplitude_audit_threshold",
+      "payload": "f168e388b5f8d43e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_parent_reconstruction_leakage_amplitude_audit_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_projected_eigen_residual_ev_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_projected_eigen_residual_ev_threshold",
+      "payload": "f168e388b5f8d43e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_projected_eigen_residual_ev_value",
+      "payload": "000000000000f83c",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_raw_unitarity_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_raw_unitarity_threshold",
+      "payload": "f168e388b5f8d43e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_raw_unitarity_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_rms_energy_shift_ev_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_rms_energy_shift_ev_threshold",
+      "payload": "76830df4f521943e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_rms_energy_shift_ev_value",
+      "payload": "000000000000f83c",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_target_reconstruction_leakage_weight_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_target_reconstruction_leakage_weight_threshold",
+      "payload": "f168e388b5f8d43e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_target_reconstruction_leakage_weight_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_target_state_leakage_weight_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_target_state_leakage_weight_threshold",
+      "payload": "f168e388b5f8d43e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_target_state_leakage_weight_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_target_to_complement_leakage_weight_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_target_to_complement_leakage_weight_threshold",
+      "payload": "f168e388b5f8d43e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_target_to_complement_leakage_weight_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_wfc_rotation_reconstruction_failed",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_wfc_rotation_reconstruction_threshold",
+      "payload": "f168e388b5f8d43e",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@construction_wfc_rotation_reconstruction_value",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@controlled_far_rotation_generator_operator",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@controlled_far_rotation_normalized_frobenius",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@controlled_far_rotation_operator",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@controlled_hamiltonian_correction_frobenius_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@controlled_hamiltonian_correction_normalized_frobenius_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@controlled_hamiltonian_correction_operator_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@controlled_sylvester_offblock_residual_normalized_frobenius_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@controlled_sylvester_offblock_residual_operator_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@controlled_symmetrization_strict_maximum_ratio",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@controlled_symmetrization_strict_violation_count",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@controlled_total_rotation_operator_report_only",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@far_band_coupling",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@far_residual_count",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@hamiltonian_covariance_after_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@hamiltonian_covariance_after_frobenius_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@hamiltonian_covariance_after_normalized_frobenius_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@hamiltonian_covariance_after_operator_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@hamiltonian_covariance_after_source_column_l2_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@hamiltonian_covariance_before_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@hamiltonian_reynolds_residual_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@kramers_pair_residual",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@maximum_bidirectional_leakage_weight",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@maximum_energy_shift_ev",
+      "payload": "000000000000f83c",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@maximum_far_frobenius_residual_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@maximum_far_normalized_frobenius_residual_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@maximum_far_operator_residual_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@maximum_far_source_column_l2_residual_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@maximum_pair_hamiltonian_residual_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@native_fidelity_projected_eigen_residual_ev",
+      "payload": "000000000000f83c",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@native_generalized_norm_before_lowdin",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@native_paw_s_norm_after_lowdin",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@native_paw_s_norm_before_lowdin",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@near_block_leakage",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@nondegenerate_block_leakage",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@normalized_polar_correction",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@parent_hamiltonian_covariance_after_ev_audit",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@parent_hamiltonian_covariance_after_normalized_frobenius_ev_audit",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@parent_hamiltonian_covariance_after_operator_ev_audit",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@parent_reconstruction_leakage_amplitude_audit",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_gauge_far_cumulative_diagnostic_exceeded",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_gauge_far_cumulative_maximum_ratio",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_symmetrization_augmentation_component_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_symmetrization_cancellation_condition_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_symmetrization_lowdin_paw_s_norm",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_symmetrization_normalized_polar_correction",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_symmetrization_pseudo_component_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_symmetrization_raw_alternative_path_residual",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_symmetrization_raw_cocycle",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_symmetrization_raw_group_law",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_symmetrization_raw_near_block_leakage",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_symmetrization_raw_unitarity",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_symmetrization_reconstruction_leakage_amplitude_audit",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_symmetrization_target_reconstruction_leakage_weight",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_symmetrization_target_state_leakage_weight",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@pre_symmetrization_total_paw_component_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@projected_eigen_residual_ev",
+      "payload": "000000000000f83c",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@raw_preflight_diagnostic_exceeded",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@raw_preflight_diagnostic_maximum_ratio",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@raw_unitarity",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@rms_energy_shift_ev",
+      "payload": "000000000000f83c",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_audit_raw_direct_reconstruction_leakage_amplitude_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_audit_raw_direct_state_leakage_amplitude_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_audit_target_raw_direct_reconstruction_leakage_amplitude_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_audit_target_raw_direct_state_leakage_amplitude_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_augmentation_component_maximum_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_complement_to_target_leakage_amplitude_audit_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_complement_to_target_leakage_weight_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_far_band_coupling_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_frozen_raw_left_unitarity_residual_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_frozen_raw_right_unitarity_residual_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_maximum_bidirectional_leakage_weight_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_near_block_leakage_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_nondegenerate_block_leakage_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_normalized_polar_correction_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_parent_complement_normalized_polar_correction_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_pseudo_component_maximum_maximum",
+      "payload": "000000000000f03f",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_raw_cocycle",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_raw_group_law",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_raw_left_unitarity_residual_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_raw_right_unitarity_residual_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_reconstruction_leakage_amplitude_audit_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_state_leakage_amplitude_audit_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_target_generalized_norm_residual_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_target_normalized_polar_correction_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_target_raw_left_unitarity_residual_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_target_raw_right_unitarity_residual_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_target_reconstruction_leakage_weight_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_target_state_leakage_weight_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_target_to_complement_leakage_amplitude_audit_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_target_to_complement_leakage_weight_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@star1_strict_transformed_generalized_norm_residual_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@state_leakage_amplitude_audit",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_audit_raw_direct_reconstruction_leakage_amplitude",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_audit_raw_direct_state_leakage_amplitude",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_audit_target_raw_direct_reconstruction_leakage_amplitude",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_audit_target_raw_direct_state_leakage_amplitude",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_augmentation_component_maximum",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_complement_to_target_leakage_amplitude_audit",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_complement_to_target_leakage_weight",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_far_band_coupling",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_frozen_raw_left_unitarity_residual",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_frozen_raw_right_unitarity_residual",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_maximum_bidirectional_leakage_weight",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_near_block_leakage",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_nondegenerate_block_leakage",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_normalized_polar_correction",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_parent_complement_normalized_polar_correction",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_pseudo_component_maximum",
+      "payload": "000000000000f03f",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_raw_left_unitarity_residual",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_raw_right_unitarity_residual",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_reconstruction_leakage_amplitude_audit",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_state_leakage_amplitude_audit",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_target_generalized_norm_residual",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_target_normalized_polar_correction",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_target_raw_left_unitarity_residual",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_target_raw_right_unitarity_residual",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_target_reconstruction_leakage_weight",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_target_state_leakage_weight",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_target_to_complement_leakage_amplitude_audit",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_target_to_complement_leakage_weight",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@strict_transformed_generalized_norm_residual",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@symmetrized_hamiltonian_correction_frobenius_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@symmetrized_hamiltonian_correction_normalized_frobenius_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@symmetrized_hamiltonian_correction_operator_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@symmetrized_parent_formal_eigen_residual_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@symmetrized_parent_maximum_energy_shift_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@symmetrized_parent_rms_energy_shift_ev",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@symmetrized_projected_eigen_residual_ev",
+      "payload": "000000000000f83c",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@symmetrized_target_formal_eigen_residual_ev",
+      "payload": "000000000000f83c",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@target_maximum_principal_angle_rad",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@target_projector_difference_frobenius",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@target_projector_difference_operator",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@target_reconstruction_leakage_weight",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@target_rms_sine_principal_angle",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@target_scoped_lowdin_paw_s_norm",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@target_state_leakage_weight",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@target_to_complement_leakage_weight",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@tolerated_far_residual_count",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "path": "native/preflight_maxima/@wfc_rotation_reconstruction",
+      "payload": "0000000000000000",
+      "type": "Float64"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/reciprocal_shifts",
+      "sha256": "4cf9816ed1062189ff0c8d427fba5e912cc68fc9af76cf7f08fd255977de3b33",
+      "shape": [
+        3,
+        48,
+        1
+      ],
+      "type": "Array{Int64, 3}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/representative_for_kpoint",
+      "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+      "shape": [
+        1
+      ],
+      "type": "Vector{Int64}"
+    },
+    {
+      "finite": true,
+      "path": "native/representative_frames/kpoint_000001/@full_kpoint_index",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/representative_frames/kpoint_000001/coefficients",
+      "sha256": "3239b05c38b825ebb79f103172438292a22a0951351a6b81be1df5d44776cc65",
+      "shape": [
+        1,
+        1,
+        1
+      ],
+      "type": "Array{ComplexF64, 3}"
+    },
+    {
+      "finite": true,
+      "max_abs": 6.802846561497005,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/representative_frames/kpoint_000001/energies_ev",
+      "sha256": "18fbdca6ae86a5fc9ac9b158ba4356ecaedb0cfead4d376d233647afc0bd9406",
+      "shape": [
+        1
+      ],
+      "type": "Vector{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/representative_frames/kpoint_000001/g_vectors",
+      "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+      "shape": [
+        1,
+        3
+      ],
+      "type": "Matrix{Int64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/representative_frames/kpoint_000001/k_fractional",
+      "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+      "shape": [
+        3
+      ],
+      "type": "Vector{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/star_representatives",
+      "sha256": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+      "shape": [
+        1
+      ],
+      "type": "Vector{Int64}"
+    },
+    {
+      "finite": true,
+      "path": "native/structure/@has_magnetic_moments",
+      "payload": "00",
+      "type": "Bool"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/structure/mp_grid",
+      "sha256": "605390e5a369ee568b19ead1733af824c7c1d286d7d24b86283238fc44a99334",
+      "shape": [
+        3
+      ],
+      "type": "Vector{Int64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/structure/positions_fractional",
+      "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+      "shape": [
+        3,
+        1
+      ],
+      "type": "Matrix{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 1.058354421806,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/structure/real_lattice",
+      "sha256": "fceff8fa54cafdc019d754900cad5bd20fd77623af2e08e43055e6182c49c3d3",
+      "shape": [
+        3,
+        3
+      ],
+      "type": "Matrix{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 5.936749710421029,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/structure/reciprocal_lattice",
+      "sha256": "58d90f0a41c1267617c2d6c436bb322388fa743b66b6ec2b0f502824b923defe",
+      "shape": [
+        3,
+        3
+      ],
+      "type": "Matrix{Float64}"
+    },
+    {
+      "finite": true,
+      "max_abs": 6.802846561497005,
+      "max_abs_nonfinite_repr": null,
+      "path": "native/symmetry_completed_energies_ev",
+      "sha256": "18fbdca6ae86a5fc9ac9b158ba4356ecaedb0cfead4d376d233647afc0bd9406",
+      "shape": [
+        1,
+        1
+      ],
+      "type": "Matrix{Float64}"
+    }
+  ],
+  "raw_file_bytes": 102304,
+  "semantic_fields": {
+    "/@antiunitary_band_gauge_convention": "B_prime=U_gk_dagger*B*conj(U_k)",
+    "/@authoritative_hamiltonian": "native_dft",
+    "/@authoritative_hamiltonian_sha256": "aea9827afa089aa4b71e0a0a6097f1df1356e2d5b380396d2d433300c709799b",
+    "/@auxiliary_parent_audit_status": "NOT_APPLICABLE",
+    "/@auxiliary_parent_qualification": "legacy_hard_gate",
+    "/@band_frame_contract_schema": "WannierNLQG.band_frame_transform_contract",
+    "/@band_frame_contract_schema_version": "1.0",
+    "/@band_frame_contract_sha256": "3253a3e757c927d202988a31cc5d295aec39f470982b37872004d4d351a2d1e0",
+    "/@band_frame_contract_status": "PASS",
+    "/@band_frame_euclidean_nonunitarity_maximum": "0.0",
+    "/@band_frame_maximum_condition_number": "1.0",
+    "/@band_frame_metric_kind": "norm_conserving",
+    "/@band_frame_minimum_singular_value": "1.0",
+    "/@band_frame_physical_isometry_maximum": "0.0",
+    "/@band_frame_physical_isometry_tolerance": "5.0e-6",
+    "/@band_frame_replay_maximum": "0.0",
+    "/@band_frame_replay_tolerance": "5.0e-6",
+    "/@band_frame_source_gauge": "native_dft_eigenstate",
+    "/@band_frame_target_gauge": "sawf_completed_native_dft",
+    "/@band_frame_transform_sha256": "017a94ef845e7e4312f6a27a5ba1f00342bb924afb83681e7fe04f7d5a931403",
+    "/@block_partition_policy": "fixed_gap",
+    "/@block_partition_policy_sha256": "58b5fdb9cadc49bc6a47c3bc27e70b190ac57171d3a0e54352ab3f277c12bdef",
+    "/@coefficient_row_convention": "C_prime=transpose(U)*C",
+    "/@controlled_symmetrization_qualification_mode": "not_applicable",
+    "/@discrete_hamiltonian_correction": "none",
+    "/@discrete_hamiltonian_correction_sha256": "6a320ce6ba908d00066c6ff5f489b514a37a716736b9721ae102abf9401a8e5a",
+    "/@energy_shift_qualification": "legacy_energy_shift_hard_gate",
+    "/@maximum_energy_shift_audit_reference_ev": "NOT_APPLICABLE",
+    "/@native_difference_audit_status": "NOT_APPLICABLE",
+    "/@native_difference_qualification": "legacy_hard_gate",
+    "/@native_fidelity_status": "NATIVE_DFT_FIDELITY_PASS",
+    "/@nonrepresentative_frame_storage": "representative_raw_symmetry_transform",
+    "/@payload_sha256": "4f522763302f664a88948d9f192283ca1bae0d904029862275a434ce9114c756",
+    "/@qualification_scope": "full_parent",
+    "/@raw_preflight_diagnostic_status": "NOT_APPLICABLE",
+    "/@residual_gate_phase": "legacy_pre_symmetrization",
+    "/@rms_energy_shift_audit_reference_ev": "NOT_APPLICABLE",
+    "/@root_cause": "GAUGE_COVARIANCE_PRIMARY_CAUSE_SUPPORTED",
+    "/@schema": "WannierNLQG.star_covariant_paw_gauge",
+    "/@schema_version": "1.0",
+    "/@sewing_backend": "augmentation_aware_paw_q0",
+    "/@source_code": "qe",
+    "/@status": "DIAGNOSTIC_ONLY",
+    "/@symmetrized_hamiltonian_status": "NOT_SELECTED",
+    "/@symmetrized_parent_energy_shift_audit_status": "NOT_APPLICABLE",
+    "/@symmetrized_target_subspace_status": "NOT_SELECTED",
+    "/@target_anchor": "NOT_APPLICABLE",
+    "/@target_complement_completion": "NOT_APPLICABLE",
+    "/@target_complement_max_element_ev": "NOT_APPLICABLE",
+    "/@target_energy_shift_audit_status": "NOT_APPLICABLE",
+    "/@target_leakage_formula_sha256": "NOT_APPLICABLE",
+    "/@target_leakage_semantics": "NOT_APPLICABLE",
+    "/@target_leakage_threshold": "NOT_APPLICABLE",
+    "/@target_subspace_contract_sha256": "NOT_APPLICABLE",
+    "/@wavefunction_gauge_backend": "star_covariant_paw",
+    "/input_sha256/@AUTHORITATIVE_HAMILTONIAN_SHA256": "aea9827afa089aa4b71e0a0a6097f1df1356e2d5b380396d2d433300c709799b",
+    "/input_sha256/@BAND_FRAME_CONTRACT_SHA256": "3253a3e757c927d202988a31cc5d295aec39f470982b37872004d4d351a2d1e0",
+    "/input_sha256/@BAND_FRAME_TRANSFORM_SHA256": "017a94ef845e7e4312f6a27a5ba1f00342bb924afb83681e7fe04f7d5a931403",
+    "/input_sha256/@BLOCK_PARTITION_POLICY_SHA256": "58b5fdb9cadc49bc6a47c3bc27e70b190ac57171d3a0e54352ab3f277c12bdef",
+    "/input_sha256/@DISCRETE_HAMILTONIAN_CORRECTION_SHA256": "6a320ce6ba908d00066c6ff5f489b514a37a716736b9721ae102abf9401a8e5a",
+    "/input_sha256/@TARGET_SUBSPACE_CONTRACT_SHA256": "NOT_APPLICABLE",
+    "/input_sha256/@UPF:X:X.UPF": "90bcd44bec8a931caf81c1f7e024a7ba8c93b0c5e175ed77d3b161db4c13baea",
+    "/input_sha256/@data-file-schema.xml": "505877f2326db341414123e2cc9f794fb9f1a60c603662530779461d76e63368",
+    "/input_sha256/@wfc1.hdf5": "616e5a93adeecab4f3f123bcdf0a21aa1e56c35a9b26408cbe927f61d5d62153",
+    "/maximum_contexts/@block_partition_maximum_block_bands": "star=1,rep=1,policy=fixed_gap,accepted_state=1",
+    "/maximum_contexts/@block_partition_search_states": "star=1,rep=1,policy=fixed_gap,accepted_state=1",
+    "/maximum_contexts/@completed_generalized_norm": "(0, 0, 0)",
+    "/maximum_contexts/@construction_alternative_path_residual_failed": "CONTINUE",
+    "/maximum_contexts/@construction_alternative_path_residual_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_buffer_target_leakage_failed": "CONTINUE",
+    "/maximum_contexts/@construction_buffer_target_leakage_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_complement_to_target_leakage_weight_failed": "CONTINUE",
+    "/maximum_contexts/@construction_complement_to_target_leakage_weight_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_completed_paw_s_norm_failed": "CONTINUE",
+    "/maximum_contexts/@construction_completed_paw_s_norm_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_ev_failed": "CONTINUE",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_ev_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_normalized_frobenius_ev_failed": "CONTINUE",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_normalized_frobenius_ev_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_operator_ev_failed": "CONTINUE",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_operator_ev_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_source_column_l2_ev_failed": "CONTINUE",
+    "/maximum_contexts/@construction_hamiltonian_covariance_after_source_column_l2_ev_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_kramers_pair_residual_failed": "CONTINUE",
+    "/maximum_contexts/@construction_kramers_pair_residual_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_maximum_energy_shift_ev_failed": "CONTINUE",
+    "/maximum_contexts/@construction_maximum_energy_shift_ev_value": "star=1,rep=1,band=1",
+    "/maximum_contexts/@construction_nondegenerate_block_leakage_failed": "CONTINUE",
+    "/maximum_contexts/@construction_nondegenerate_block_leakage_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_normalized_polar_correction_failed": "CONTINUE",
+    "/maximum_contexts/@construction_normalized_polar_correction_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_parent_reconstruction_leakage_amplitude_audit_failed": "CONTINUE",
+    "/maximum_contexts/@construction_parent_reconstruction_leakage_amplitude_audit_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_projected_eigen_residual_ev_failed": "CONTINUE",
+    "/maximum_contexts/@construction_projected_eigen_residual_ev_value": "star=1,rep=1,target=1,op=1",
+    "/maximum_contexts/@construction_raw_unitarity_failed": "CONTINUE",
+    "/maximum_contexts/@construction_raw_unitarity_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_rms_energy_shift_ev_failed": "CONTINUE",
+    "/maximum_contexts/@construction_rms_energy_shift_ev_value": "all_stars",
+    "/maximum_contexts/@construction_target_reconstruction_leakage_weight_failed": "CONTINUE",
+    "/maximum_contexts/@construction_target_reconstruction_leakage_weight_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_target_state_leakage_weight_failed": "CONTINUE",
+    "/maximum_contexts/@construction_target_state_leakage_weight_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_target_to_complement_leakage_weight_failed": "CONTINUE",
+    "/maximum_contexts/@construction_target_to_complement_leakage_weight_value": "NOT_RECORDED",
+    "/maximum_contexts/@construction_wfc_rotation_reconstruction_failed": "CONTINUE",
+    "/maximum_contexts/@construction_wfc_rotation_reconstruction_value": "NOT_RECORDED",
+    "/maximum_contexts/@hamiltonian_reynolds_residual_ev": "NOT_RECORDED",
+    "/maximum_contexts/@maximum_energy_shift_ev": "star=1,rep=1,band=1",
+    "/maximum_contexts/@native_fidelity_projected_eigen_residual_ev": "star=1,rep=1,target=1,op=1",
+    "/maximum_contexts/@native_generalized_norm_before_lowdin": "(0, 0, 0)",
+    "/maximum_contexts/@native_paw_s_norm_before_lowdin": "NOT_RECORDED",
+    "/maximum_contexts/@parent_hamiltonian_covariance_after_ev_audit": "star=1,rep=1,target=1,op=1,parent=full,audit_only",
+    "/maximum_contexts/@parent_hamiltonian_covariance_after_normalized_frobenius_ev_audit": "star=1,rep=1,target=1,op=1,parent=full,audit_only",
+    "/maximum_contexts/@parent_hamiltonian_covariance_after_operator_ev_audit": "star=1,rep=1,target=1,op=1,parent=full,audit_only",
+    "/maximum_contexts/@pre_gauge_far_cumulative_diagnostic_exceeded": "star=1,rep=1,policy=fixed_gap,accepted_state=1",
+    "/maximum_contexts/@pre_gauge_far_cumulative_maximum_ratio": "star=1,rep=1,policy=fixed_gap,accepted_state=1",
+    "/maximum_contexts/@pre_symmetrization_lowdin_paw_s_norm": "NOT_RECORDED",
+    "/maximum_contexts/@projected_eigen_residual_ev": "star=1,rep=1,target=1,op=1",
+    "/maximum_contexts/@rms_energy_shift_ev": "all_stars",
+    "/maximum_contexts/@star1_strict_audit_raw_direct_reconstruction_leakage_amplitude_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_audit_raw_direct_state_leakage_amplitude_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_audit_target_raw_direct_reconstruction_leakage_amplitude_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_audit_target_raw_direct_state_leakage_amplitude_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_augmentation_component_maximum_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_complement_to_target_leakage_amplitude_audit_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_complement_to_target_leakage_weight_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_far_band_coupling_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0), target_band = 0, source_band = 0)",
+    "/maximum_contexts/@star1_strict_frozen_raw_left_unitarity_residual_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_frozen_raw_right_unitarity_residual_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_maximum_bidirectional_leakage_weight_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_near_block_leakage_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0), target_band = 0, source_band = 0)",
+    "/maximum_contexts/@star1_strict_nondegenerate_block_leakage_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0), target_band = 0, source_band = 0)",
+    "/maximum_contexts/@star1_strict_normalized_polar_correction_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0), block_label = 1, block_start = 1, block_stop = 1)",
+    "/maximum_contexts/@star1_strict_parent_complement_normalized_polar_correction_maximum": "star=1,rep=1,policy=fixed_gap,accepted_state=1",
+    "/maximum_contexts/@star1_strict_pseudo_component_maximum_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_raw_cocycle": "(Dict{String, String}(), Dict{String, String}(), Dict{String, String}(), Dict{String, String}())",
+    "/maximum_contexts/@star1_strict_raw_group_law": "(Dict{String, String}(), Dict{String, String}(), Dict{String, String}(), Dict{String, String}())",
+    "/maximum_contexts/@star1_strict_raw_left_unitarity_residual_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_raw_right_unitarity_residual_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_reconstruction_leakage_amplitude_audit_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_state_leakage_amplitude_audit_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_target_generalized_norm_residual_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_target_normalized_polar_correction_maximum": "star=1,rep=1,policy=fixed_gap,accepted_state=1",
+    "/maximum_contexts/@star1_strict_target_raw_left_unitarity_residual_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_target_raw_right_unitarity_residual_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_target_reconstruction_leakage_weight_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_target_state_leakage_weight_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_target_to_complement_leakage_amplitude_audit_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_target_to_complement_leakage_weight_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@star1_strict_transformed_generalized_norm_residual_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_audit_raw_direct_reconstruction_leakage_amplitude": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_audit_raw_direct_state_leakage_amplitude": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_audit_target_raw_direct_reconstruction_leakage_amplitude": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_audit_target_raw_direct_state_leakage_amplitude": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_augmentation_component_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_complement_to_target_leakage_amplitude_audit": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_complement_to_target_leakage_weight": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_far_band_coupling": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0), target_band = 0, source_band = 0)",
+    "/maximum_contexts/@strict_frozen_raw_left_unitarity_residual": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_frozen_raw_right_unitarity_residual": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_maximum_bidirectional_leakage_weight": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_near_block_leakage": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0), target_band = 0, source_band = 0)",
+    "/maximum_contexts/@strict_nondegenerate_block_leakage": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0), target_band = 0, source_band = 0)",
+    "/maximum_contexts/@strict_normalized_polar_correction": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0), block_label = 1, block_start = 1, block_stop = 1)",
+    "/maximum_contexts/@strict_pseudo_component_maximum": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_raw_left_unitarity_residual": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_raw_right_unitarity_residual": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_reconstruction_leakage_amplitude_audit": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_state_leakage_amplitude_audit": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_target_generalized_norm_residual": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_target_raw_left_unitarity_residual": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_target_raw_right_unitarity_residual": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_target_reconstruction_leakage_weight": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_target_state_leakage_weight": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_target_to_complement_leakage_amplitude_audit": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_target_to_complement_leakage_weight": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@strict_transformed_generalized_norm_residual": "(operation = 1, source_kpoint = 1, target_kpoint = 1, antiunitary = false, translation_fractional = (0.0, 0.0, 0.0))",
+    "/maximum_contexts/@symmetrized_parent_formal_eigen_residual_ev": "star=1,rep=1,policy=fixed_gap,accepted_state=1",
+    "/maximum_contexts/@symmetrized_projected_eigen_residual_ev": "star=1,rep=1,target=1,op=1",
+    "/maximum_contexts/@symmetrized_target_formal_eigen_residual_ev": "star=1,rep=1,target=1,op=1",
+    "/maximum_contexts/@target_scoped_lowdin_paw_s_norm": "\"NOT_RECORDED\"",
+    "/parsed_paw_metric/@kind": "qe_upf_beta_q0",
+    "/parsed_paw_metric/@metric_kind": "norm_conserving",
+    "/parsed_paw_metric/@metric_sha256": "a5672b87d25af11e49a05a68e91e6a9c8608e7e0f0d32974db3f133d0c11f257",
+    "/parsed_paw_metric/projector_plan/atom_000001/@atomic_type_label": "X",
+    "/parsed_paw_metric/projector_plan/atom_000001/@element": "X",
+    "/parsed_paw_metric/upf/type_000001/@element": "X",
+    "/parsed_paw_metric/upf/type_000001/@filename": "X.UPF",
+    "/parsed_paw_metric/upf/type_000001/@label": "X",
+    "/parsed_paw_metric/upf/type_000001/@metric_kind": "norm_conserving",
+    "/source_metadata/@augmentation_backend": "native_qe_paw_pending_qualification",
+    "/source_metadata/@authoritative_hamiltonian": "native_dft",
+    "/source_metadata/@band_frame_contract_schema": "WannierNLQG.band_frame_transform_contract",
+    "/source_metadata/@band_frame_contract_schema_version": "1.0",
+    "/source_metadata/@band_frame_contract_sha256": "3253a3e757c927d202988a31cc5d295aec39f470982b37872004d4d351a2d1e0",
+    "/source_metadata/@band_frame_contract_status": "PASS",
+    "/source_metadata/@band_frame_euclidean_nonunitarity_maximum": "0.0",
+    "/source_metadata/@band_frame_maximum_condition_number": "1.0",
+    "/source_metadata/@band_frame_metric_kind": "norm_conserving",
+    "/source_metadata/@band_frame_minimum_singular_value": "1.0",
+    "/source_metadata/@band_frame_physical_isometry_maximum": "0.0",
+    "/source_metadata/@band_frame_physical_isometry_tolerance": "5.0e-6",
+    "/source_metadata/@band_frame_replay_maximum": "0.0",
+    "/source_metadata/@band_frame_replay_tolerance": "5.0e-6",
+    "/source_metadata/@band_frame_source_gauge": "native_dft_eigenstate",
+    "/source_metadata/@band_frame_target_gauge": "sawf_completed_native_dft",
+    "/source_metadata/@band_frame_transform_sha256": "017a94ef845e7e4312f6a27a5ba1f00342bb924afb83681e7fe04f7d5a931403",
+    "/source_metadata/@block_partition_max_gap_ev": "0.02",
+    "/source_metadata/@block_partition_policy": "fixed_gap",
+    "/source_metadata/@coefficient_normalization": "qe_raw",
+    "/source_metadata/@construction_policy": "standard",
+    "/source_metadata/@controlled_symmetrization_qualification_mode": "not_applicable",
+    "/source_metadata/@discrete_hamiltonian_correction": "none",
+    "/source_metadata/@global_production_eligible": "false",
+    "/source_metadata/@kstar_count": "1",
+    "/source_metadata/@magnetic_operation_count": "48",
+    "/source_metadata/@native_fidelity_scope": "independent_audit",
+    "/source_metadata/@nonrepresentative_frame_storage": "representative_raw_symmetry_transform",
+    "/source_metadata/@parent_band_range": "1:1",
+    "/source_metadata/@physical_overlap_available": "false",
+    "/source_metadata/@pre_gauge_far_cumulative_status": "PASS",
+    "/source_metadata/@qe_atomic_type_labels": "X",
+    "/source_metadata/@qe_atomic_type_to_element": "X=>X",
+    "/source_metadata/@qe_element_authority": "UPF PP_HEADER element",
+    "/source_metadata/@qe_metric_kind": "norm_conserving",
+    "/source_metadata/@qe_reader_purpose": "native_paw_matrix_construction_raw",
+    "/source_metadata/@qualification": "diagnostic_pending_oracle",
+    "/source_metadata/@sewing_construction": "coefficient_mapping",
+    "/source_metadata/@source_replay_band_start": "1",
+    "/source_metadata/@source_replay_band_stop": "1",
+    "/source_metadata/@source_replay_descriptor_sha256": "555e90767e3752e3f9077bac0865b242727e56085f15c7e445c6fd3021675737",
+    "/source_metadata/@source_replay_include_time_reversal": "false",
+    "/source_metadata/@source_replay_kind": "qe",
+    "/source_metadata/@source_replay_magnetic_moments": "NONE",
+    "/source_metadata/@source_replay_path_policy": "absolute_local_locator_hash_authority",
+    "/source_metadata/@source_replay_representation_cutoff_ev": "NONE",
+    "/source_metadata/@source_replay_resource_manifest_sha256": "54fae4ad85ad1215db1e581d1da140d08140064bca7feee341e40eaf6b8e2dd6",
+    "/source_metadata/@source_replay_save_directory": "golden-payload/assets/group_7/fixture.save",
+    "/source_metadata/@source_replay_schema": "1.0",
+    "/source_metadata/@source_replay_spin_channel": "none",
+    "/source_metadata/@spin_channel": "none",
+    "/source_metadata/@spin_mode": "scalar",
+    "/source_metadata/@spinorbit": "false",
+    "/source_metadata/@symmetrized_hamiltonian_is_pure_gauge": "false",
+    "/source_metadata/@target_band_range": "1:1",
+    "/source_metadata/@wavefunction_gauge_backend": "star_covariant_paw",
+    "/source_metadata/@wavefunction_gauge_preparation": "paw_s_symmetric_lowdin",
+    "/source_metadata/@wavefunction_gauge_schema": "1.0"
+  }
+}

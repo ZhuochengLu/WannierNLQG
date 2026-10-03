@@ -25,6 +25,21 @@ development and release workflow.
   observable selectors, `RunResult`, and `run`, as frozen in the API snapshot.
   EffectiveTaskConfig and NormalizedTaskSpec are private Runtime details. Expert
   APIs are accessed through `WannierNLQG.Core`, `.IO`, and `.MatrixElements`.
+- For local Full, MPI, cold-call and source-audit development jobs, the default
+  entrypoint is `python3 scripts/development_runner.py`; read its `--help` and
+  `docs/DEVELOPMENT.md`. The common core is the repository's
+  `scripts/development/common_runner`, outside Julia Runtime. Follow this package's
+  `.agents/skills/wanniernlqg-development-runner/SKILL.md`. Prepare explicit commands,
+  complete environments, pinned inputs and typed contracts within the user's task;
+  the user need not provide a runner prompt or JSON files. Do not add a parallel
+  guardian or bypass typed qualification with exit0. The complete source archive
+  contains the core, skill and guide; no parent repository is required. Legacy commands
+  remain available as explicit compatibility paths.
+- Keep run evidence, requests and depots outside this source payload. Query through
+  status/reconcile, and resume only eligible pending stages. Missing actual exits
+  remain UNKNOWN. The supported task contract is foreground_owned_group; complete
+  kernel containment remains UNKNOWN. Validate the reachable tooling diff without
+  relabeling prior scientific evidence as measurements on a new payload.
 - During implementation, run formatter/static checks and focused tests for the
   reachable Symmetrization, Wannierization, Response, Runtime, or tooling path. Do
   not rerun fast/full after every edit. Freeze the final evidence hashes first and

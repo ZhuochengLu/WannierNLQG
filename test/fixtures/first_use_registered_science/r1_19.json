@@ -1,0 +1,55 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__berry_curvature_dipole__conventional",
+  "native_science": {
+    "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3f56273fd9358260",
+        "3f56273fd9358260",
+        "3f56273fd9358260",
+        "3f56273fd9358260",
+        "bf5a29bbfcf4ec90",
+        "bf5a29bbfcf4ec90",
+        "bf5a29bbfcf4ec90",
+        "bf5a29bbfcf4ec90",
+        "bf619392ffd789a8",
+        "bf619392ffd789a8",
+        "bf619392ffd789a8",
+        "bf619392ffd789a8",
+        "3f63b8ba3440c3f0",
+        "3f63b8ba3440c3f0",
+        "3f63b8ba3440c3f0",
+        "3f63b8ba3440c3f0"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0024074208067976707,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat",
+      "sha256": "d0b582b95b48a88915e590f35047f28daf221ce8fb7c01fde87ca8ecfd319cb9"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "a3e3ef939d089b34e731e8197f31c8180ae23ba38b50700489106629b6321eb8"
+  ],
+  "original_receipt_sha256": "a3e3ef939d089b34e731e8197f31c8180ae23ba38b50700489106629b6321eb8",
+  "rank_output_inventory": [
+    [
+      "kslice_berry_curvature_dipole_conventional/synthetic_demo_bcdk_subspace_1_2_conv.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "berry_curvature_dipole/k_slice/conventional"
+  ]
+}

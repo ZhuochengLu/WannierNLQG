@@ -1,0 +1,89 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__hermitian_curvature_tensor__conventional",
+  "native_science": {
+    "kslice_hermitian_curvature_tensor_conventional/synthetic_demo_hctk_i_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "3f0e42728d4cc1ed",
+        "3f0e42728d4cc1ed",
+        "3f0e42728d4cc1ed",
+        "3f0e42728d4cc1ed",
+        "3bb25366c9a4ded6",
+        "3bb25366c9a4ded6",
+        "3bb25366c9a4ded6",
+        "3bb25366c9a4ded6",
+        "bf0e42728d4cc1ed",
+        "bf0e42728d4cc1ed",
+        "bf0e42728d4cc1ed",
+        "bf0e42728d4cc1ed"
+      ],
+      "nonzero_scientific_values": 12,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 5.7715531204375347e-05,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_hermitian_curvature_tensor_conventional/synthetic_demo_hctk_r_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3b98419d16860c6d",
+        "3b98419d16860c6d",
+        "3b98419d16860c6d",
+        "3b98419d16860c6d",
+        "3ba325b01b3a762e",
+        "3ba325b01b3a762e",
+        "3ba325b01b3a762e",
+        "3ba325b01b3a762e",
+        "bb95d02930732982",
+        "bb95d02930732982",
+        "bb95d02930732982",
+        "bb95d02930732982",
+        "3ba325b01b3a762e",
+        "3ba325b01b3a762e",
+        "3ba325b01b3a762e",
+        "3ba325b01b3a762e"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 2.0272906062319056e-21,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_hermitian_curvature_tensor_conventional/synthetic_demo_hctk_r_conv.dat",
+      "sha256": "34b18b42f39a3e3aa60b605c8071687bba7ec4fb00f91d9fa7470aaa3c2531b6"
+    },
+    {
+      "file": "kslice_hermitian_curvature_tensor_conventional/synthetic_demo_hctk_i_conv.dat",
+      "sha256": "877140d79d9cbd580d9571a3702ac567cd339571ceb66d1cac2b5d02a3b17a59"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "b547396dabffc5071de8aab75042d9e52dbd78098b0c4c48dd386f5d867fab37"
+  ],
+  "original_receipt_sha256": "b547396dabffc5071de8aab75042d9e52dbd78098b0c4c48dd386f5d867fab37",
+  "rank_output_inventory": [
+    [
+      "kslice_hermitian_curvature_tensor_conventional/synthetic_demo_hctk_r_conv.dat",
+      "kslice_hermitian_curvature_tensor_conventional/synthetic_demo_hctk_i_conv.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "hermitian_curvature_tensor/k_slice/conventional"
+  ]
+}

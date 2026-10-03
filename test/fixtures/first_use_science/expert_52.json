@@ -1,0 +1,98 @@
+{
+  "id": "symmetrize_real_space_operator",
+  "ranks": [
+    {
+      "original_receipt_sha256": "0e6cd69a249a29301f265046f6e7f7dfb0864242c7e9bc96af49def58f361d27",
+      "rank": 0,
+      "science": {
+        "native_readback": null,
+        "return_bits": {
+          "all_finite": true,
+          "leaves": [
+            {
+              "finite": true,
+              "path": "result.operator.spec.cartesian_rank",
+              "payload": "0000000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.operator.spec.inversion_parity",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.operator.spec.time_reversal_parity",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "path": "result.operator.spec.rotate_cartesian",
+              "payload": "01",
+              "type": "Bool"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operator.r_vectors",
+              "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+              "shape": [
+                3,
+                1
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 2,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operator.data",
+              "sha256": "d48b908d1d6ca42c0a573fd78626b6508904e1a44aab41682a843912901ead1f",
+              "shape": [
+                1,
+                1,
+                1
+              ],
+              "type": "Array{ComplexF64, 3}"
+            },
+            {
+              "finite": true,
+              "path": "result.original_num_r_vectors",
+              "payload": "0100000000000000",
+              "type": "Int64"
+            },
+            {
+              "finite": true,
+              "max_abs": 0,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.generated_r_vectors",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                3,
+                0
+              ],
+              "type": "Matrix{Int64}"
+            },
+            {
+              "finite": true,
+              "max_abs": 2,
+              "max_abs_nonfinite_repr": null,
+              "path": "result.operation_indices",
+              "sha256": "0c730b69905c5ef7a4ca5269f72365400bde2dd2c04eaf9bbb3d1c4a265a0131",
+              "shape": [
+                2
+              ],
+              "type": "Vector{Int64}"
+            }
+          ],
+          "type": "WannierNLQG.SymmetryFoundation.RealSpaceSymmetrizationResult{3}"
+        },
+        "semantic_return": null
+      }
+    }
+  ],
+  "schema": 1
+}

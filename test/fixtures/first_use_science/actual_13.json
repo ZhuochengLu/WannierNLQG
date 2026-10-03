@@ -1,0 +1,39 @@
+{
+  "all_finite": true,
+  "leaves": [
+    {
+      "finite": true,
+      "path": "result.num_bands",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "result.num_kpts",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "path": "result.num_wannier",
+      "payload": "0100000000000000",
+      "type": "Int64"
+    },
+    {
+      "finite": true,
+      "max_abs": 5.013256549261996,
+      "max_abs_nonfinite_repr": null,
+      "path": "result.data",
+      "sha256": "b1068a309c011e2a03e61949f10122e8454aa52f5ec2fadce185504f6f84520e",
+      "shape": [
+        1,
+        1,
+        1
+      ],
+      "type": "Array{ComplexF64, 3}"
+    }
+  ],
+  "numeric_leaf_count": 4,
+  "numeric_sha256": "cecd9e237daea36d03cd11339e12d79b0912367ccbdd244e2f9560a0cccee22d",
+  "type": "WannierNLQG.IO.WannierAMN"
+}

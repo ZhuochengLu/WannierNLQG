@@ -1,0 +1,315 @@
+{
+  "expected_nonzero": true,
+  "id": "kpath__band_structure__conventional",
+  "native_science": {
+    "band_structure/synthetic_demo_bands.dat": {
+      "headers": [
+        "#### WannierNLQG band structure",
+        "# energy_reference_E_ref_eV = 0.00000000000000000e+00",
+        "# energy_convention = ascending_eigenvalues_minus_E_ref",
+        "# energy_unit = eV",
+        "# distance_A^-1 k1_fractional k2_fractional k3_fractional band_1_minus_E_ref_eV band_2_minus_E_ref_eV band_3_minus_E_ref_eV band_4_minus_E_ref_eV"
+      ],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "bff60f4a0f065115",
+        "bfdd781205d15638",
+        "3fbf81b4d53230dd",
+        "3ff37533432783ac",
+        "3ff921fb54442d1a",
+        "3fd0000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "bff4461b9bb33cc3",
+        "bfe0da72e2e5df80",
+        "3fccddeb9912bbd8",
+        "3ff117979a03d51c",
+        "400921fb54442d18",
+        "3fe0000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "bff285922521bba5",
+        "bfe373f7eda857fe",
+        "3fd57a3c7cecbf53",
+        "3fedc1fdf9756fcd",
+        "4012d97c7f3321d2",
+        "3fe0000000000000",
+        "3fd0000000000000",
+        "0000000000000000",
+        "bff285922521bba5",
+        "bfe373f7eda857fe",
+        "3fd57a3c7cecbf53",
+        "3fedc1fdf9756fcd",
+        "401921fb54442d18",
+        "3fe0000000000000",
+        "3fe0000000000000",
+        "0000000000000000",
+        "bff285922521bba5",
+        "bfe373f7eda857fe",
+        "3fd57a3c7cecbf53",
+        "3fedc1fdf9756fcd",
+        "401f6a7a2955385e",
+        "3fd0000000000000",
+        "3fe0000000000000",
+        "0000000000000000",
+        "bff4461b9bb33cc3",
+        "bfe0da72e2e5df80",
+        "3fccddeb9912bbd8",
+        "3ff117979a03d51c",
+        "4022d97c7f3321d2",
+        "0000000000000000",
+        "3fe0000000000000",
+        "0000000000000000",
+        "bff60f4a0f065115",
+        "bfdd781205d15638",
+        "3fbf81b4d53230dd",
+        "3ff37533432783ac",
+        "4025fdbbe9bba777",
+        "0000000000000000",
+        "3fd0000000000000",
+        "0000000000000000",
+        "bff60f4a0f065115",
+        "bfdd781205d15638",
+        "3fbf81b4d53230dd",
+        "3ff37533432783ac",
+        "402921fb54442d17",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "bff60f4a0f065115",
+        "bfdd781205d15638",
+        "3fbf81b4d53230dd",
+        "3ff37533432783ac"
+      ],
+      "nonzero_scientific_values": 36,
+      "science_skip_columns": 4,
+      "scientific_max_abs": 1.378732737245689,
+      "scientific_value_count": 36,
+      "shape": [
+        9,
+        8
+      ]
+    },
+    "band_structure/synthetic_demo_kpath.json": {
+      "json_science": {
+        "distance_unit": "A^-1",
+        "fractional_coordinates_folded": false,
+        "lattice_convention": "row-lattice",
+        "node_chain": [
+          {
+            "cumulative_distance_A_inverse": {
+              "float64_bits": "0000000000000000"
+            },
+            "fractional_coordinates": [
+              {
+                "float64_bits": "0000000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              }
+            ],
+            "label": "\u0393",
+            "point_index_one_based": 1
+          },
+          {
+            "cumulative_distance_A_inverse": {
+              "float64_bits": "400921fb54442d18"
+            },
+            "fractional_coordinates": [
+              {
+                "float64_bits": "3fe0000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              }
+            ],
+            "label": "X",
+            "point_index_one_based": 3
+          },
+          {
+            "cumulative_distance_A_inverse": {
+              "float64_bits": "401921fb54442d18"
+            },
+            "fractional_coordinates": [
+              {
+                "float64_bits": "3fe0000000000000"
+              },
+              {
+                "float64_bits": "3fe0000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              }
+            ],
+            "label": "S",
+            "point_index_one_based": 5
+          },
+          {
+            "cumulative_distance_A_inverse": {
+              "float64_bits": "4022d97c7f3321d2"
+            },
+            "fractional_coordinates": [
+              {
+                "float64_bits": "0000000000000000"
+              },
+              {
+                "float64_bits": "3fe0000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              }
+            ],
+            "label": "Y",
+            "point_index_one_based": 7
+          },
+          {
+            "cumulative_distance_A_inverse": {
+              "float64_bits": "402921fb54442d18"
+            },
+            "fractional_coordinates": [
+              {
+                "float64_bits": "0000000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              },
+              {
+                "float64_bits": "0000000000000000"
+              }
+            ],
+            "label": "\u0393",
+            "point_index_one_based": 9
+          }
+        ],
+        "reciprocal_lattice_convention": "B=2pi*A^(-T)",
+        "schema": "wanniernlqg.kpath",
+        "schema_version": "1.0",
+        "segments": [
+          {
+            "end_node_index_one_based": 2,
+            "end_point_index_one_based": 3,
+            "kpoints_including_endpoints": 3,
+            "segment_index_one_based": 1,
+            "start_node_index_one_based": 1,
+            "start_point_index_one_based": 1
+          },
+          {
+            "end_node_index_one_based": 3,
+            "end_point_index_one_based": 5,
+            "kpoints_including_endpoints": 3,
+            "segment_index_one_based": 2,
+            "start_node_index_one_based": 2,
+            "start_point_index_one_based": 3
+          },
+          {
+            "end_node_index_one_based": 4,
+            "end_point_index_one_based": 7,
+            "kpoints_including_endpoints": 3,
+            "segment_index_one_based": 3,
+            "start_node_index_one_based": 3,
+            "start_point_index_one_based": 5
+          },
+          {
+            "end_node_index_one_based": 5,
+            "end_point_index_one_based": 9,
+            "kpoints_including_endpoints": 3,
+            "segment_index_one_based": 4,
+            "start_node_index_one_based": 4,
+            "start_point_index_one_based": 7
+          }
+        ],
+        "shared_segment_endpoints_written_once": true,
+        "total_kpoints": 9
+      }
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "band_structure/synthetic_demo_bands.dat",
+      "sha256": "0fffe93d4bb55a2fdfe63fc69809143734f2bd1f68f839a3750c1eba7192399d"
+    },
+    {
+      "file": "band_structure/synthetic_demo_kpath.json",
+      "sha256": "68f8279ebd0929e1bf004bc0bfe5701546992326b402efe277112a467cd3bb67"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "83a891962ab65829bccd6058ef2fd0f8f921bb177e530a729e723d94513a7d5a",
+    "7cb0b6e8175d6c5c6b2bc070986d1663ab10c0c156d7e1ec546ca8efad58016b",
+    "0e6cabf86764bebb5af9787bd3c6eb670ff4611a218bdf541358964e18c3c42c",
+    "fa401a371ee40b4a14bdc983237db1a9e968c27e0aa963001942477fd9d30a42",
+    "f58246b55aefe97901976c1b0eca16c7017280254e5381d45ffaf761c09a5ab0",
+    "809090fc23aa6bcbbef880545cdc92b9b3f490fc2d459f1f4dd1a7f12b0e2c6f",
+    "397b1789f74b67a684b3cdce8502087ac09a1a8e25b6e423aaf2dd9113135304",
+    "77fd326cc65b2e8ddaf930d7e9527131c1ca47cd11973b56a93524a604e23052",
+    "5fdc3aa446110b39fb00fed7ee9010250a2011646ba95ca03083ecc28c91921c",
+    "55ed21052604f114c25a9278c017fc5810f8b7d3e1b67399ec81fdf93a100d7e",
+    "b8b1cf25208ff02368c4ef651b31b50e0c57716d904ab162f1348b48eba9f748",
+    "5e28fcb5b4cdf9c09a43cd1236aaf17c662e12b5951ce09a930f85c2883eb263"
+  ],
+  "original_receipt_sha256": "83a891962ab65829bccd6058ef2fd0f8f921bb177e530a729e723d94513a7d5a",
+  "rank_output_inventory": [
+    [
+      "band_structure/synthetic_demo_bands.dat",
+      "band_structure/synthetic_demo_kpath.json"
+    ],
+    [
+      "band_structure/synthetic_demo_bands.dat",
+      "band_structure/synthetic_demo_kpath.json"
+    ],
+    [
+      "band_structure/synthetic_demo_bands.dat",
+      "band_structure/synthetic_demo_kpath.json"
+    ],
+    [
+      "band_structure/synthetic_demo_bands.dat",
+      "band_structure/synthetic_demo_kpath.json"
+    ],
+    [
+      "band_structure/synthetic_demo_bands.dat",
+      "band_structure/synthetic_demo_kpath.json"
+    ],
+    [
+      "band_structure/synthetic_demo_bands.dat",
+      "band_structure/synthetic_demo_kpath.json"
+    ],
+    [
+      "band_structure/synthetic_demo_bands.dat",
+      "band_structure/synthetic_demo_kpath.json"
+    ],
+    [
+      "band_structure/synthetic_demo_bands.dat",
+      "band_structure/synthetic_demo_kpath.json"
+    ],
+    [
+      "band_structure/synthetic_demo_bands.dat",
+      "band_structure/synthetic_demo_kpath.json"
+    ],
+    [
+      "band_structure/synthetic_demo_bands.dat",
+      "band_structure/synthetic_demo_kpath.json"
+    ],
+    [
+      "band_structure/synthetic_demo_bands.dat",
+      "band_structure/synthetic_demo_kpath.json"
+    ],
+    [
+      "band_structure/synthetic_demo_bands.dat",
+      "band_structure/synthetic_demo_kpath.json"
+    ]
+  ],
+  "ranks": 12,
+  "task_labels": [
+    "band_structure/k_path/conventional"
+  ]
+}

@@ -808,6 +808,7 @@ function write_metadata(
     band_summary::NamedTuple = NamedTuple(),
     replica_summary::NamedTuple = NamedTuple(),
     qualification_summary::NamedTuple = NamedTuple(),
+    metadata_centers::Union{Nothing, Matrix{Float64}} = nothing,
 )
     _ = family_counts
     single_task = length(ctx.specs) == 1
@@ -866,8 +867,9 @@ function write_metadata(
     ]
     if ctx.model_input_mode == :legacy
         try
-            model = read_wannier_tb(ctx.model_file)
-            centers = extract_wannier_centers(model)
+            centers =
+                metadata_centers === nothing ? _read_wannier_tb_centers(ctx.model_file) :
+                metadata_centers
             all(isfinite, centers) || error("TB Wannier centers contain non-finite values.")
             center_bytes = reinterpret(UInt8, vec(centers))
             push!(input_entries, "wannier_center_count" => string(size(centers, 2)))

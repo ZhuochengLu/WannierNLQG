@@ -1,0 +1,89 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__quantum_hermitian_connection__projector",
+  "native_science": {
+    "kslice_quantum_hermitian_connection_projector/synthetic_demo_qhck_i_proj.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "3efe54d52e17e7dc",
+        "3efe54d52e17e7dc",
+        "3efe54d52e17e7dc",
+        "3efe54d52e17e7dc",
+        "3eec93a21bc5e072",
+        "3eec93a21bc5e072",
+        "3eec93a21bc5e072",
+        "3eec93a21bc5e072",
+        "3ec72d9a1cf915a7",
+        "3ec72d9a1cf915a7",
+        "3ec72d9a1cf915a7",
+        "3ec72d9a1cf915a7",
+        "3eec93a21bc5e072",
+        "3eec93a21bc5e072",
+        "3eec93a21bc5e072",
+        "3eec93a21bc5e072"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 2.8926256055307342e-05,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "kslice_quantum_hermitian_connection_projector/synthetic_demo_qhck_r_proj.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000"
+      ],
+      "nonzero_scientific_values": 0,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_quantum_hermitian_connection_projector/synthetic_demo_qhck_r_proj.dat",
+      "sha256": "39578347d52ff34250fbfb8ea28ae027caae3bfcd694cfb812b1c40656a8c997"
+    },
+    {
+      "file": "kslice_quantum_hermitian_connection_projector/synthetic_demo_qhck_i_proj.dat",
+      "sha256": "d4a68a8a5020ebec2dff6722b2b5b085590be2e398e564f5e707d75beabe1887"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "2b63c2f4d1dbe11b671ed8f823dba1177253959ec3c470e516f3a68a39eb1147"
+  ],
+  "original_receipt_sha256": "2b63c2f4d1dbe11b671ed8f823dba1177253959ec3c470e516f3a68a39eb1147",
+  "rank_output_inventory": [
+    [
+      "kslice_quantum_hermitian_connection_projector/synthetic_demo_qhck_r_proj.dat",
+      "kslice_quantum_hermitian_connection_projector/synthetic_demo_qhck_i_proj.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "quantum_hermitian_connection/k_slice/projector"
+  ]
+}

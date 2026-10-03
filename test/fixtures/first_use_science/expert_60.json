@@ -1,0 +1,93 @@
+{
+  "id": "write_band_representation_summary",
+  "ranks": [
+    {
+      "original_receipt_sha256": "738d94354184ab5672f047533a31946a610fc1745577053ac95f2de0413cedd4",
+      "rank": 0,
+      "science": {
+        "native_output_sha256": "5aa4f144ddd5bef2dc7a75a1fa48d5a6ba774b42f6c94e6041f8246920def7b4",
+        "native_payload": {
+          "diagnostics": [],
+          "input_sha256": {
+            "fixture": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "maximum_group_law_residuals": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "maximum_reciprocal_shift_residual": 0,
+          "maximum_theta_residual": 0,
+          "maximum_unitarity_residual": 0,
+          "mp_grid": [
+            2,
+            1,
+            1
+          ],
+          "num_bands": 2,
+          "num_kpoints": 2,
+          "num_operations": 2,
+          "oracle_excess_group_law_residuals": null,
+          "oracle_sha256": null,
+          "passed": true,
+          "representation_sha256": "3640891dfa31dcb229b42ab2bd4e657c931886714aff8b306bd8dccb468df822",
+          "schema": "WannierNLQG.band_representation_summary",
+          "schema_version": "1.0"
+        },
+        "sewing_native_sha256": "ef112d42f942a6dd49b155b8906f6dc40336ab84b566f0334ae8948c9e2ce493",
+        "validation_native_fields": {
+          "absolute_tolerance": {
+            "bits": "3a8c30e28e79453e",
+            "type": "Float64"
+          },
+          "diagnostics": [],
+          "maximum_group_law_residuals": [
+            {
+              "bits": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "bits": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "bits": "0000000000000000",
+              "type": "Float64"
+            },
+            {
+              "bits": "0000000000000000",
+              "type": "Float64"
+            }
+          ],
+          "maximum_reciprocal_shift_residual": {
+            "bits": "0000000000000000",
+            "type": "Float64"
+          },
+          "maximum_theta_residual": {
+            "bits": "0000000000000000",
+            "type": "Float64"
+          },
+          "maximum_unitarity_residual": {
+            "bits": "0000000000000000",
+            "type": "Float64"
+          },
+          "oracle_excess_group_law_residuals": null,
+          "oracle_excess_tolerance": {
+            "bits": "3a8c30e28e79453e",
+            "type": "Float64"
+          },
+          "oracle_sha256": null,
+          "passed": {
+            "bits": "01",
+            "type": "Bool"
+          },
+          "representation_sha256": "3640891dfa31dcb229b42ab2bd4e657c931886714aff8b306bd8dccb468df822"
+        },
+        "validation_type": "WannierNLQGSymmetryFoundationExt.BandRepresentationValidation",
+        "validation_type_owner": "WannierNLQGSymmetryFoundationExt"
+      }
+    }
+  ],
+  "schema": 1
+}

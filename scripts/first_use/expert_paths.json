@@ -1,0 +1,1504 @@
+[
+  {
+    "id": "audit_paw_block_partitions",
+    "public_target": "audit_paw_block_partitions",
+    "fixture": "fixtures/entry_1.jl",
+    "supports": [
+      "OperatorBundleTestSupport.jl",
+      "ResponseTestSupport.jl",
+      "DocumentedExampleTestSupport.jl",
+      "WannierizationFixtureSupportDataOnly.jl"
+    ],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "4a278e37996054c6b75755249fbd2245735e3661c0752cda2e311b8578060883",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification",
+    "backend_contract": "Root-owned fixture definitions may activate unrelated OperatorBundle; required Wannierization owner remains absent"
+  },
+  {
+    "id": "authoritative_band_hamiltonian",
+    "public_target": "authoritative_band_hamiltonian",
+    "fixture": "fixtures/entry_16.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "custom",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "d89f4c7c065a0da702a867fcd09fc6bffa6e5faddf71149cd942ae706a82d8bd",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification",
+    "input": "arguments/fixture_2.jls"
+  },
+  {
+    "id": "band_representation_schema_version",
+    "public_target": "band_representation_schema_version",
+    "fixture": "fixtures/entry_15.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "8602c6f75ba020ac5a3a04194cb286d7a6239d322bc14709fcc8e65c69845183",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "build_band_product_table",
+    "public_target": "build_band_product_table",
+    "fixture": "fixtures/entry_15.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "8602c6f75ba020ac5a3a04194cb286d7a6239d322bc14709fcc8e65c69845183",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "build_wannier_tight_binding_model",
+    "public_target": "build_wannier_tight_binding_model",
+    "fixture": "fixtures/entry_58.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "a15817314f8170a36152f68c98ad26755173ada663e999d6274e2af2e13571fb",
+    "environment": {
+      "FIRSTUSE_ACTUAL_ARGUMENTS_FILE": {
+        "input": "arguments/fixture_24.jls"
+      },
+      "FIRSTUSE_ACTUAL_ARGUMENTS_SHA256": "4de0950667fd87609f3467dde301018a5922c6771e3abc0a70b1086784d5b227"
+    },
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "classify_wannierization_u_periodicity",
+    "public_target": "classify_wannierization_u_periodicity",
+    "fixture": "fixtures/entry_2.jl",
+    "supports": [
+      "OperatorBundleTestSupport.jl",
+      "ResponseTestSupport.jl",
+      "DocumentedExampleTestSupport.jl",
+      "WannierizationFixtureSupportDataOnly.jl"
+    ],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "44b605852447625818614dab001bdacd8f1e9e275297fb60d10e519cd3284ac6",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification",
+    "backend_contract": "Root-owned fixture definitions may activate unrelated OperatorBundle; required Wannierization owner remains absent"
+  },
+  {
+    "id": "configure_band_qualification_window!",
+    "public_target": "configure_band_qualification_window!",
+    "fixture": "fixtures/entry_15.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "8602c6f75ba020ac5a3a04194cb286d7a6239d322bc14709fcc8e65c69845183",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "construct_symmetry_adapted_wannier_functions",
+    "public_target": "construct_symmetry_adapted_wannier_functions",
+    "fixture": "fixtures/entry_3.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [
+      "result.restart_state.elapsed_seconds"
+    ],
+    "fixture_origin_sha256": "b729fed640dc296eaf25ad88ac6c7247d8eb59d16ee816a6d234f98520d6b262",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "detect_magnetic_symmetry_inventory__type1",
+    "public_target": "detect_magnetic_symmetry_inventory",
+    "fixture": "fixtures/entry_29.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "25ee1da7d19453acc5bb9e5da1d6bda7ddaadd56275904762fcc10e73ff7afeb",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "detect_magnetic_symmetry_inventory__type3",
+    "public_target": "detect_magnetic_symmetry_inventory",
+    "fixture": "fixtures/entry_30.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "334c964d4c31d7c15cdd16bcbb5218289859cb492fbb48fcd0b1e62b627c23e5",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "detect_symmetry_operations",
+    "public_target": "detect_symmetry_operations",
+    "fixture": "fixtures/entry_6.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "efa1ad1fb8989e76b6fca5d003e3381384375e98f38f11c02a1d7279f43231b8",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "detect_tb_compatibility_symmetry_operations",
+    "public_target": "detect_tb_compatibility_symmetry_operations",
+    "fixture": "fixtures/entry_15.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "8602c6f75ba020ac5a3a04194cb286d7a6239d322bc14709fcc8e65c69845183",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "diagnose_wannier_gauge_chain",
+    "public_target": "diagnose_wannier_gauge_chain",
+    "fixture": "fixtures/entry_28.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "7d563da638f8d3eeaff6bf09653d3c218cce396fa5de21f5f035c2b669a1caf1",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "evaluate_full_3d_wannier_spreads",
+    "public_target": "evaluate_full_3d_wannier_spreads",
+    "fixture": "fixtures/entry_59.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "27e98389411e0bf2acef547608dcfcb60332f64036eeb07bfadb4e22d878db08",
+    "environment": {
+      "FIRSTUSE_ACTUAL_ARGUMENTS_FILE": {
+        "input": "arguments/fixture_25.jls"
+      },
+      "FIRSTUSE_ACTUAL_ARGUMENTS_SHA256": "22ec0881c14d7c57579b5af14405400c2c95ca89517def9f0fe9060f4f7f6e39"
+    },
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "evaluate_full_3d_wannier_spreads_nonzero_unitary_frames",
+    "public_target": "evaluate_full_3d_wannier_spreads",
+    "fixture": "fixtures/entry_60.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "51f4c01df117d3e0055c83bc2551b656ad80bace26f430fb9abc446d366e7db2",
+    "environment": {
+      "FIRSTUSE_ACTUAL_ARGUMENTS_FILE": {
+        "input": "arguments/fixture_26.jls"
+      },
+      "FIRSTUSE_ACTUAL_ARGUMENTS_SHA256": "132f2af44cda6d4e9ade029afecf5566120dc4690d3bd6f80ea31d7bad7a6402"
+    },
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "generate_qe_paw_matrix_elements",
+    "public_target": "generate_qe_paw_matrix_elements",
+    "fixture": "fixtures/entry_36.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "e6f7786c9658d0ca87c0d2673c814a3ad6665decb36ca2299e2d860030a9de91",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "generate_qe_paw_spn",
+    "public_target": "generate_qe_paw_spn",
+    "fixture": "fixtures/entry_37.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "5663b9c2503e85efc78956338aadade6f401d1484083136f2c46c0ea1618deeb",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "generate_symmetry_completed_qe_paw_matrix_elements",
+    "public_target": "generate_symmetry_completed_qe_paw_matrix_elements",
+    "fixture": "fixtures/entry_38.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "b362c266fced1fd2ba27839f2c47434679f660ea0e0ca0784297011142899e06",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "generate_vasp_band_representation",
+    "public_target": "generate_vasp_band_representation",
+    "fixture": "fixtures/entry_31.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "020fc773fb3e08f2c2272536e120dbc07208f6f8ed5d2241e1ef4be928f6fe3f",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "generate_vasp_paw_matrix_elements",
+    "public_target": "generate_vasp_paw_matrix_elements",
+    "fixture": "fixtures/entry_32.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "0fb011863c4faa1dc87c9a4b95aaf604b77697033a9b8f632c708a8d3a99c5e8",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "generate_vasp_paw_spn",
+    "public_target": "generate_vasp_paw_spn",
+    "fixture": "fixtures/entry_33.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "a0117226d0123779b10833bd1a6b0d11a2fbaaf6c99fdff5ffe2a22d6db3f0b1",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "generate_wannier_amn",
+    "public_target": "generate_wannier_amn",
+    "fixture": "fixtures/entry_39.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "71339fa14fd379862ad26af39eca8dade82fca20413474a1af1748320843e5ae",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "generate_wannier_shu",
+    "public_target": "generate_wannier_shu",
+    "fixture": "fixtures/entry_34.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "dbbf8a41ffa5bc6a721fe0e68ce63917e4751dfa9cec2a98096905f6728806bd",
+    "environment": {
+      "FIRSTUSE_HAM_NATIVE_DIRECTORY": {
+        "input": "assets/native_directory_2"
+      },
+      "FIRSTUSE_HAM_NATIVE_IDENTITIES": {
+        "input": "assets/additional_39/all_frozen_source_files.json"
+      }
+    },
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "generate_wannier_siu",
+    "public_target": "generate_wannier_siu",
+    "fixture": "fixtures/entry_35.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "65c7a3accec96066818dea10df0bff41eca72b7e08ac1a17dd23731a7af038d4",
+    "environment": {
+      "FIRSTUSE_HAM_NATIVE_DIRECTORY": {
+        "input": "assets/native_directory_2"
+      },
+      "FIRSTUSE_HAM_NATIVE_IDENTITIES": {
+        "input": "assets/additional_39/all_frozen_source_files.json"
+      }
+    },
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "generate_wannier_uhu",
+    "public_target": "generate_wannier_uhu",
+    "fixture": "fixtures/entry_40.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "10cd0061264dd0c8ae2f47de894f9b5bd1ce2ffcc8d8cc9bb38ea4c643da4a74",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "generate_wannier_uiu",
+    "public_target": "generate_wannier_uiu",
+    "fixture": "fixtures/entry_41.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [
+      "result.peak_memory_bytes"
+    ],
+    "fixture_origin_sha256": "05dab13c2131f70a1670dd1fbef656b64fe0d6af00331b14017dfff56180c748",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "materialize_projection_basis",
+    "public_target": "materialize_projection_basis",
+    "fixture": "fixtures/entry_47.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "1381bc78b059968fec74b55d20629bedcec38f7caade31cd11e01358d466a6e1",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "materialize_symmetry_adapted_wannierization_config",
+    "public_target": "materialize_symmetry_adapted_wannierization_config",
+    "fixture": "fixtures/entry_48.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "eea8a74a244a806b8d8fcf010a11355cd90ea44cb7bf03cadee575713d6b2dc5",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "maximum_real_space_covariance_error__original_projected_nonzero_input",
+    "public_target": "maximum_real_space_covariance_error",
+    "fixture": "fixtures/entry_54.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "e974d5ec509511b80b4eb50fa01f9bf487a1510986515cbac1e1cd81a46cd5c5",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "maximum_real_space_covariance_error__antiunitary_broken_nonzero",
+    "public_target": "maximum_real_space_covariance_error",
+    "fixture": "fixtures/entry_53.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "88201d492752e032768e277538aa39567d923b737bb37b6962e11ee56755d3ed",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "prepare_band_representation",
+    "public_target": "prepare_band_representation",
+    "fixture": "fixtures/entry_11.jl",
+    "supports": [
+      "OperatorBundleTestSupport.jl",
+      "ResponseTestSupport.jl",
+      "DocumentedExampleTestSupport.jl",
+      "WannierizationFixtureSupportDataOnly.jl"
+    ],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "8911d85abe7b1911115694d60160a95a5f8997f9c0ea56edff44333a01346d9e",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "prepare_exact_wannier_operator_bundle",
+    "public_target": "prepare_exact_wannier_operator_bundle",
+    "fixture": "fixtures/entry_42.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "99919abf0343af14a268463b629b8677c6bf4078bac7e350dde42b84a22545f4",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "prepare_paw_scdm_input_artifact",
+    "public_target": "prepare_paw_scdm_input_artifact",
+    "fixture": "fixtures/entry_43.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "eb45a11217383a57819568b4ba3c485d483466414aebc20f80cb18020dc07baa",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "prepare_symmetry_covariant_wavefunctions",
+    "public_target": "prepare_symmetry_covariant_wavefunctions",
+    "fixture": "fixtures/entry_44.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "0a9c274cb2c35e6aee4bbe150100c1948fc6e33ab294cd121faa797610ae19c0",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "prepare_wannier_operator_target_contract",
+    "public_target": "prepare_wannier_operator_target_contract",
+    "fixture": "fixtures/entry_49.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "11d2d9f2eab8c8a8924cf3612252262dd461f4e309cbe60ceae7b6967e212d74",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "qualify_exported_wannierization_tb",
+    "public_target": "qualify_exported_wannierization_tb",
+    "fixture": "fixtures/entry_23.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "65ad3ff33dce0e67d56d3a3091d08558f5f3b2daaa172ab51095da0f9ba42825",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "qualify_response_symmetry_wannier90",
+    "public_target": "qualify_response_symmetry_wannier90",
+    "fixture": "fixtures/entry_50.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "c09614bca9542d88a2b59195cbd23f63d0e8011189a35d215cdb66eea0508267",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "read_band_representation_hdf5",
+    "public_target": "read_band_representation_hdf5",
+    "fixture": "fixtures/entry_19.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "909c1b68693b77fa2edf0083f2e39a471c291af771683f5177f4b0fdeafe4342",
+    "environment": {
+      "FIRSTUSE_FROZEN_READER_INPUT": {
+        "input": "assets/additional_1/frozen_reader_input.h5"
+      },
+      "FIRSTUSE_FROZEN_READER_SHA256": "786fd74ec52440267bb39f3d65d4b0c071694a3acaee6ef6ab298884e8d537de"
+    },
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "read_band_representation_preparation_hdf5",
+    "public_target": "read_band_representation_preparation_hdf5",
+    "fixture": "fixtures/entry_15.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "8602c6f75ba020ac5a3a04194cb286d7a6239d322bc14709fcc8e65c69845183",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "read_paw_scdm_input_artifact",
+    "public_target": "read_paw_scdm_input_artifact",
+    "fixture": "fixtures/entry_20.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "0c431d0cc9a0cd41014ddfce73e90651539e04674856a6317c6b0b644e1f97c8",
+    "environment": {
+      "FIRSTUSE_FROZEN_READER_INPUT": {
+        "input": "assets/additional_3/frozen_reader_input.h5"
+      },
+      "FIRSTUSE_FROZEN_READER_SHA256": "d54b8bf38f118e15b57861d788adf99041cbe464cb544b982b1a49f886142c56"
+    },
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "read_projection_representation_search_hdf5",
+    "public_target": "read_projection_representation_search_hdf5",
+    "fixture": "fixtures/entry_21.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "c9d6e905f4b7685189db0a4781b701f8ceae97c32e71caebd71804ebf2fc688e",
+    "environment": {
+      "FIRSTUSE_FROZEN_READER_INPUT": {
+        "input": "assets/additional_4/frozen_reader_input.h5"
+      },
+      "FIRSTUSE_FROZEN_READER_SHA256": "44f9af72b868398e392e98ec85e038f315344f59c757ec29eba1dace43353d7d"
+    },
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "read_qe_paw_spn_provenance",
+    "public_target": "read_qe_paw_spn_provenance",
+    "fixture": "fixtures/entry_18.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "custom",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "401668802956d55437eef3cea00554448f7bf3b19b83b743a1154a9d79218c36",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification",
+    "input": "assets/native_directory_2/qe-native.spn.json"
+  },
+  {
+    "id": "read_vasp_paw_spn_provenance",
+    "public_target": "read_vasp_paw_spn_provenance",
+    "fixture": "fixtures/entry_57.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "f0a2fa0bfdec8dce1a64d7743a0ee2076fa8359341b0b92cda1f30d741cd62a9",
+    "environment": {
+      "FIRSTUSE_FROZEN_READER_INPUT": {
+        "input": "assets/additional_41/vasp_spn.h5"
+      },
+      "FIRSTUSE_FROZEN_READER_SHA256": "e8c65a1bb579b9680852d0b4bf907a5b6179610efb630d91e4244e78c152aec1"
+    },
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "read_wannierization_checkpoint_hdf5",
+    "public_target": "read_wannierization_checkpoint_hdf5",
+    "fixture": "fixtures/entry_8.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [
+      "result.restart_state.elapsed_seconds"
+    ],
+    "fixture_origin_sha256": "99f7fcca0b211edde45b1d11f9c4b26511acb5e208e7aa68c285503faec84974",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "read_wannierization_fixed_subspace_hdf5",
+    "public_target": "read_wannierization_fixed_subspace_hdf5",
+    "fixture": "fixtures/entry_22.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "7add47b38f163a566f18da4fea342f37c51c92c075fcbfa894f2e809fbb3c86c",
+    "environment": {
+      "FIRSTUSE_FROZEN_READER_INPUT": {
+        "input": "assets/additional_5/frozen_reader_input.h5"
+      },
+      "FIRSTUSE_FROZEN_READER_SHA256": "0e437d462f6798051c45d78cb38c6155d06d4b508f741d5192fadc6eb76bb95e"
+    },
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "response_symmetry_group_report",
+    "public_target": "response_symmetry_group_report",
+    "fixture": "fixtures/entry_15.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "8602c6f75ba020ac5a3a04194cb286d7a6239d322bc14709fcc8e65c69845183",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "screen_wannier_mesh",
+    "public_target": "screen_wannier_mesh",
+    "fixture": "fixtures/entry_45.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "eadc7b43f75de58fb8748484a5be7d5ccb322cce3f0bed26027ca5300c57c793",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "search_projection_representations",
+    "public_target": "search_projection_representations",
+    "fixture": "fixtures/entry_51.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "f8574ed722ea845ddcdec892b85121153c4994c7df631c0815f7310261744e79",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "smv_fletcher_reeves_two_stage_audit",
+    "public_target": "smv_fletcher_reeves_two_stage_audit",
+    "fixture": "fixtures/entry_52.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "2d54be84c81390daec5ac1e5fa399848a92533f59afbed2b19c610f621480c94",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "smv_fletcher_reeves_two_stage_audit_contract_sha256",
+    "public_target": "smv_fletcher_reeves_two_stage_audit_contract_sha256",
+    "fixture": "fixtures/entry_9.jl",
+    "supports": [
+      "OperatorBundleTestSupport.jl",
+      "ResponseTestSupport.jl",
+      "DocumentedExampleTestSupport.jl",
+      "WannierizationFixtureSupportDataOnly.jl"
+    ],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "d54eb7e5cbfd4d0d78cdcd2addb746b82d9c3b4de9ed25281b247c40d50604f9",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "symmetrize_existing_wannier_model",
+    "public_target": "symmetrize_existing_wannier_model",
+    "fixture": "fixtures/entry_46.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "73cadeff5a6ff879a0cb90a255c98a6543b7661f6b0ffb2fd83cfa59bff7b796",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "symmetrize_real_space_operator",
+    "public_target": "symmetrize_real_space_operator",
+    "fixture": "fixtures/entry_26.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "b896f24ebea2fc0977e1cd0e7a023bfca602e8e539969fb2f4ad56608fba95f2",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "symmetrize_wannier_operators",
+    "public_target": "symmetrize_wannier_operators",
+    "fixture": "fixtures/entry_27.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "b10ead31317ad24790fe2685236996aae8979d602851c93d68320c88e26724fb",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "symmetry_detection_backend_provenance",
+    "public_target": "symmetry_detection_backend_provenance",
+    "fixture": "fixtures/entry_15.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "8602c6f75ba020ac5a3a04194cb286d7a6239d322bc14709fcc8e65c69845183",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "validate_band_representation",
+    "public_target": "validate_band_representation",
+    "fixture": "fixtures/entry_15.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "8602c6f75ba020ac5a3a04194cb286d7a6239d322bc14709fcc8e65c69845183",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "validate_band_representation_compatibility",
+    "public_target": "validate_band_representation_compatibility",
+    "fixture": "fixtures/entry_10.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "f6ff1f87249a4bc82fa2c49f076ffcf9dc6fa72024ca92f5f5b3b9e8351081c6",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "validate_public_band_representation_contract",
+    "public_target": "validate_public_band_representation_contract",
+    "fixture": "fixtures/entry_7.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "e899e99ba2cdccfb3b0cfd2c2e3b185efe8c20371a5abf3dfad18456ab2d3d4a",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "validate_unified_representation_mode_contract",
+    "public_target": "validate_unified_representation_mode_contract",
+    "fixture": "fixtures/entry_7.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "e899e99ba2cdccfb3b0cfd2c2e3b185efe8c20371a5abf3dfad18456ab2d3d4a",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "write_band_representation_hdf5",
+    "public_target": "write_band_representation_hdf5",
+    "fixture": "fixtures/entry_12.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "1953491b89e07fed7506fe8b7c9e79983285ffbe9128481c83456478df93ed40",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "write_band_representation_summary",
+    "public_target": "write_band_representation_summary",
+    "fixture": "fixtures/entry_17.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "custom",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "00e65865e6ca4a0cf0086424295ae2d383bb665f0bff5184e67762ea0907dc14",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification",
+    "prerequisite": "validate_band_representation",
+    "pipeline_contract": "Required Foundation backend absent before actual public validation, present before first writer because validation result is extension-owned"
+  },
+  {
+    "id": "write_projection_representation_search_hdf5",
+    "public_target": "write_projection_representation_search_hdf5",
+    "fixture": "fixtures/entry_56.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "cb150a4f609f32492a6c5c67a45aa5cea79c2201fbab5b65581be51871f6d326",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "write_response_symmetry_artifact",
+    "public_target": "write_response_symmetry_artifact",
+    "fixture": "fixtures/entry_13.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "f38fd9764ae7db18fb75ccd2264c896c25ce313c9ffad067295d72ea521714d9",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "write_wannierization_checkpoint_hdf5",
+    "public_target": "write_wannierization_checkpoint_hdf5",
+    "fixture": "fixtures/entry_24.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "8bc9d8643f84b36e3cd2bc35659e64f0e1068de42231e1e60788229140e1eca5",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "write_wannierization_fixed_subspace_hdf5",
+    "public_target": "write_wannierization_fixed_subspace_hdf5",
+    "fixture": "fixtures/entry_25.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "5e028ea02e39c618147f2e194f0a403a9f68506a02ffa25e10f6012fc8f34a33",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "write_wannierization_u_convergence_diagnostics_hdf5",
+    "public_target": "write_wannierization_u_convergence_diagnostics_hdf5",
+    "fixture": "fixtures/entry_14.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "2e5ad3f709a3610b314983e3f9165b208971399538f690c0037e14dd33658bc3",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "construct_symmetry_adapted_wannier_functions__localization8",
+    "public_target": "construct_symmetry_adapted_wannier_functions",
+    "fixture": "fixtures/entry_4.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [
+      "result.restart_state.elapsed_seconds"
+    ],
+    "fixture_origin_sha256": "3ff86cb9e167e120c1393f7d0e23b5cbe89800cccdba572ffa27c2d3a461e5b7",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  },
+  {
+    "id": "construct_symmetry_adapted_wannier_functions__localization8__mpi12",
+    "public_target": "construct_symmetry_adapted_wannier_functions",
+    "fixture": "fixtures/entry_5.jl",
+    "supports": [],
+    "mpi_size": 12,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [
+      "result.restart_state.elapsed_seconds"
+    ],
+    "fixture_origin_sha256": "ce309913f9aba8a9b04f8ca8edfcc80d60adcf409296ba8e7e2d135ad6cf9564",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification",
+    "mpi_compilation_aggregation": "maximum over all 12 actual ranks",
+    "mpi_initialization": "explicit setup outside target timer, original expert MPI contract"
+  },
+  {
+    "id": "prepare_band_representation__augmentation_required_pipeline",
+    "public_target": "prepare_band_representation",
+    "fixture": "fixtures/entry_55.jl",
+    "supports": [],
+    "mpi_size": 1,
+    "kind": "generic",
+    "compile_limit_seconds": 0.5,
+    "predeclared_samples": 2,
+    "required_absent_backends": [
+      "WannierNLQGWannierizationPrecompileExt",
+      "WannierNLQGWannierizationExt",
+      "WannierNLQGOperatorBundleExt",
+      "WannierNLQGSymmetryFoundationExt",
+      "WannierNLQGSymmetrizationExt"
+    ],
+    "excluded_return_fields": [],
+    "fixture_origin_sha256": "acc35968d7bce110aaf30fd83643103085dcbc4a83f154e1043348776258dc4f",
+    "environment": {},
+    "validity": "Original frozen assertions and native scientific readback; not solver quality qualification"
+  }
+]

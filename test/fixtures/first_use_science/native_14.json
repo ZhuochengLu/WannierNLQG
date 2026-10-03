@@ -1,0 +1,88 @@
+{
+  "original_artifact_attestation": null,
+  "original_report_sha256": "8112362ffe05a1387d101c64442743fcf50bba20e21bdddfdffbb83b714a04dd",
+  "report": [
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "payload_hex": "00000000000000000000000000000000",
+      "shape": [
+        1,
+        1
+      ]
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "payload_hex": "00000000000000000000000000000000",
+      "shape": [
+        1,
+        1
+      ]
+    },
+    {
+      "finite": true,
+      "max_abs": 1.0,
+      "payload_hex": "000000000000f03f0000000000000000",
+      "shape": [
+        1,
+        1
+      ]
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "payload_hex": "00000000000000000000000000000000",
+      "shape": [
+        1,
+        1
+      ]
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "payload_hex": "00000000000000000000000000000000",
+      "shape": [
+        1,
+        1
+      ]
+    },
+    {
+      "finite": true,
+      "max_abs": 2.0,
+      "payload_hex": "00000000000000400000000000000000",
+      "shape": [
+        1,
+        1
+      ]
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "payload_hex": "00000000000000000000000000000000",
+      "shape": [
+        1,
+        1
+      ]
+    },
+    {
+      "finite": true,
+      "max_abs": 0.0,
+      "payload_hex": "00000000000000000000000000000000",
+      "shape": [
+        1,
+        1
+      ]
+    },
+    {
+      "finite": true,
+      "max_abs": 3.0,
+      "payload_hex": "00000000000008400000000000000000",
+      "shape": [
+        1,
+        1
+      ]
+    }
+  ],
+  "schema": 1
+}

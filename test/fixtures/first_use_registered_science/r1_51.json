@@ -1,0 +1,55 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__zeeman_interband_berry_curvature__conventional",
+  "native_science": {
+    "kslice_zeeman_interband_berry_curvature_conventional/synthetic_demo_zibck_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "bf905f3d9cbc1fab",
+        "bf905f3d9cbc1fab",
+        "bf905f3d9cbc1fab",
+        "bf905f3d9cbc1fab",
+        "bf6a64cf0d4d9988",
+        "bf6a64cf0d4d9988",
+        "bf6a64cf0d4d9988",
+        "bf6a64cf0d4d9988",
+        "3f715c345beea591",
+        "3f715c345beea591",
+        "3f715c345beea591",
+        "3f715c345beea591",
+        "3f8f222000382249",
+        "3f8f222000382249",
+        "3f8f222000382249",
+        "3f8f222000382249"
+      ],
+      "nonzero_scientific_values": 16,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.01598831433423668,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_zeeman_interband_berry_curvature_conventional/synthetic_demo_zibck_conv.dat",
+      "sha256": "fd48cd01b9d70d448a68d31a9d94972116b8ea3fba2eaafa2161d7c15dc17847"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "7b187ce88df1ccbc8788937e5fd1f01d1a87e13d928da28ebfe4b234434fecdd"
+  ],
+  "original_receipt_sha256": "7b187ce88df1ccbc8788937e5fd1f01d1a87e13d928da28ebfe4b234434fecdd",
+  "rank_output_inventory": [
+    [
+      "kslice_zeeman_interband_berry_curvature_conventional/synthetic_demo_zibck_conv.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "zeeman_interband_berry_curvature/k_slice/conventional"
+  ]
+}

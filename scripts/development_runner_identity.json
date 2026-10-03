@@ -1,0 +1,13 @@
+{
+  "schema": "wanniernlqg.development-runner/1",
+  "core_sha256": {
+    "adapters.py": "8478a8f512ff80bcfa38eeb2a27eaf24e8f4ba5ffbbc0cb6c171aeba174b7943",
+    "comparison_contract.py": "c7f00dbc16350ca3c2294da21f05d5a2fd0f90b457fdcb9368593ffea47d33dd",
+    "darwin_process_resources.py": "c1fcd8086c47e6b2fd9202344023d01ca9d1a895e3ffaee58c633cf22c33cd28",
+    "identity.py": "acc37f25e7ef038cbfbb7abb79ed29463cc87716dfe825c698956a259f0d2c86",
+    "process_resources.py": "379c2da574b65b406ae13949e7dfa944038090a82dbef6ac85294c9447242be6",
+    "resource_policy.py": "c8ee8de85ecebfe4e81f1659cfce0c9f67000e83cb5eb9504d6603152a8a60ea",
+    "runner.py": "e26e2e018e90f07d0147ccbf297a802eb3a24ed4338a631043143af6152ef85e"
+  },
+  "integration_sha256": "c9021c571a6d0123440ca2774528ce4fa97b4a9329ed6532c514aefa49519a82"
+}

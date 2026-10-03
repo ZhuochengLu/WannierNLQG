@@ -1,6 +1,10 @@
 const BAND_REPRESENTATION_SCHEMA = "WannierNLQG.band_representation"
 const BAND_REPRESENTATION_SCHEMA_VERSION = "1.0"
 
+# Hash the exact input-file bytes for persisted BandRepresentation source provenance.
+_band_source_sha256_file(filename::AbstractString) =
+    WannierNLQG.SymmetryFoundation.sha256_file(filename)
+
 """Return the current BandRepresentation writer schema version."""
 band_representation_schema_version() = BAND_REPRESENTATION_SCHEMA_VERSION
 const BAND_REPRESENTATION_READABLE_SCHEMA_VERSIONS = ("1.0",)
@@ -1708,6 +1712,37 @@ function write_band_representation_summary(
     return path
 end
 
+"""Complete the canonical in-memory VASP stage without altering its scientific arrays."""
+function _complete_vasp_public_representation(representation::BandRepresentation)
+    representation.schema_version == "1.5" ||
+        throw(ArgumentError("VASP canonical representation must be a schema-1.5 stage"))
+    conventions = copy(representation.conventions)
+    conventions["requested_wannierization_mode"] = "symmetry_adapted"
+    conventions["effective_wannierization_mode"] = "symmetry_adapted"
+    conventions["representation_source"] = "detected"
+    conventions["symmetry_constraints_applied"] = "true"
+    return BandRepresentation(
+        BAND_REPRESENTATION_SCHEMA_VERSION,
+        representation.source_code,
+        representation.spinor,
+        representation.real_lattice,
+        representation.reciprocal_lattice,
+        representation.mp_grid,
+        representation.kpoints_fractional,
+        representation.energies_ev,
+        representation.operations,
+        representation.kpoint_map,
+        representation.reciprocal_shifts,
+        representation.sewing_matrices,
+        representation.band_block_labels,
+        representation.irreducible_indices,
+        representation.full_to_irreducible,
+        representation.full_to_operation;
+        conventions,
+        input_sha256 = representation.input_sha256,
+    )
+end
+
 """Generate, validate, and persist one native VASP band representation."""
 function generate_vasp_band_representation(config::VASPBandRepresentationConfig)
     config.spin_channel > 0 || throw(ArgumentError("spin_channel must be positive"))
@@ -1771,7 +1806,7 @@ function generate_vasp_band_representation(config::VASPBandRepresentationConfig)
         diagnostic_frozen_masks,
         return_diagnostics = true,
     )
-    representation = built.representation
+    representation = _complete_vasp_public_representation(built.representation)
     representation.input_sha256["EIG"] = _band_source_sha256_file(config.eig_file)
     configure_band_qualification_window!(representation, config.qualification_window_ev)
     validation = validate_band_representation(

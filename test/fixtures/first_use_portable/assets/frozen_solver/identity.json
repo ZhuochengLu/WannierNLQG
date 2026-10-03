@@ -1,0 +1,29 @@
+{
+  "files": [
+    {
+      "file": "synthetic.win",
+      "sha256": "141702f3bdf5cd0367244156b31b6894beca35cb67dec75f9bd4317e912746dc",
+      "bytes": 13
+    },
+    {
+      "file": "synthetic.eig",
+      "sha256": "ac686efc3efc59bf886f988c8e3978c2fc139c1bc3395bb8db8ae8906842d8b9",
+      "bytes": 34
+    },
+    {
+      "file": "synthetic.mmn",
+      "sha256": "8988bcaca70cad3f1987a2d41f97e896bb3064efbb04e1200f74fab9d6d37445",
+      "bytes": 558
+    },
+    {
+      "file": "synthetic.band-representation.h5",
+      "sha256": "499b9415d594bc527f12b8957f6f9676ce730818305cdd73975b3676d00ea658",
+      "bytes": 25290
+    },
+    {
+      "file": "synthetic.wannierization.h5",
+      "sha256": "94cb21b92e1f99a09e45251799c6d0da90f9489675cca2d045c364e05386c2b6",
+      "bytes": 72802
+    }
+  ]
+}

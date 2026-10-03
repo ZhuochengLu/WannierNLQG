@@ -1,0 +1,55 @@
+{
+  "expected_nonzero": true,
+  "id": "kslice__berry_curvature__conventional",
+  "native_science": {
+    "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat": {
+      "headers": [],
+      "native_float_bits": [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "3f654b743d420281",
+        "3f654b743d420281",
+        "3f654b743d420281",
+        "3f654b743d420281",
+        "bbd8955d4d3d6ac0",
+        "bbd8955d4d3d6ac0",
+        "bbd8955d4d3d6ac0",
+        "bbd8955d4d3d6ac0",
+        "bf654b743d420281",
+        "bf654b743d420281",
+        "bf654b743d420281",
+        "bf654b743d420281"
+      ],
+      "nonzero_scientific_values": 12,
+      "science_skip_columns": 0,
+      "scientific_max_abs": 0.0025994558619120704,
+      "scientific_value_count": 16,
+      "shape": [
+        4,
+        4
+      ]
+    }
+  },
+  "original_artifacts": [
+    {
+      "file": "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat",
+      "sha256": "a03cf9f4c82922c1c8ac36c08f81776b79d2779089ff21f315a23021c48e5fbc"
+    }
+  ],
+  "original_producer_release_tree_sha256": "e67d99a0afdcd890cbd3d1fb8695f461c27617f3c04c03472c1d4579ab796fc7",
+  "original_rank_receipt_sha256s": [
+    "ea05983b5ff01338ccdc9a7ab80589cd3dfe4c4d4f15630578ad1cc288f5045a"
+  ],
+  "original_receipt_sha256": "ea05983b5ff01338ccdc9a7ab80589cd3dfe4c4d4f15630578ad1cc288f5045a",
+  "rank_output_inventory": [
+    [
+      "kslice_berry_curvature_conventional/synthetic_demo_bck_subspace_1_2_conv.dat"
+    ]
+  ],
+  "ranks": 1,
+  "task_labels": [
+    "berry_curvature/k_slice/conventional"
+  ]
+}
