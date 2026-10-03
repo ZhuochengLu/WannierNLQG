@@ -5,7 +5,7 @@ sys.dont_write_bytecode = True  # Detached helpers must not write into the sourc
 import argparse, contextlib, fcntl, hashlib, json, os, re, shutil, signal
 import subprocess, sys, time
 from pathlib import Path
-from identity import identity, alive, signal_owned, descendants, signal_process, parent_pid
+from identity import identity, alive, signal_owned, descendants, signal_process, parent_pid, owned_rss_kib, process_snapshot, parent_pid
 import process_resources
 import ctypes
 import uuid
@@ -67,14 +67,14 @@ def lock(path):
 
 
 def tools_identity():
-    names=('runner.py','identity.py','process_resources.py','darwin_process_resources.py','adapters.py','resource_policy.py','comparison_contract.py')
+    names=('runner.py','identity.py','process_resources.py','darwin_process_resources.py','adapters.py','resource_policy.py','comparison_contract.py','mpi_ownership.py')
     return {**{n:digest(HERE/n) for n in names},'python_executable':digest(sys.executable)}
 
 
 def validate(spec):
     allowed={'schema','run_id','adapter','limits','stages','acceptance','process_contract','qualification'}
     if set(spec)-allowed: raise ValueError('unsupported request fields: '+str(sorted(set(spec)-allowed)))
-    if spec.get('process_contract')!='foreground_owned_group':
+    if spec.get('process_contract') not in ('foreground_owned_group','foreground_owned_mpi'):
         raise ValueError('explicit foreground_owned_group contract required; daemonization/PGID escape unsupported')
     if spec.get('schema') != SCHEMA or not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', spec.get('run_id', '')):
         raise ValueError('invalid schema/run_id')
@@ -95,7 +95,7 @@ def validate(spec):
     if not .05 <= limits['sample_seconds'] <= 5: raise ValueError('invalid sample interval')
     names = []
     for s in spec['stages']:
-        if set(s)-{'name','argv','cwd','env','inputs','outputs'}: raise ValueError('unsupported stage fields')
+        if set(s)-{'name','argv','cwd','env','inputs','outputs','controlled_groups','mpi_ownership'}: raise ValueError('unsupported stage fields')
         names.append(s['name'])
         if not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', s['name']): raise ValueError('bad stage name')
         if not s['argv'] or any(not isinstance(a, str) or '\0' in a for a in s['argv']): raise ValueError('argv must be strings')
@@ -107,6 +107,23 @@ def validate(spec):
             if not Path(p).is_absolute() or digest(p) != sha: raise ValueError('input hash mismatch: '+p)
         if s['argv'][0] not in s['inputs']: raise ValueError('executable must be included in input hashes')
         if any(not relative_output(n) for n in s.get('outputs',[])): raise ValueError('outputs must be safe stage-relative paths')
+        if 'mpi_ownership' in s:
+            if spec['process_contract']!='foreground_owned_mpi': raise ValueError('explicit foreground_owned_mpi required')
+            from mpi_ownership import validate as validate_mpi
+            validate_mpi(s, limits.get('cpu_budget',1))
+        if 'controlled_groups' in s:
+            policy=s['controlled_groups']
+            q=spec.get('qualification',{}).get(s['name'],{})
+            if spec['adapter']!='full' or q.get('kind')!='full' or set(policy)!={'kind','driver'} or policy['kind']!='ci_scheduler_selftest':
+                raise ValueError('controlled groups only support pinned Full scheduler self-tests')
+            package=Path(q['source_root']).resolve()
+            driver=str(package/'test/run_tests_unit.py')
+            if policy['driver']!=driver or driver not in s['inputs'] or len(s['argv'])<4 or s['argv'][1]!=str(package/'scripts/run_tests.py') or s['argv'][2]!=spec['adapter'] or '--owned-group' not in s['argv']:
+                raise ValueError('controlled scheduler group source/command mismatch')
+            controlled_fake_bytes(s)
+
+    if spec['process_contract']=='foreground_owned_mpi' and not any('mpi_ownership' in s for s in spec['stages']): raise ValueError('MPI ownership catalogue required')
+
     for stage_name,gates in spec.get('acceptance',{}).items():
         stage=next((s for s in spec['stages'] if s['name']==stage_name),None)
         if stage is None: raise ValueError('unknown acceptance stage')
@@ -175,7 +192,7 @@ def terminal(stage, spec):
     if seal.exists():
         sealed=read(seal)
         required={'stage.json','owner.json','exit.json','stdout.log','stderr.log'}
-        required|={n for n in ('monitor.json','monitor_terminal.json','resources.jsonl','stop.json','members.json') if (stage/n).exists()}
+        required|={n for n in ('monitor.json','monitor_terminal.json','resources.jsonl','stop.json','members.json','controlled_groups_waiter.jsonl','controlled_groups_monitor.jsonl','mpi_terminal.json') if (stage/n).exists()}
         if set(sealed)!=required: raise ValueError('evidence seal coverage mismatch')
         for name,sha in sealed.items():
             if digest(stage/name) != sha: raise ValueError('evidence tampered: '+name)
@@ -185,6 +202,12 @@ def terminal(stage, spec):
         if digest(stage/name) != sha: raise ValueError('output hash mismatch: '+name)
     state = 'EXECUTED' if e['return_code'] == 0 else 'RUN_FAILED'
     if e.get('missing_outputs'): state='INFRASTRUCTURE_FAILED'
+    if spec.get('mpi_ownership'):
+        if not (stage/'mpi_terminal.json').exists(): state='INFRASTRUCTURE_FAILED'
+        else:
+            mpi=read(stage/'mpi_terminal.json')
+            if mpi.get('root')!=e['owner']['task'] or mpi.get('actual_root_exit')!=e['return_code']: raise ValueError('MPI terminal root identity/exit mismatch')
+            if mpi.get('cleanup_status')!='PASS' or mpi.get('remaining_owned'): state='INFRASTRUCTURE_FAILED'
     if e['stop_reason']:
         state = 'RESOURCE_LIMIT' if e['stop_reason'] in ('timeout','rss','disk_floor','host_swapouts_increased') else 'INFRASTRUCTURE_FAILED'
     if not (stage/'monitor_terminal.json').exists() or not seal.exists():
@@ -223,7 +246,7 @@ def reconcile(run):
     result['process_contract']=spec['process_contract']
     result['execution_status']='PASS' if state=='EXECUTED' else state
     result['resource_status']='PASS' if state=='EXECUTED' else state
-    result['qualification_scope']='foreground_owned_group contract; no daemonization or PGID escape permitted'
+    result['qualification_scope']=spec['process_contract']+' contract; only explicitly proved groups; no kernel containment'
     return result
 
 
@@ -275,6 +298,88 @@ def controller(run):
         if not (run/'fault_receipt').exists(): atomic(run/'receipt.json',result)
 
 
+def controlled_fake_bytes(stage):
+    """Extract the immutable generated fake executable from the pinned self-test."""
+    import ast
+    policy=stage['controlled_groups']; driver=policy['driver']
+    if digest(driver)!=stage['inputs'].get(driver): raise ValueError('scheduler driver changed')
+    nodes=ast.parse(Path(driver).read_text()).body
+    values=[n.value for n in nodes if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='FAKE' for t in n.targets)]
+    if len(values)!=1: raise ValueError('unsupported scheduler fake source')
+    value=ast.literal_eval(values[0])
+    if not isinstance(value,str) or not value.startswith('#!/usr/bin/env python3\n'): raise ValueError('unsupported scheduler fake bytes')
+    return value.encode()
+
+
+def owned_argv(owner):
+    """Read exact argv under matching start identity; no ps ambiguity/permission dependency."""
+    snapshot=process_snapshot(owner)
+    return snapshot['argv'] if snapshot else []
+
+
+def controlled_group_supported(stage, root, member, current, mpi_states=None):
+    """Admit only the exact pinned CI fake executable under its live test driver."""
+    if member['pgid']==root['pgid']: return True,None
+    if not alive(member): return True,None
+    if stage.get('mpi_ownership'):
+        from mpi_ownership import group_supported
+        ok,proof=group_supported(stage,root,member,current,mpi_states if mpi_states is not None else {})
+        if ok: return ok,proof
+    policy=stage.get('controlled_groups')
+    if not policy: return False,None
+    by_pid={m['pid']:m for m in current if alive(m)}
+    leader=by_pid.get(member['pgid'])
+    if leader is None or leader['pgid']!=leader['pid'] or member['pid'] not in by_pid: return False,None
+    # Both member and leader must still be foreground descendants of this root.
+    chain=[];pid=parent_pid(leader['pid']);seen=set()
+    while pid in by_pid and pid not in seen:
+        seen.add(pid);owner=by_pid[pid];chain.append(owner)
+        if pid==root['pid']: break
+        pid=parent_pid(pid)
+    driver=policy['driver']
+    def is_driver(owner):
+        args=owned_argv(owner)
+        return len(args)==2 and args[1]==driver
+    driver_owner=next((m for m in chain if is_driver(m)),None)
+    if driver_owner is None or not alive(driver_owner): return False,None
+    args=owned_argv(leader); expected=controlled_fake_bytes(stage)
+    # During fork/setsid/exec the leader can briefly retain its driver's argv.
+    # This is admitted only while the separate pinned parent driver remains live.
+    if len(args)==2 and args[1]==driver:
+        return True,dict(kind='ci_scheduler_exec_transition',leader=leader,driver_owner=driver_owner)
+    if len(args)<2: return (not alive(member)),None
+    fake=Path(args[2] if len(args)>2 and Path(args[0]).name=='env' and args[1]=='python3' else args[1])
+    try:
+        stat=fake.parent.stat()
+        if fake.name!='fake-julia' or not fake.is_absolute() or fake.is_symlink() or stat.st_uid!=os.getuid() or stat.st_mode & 0o077 or fake.read_bytes()!=expected:
+            return False,None
+    except OSError: return (not alive(member)),None
+    return True,dict(kind='ci_scheduler_exact_fake',leader=leader,driver_owner=driver_owner,
+                     driver=driver,driver_sha256=stage['inputs'][driver],fake_sha256=hashlib.sha256(expected).hexdigest())
+
+
+def process_groups_supported(stage, root, observed, current, directory, reporter, logged):
+    """Keep arbitrary PGID changes and reparented/background children rejected."""
+    for member in observed:
+        if not alive(member) or member['pgid']==root['pgid']: continue
+        ok,proof=controlled_group_supported(stage,root,member,current,logged.setdefault('mpi_states',{}))
+        if not ok:
+            leader=identity(member['pgid'])
+            append(directory/('controlled_groups_'+reporter+'.jsonl'),dict(kind='REJECTED',member=member,leader=leader,leader_argv=owned_argv(leader) if leader else [],ancestor_snapshot=[dict(owner=m,parent=parent_pid(m['pid']),argv=owned_argv(m)) for m in current if m['pid'] in (member['pid'],member['pgid'],parent_pid(member['pgid']))]))
+            return False
+        if proof:
+            key=(proof['leader']['pid'],str(proof['leader']['start']))
+            state=logged.setdefault(key,dict(started=time.monotonic(),kinds=[]))
+            if proof['kind']=='ci_scheduler_exec_transition' and time.monotonic()-state['started']>.5:
+                append(directory/('controlled_groups_'+reporter+'.jsonl'),dict(kind='REJECTED_EXEC_TRANSITION_TIMEOUT',leader=proof['leader']))
+                return False
+            if proof['kind'] not in state['kinds']:
+                append(directory/('controlled_groups_'+reporter+'.jsonl'),proof);state['kinds'].append(proof['kind'])
+    return True
+
+
+
+
 def terminate(owner, observed=()):
     # Files are evidence, never authority to signal an arbitrary current process.
     members=descendants(owner)+list(observed)
@@ -305,7 +410,7 @@ def waiter(d):
             os.dup2(out,1);os.dup2(err,2);os.close(out);os.close(err)
             os.execve(s['argv'][0],s['argv'],s['env'])
         except BaseException: os._exit(126)
-    os.close(r); monitor=None; released=False; rc=None; reason=None; observed={}
+    os.close(r); monitor=None; released=False; rc=None; reason=None; observed={}; group_proofs={}
     try:
         task=None
         for _ in range(100):
@@ -324,8 +429,9 @@ def waiter(d):
         else: raise RuntimeError('monitor not ready')
         os.write(w,b'G');os.close(w);released=True
         while True:
-            for member in descendants(task): observed[(member['pid'],str(member['start']))]=member
-            if any(m['pgid']!=task['pgid'] for m in observed.values() if alive(m)):
+            current=descendants(task)
+            for member in current: observed[(member['pid'],str(member['start']))]=member
+            if not process_groups_supported(s,task,observed.values(),current,d,'waiter',group_proofs):
                 reason='unsupported_process_escape';terminate(task,observed.values())
             # waitid WNOWAIT retains leader identity until owned group cleanup.
             if exited_unreaped(pid): break
@@ -340,6 +446,16 @@ def waiter(d):
         for member in observed.values(): signal_process(member,signal.SIGKILL)
         _,status=os.waitpid(pid,0)
         rc=os.waitstatus_to_exitcode(status)
+        if s.get('mpi_ownership'):
+            records=list(group_proofs.get('mpi_states',{}).values())
+            # Terminal observations, not invented wait statuses for grandchildren.
+            deadline=time.monotonic()+1
+            while any(alive(m) for m in observed.values()) and time.monotonic()<deadline: time.sleep(.025)
+            remaining=[m for m in observed.values() if alive(m)]
+            if remaining: reason=reason or 'mpi_cleanup_incomplete'
+            atomic(d/'mpi_terminal.json',dict(schema='local_openmpi-terminal/1',root=task,actual_root_exit=rc,
+                records=[dict(leader=x.get('leader'),binding=x['bound'],rank=x.get('rank'),kind=x.get('kind'),leader_alive=alive(x.get('leader')),launcher_alive=alive(x['bound']['launcher']),rank_exit_status='NOT_OBSERVED_BY_CORE') for x in records if x.get('bound')],
+                remaining_owned=remaining,cleanup_status='PASS' if not remaining else 'UNKNOWN',scope='root waitpid authoritative; rank and nested launcher exits not waitable by this parent'))
         if (d/'stop.json').exists(): reason=read(d/'stop.json')['reason']
         e={'schema':SCHEMA,'run_id':record['run_id'],'stage_sha256':hashlib.sha256(canonical(s)).hexdigest(),
            'owner':owner_record,'return_code':rc,'stop_reason':reason,
@@ -372,7 +488,7 @@ def waiter(d):
                 terminate(identity(monitor.pid)); monitor.wait()
         if (d/'exit.json').exists():
             names=['stage.json','owner.json','exit.json','stdout.log','stderr.log']
-            names += [n for n in ('monitor.json','monitor_terminal.json','resources.jsonl','stop.json','members.json') if (d/n).exists()]
+            names += [n for n in ('monitor.json','monitor_terminal.json','resources.jsonl','stop.json','members.json','controlled_groups_waiter.jsonl','controlled_groups_monitor.jsonl','mpi_terminal.json') if (d/n).exists()]
             atomic(d/'evidence.json',{n:digest(d/n) for n in names})
 
 
@@ -380,7 +496,7 @@ def monitor(d):
     x=read(d/'stage.json'); limits=x['limits']; owner=read(d/'owner.json')
     if owner['waiter']!=identity(os.getppid()) or parent_pid(owner['task']['pid'])!=os.getppid() or not alive(owner['task']):
         raise RuntimeError('monitor launch ownership mismatch; no signals authorized')
-    start=time.monotonic(); peak=0; count=0; reason=None; members={}; baseline=None; cleanup_error=None
+    start=time.monotonic(); peak=0; count=0; reason=None; members={}; baseline=None; cleanup_error=None; group_proofs={}
     try:
         baseline=process_resources.swapout_pages() if limits.get('host_swapouts_guard') else None
         policy=Policy(limits,baseline)
@@ -389,13 +505,14 @@ def monitor(d):
             if (d/'exit.json').exists(): break
             if not alive(owner['waiter']): reason='waiter_lost'; break
             if not alive(owner['task']): break
-            for m in descendants(owner['task']): members[(m['pid'],str(m['start']))]=m
+            current=descendants(owner['task'])
+            for m in current: members[(m['pid'],str(m['start']))]=m
             atomic(d/'members.json',list(members.values()))
-            if any(m['pgid']!=owner['task']['pgid'] for m in members.values() if alive(m)):
+            if not process_groups_supported(x['spec'],owner['task'],members.values(),current,d,'monitor',group_proofs):
                 reason='unsupported_process_escape';break
             if (d/'fault_sample').exists(): raise RuntimeError('injected sampler failure')
             if (d/'fault_write').exists(): raise OSError(28,'injected ENOSPC; no real disk fill')
-            rss=process_resources.tree_rss_kib(owner['task']['pid'])
+            rss=owned_rss_kib(members.values()) if x['spec'].get('mpi_ownership') else process_resources.tree_rss_kib(owner['task']['pid'])
             swap=process_resources.swapout_pages() if limits.get('host_swapouts_guard') else None
             if (d/'fault_swapout_sensor').exists(): raise RuntimeError('injected Swapouts sensor unavailable')
             if (d/'fault_swapout_increase').exists() and swap is not None: swap=max(swap,baseline+1)

@@ -36,17 +36,24 @@ def main():
             if (run/'receipt.json').exists():return runner.reconcile(run)
             time.sleep(.1)
         raise AssertionError('task did not finish')
-    env=save('env.json',dict(PATH='/usr/bin:/bin',PYTHONDONTWRITEBYTECODE='1'))
+    env=save('env.json',dict(PATH=str(Path(sys.executable).resolve().parent)+':/usr/bin:/bin',PYTHONDONTWRITEBYTECODE='1'))
     def common(kind,name,cpu):
         return [kind,'--run-id',name,'--runs-root',str(out/'runs'),'--request-out',str(out/(name+'.request.json')),
                 '--env-json',env,'--timeout','12','--rss-gib','1','--cpu-budget',str(cpu)]
     fake=out/'fake_julia.py';fake.write_text('#!'+str(Path(sys.executable).resolve())+'\n'+'''import os,time
 mode=os.environ['WANNIERNLQG_TEST_MODE'];task=os.environ['WANNIERNLQG_TEST_TASK_ID'];shard=os.environ.get('WANNIERNLQG_TEST_SHARD','none')
-print(f'OWNED_GROUP={os.getpgrp()}',flush=True);time.sleep(.06)
+print(f'OWNED_GROUP={os.getpgrp()}',flush=True)
+if task=='fast':
+ import subprocess,sys
+ from pathlib import Path
+ driver=Path(__file__).with_name('scheduler_driver_path.txt').read_text().strip()
+ subprocess.run([sys.executable,driver],check=True)
+time.sleep(.06)
 print(f'[test-suite:complete] mode={mode} shard={shard} elapsed_s=0.06')
 print('Testing WannierNLQG tests passed')
 print('WANNIERNLQG_TEST_TASK_COMPLETE:'+task)
 ''');fake.chmod(0o755)
+    (out/'scheduler_driver_path.txt').write_text(str(PACKAGE/'test/run_tests_unit.py'))
     p=cli(common('full','full',17)+['--julia',str(fake),'--jobs','1'],'full_submit');record('full_submit',p.returncode==0,p.stderr)
     run=out/'runs/full';r=finished(run);p=cli(['qualify',str(run)],'full_qualify');q=json.loads(p.stdout)
     record('full_typed_pass',p.returncode==0 and q['status']=='PASS',q)

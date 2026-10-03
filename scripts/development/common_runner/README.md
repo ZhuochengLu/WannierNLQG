@@ -148,3 +148,47 @@ They are engineering examples only. Adapter field checks are implemented in
 [adapters.py](adapters.py); review a real task's native receipt against those
 checks before migrating its producer. Query with `status`, rebuild sealed evidence
 with `reconcile`, advance pending stages with `resume`, then call `qualify`.
+
+## Explicit local OpenMPI ownership
+
+The optional `--mpi-ownership-json PATH` selects `foreground_owned_mpi`. It composes
+with the exact pinned CI scheduler self-test exception, without accepting arbitrary
+process groups. Its `local_openmpi/1` policy contains resolved SHA-pinned `launcher`
+(`mpirun`), PRTE `runtime`, all non-Apple mandatory
+linked `runtime_inputs` and an exact `applications` rank-argv catalogue with allowed
+rank counts. Each variable argument must be an absolute path under its declared
+`path_under` root. Relative existing scripts/inputs must also be pinned.
+
+Only single-program `-n/-np N` launches, optionally `--bind-to none`, are supported.
+Ranks must be direct children of the observed pinned embedded PRTE launcher, in the
+original task session, with valid local/world rank metadata and exact launcher-bound
+argv. Fork/exec transitions have a 0.5 second bound. A different session, new rank
+child group, unowned/reused identity, remote allocation or runtime/loader/MCA override
+is rejected. Active user/site MCA parameter files are unsupported; they are only read.
+Detached/persistent PRTE daemons, remote nodes, MPI dynamic spawn/MPI-in-MPI launch,
+multiple app contexts and complete kernel containment are not supported. Local embedded
+PRTE uses no separate daemon; its launcher and all observed rank groups are tracked.
+
+Waiter and monitor both prove the groups; retained observed identities contribute to
+sampled RSS even after reparenting and receive only identity-checked individual signals.
+The sealed `mpi_terminal.json` records every observed rank/launcher identity and cleanup.
+The root's actual waitpid exit remains authoritative. Rank and nested launcher exit codes
+are explicitly NOT_OBSERVED_BY_CORE; disappearance is never presented as a wait status.
+Residual ranks or missing process terminal fail closed. No receipt survives source/input
+tampering; absent actual waiter exit remains UNKNOWN. Linux MPI contract is rejected
+until qualified; current validation is Darwin OpenMPI5.0.9/PRTE4.1 only.
+
+For Full, preserve the seven-task scheduler argv and its CI policy; pass this additional
+MPI catalogue. Capture exact Base.julia_cmd().exec under the actual MPI-only parent's
+Julia flags, and derive literal scripts/rank counts from the current pinned test source.
+An integration helper is delivered alongside the patch for this closure; no scientific
+commands run while preparing it. Keep the scheduler's per-task TMPDIR owned and bind
+variable paths to that root. Use CPU17 for the declared Full16-rank closure; MPI2 short
+contract tests use CPU2/RSS3GiB. Typed scientific qualification remains unchanged.
+
+Darwin KERN_PROCARGS2 EIO during exec is retried by re-reading the entire snapshot
+at most six times (five 1ms delays), with the same start identity on each attempt.
+No cached argv or ownership grace is admitted: persistent EIO, other errno and
+PID reuse remain missing evidence/rejection. CI admission uses the single resulting
+leader argv consistently. `snapshot_selftest.py --output-dir /ABS/OWNED/NEW`
+replays query/copy EIO and admission negatives without scientific computation.

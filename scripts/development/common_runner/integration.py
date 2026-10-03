@@ -99,8 +99,18 @@ def prepare(args, package, launcher):
         sample_seconds=1,cpu_budget=args.cpu_budget,reserve_bytes=int(args.reserve_gib*1024**3),
         disk_floor_bytes=10*1024**3,rss_over_samples=3,host_swapouts_guard=True)
     stage = dict(name='execute',argv=argv,cwd=cwd,env=env,inputs=inputs,outputs=outputs)
+    if args.kind=='full':
+        stage['controlled_groups']=dict(kind='ci_scheduler_selftest',driver=str(package/'test/run_tests_unit.py'))
+    if getattr(args,'mpi_ownership_json',None):
+        policy=runner.read(Path(args.mpi_ownership_json).resolve());pin(inputs,args.mpi_ownership_json)
+        for entry in (policy['launcher'],policy['runtime']): pin(inputs,entry['path'])
+        for path in policy['runtime_inputs']: pin(inputs,path)
+        for app in policy['applications']:
+            for arg in app['argv']:
+                if isinstance(arg,str) and Path(arg).is_absolute() and Path(arg).is_file(): pin(inputs,arg)
+        stage['mpi_ownership']=policy
     request = adapters.request(args.kind.replace('-','_'),args.run_id,[stage],limits,
-        {'execute':gates},{'execute':qualification})
+        {'execute':gates},{'execute':qualification},process_contract='foreground_owned_mpi' if stage.get('mpi_ownership') else 'foreground_owned_group')
     runner.validate(request)
     path = Path(args.request_out).resolve()
     if path == package or package in path.parents:raise ValueError('request must be outside package payload')
@@ -119,7 +129,7 @@ def main(package,launcher,argv=None):
         p.set_defaults(kind=kind)
         p.add_argument('--run-id',required=True);p.add_argument('--runs-root',required=True)
         p.add_argument('--request-out',required=True);p.add_argument('--env-json',required=True)
-        p.add_argument('--input',action='append',default=[]);p.add_argument('--gates-json')
+        p.add_argument('--mpi-ownership-json',help='explicit pinned local OpenMPI rank-argv catalogue');p.add_argument('--input',action='append',default=[]);p.add_argument('--gates-json')
         p.add_argument('--timeout',type=float,required=True);p.add_argument('--rss-gib',type=float,default=42)
         p.add_argument('--cpu-budget',type=int,required=True);p.add_argument('--reserve-gib',type=float,default=0)
         p.add_argument('--plan-only',action='store_true',help='write validated request without launching')

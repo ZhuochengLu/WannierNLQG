@@ -13,10 +13,10 @@ RESOURCE_LIMITS=dict(timeout_seconds=180,rss_kib=42*1024**2,disk_floor_bytes=10*
                      sample_seconds=1,rss_over_samples=3,host_swapouts_guard=True,cpu_budget=1,reserve_bytes=0)
 
 
-def request(kind,run_id,stages,limits,acceptance=None,qualification=None):
+def request(kind,run_id,stages,limits,acceptance=None,qualification=None,*,process_contract="foreground_owned_group"):
     if kind not in KINDS: raise ValueError('unknown task family')
     result=dict(schema=runner.SCHEMA,adapter=kind,run_id=run_id,stages=stages,limits=limits,
-                process_contract='foreground_owned_group',acceptance=acceptance or {},qualification=qualification or {})
+                process_contract=process_contract,acceptance=acceptance or {},qualification=qualification or {})
     runner.validate(result);return result
 
 
