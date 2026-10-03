@@ -557,3 +557,22 @@ end
         @test !isempty(violations(source))
     end
 end
+
+@testset "captured compiler types stay confined to their verified source" begin
+    path = "ext/CompilerFixture/Guarded.jl"
+    other = "ext/CompilerFixture/Other.jl"
+    symbols = Dict("SymmetryFoundation" => Symbol[], "WannierProjection" => Symbol[])
+    verified = Dict("SymmetryFoundation" => Set([Symbol("#3#4")]))
+    literal = "@compile_workload begin\n_record_precompile(Tuple{SymmetryFoundation.var\"#3#4\"})\nend\n"
+    check(sources) = shared_boundary_reference_violations(
+        sources,
+        symbols,
+        symbols;
+        compiler_type_symbols_by_source = Dict(path => verified),
+    )
+    @test isempty(check(Dict(path => literal)))
+    @test !isempty(check(Dict(other => literal)))
+    @test !isempty(check(Dict(path => "value = SymmetryFoundation.var\"#3#4\"()\n")))
+    @test !isempty(check(Dict(path => "import WannierNLQG.SymmetryFoundation: var\"#3#4\"\n")))
+    @test !isempty(check(Dict(path => replace(literal, "#3#4" => "#5#6"))))
+end

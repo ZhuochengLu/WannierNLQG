@@ -1,6 +1,7 @@
 #!/usr/bin/env julia
 
 using TOML
+using SHA
 
 include(joinpath(@__DIR__, "ArchitectureContracts.jl"))
 using .ArchitectureContracts
@@ -1435,6 +1436,42 @@ compiler_type_symbols = Dict(
     ) for owner in
     (WannierNLQG.SymmetryFoundation, WannierNLQG.WannierProjection, WannierNLQG.MatrixElements)
 )
+# Anonymous compiler type numbers belong to the captured Julia 1.11.2 trace.
+# On other versions these source-pinned declarations are not included at runtime.
+# Permit their literal Type operands only in the two verified guarded files;
+# calls, imports, and every other source retain the ordinary boundary checks.
+compiler_type_symbols_by_source = Dict()
+if !WannierNLQG.FIRST_USE_TRACE_COMPATIBLE
+    guarded_trace_sources = (
+        (
+            "ext/WannierNLQGSymmetrizationExt/Generated/SymmetrizationResponseWriterSignatures.jl",
+            "1a8abf6a2d98c54bb8f807fc170db02d9df47fc6cb8a061da8f4b1ae35567a07",
+            "ext/WannierNLQGSymmetrizationExt/WannierNLQGSymmetrizationExt.jl",
+            "311bf0bf49367ab2a4fe9f38ac756cc224125758e2b9e7fdea65e1f676b339a7",
+            Symbol("#3#4"),
+        ),
+        (
+            "ext/WannierNLQGWannierizationExt/Generated/VASPPAWSPNResidualSignatures.jl",
+            "8fcbd76c2d1634edc5a0fd62b866328ef003d84b950b3efc1a6909d02056c039",
+            "ext/WannierNLQGWannierizationExt/WannierNLQGWannierizationExt.jl",
+            "68f31c1d168e15451b98270701f4e38b6ded10fdc15e992d9a5e6ddd0ff60b7f",
+            Symbol("#124#132"),
+        ),
+    )
+    bytes2hex(sha256(read(joinpath(SRC, "WannierNLQG.jl")))) ==
+    "7a7e17c1032b66759f47110f3dfab99c6b156d929b498617a51fb6c41ad77c25" ||
+        fail("captured compiler trace version guard changed; revalidate its source pins")
+    for (path, digest, parent_path, parent_digest, type_name) in guarded_trace_sources
+        bytes2hex(sha256(read(joinpath(ROOT, path)))) == digest ||
+            fail("captured compiler trace source changed: $(path)")
+        bytes2hex(sha256(read(joinpath(ROOT, parent_path)))) == parent_digest ||
+            fail("captured compiler trace include guard changed: $(parent_path)")
+        verified_types = copy(compiler_type_symbols)
+        verified_types["SymmetryFoundation"] =
+            union(verified_types["SymmetryFoundation"], Set((type_name,)))
+        compiler_type_symbols_by_source[path] = verified_types
+    end
+end
 shared_boundary_violations = shared_boundary_reference_violations(
     boundary_sources,
     Dict(
@@ -1450,6 +1487,7 @@ shared_boundary_violations = shared_boundary_reference_violations(
     ),
     ;
     compiler_type_symbols,
+    compiler_type_symbols_by_source,
 )
 isempty(shared_boundary_violations) || fail(
     "shared-layer qualified references bypass integration allowlists: " *

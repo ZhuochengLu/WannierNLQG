@@ -921,10 +921,12 @@ function shared_boundary_reference_violations(
         "WannierProjection" => ("src/WannierProjection/",),
     ),
     compiler_type_symbols = Dict{String, Set{Symbol}}(),
+    compiler_type_symbols_by_source = Dict(),
 )
     violations = String[]
     for path in sort!(collect(keys(sources)))
-        syntax = _compiler_type_projection(sources[path], compiler_type_symbols)
+        verified_types = get(compiler_type_symbols_by_source, path, compiler_type_symbols)
+        syntax = _compiler_type_projection(sources[path], verified_types)
         imports = direct_import_records(sources[path])
         for module_name in sort!(collect(keys(owner_prefixes)))
             any(prefix -> startswith(path, prefix), owner_prefixes[module_name]) && continue
