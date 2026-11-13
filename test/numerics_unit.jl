@@ -151,8 +151,17 @@ end
         :FermiSurfaceBroadening,
     )
         module_under_test=Module(gensym(:RemovedImport))
-        # Julia reports missing explicit imports as warnings; no binding is created.
-        Core.eval(module_under_test, Meta.parse("using WannierNLQG: "*string(name)))
+        # Julia versions either warn or throw for an explicit missing import.
+        # An error is acceptable only for this exact retired name; the binding
+        # must remain absent and calling it must still fail below.
+        import_error = try
+            Core.eval(module_under_test, Meta.parse("using WannierNLQG: "*string(name)))
+            nothing
+        catch exception
+            exception
+        end
+        @test import_error === nothing ||
+              (import_error isa UndefVarError && import_error.var == name)
         @test !isdefined(module_under_test, name)
         @test_throws UndefVarError Core.eval(module_under_test, Expr(:call, name))
         @test_throws UndefVarError Core.eval(@__MODULE__, :(WannierNLQG.Runtime.$name()))
