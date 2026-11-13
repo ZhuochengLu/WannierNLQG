@@ -1,4 +1,5 @@
 using SHA
+import Spglib
 using Test
 
 include(joinpath(@__DIR__, "support", "TBDetectionInventorySupport.jl"))
@@ -26,5 +27,5 @@ include(joinpath(@__DIR__, "support", "TBDetectionInventorySupport.jl"))
           reinterpret(UInt8, [round(Int64, 1.0 / TB_DETECTION_INVENTORY_FLOAT_QUANTUM)])
 
     provenance = owner.symmetry_detection_backend_provenance()
-    @test provenance == (package = "Spglib", version = "1.2.0")
+    @test provenance == (package = "Spglib", version = string(Base.pkgversion(Spglib)))
 end
