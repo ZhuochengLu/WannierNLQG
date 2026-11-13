@@ -146,7 +146,8 @@ end
     w=WannierNLQG.Wannierization
     runtime=WannierNLQG.Runtime
     input_io=WannierNLQG.IO
-    root=realpath(tempdir())
+    fixture_parent=mktempdir(; cleanup = false)
+    root=realpath(mktempdir(fixture_parent; cleanup = false))
     # Keep this small owned fixture on failure for diagnosis; never modify assets.
     dir=mktempdir(root; cleanup = false)
     @test_throws ArgumentError input_io.scientific_reference_path(
