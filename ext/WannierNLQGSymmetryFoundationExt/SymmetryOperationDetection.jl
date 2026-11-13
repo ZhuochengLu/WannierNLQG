@@ -30,7 +30,7 @@ function standardize_crystal_band_cell(
             collect(vector) for vector in Spglib.basisvectors(dataset.std_lattice)
         ],
         standard_rotation_matrix = Matrix{Float64}(dataset.std_rotation_matrix),
-        primitive_lattice = Matrix{Float64}(dataset.primitive_lattice),
+        primitive_lattice = copy(convert(Matrix{Float64}, dataset.primitive_lattice)),
     )
 end
 

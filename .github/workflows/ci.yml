@@ -24,8 +24,8 @@ jobs:
         julia:
           - version: '1.10'
             label: '1.10'
-          - version: '1'
-            label: current
+          - version: '1.13.0'
+            label: '1.13.0'
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

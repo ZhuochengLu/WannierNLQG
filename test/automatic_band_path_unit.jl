@@ -1,5 +1,5 @@
 module AutomaticBandPathTests
-using Test, WannierNLQG, LinearAlgebra, JSON3
+using Test, WannierNLQG, LinearAlgebra, JSON3, Spglib
 const R = WannierNLQG.Runtime
 const S = WannierNLQG.SymmetryFoundation
 const ROOT = Base.pkgdir(WannierNLQG)
@@ -77,6 +77,22 @@ end
             1.0e-10
     end
     @test_throws ArgumentError automatic_kpath(diamond; model_lattice = Matrix{Float64}(I, 3, 3))
+end
+
+@testset "Spglib primitive lattice conversion preserves basis columns and ownership" begin
+    lattice = [2.7 0.0 0.0; 0.4 3.1 0.0; 0.2 0.6 4.3]
+    structure = S.CrystalStructure(lattice, ["X"], zeros(3, 1))
+    dataset = Spglib.get_dataset(Spglib.Cell(transpose(lattice), [zeros(3)], [1]), 1.0e-5)
+    expected = hcat(collect.(Spglib.basisvectors(dataset.primitive_lattice))...)
+    @test !issymmetric(expected)
+    extension, _ = S._load_symmetry_foundation_extension!()
+    actual = Base.invokelatest(extension.standardize_crystal_band_cell, structure)
+    @test actual.primitive_lattice isa Matrix{Float64}
+    @test actual.primitive_lattice == expected
+    actual.primitive_lattice[1, 1] += 1.0
+    repeated = Base.invokelatest(extension.standardize_crystal_band_cell, structure)
+    @test repeated.primitive_lattice == expected
+    @test structure.lattice == lattice
 end
 
 @testset "2D explicit periodic plane and moderate Cartesian sampling" begin
