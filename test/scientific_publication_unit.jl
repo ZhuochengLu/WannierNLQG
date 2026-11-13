@@ -36,12 +36,17 @@ end
         write(path, "publication-A\n1 2 3\n")
         @test_throws ArgumentError decoded(path)
         receipt = publish(path, "publication-A")
-        @test receipt == path * ".commit.toml"
+        @test receipt == realpath(path) * ".commit.toml"
         result = decoded(path)
         @test result.value == "1 2 3"
         @test result.publication_identity == "publication-A"
         @test result.state == DataIO.scientific_file_state(path)
         @test result.receipt_state == DataIO.scientific_file_state(receipt)
+        parent_alias = joinpath(directory, "linked-directory")
+        symlink(directory, parent_alias)
+        alias_path = joinpath(parent_alias, basename(path))
+        @test publish(alias_path, "publication-A") == receipt
+        @test decoded(alias_path).value == result.value
         link = joinpath(directory, "linked.dat")
         symlink(path, link)
         @test decoded(link).value == result.value

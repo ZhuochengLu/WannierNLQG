@@ -902,7 +902,7 @@ end
         bundle = WannierNLQG.IO.read_real_space_operator_bundle(output_bundle)
         @test bundle.manifest.schema_version == WannierNLQG.IO.OPERATOR_BUNDLE_SCHEMA_VERSION
         original_tb = WannierNLQG.IO.read_wannier_tb(tb_file)
-        @test bundle.manifest.path == output_bundle
+        @test bundle.manifest.path == realpath(output_bundle)
         @test bundle.manifest.lattice == original_tb.lattice
         @test bundle.manifest.r_vectors == original_tb.r_vectors
         @test bundle.manifest.degeneracies == original_tb.r_degeneracies
@@ -944,7 +944,7 @@ end
             WannierNLQG.IO.read_real_space_operator_bundle(baseline.operator_bundle_file)
         @test result.input_files == baseline.input_files == expected_input_files
         @test result.operator_bundle_file != baseline.operator_bundle_file
-        @test baseline_bundle.manifest.path == baseline.operator_bundle_file
+        @test baseline_bundle.manifest.path == realpath(baseline.operator_bundle_file)
         @test all(read(path) == original_inputs[name] for (name, path) in expected_input_files)
         @test all(
             bundle.operators[kind].data == baseline_bundle.operators[kind].data for
