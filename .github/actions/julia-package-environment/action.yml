@@ -31,12 +31,22 @@ runs:
           read(joinpath(root, "Project.toml")) == project_bytes || error("Released project changed in CI")
           bootstrap = joinpath(consumer, "test_load_path.jl")
           open(bootstrap, "w") do stream
-              println(stream, "test_environments = [path for path in LOAD_PATH if isabspath(path) && path != ", repr(consumer), " && isfile(joinpath(path, \"Project.toml\"))]")
-              println(stream, "length(test_environments) == 1 || error(\"Expected the explicit Pkg.test sandbox environment\")")
-              println(stream, "test_environment = only(test_environments)")
-              println(stream, "empty!(LOAD_PATH)")
-              println(stream, "append!(LOAD_PATH, unique([test_environment, ", repr(consumer), ", \"@stdlib\"]))")
-              println(stream, "ENV[\"JULIA_LOAD_PATH\"] = join(LOAD_PATH, Sys.iswindows() ? Char(59) : Char(58))")
+              # Pkg forwards -L to incremental compiler workers as well as tests.
+              # Leave compiler startup untouched and avoid globals/closures in Main.
+              println(stream, "if ccall(:jl_generating_output, Cint, ()) == 0")
+              println(stream, "    let test_environments = String[]")
+              println(stream, "        for path in LOAD_PATH")
+              println(stream, "            if isabspath(path) && path != ", repr(consumer), " && isfile(joinpath(path, \"Project.toml\"))")
+              println(stream, "                push!(test_environments, path)")
+              println(stream, "            end")
+              println(stream, "        end")
+              println(stream, "        length(test_environments) == 1 || error(\"Expected the explicit Pkg.test sandbox environment\")")
+              println(stream, "        test_environment = only(test_environments)")
+              println(stream, "        empty!(LOAD_PATH)")
+              println(stream, "        append!(LOAD_PATH, unique([test_environment, ", repr(consumer), ", \"@stdlib\"]))")
+              println(stream, "        ENV[\"JULIA_LOAD_PATH\"] = join(LOAD_PATH, Sys.iswindows() ? Char(59) : Char(58))")
+              println(stream, "    end")
+              println(stream, "end")
           end
           open(ENV["GITHUB_ENV"], "a") do stream
               println(stream, "WANNIERNLQG_CI_PROJECT=", consumer)

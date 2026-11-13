@@ -965,7 +965,9 @@ end
 
 @testset "Relative input paths follow the file and unresolved records preserve old files" begin
     mktempdir() do directory
-        request_root = joinpath(directory, "requests")
+        # Resolve the fixture parent once so macOS temporary-directory aliases do
+        # not change the expected physical base of file-relative paths.
+        request_root = joinpath(realpath(directory), "requests")
         mkpath(request_root)
         model_path = joinpath(request_root, "model_tb.dat")
         source_model = optical_document(directory)["model"]["model_file"]
