@@ -7,11 +7,23 @@ isdefined(Main, :QEPAWMatrixElementsTestSupport) ||
     include(joinpath(@__DIR__, "QEPAWMatrixElementsTestSupport.jl"))
 using .QEPAWMatrixElementsTestSupport: write_qe_paw_fixture
 
+isdefined(@__MODULE__, :CurrentScientificValues) ||
+    include(joinpath(@__DIR__, "support/CurrentScientificValues.jl"))
+
 const TARGET_SCOPE_W = WannierNLQG.Wannierization
 const TARGET_SCOPE_EXTENSION = first(TARGET_SCOPE_W._load_wannierization_extension!())
 const TARGET_SCOPE_PAW = TARGET_SCOPE_EXTENSION.PAWMatrixElements
 const TARGET_SCOPE_OPERATOR = TARGET_SCOPE_EXTENSION.OperatorExport
 const TARGET_SCOPE_WORKFLOW = TARGET_SCOPE_EXTENSION.WorkflowOrchestration
+
+function target_scope_read_attribute(object, name)
+    attribute = HDF5.attributes(object)[name]
+    try
+        return read(attribute)
+    finally
+        close(attribute)
+    end
+end
 
 function target_scope_solution(; overrides = Dict{String, Float64}())
     maxima = Dict{String, Float64}(
@@ -47,7 +59,8 @@ end
 function one_band_target_contract()
     scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
         trues(1, 1),
-        trues(1, 1),
+        trues(1, 1);
+        content_authentication = false,
     )
     return TARGET_SCOPE_W.TargetSubspaceQualificationContract(
         scope;
@@ -83,17 +96,18 @@ function target_scope_identity_representation(scope, contract)
         [1],
         [1];
         conventions = Dict(
+            "content_authentication" => "NOT_PERFORMED",
             "qualification_scope" => "target_subspace",
-            "outer_mask_sha256" => scope.outer_mask_sha256,
-            "frozen_mask_sha256" => scope.frozen_mask_sha256,
-            "target_subspace_contract_sha256" => contract.contract_sha256,
+            "outer_mask_definition" => scope.outer_mask_definition,
+            "frozen_mask_definition" => scope.frozen_mask_definition,
+            "target_subspace_contract_definition" => contract.contract_definition,
             "target_leakage_semantics" => TARGET_SCOPE_PAW.TARGET_LEAKAGE_WEIGHT_SEMANTICS,
-            "target_leakage_formula_sha256" =>
-                TARGET_SCOPE_PAW.TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256,
+            "target_leakage_formula_definition" =>
+                TARGET_SCOPE_PAW.TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION,
             "target_leakage_threshold" =>
                 repr(contract.scoped_paw_thresholds.target_leakage_weight),
         ),
-        input_sha256 = Dict("TARGET_SUBSPACE_CONTRACT_SHA256" => contract.contract_sha256),
+        input_sha256 = Dict("TARGET_SUBSPACE_CONTRACT_DEFINITION" => contract.contract_definition),
     )
 end
 
@@ -166,7 +180,8 @@ end
 @testset "gauge and representation share one immutable target contract digest" begin
     scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
         BitMatrix(reshape([true, false], 2, 1)),
-        BitMatrix(reshape([true, false], 2, 1)),
+        BitMatrix(reshape([true, false], 2, 1));
+        content_authentication = false,
     )
     contract = TARGET_SCOPE_W.TargetSubspaceQualificationContract(
         scope;
@@ -176,8 +191,8 @@ end
         frozen_max_ev = 0.5,
         num_wannier = 1,
     )
-    @test Base.invokelatest(TARGET_SCOPE_PAW._star_target_subspace_contract_sha256, contract) ==
-          contract.contract_sha256
+    @test Base.invokelatest(TARGET_SCOPE_PAW._star_target_subspace_contract_definition, contract) ==
+          contract.contract_definition
     representation = target_scope_identity_representation(scope, contract)
     config = TARGET_SCOPE_W.BandRepresentationPreparationConfig(
         wannierization_mode = :symmetry_adapted,
@@ -199,11 +214,12 @@ end
         config,
         scope,
     )
-    @test rebound.conventions["target_subspace_contract_sha256"] == contract.contract_sha256
+    @test rebound.conventions["target_subspace_contract_definition"] == contract.contract_definition
 
     changed_scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
         trues(2, 1),
-        BitMatrix(reshape([true, false], 2, 1)),
+        BitMatrix(reshape([true, false], 2, 1));
+        content_authentication = false,
     )
     @test_throws ArgumentError Base.invokelatest(
         TARGET_SCOPE_WORKFLOW._representation_with_target_subspace_contract,
@@ -338,12 +354,15 @@ end
 @testset "operator generators hard-gate the target and audit the parent" begin
     outer = BitMatrix(reshape([true, true, false], 3, 1))
     frozen = BitMatrix(reshape([true, false, false], 3, 1))
-    scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(outer, frozen)
+    scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
+        outer,
+        frozen;
+        content_authentication = false,
+    )
     target = (
         qualification_scope = scope,
         target_authority = "outer_window",
         parent_audit_policy = "audit_only",
-        contract_sha256 = repeat("a", 64),
     )
 
     generated = zeros(ComplexF64, 3, 3, 3, 1)
@@ -371,12 +390,16 @@ end
     @test qualified.parent_audit_policy == "audit_only"
 
     gauge = (
-        gauge_artifact_sha256 = nothing,
+        gauge_definition = nothing,
         transforms = nothing,
-        status = "PASS",
-        contract_sha256 = repeat("b", 64),
+        contract_definition = repr((frame = :identity, bands = 3, kpoints = 1)),
     )
-    topology = (num_bands = 3, num_kpts = 1, num_neighbors = 1, source_sha256 = repeat("c", 64))
+    topology = (
+        num_bands = 3,
+        num_kpts = 1,
+        num_neighbors = 1,
+        source_definition = repr((bands = 3, kpoints = 1, neighbors = 1)),
+    )
     closure = Base.invokelatest(
         TARGET_SCOPE_OPERATOR._hamiltonian_operator_native_identity_scope,
         gauge,
@@ -387,17 +410,18 @@ end
     @test closure.parent_audit_policy == "audit_only"
     @test closure.outer_rank_minimum == 2
     @test closure.outer_rank_maximum == 2
-    @test closure.outer_mask_sha256 == scope.outer_mask_sha256
+    @test closure.outer_mask_definition == scope.outer_mask_definition
 
+    changed_mask_scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
+        outer,
+        frozen;
+        content_authentication = false,
+    )
+    changed_mask_scope.outer_mask[3, 1] = true
     tampered = (
-        qualification_scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
-            trues(3, 1),
-            frozen;
-            outer_mask_sha256 = scope.outer_mask_sha256,
-        ),
+        qualification_scope = changed_mask_scope,
         target_authority = "outer_window",
         parent_audit_policy = "audit_only",
-        contract_sha256 = repeat("a", 64),
     )
     @test_throws ArgumentError Base.invokelatest(
         TARGET_SCOPE_PAW._uiu_state_with_qualification_scope,
@@ -472,7 +496,7 @@ end
         )
         result = TARGET_SCOPE_W.prepare_symmetry_covariant_wavefunctions(
             TARGET_SCOPE_W.SymmetryCovariantWavefunctionPreparationConfig(
-                construction_policy = :strict,
+                construction_policy = :standard,
                 source = source,
                 wavefunction_gauge_backend = backend,
                 authoritative_hamiltonian = TARGET_SCOPE_W.NativeDFTHamiltonian(),
@@ -481,16 +505,138 @@ end
                 target_band_count = 1,
             ),
         )
-        @test result.status == :PASS
+        @test result.status == :STANDARD
         @test result.authoritative_hamiltonian == "native_dft"
-        @test result.target_scope_production_eligible
+        @test !result.target_scope_production_eligible
+        gauge_hdf5 = something(result.output_hdf5)
 
-        restored =
-            Base.invokelatest(TARGET_SCOPE_PAW._read_star_covariant_paw_gauge_hdf5, gauge_hdf5)
+        restored = Base.invokelatest(
+            TARGET_SCOPE_PAW._read_star_covariant_paw_gauge_hdf5,
+            gauge_hdf5;
+            require_pass = false,
+        )
         @test restored.payload.qualification_scope !== nothing
         @test restored.payload.symmetrized_hamiltonian_audit === nothing
         @test restored.payload.source_metadata["qualification_scope"] == "target_subspace"
         @test restored.payload.source_metadata["authoritative_hamiltonian"] == "native_dft"
+        @test restored.payload.source_metadata["ordinary_calculation_policy_version"] == "1.0"
+        expected_values =
+            Base.invokelatest(CurrentScientificValues.payload_values, restored.payload)
+        for require_pass in (nothing, false, true)
+            compatible = Base.invokelatest(
+                TARGET_SCOPE_PAW._read_star_covariant_paw_gauge_hdf5,
+                gauge_hdf5;
+                construction_policy = :standard,
+                require_pass,
+            )
+            @test compatible.status == :NOT_EVALUATED
+            @test Base.invokelatest(CurrentScientificValues.payload_values, compatible.payload) ==
+                  expected_values
+        end
+        # Current mathematical reads do not adopt historical permission labels.
+        for field in (
+            "status",
+            "production_eligible",
+            "diagnostic_only",
+            "scoped_production_eligible",
+            "global_production_eligible",
+            "target_scope_production_eligible",
+        )
+            copy_path = joinpath(directory, "legacy-label-$(field).h5")
+            cp(gauge_hdf5, copy_path)
+            chmod(copy_path, 0o600)
+            value = field == "status" ? "PASS" : true
+            HDF5.h5open(copy_path, "r+") do handle
+                haskey(HDF5.attributes(handle), field) && HDF5.delete_attribute(handle, field)
+                HDF5.attributes(handle)[field] = value
+            end
+            HDF5.h5open(copy_path, "r") do handle
+                @test target_scope_read_attribute(handle, field) == value
+            end
+            compatible = Base.invokelatest(
+                TARGET_SCOPE_PAW._read_star_covariant_paw_gauge_hdf5,
+                copy_path;
+                require_pass = true,
+            )
+            @test compatible.status == :NOT_EVALUATED
+            @test Base.invokelatest(CurrentScientificValues.payload_values, compatible.payload) ==
+                  expected_values
+        end
+        # The ordinary algorithm version remains a real contract, not a permission tag.
+        policy_copy = joinpath(directory, "wrong-algorithm-version.h5")
+        cp(gauge_hdf5, policy_copy)
+        HDF5.h5open(policy_copy, "r+") do handle
+            @test String(
+                target_scope_read_attribute(handle, "ordinary_calculation_policy_version"),
+            ) == "1.0"
+            HDF5.delete_attribute(handle, "ordinary_calculation_policy_version")
+            HDF5.attributes(handle)["ordinary_calculation_policy_version"] = "9.0"
+        end
+        HDF5.h5open(policy_copy, "r") do handle
+            @test String(
+                target_scope_read_attribute(handle, "ordinary_calculation_policy_version"),
+            ) == "9.0"
+        end
+        policy_error = try
+            Base.invokelatest(
+                TARGET_SCOPE_PAW._read_star_covariant_paw_gauge_hdf5,
+                policy_copy;
+                require_pass = false,
+            )
+            nothing
+        catch exception
+            exception
+        end
+        @test policy_error isa ArgumentError
+        @test occursin("ORDINARY_STAR_POLICY_CONTRACT_MISMATCH", sprint(showerror, policy_error))
+        # The saved frozen-mask values and their full definition must agree, even
+        # when forged legacy labels claim PASS. Mutate each independently.
+        for mutation in (:matrix, :definition)
+            copy_path = joinpath(directory, "bad-frozen-$(mutation).h5")
+            cp(gauge_hdf5, copy_path)
+            HDF5.h5open(copy_path, "r+") do handle
+                group = handle["qualification_scope"]
+                frozen = read(group["frozen_mask"])
+                @test all(==(1), frozen)
+                if mutation == :matrix
+                    write(group["frozen_mask"], zeros(eltype(frozen), size(frozen)))
+                else
+                    key = "frozen_mask_definition"
+                    HDF5.delete_attribute(group, key)
+                    HDF5.attributes(group)[key] =
+                        WannierNLQG.SymmetryFoundation.qualification_mask_definition(
+                            falses(size(frozen)),
+                        )
+                end
+                HDF5.attributes(handle)["status"] = "PASS"
+            end
+            HDF5.h5open(copy_path, "r") do handle
+                group = handle["qualification_scope"]
+                if mutation == :matrix
+                    @test all(iszero, read(group["frozen_mask"]))
+                else
+                    @test String(target_scope_read_attribute(group, "frozen_mask_definition")) ==
+                          WannierNLQG.SymmetryFoundation.qualification_mask_definition(
+                        falses(size(read(group["frozen_mask"]))),
+                    )
+                end
+            end
+            failure = try
+                Base.invokelatest(
+                    TARGET_SCOPE_PAW._read_star_covariant_paw_gauge_hdf5,
+                    copy_path;
+                    require_pass = true,
+                )
+                nothing
+            catch exception
+                exception
+            end
+            @test failure isa ArgumentError
+            @test occursin(
+                "frozen mask differs from its complete recorded definition",
+                sprint(showerror, failure),
+            )
+        end
 
         matrices = TARGET_SCOPE_W.generate_symmetry_completed_qe_paw_matrix_elements(
             source,

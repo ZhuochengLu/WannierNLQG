@@ -42,14 +42,22 @@ end
 
 # Expose compatibility matrix-property names through the shared k-point payload; read all other names as stored fields.
 function Base.getproperty(data::ProjectorMatrixData, name::Symbol)
-    if name === :spectrum ||
-       name === :energy_differences ||
-       name === :inverse_energy_differences ||
-       name === :berry_connection ||
-       name === :gauge_correction ||
-       name === :internal_connection ||
-       name === :hamiltonian_derivatives ||
-       name === :velocity_vertices
+    if name === :inverse_energy_differences
+        return subspace_inverse_energy_differences(getfield(data, :common))
+    elseif name === :gauge_correction
+        return subspace_gauge_correction(getfield(data, :common))
+    elseif name === :velocity_vertices
+        return subspace_velocity_vertices(getfield(data, :common))
+    elseif name === :berry_connection
+        return subspace_connection(getfield(data, :common))
+    elseif name === :spectrum ||
+           name === :energy_differences ||
+           name === :inverse_energy_differences ||
+           name === :berry_connection ||
+           name === :gauge_correction ||
+           name === :internal_connection ||
+           name === :hamiltonian_derivatives ||
+           name === :velocity_vertices
         return getproperty(getfield(data, :common), name)
     elseif name === :wannier_connection
         return getfield(data, :common).position.wannier_gauge
@@ -124,13 +132,11 @@ method deliberately has no MMN-internal fallback.
 function prepare_projector_covariant_geometry!(
     data::ProjectorMatrixData,
     workspace::ProjectorMatrixWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
 )
     source = workspace.matrix_elements.sources.derivative_overlap
     source === nothing && throw(
-        ArgumentError(
-            "PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: exact uIu/FF_R source is absent",
-        ),
+        ArgumentError("PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: full uIu/FF_R source is absent"),
     )
     derivative_overlap_r = source.derivative_overlap_r
     size(derivative_overlap_r, 1) == model.num_orbitals &&
@@ -244,7 +250,7 @@ function bind_kpoint_offset!(
 end
 
 # Reuse caller-owned scratch and the plan's Wannier-center convention; no k-space or response accumulation occurs.
-prepare_real_space!(workspace::ProjectorMatrixWorkspace, model::TightBindingModel) =
+prepare_real_space!(workspace::ProjectorMatrixWorkspace, model::AbstractResponseModel) =
     prepare_real_space!(workspace.matrix_elements, model)
 
 # Populate the supplied workspace or k-point data for a fractional reciprocal point using its capability plan.
@@ -253,7 +259,7 @@ prepare_real_space!(workspace::ProjectorMatrixWorkspace, model::TightBindingMode
 function compute_kpoint!(
     data::ProjectorMatrixData,
     workspace::ProjectorMatrixWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     kpoint::AbstractVector{<:Real};
     denominator_regularization::Real,
     spatial_dimension::Integer = workspace.matrix_elements.plan.spatial_dimension,
@@ -280,7 +286,7 @@ channel set for every offset.
 function compute_projector_spectrum!(
     data::ProjectorMatrixData,
     workspace::ProjectorMatrixWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     kpoint::AbstractVector{<:Real},
     ;
     denominator_regularization::Real = workspace.matrix_elements.plan.denominator_regularization,
@@ -340,25 +346,13 @@ end
 
 # Populate contiguous energy-degeneracy group bounds, projectors and normalized group weights for the current spectrum.
 function mark_degenerate_groups!(data::ProjectorMatrixData, degeneracy_threshold::Float64)
-    num_orbitals = data.num_orbitals
-    band = 1
-    while band <= num_orbitals
-        group_start = band
-        while band < num_orbitals &&
-            (data.spectrum.energies[band + 1] - data.spectrum.energies[band]) < degeneracy_threshold
-            band += 1
-        end
-        group_stop = band
-        group_size = group_stop - group_start + 1
-        group_weight = 1.0 / group_size
-        for ib in group_start:group_stop
-            data.degeneracy_weights[ib] = group_weight
-            data.degeneracy_group_starts[ib] = group_start
-            data.degeneracy_group_stops[ib] = group_stop
-        end
-        band = group_stop + 1
-    end
-    return data
+    # Retain the original exact-spectral admissibility check independently.
+    # Its ranges do not choose or overwrite the response near-degeneracy groups.
+    spectral_subspace_blocks(
+        data.spectrum.energies;
+        gap_tolerance = data.common.spectral_gap_tolerance,
+    )
+    return _mark_response_degeneracy_groups!(data, degeneracy_threshold)
 end
 
 """

@@ -399,7 +399,7 @@ Integral output applies the normalized k-point weights. K-slice output contains 
 - Time-reversal symmetry alone does not forbid SHG.
 - At `temperature <= 1e-7 K`, occupations are step functions and both one-band terms are skipped, following the legacy switch exactly. No positive surrogate temperature or extrapolation is used. This omits the distributional Fermi-surface response of a strictly zero-temperature metal.
 - At higher temperature, occupations are Fermi--Dirac. The one-band occupation derivatives retain the reference truncated-Gaussian approximation within $5k_{\mathrm B}T$.
-- A pair with a non-negligible occupation difference and $|E_{mn}|<10^{-12}$ eV is rejected. Near degeneracies also require care because isolated-band curvatures and Hessians are not invariant under arbitrary rotations of a degenerate subspace.
+- Outer bare energy inverses use zero strictly below $10^{-7}$ eV in absolute gap and reciprocal at equality and above; this does not remove the finite connection terms at their producer. Near degeneracies still require care because the scalar formulas are not a complete degenerate-subspace response theory.
 - Convergence with respect to the k mesh, Wannier window, model-band count, broadening, regularization, and degeneracy threshold is material dependent and is not implied by formula-level tests.
 
 ## 6. Formula provenance
@@ -425,3 +425,88 @@ Integral output applies the normalized k-point weights. K-slice output contains 
 5. J.-M. Lihm, “Comment on ‘Ab initio calculation of the shift photocurrent by Wannier interpolation’,” *Phys. Rev. B* **103**, 247101 (2021). [DOI](https://doi.org/10.1103/PhysRevB.103.247101)
 6. P. Garcia-Goiricelaya, J. Krishna, and J. Ibañez-Azpiroz, “Including many-body effects into the Wannier-interpolated quadratic photoresponse tensor,” *Phys. Rev. B* **107**, 205101 (2023), corrected 22 June 2023. [DOI](https://doi.org/10.1103/PhysRevB.107.205101)
 See [the public SHG interface](../docs/SECOND_HARMONIC_GENERATION.md) for configuration controls, output files, and numerical qualification boundaries.
+
+## Matched isolated-band BCD and bare endpoint roles
+
+Orthogonal and nonorthogonal SHG now use the same BCD mask: a band is
+included only when every existing adjacent gap is strictly greater than
+`degeneracy_threshold` (default `1e-4` eV). This is the singleton of the
+adjacent-gap chain partition. Only the BCD term is omitted for other bands;
+interband and semiclassical terms still run. The omitted BCD is not asserted
+to be a zero coherent-block response.
+
+The metric BCD curvature now matches the orthogonal bare isolated-band
+prescription, retaining overlap/connection and ambient terms. With
+`B=C'*(r+i*S_a)*C`, `G=-i*(B-B')`, `N=h-(E_n+E_m)*G/2`, the off-diagonal
+bare position is `r0=(B+B')/2+i*N*I0(E_m-E_n)` and its curvature is the
+ambient diagonal minus `2*imag(sum(r0_nm^a*r0_mn^b))`. The finite connection
+is retained when I0 is zero. No global zero-eta metric geometry is prepared.
+At S=I this is algebraically the existing orthogonal curl/commutator formula;
+its orthogonal implementation and summation order are retained.
+
+Metric interband outer inverses also use the existing `bare_energy_inverse`:
+zero strictly below `1e-7` eV in absolute gap, reciprocal at equality and
+above. The finite connection/generalized-derivative terms are not erased at
+their producer. This cutoff, the BCD threshold and positive broadenings have
+independent roles. With threshold zero only literally equal adjacent energies
+are excluded; no new machine-equality grouping is introduced.
+
+Full SHG still requires finite positive geometry and intermediate widths.
+Orthogonal geometry uses `intermediate_regularization`; metric geometry uses
+`denominator_regularization`, independently of its intermediate energy-sum
+width. Defaults and optical/low-frequency rates are unchanged. Expert SHG
+vertices reject a zero planned metric width; independent eta=0 matrix-element
+or other-response routes keep their previous support.
+
+Metric SHG now requests the optional public MatrixElements capability
+`OPTICAL_CUTOFF_VERTICES` and consumes `cutoff_optical_position_vertices`.
+The existing `optical_position_vertices` metric expert interface still returns
+its original r_eta/G_Deta aliases and is not redirected for other consumers.
+The new source jet preserves the full connection diagonal, overlap derivatives
+and moving-frame connection. Only optical vertices change; BCD and the metric
+energy Hessian/semiclassical term use their original data.
+
+## Optional normalized source jet for metric cutoff optics
+
+At each k0, hold the accepted complete generalized eigenvectors C0 fixed and
+write M(k)=C0†S(k)C0, P=M^(-1/2). At k0, M=P=I. Define projected raw
+K_a=C0†H_aC0, G_a=C0†S_aC0 and B_a=C0†(r_a+iS_a)C0, with analogous
+raw second/connection derivatives K_ab, G_ab and B_a;b. Then
+
+$$
+Z_{ab}=P_{ab}=-G_{ab}/2+3(G_aG_b+G_bG_a)/8,
+$$
+$$
+\bar H_a=K_a-\{G_a,E\}/2,
+$$
+$$
+\bar H_{ab}=K_{ab}-[\{G_a,K_b\}+\{G_b,K_a\}]/2
++(G_aEG_b+G_bEG_a)/4+\{Z_{ab},E\},
+$$
+$$
+\bar A_a=B_a-iG_a/2,\qquad
+\bar A_{a;b}=B_{a;b}-\{G_b,B_a\}/2+i(Z_{ab}-G_bG_a/4).
+$$
+
+These are derivatives of PHP and PBP+iPMP_a in the anchored normalized frame;
+raw source derivatives are projected once, not the already differentiated D_eta
+connection. The point parallel-gauge zero diagonal is not the source diagonal.
+The existing orthogonal producer receives these jets and builds r0, r_eta and
+Gcut=R+I0 Q with eta_correction=false. It retains finite R and raw connection
+terms even when I0=0. This is a distinct finite-eta numerical prescription, not
+an identity for the derivative of regularized D. S must remain positive definite.
+
+The metric geometry width eta_g remains `denominator_regularization`: it controls
+both r_eta and all regularized commutators inside Gcut. The independent eta_sum,
+`intermediate_regularization`, controls three-band energy combinations only.
+Defaults are unchanged. Orthogonal SHG still uses its existing intermediate width
+for its vertex producer; an S=I equality comparison explicitly matches both widths
+and disables eta_correction on both sides. Nonorthogonal eta_correction=true remains
+unsupported. No global eta=0 or complete degenerate-block theory is introduced.
+Finite-eta invariance under arbitrary k-dependent frame changes is not asserted.
+
+The optional cutoff optical capability requires `spatial_dimension=3`, just like
+the SHG tensor producer, even for one/two-dimensional sampling. Capability-only
+requests close their source dependencies; requests without this capability do
+not allocate its jet. Lower-dimensional optical storage is rejected in planning
+rather than returning r0/Gcut and the reused r_eta with inconsistent axis extents.

@@ -1,5 +1,9 @@
 module PreparationStorageUnitTests
 
+if !isdefined(@__MODULE__, :CurrentScientificValues)
+    include(joinpath(@__DIR__, "support/CurrentScientificValues.jl"))
+end
+
 using Test, WannierNLQG, HDF5, JSON3
 isdefined(@__MODULE__, :QEPAWMatrixElementsTestSupport) ||
     include(joinpath(@__DIR__, "QEPAWMatrixElementsTestSupport.jl"))
@@ -24,6 +28,61 @@ using .QEPAWMatrixElementsTestSupport
             @test_throws ArgumentError values[1]
         end
         @test storage.preparation_vector(Float64, "dense", 2) isa Vector{Float64}
+    end
+end
+
+@testset "disk publication owns data and rejects changed resident dependencies" begin
+    storage = WannierNLQG.IO
+    mktempdir() do directory
+        storage.with_preparation_storage(directory) do
+            values = storage.preparation_vector(Matrix{ComplexF64}, "owned", 1)
+            @test_throws UndefRefError values[1]
+            original = reshape(ComplexF64.(1:6), 2, 3)
+            values[1] = original
+            generation = values.publications[1].generation
+            original[1] = 99
+            @test values[1][1] == 1
+            values[1] = fill(2.0 + 0.0im, 2, 3)
+            @test values.publications[1].generation != generation
+            @test values[1] == fill(2.0 + 0.0im, 2, 3)
+            publication = values.publications[1]
+            storage.preparation_release!()
+            values.publications[1] = storage.PreparationDiskPublication(
+                publication.generation,
+                publication.state,
+                (payload_type = string(Matrix{ComplexF64}), dimensions = (3, 2)),
+            )
+            @test_throws ArgumentError values[1]
+            values.publications[1] = publication
+            @test storage.preparation_restore_vectors!((points = values,))
+            @test values[1] == fill(2.0 + 0.0im, 2, 3)
+            open(joinpath(values.directory, "1.bin"), "a") do stream
+                write(stream, UInt8(0))
+            end
+            # The resident fast path must observe invalidation too.
+            @test_throws ArgumentError values[1]
+            @test !storage.preparation_restore_vectors!((points = values,))
+        end
+    end
+end
+
+@testset "publication comparison preserves exact bytes across streaming boundaries" begin
+    storage = WannierNLQG.IO
+    mktempdir() do directory
+        output = joinpath(directory, "accepted")
+        expected = UInt8[mod(index, 251) for index in 1:131089]
+        write(output, expected)
+        candidate = storage.operator_publication_candidate(output)
+        changed = copy(expected)
+        changed[65537] ⊻= 0x01
+        write(candidate, changed)
+        @test_throws ArgumentError storage.verify_operator_publication_candidate(candidate, output)
+        @test read(output) == expected
+        @test read(candidate) == changed
+        write(candidate, expected)
+        @test storage.verify_operator_publication_candidate(candidate, output) == output
+        @test !ispath(candidate)
+        @test read(output) == expected
     end
 end
 
@@ -137,18 +196,18 @@ end
             )
             key = only(keys(context.resident))
             cached_payload = context.resident[key].payload
-            digest = context.resident[key].digest
+            generation = context.resident[key].generation
             before = storage._preparation_artifact_identity(artifact)
             chmod(artifact, 0o400)
-            chmod(artifact * ".sha256", 0o400)
+            chmod(artifact * ".commit.toml", 0o400)
             @test fetch("a", () -> error("metadata changes must not rebuild")) == payload
             @test context.resident[key].payload === cached_payload
-            @test context.resident[key].digest == digest
+            @test context.resident[key].generation == generation
             @test context.resident[key].identity != before
             @test storage._preparation_verified_artifact_identity(artifact, before, "invalid") ===
                   nothing
             chmod(artifact, 0o600)
-            chmod(artifact * ".sha256", 0o600)
+            chmod(artifact * ".commit.toml", 0o600)
             open(artifact, "a") do stream
                 write(stream, UInt8(0))
             end
@@ -174,7 +233,66 @@ end
     end
 end
 
-@testset "preparation checksum sidecars use independent atomic temporaries" begin
+@testset "Derived artifact slots preserve complete, unambiguous definitions" begin
+    storage = WannierNLQG.IO
+    mktempdir() do directory
+        version = string(VERSION)
+        first_scope = "scope:" * version * ":a"
+        second_identity = version * ":a:x"
+        # These two definitions collided under the old colon-concatenation
+        # before hashing; distinct scopes must build and restore distinct data.
+        for (scope, identity, expected) in
+            ((first_scope, "x", [1.0]), ("scope", second_identity, [2.0]))
+            storage.with_preparation_artifact_cache(directory, scope) do
+                built = storage.cached_preparation_artifact("a", () -> identity) do
+                    expected
+                end
+                @test built == expected
+            end
+        end
+        for (scope, identity, expected) in
+            ((first_scope, "x", [1.0]), ("scope", second_identity, [2.0]))
+            storage.with_preparation_artifact_cache(directory, scope) do
+                restored = storage.cached_preparation_artifact(
+                    () -> error("existing definition must restore"),
+                    "a",
+                    () -> identity,
+                )
+                @test restored == expected
+            end
+        end
+        catalogs = filter(
+            path -> startswith(basename(path), "artifact-index-v2-") && endswith(path, ".toml"),
+            readdir(joinpath(directory, "a"); join = true),
+        )
+        @test length(catalogs) == 1
+        document = storage.read_task_input_file(only(catalogs)).document
+        @test length(document["entries"]) == 2
+        @test length(unique(row["contract"] for row in document["entries"])) == 2
+        @test !isdir(only(catalogs) * ".lock")
+        corrupted = deepcopy(document)
+        corrupted["entries"][2]["slot"] = corrupted["entries"][1]["slot"]
+        storage.write_task_input_file(only(catalogs), corrupted)
+        storage.with_preparation_artifact_cache(directory, first_scope) do
+            @test_throws ArgumentError storage.cached_preparation_artifact(
+                () -> error("corrupt catalog must not build"),
+                "a",
+                () -> "x",
+            )
+        end
+        corrupted["schema"] = "wanniernlqg.preparation-contract-catalog/1"
+        storage.write_task_input_file(only(catalogs), corrupted)
+        storage.with_preparation_artifact_cache(directory, first_scope) do
+            @test_throws ArgumentError storage.cached_preparation_artifact(
+                () -> error("old catalog must not build"),
+                "a",
+                () -> "x",
+            )
+        end
+    end
+end
+
+@testset "preparation commit receipts use independent atomic temporaries" begin
     storage = WannierNLQG.IO
     mktempdir() do directory
         path_a = joinpath(directory, "payload-a.bin")
@@ -207,7 +325,11 @@ end
             band_range = 1:1,
             include_time_reversal = false,
         )
-        scope = S.BandRepresentationQualificationScope(trues(1, 7), trues(1, 7))
+        scope = S.BandRepresentationQualificationScope(
+            trues(1, 7),
+            trues(1, 7);
+            content_authentication = false,
+        )
         contract = W.TargetSubspaceQualificationContract(
             scope;
             outer_min_ev = -18.0,
@@ -265,13 +387,34 @@ end
                 @test !isfile(joinpath(checkpoint, "stages", "completed_payload.bin"))
                 prior_star_mtime = stat(joinpath(checkpoint, "stars", "star-1.bin")).mtime
                 if index == 7
-                    write(joinpath(checkpoint, "stars", "star-1.bin.sha256"), repeat("0", 64))
+                    write(joinpath(checkpoint, "stars", "star-1.bin.commit.toml"), repeat("0", 64))
                 end
             end
             event_path = joinpath(checkpoint, "resource_events.jsonl")
             previous_events = isfile(event_path) ? readlines(event_path) : String[]
             previous_native_reads =
                 count(line -> occursin("native_read_started", line), previous_events)
+            if index == 7
+                # The malformed receipt is uncommitted work, never authenticated
+                # input. Preserve the existing workspace and require an explicit
+                # fresh workspace instead of silently overwriting its records.
+                receipt_path = joinpath(checkpoint, "stars", "star-1.bin.commit.toml")
+                original_receipt = read(receipt_path)
+                invalid_receipt_error = try
+                    W.prepare_symmetry_covariant_wavefunctions(config)
+                    nothing
+                catch exception
+                    exception
+                end
+                @test invalid_receipt_error isa ArgumentError
+                @test occursin(
+                    "PREPARATION_VALUE_MIGRATION_REQUIRED",
+                    sprint(showerror, invalid_receipt_error),
+                )
+                @test read(receipt_path) == original_receipt
+                @test stat(joinpath(checkpoint, "stars", "star-1.bin")).mtime == prior_star_mtime
+                continue
+            end
             result = W.prepare_symmetry_covariant_wavefunctions(config)
             if index == 5
                 events = readlines(event_path)
@@ -282,11 +425,30 @@ end
                     line -> occursin("completed_payload_resumed", line),
                     events[(length(previous_events) + 1):end],
                 )
+                # A complete cached payload must never bypass a later limited
+                # preflight request. Only partial numerical stages omit the cap.
+                full_payload_path = joinpath(checkpoint, "stages", "completed_payload.bin")
+                full_payload_mtime = stat(full_payload_path).mtime
+                fields =
+                    (; (name => getfield(config, name) for name in fieldnames(typeof(config)))...)
+                limited_config = W.SymmetryCovariantWavefunctionPreparationConfig(;
+                    merge(fields, (; maximum_star_count = 1))...,
+                )
+                limited_cache_error = try
+                    W.prepare_symmetry_covariant_wavefunctions(limited_config)
+                    nothing
+                catch exception
+                    exception
+                end
+                @test limited_cache_error isa ArgumentError
+                @test occursin(
+                    "PREPARATION_INPUT_DEFINITION_MISMATCH",
+                    sprint(showerror, limited_cache_error),
+                )
+                @test stat(full_payload_path).mtime == full_payload_mtime
             end
             if index == 6
                 @test stat(joinpath(checkpoint, "stars", "star-1.bin")).mtime == prior_star_mtime
-            elseif index == 7
-                @test stat(joinpath(checkpoint, "stars", "star-1.bin")).mtime != prior_star_mtime
             end
             @test result.status == :STANDARD
             @test length(result.star_representatives) == 4
@@ -299,7 +461,10 @@ end
                         construction_policy = :standard,
                     )
                 end
-            push!(digests, Base.invokelatest(E._star_payload_sha256, restored.payload))
+            push!(
+                digests,
+                Base.invokelatest(CurrentScientificValues.payload_values, restored.payload),
+            )
         end
         @test length(unique(digests)) == 1
         @test all(result -> result.maxima == results[1].maxima, results)
@@ -322,7 +487,7 @@ end
         for mode in (:dense_reference, :streaming_serial)
             config = W.SymmetryCovariantWavefunctionPreparationConfig(
                 execution = W.WavefunctionPreparationExecutionConfig(mode = mode),
-                construction_policy = :strict,
+                construction_policy = :standard,
                 source = source,
                 wavefunction_gauge_backend = W.StarCovariantPAWGauge(
                     buffer_policy = W.ClosureDrivenBandBuffer(max_extra_bands = 0),
@@ -331,9 +496,13 @@ end
                 target_band_count = 1,
             )
             result = W.prepare_symmetry_covariant_wavefunctions(config)
-            @test result.status == :PASS
+            @test result.status == :STANDARD
             push!(outcomes, result)
-            restored = Base.invokelatest(E._read_star_covariant_paw_gauge_hdf5, result.output_hdf5)
+            restored = Base.invokelatest(
+                E._read_star_covariant_paw_gauge_hdf5,
+                result.output_hdf5;
+                require_pass = false,
+            )
             push!(payloads, restored.payload)
         end
         @test outcomes[1].maxima == outcomes[2].maxima
@@ -353,7 +522,7 @@ end
         storage.write_preparation_checkpoint(path, "contract-A", payload)
         @test storage.read_preparation_checkpoint(path, "contract-A") == payload
         @test storage.read_preparation_checkpoint(path, "contract-B") === nothing
-        rm(path * ".sha256") # Interrupted before the commit marker.
+        rm(path * ".commit.toml") # Interrupted before the commit marker.
         @test storage.read_preparation_checkpoint(path, "contract-A") === nothing
         storage.write_preparation_checkpoint(path, "contract-A", payload)
         open(path, "a") do io
@@ -364,6 +533,60 @@ end
         @test storage.read_preparation_checkpoint(path, "contract-A") == payload
         write(path * ".partial", "uncommitted")
         @test storage.read_preparation_checkpoint(path * ".partial", "contract-A") === nothing
+        # A valid checksum does not make the old envelope admissible.
+        open(path, "w") do stream
+            storage.Serialization.serialize(stream, (contract = "contract-A", payload = payload))
+        end
+        write(path * ".sha256", bytes2hex(open(storage.SHA.sha256, path)))
+        legacy_bytes = read(path)
+        legacy_sidecar = read(path * ".sha256")
+        @test_throws ArgumentError storage.read_preparation_checkpoint(path, "contract-A")
+        @test_throws ArgumentError storage.write_preparation_checkpoint(path, "contract-A", payload)
+        @test read(path) == legacy_bytes
+        @test read(path * ".sha256") == legacy_sidecar
+        foreign_prefix =
+            replace(storage.PREPARATION_CHECKPOINT_PREFIX, string(VERSION) => "other-julia")
+        write(path, foreign_prefix)
+        write(path * ".sha256", bytes2hex(open(storage.SHA.sha256, path)))
+        @test_throws ArgumentError storage.read_preparation_checkpoint(path, "contract-A")
+        @test_throws ArgumentError storage.write_preparation_checkpoint(path, "contract-A", payload)
+        @test read(path, String) == foreign_prefix
+    end
+end
+
+@testset "checkpoint receipts bind generation, layout and local publication" begin
+    storage = WannierNLQG.IO
+    mktempdir() do directory
+        path = joinpath(directory, "owned.bin")
+        payload = (coefficients = reshape(ComplexF64.(1:12), 3, 4), diagnostics = [0.0, 1.0])
+        storage.write_preparation_checkpoint(path, "owned-contract", payload)
+        @test isfile(path * ".commit.toml")
+        @test !isfile(path * ".sha256")
+        @test storage.read_preparation_checkpoint(path, "owned-contract") == payload
+        receipt = storage.read_task_input_file(path * ".commit.toml").document
+        @test receipt["schema"] == "wanniernlqg.preparation-commit/3"
+        @test receipt["julia_version"] == string(VERSION)
+        changed = deepcopy(receipt)
+        changed["generation"] = "unrelated-publication"
+        storage.write_task_input_file(path * ".commit.toml", changed)
+        @test storage.read_preparation_checkpoint(path, "owned-contract") === nothing
+        storage.write_task_input_file(path * ".commit.toml", receipt)
+        changed = deepcopy(receipt)
+        changed["payload_layout"] = "wrong-shape"
+        storage.write_task_input_file(path * ".commit.toml", changed)
+        @test storage.read_preparation_checkpoint(path, "owned-contract") === nothing
+        storage.write_task_input_file(path * ".commit.toml", receipt)
+        copied = joinpath(directory, "copied.bin")
+        cp(path, copied)
+        cp(path * ".commit.toml", copied * ".commit.toml")
+        @test storage.read_preparation_checkpoint(copied, "owned-contract") === nothing
+        storage.write_preparation_checkpoint(path, "owned-contract", payload)
+        new_receipt = storage.read_task_input_file(path * ".commit.toml").document
+        @test new_receipt["generation"] != receipt["generation"]
+        storage.write_task_input_file(path * ".commit.toml", receipt)
+        @test storage.read_preparation_checkpoint(path, "owned-contract") === nothing
+        storage.write_task_input_file(path * ".commit.toml", new_receipt)
+        @test storage.read_preparation_checkpoint(path, "owned-contract") == payload
     end
 end
 
@@ -429,6 +652,7 @@ end
 end
 
 @testset "ordinary native AMN dense oracle and workers" begin
+    storage = WannierNLQG.IO
     include(joinpath(@__DIR__, "WannierizationFixtureSupport.jl"))
     W = WannierNLQG.Wannierization
     E = first(W._load_wannierization_extension!()).RepresentationPreparation
@@ -441,6 +665,16 @@ end
         )
         native = Base.invokelatest(E.read_native_source, source; purpose = :physical_overlap)
         basis = synthetic_wannierization_fixture().basis
+        # Keep a stable mutable owner so changes are actual inputs rather than
+        # edits to a transient source-provider readback.
+        native = WannierNLQG.SymmetryFoundation.NativeWavefunctionData(
+            (
+                name===:kpoints ? [deepcopy(point) for point in native.kpoints] :
+                getfield(native, name) for
+                name in fieldnames(typeof(native)) if name != :source_definition
+            )...;
+            source_definition = native.source_definition,
+        )
         expected = Base.invokelatest(E._dense_native_amn_test_oracle, native, basis)
         for workers in (1, 2, 4)
             execution = W.WavefunctionPreparationExecutionConfig(
@@ -457,6 +691,55 @@ end
             end
             @test resumed == expected
         end
+        execution = W.WavefunctionPreparationExecutionConfig(
+            mode = :streaming_serial,
+            max_workers = 1,
+            checkpoint_directory = joinpath(directory, "amn-1"),
+        )
+        before = storage.read_task_input_file(
+            joinpath(directory, "amn-1", "native-amn", "block-1.bin.commit.toml"),
+        ).document["contract"]
+        @views native.kpoints[1].coefficients[1, :, :] .*= cis(0.125)
+        changed_expected = Base.invokelatest(E._dense_native_amn_test_oracle, native, basis)
+        changed = task_local_storage(:wannier_preparation_execution, execution) do
+            Base.invokelatest(E._generate_amn, native, basis)
+        end
+        @test changed == changed_expected
+        @test changed != expected
+        after = storage.read_task_input_file(
+            joinpath(directory, "amn-1", "native-amn", "block-1.bin.commit.toml"),
+        ).document["contract"]
+        @test after != before
+        @test count(
+            name->startswith(name, "block-1.bin.input-"),
+            readdir(joinpath(directory, "amn-1", "native-amn")),
+        ) == 2
+    end
+end
+
+@testset "Complete preparation input definitions cross chunk and scalar boundaries" begin
+    storage=WannierNLQG.IO
+    mktempdir() do directory
+        path=joinpath(directory, "block.bin")
+        values=collect(Float64, 1:10000)
+        definition=item->(values = item, axes = size(item), source = "current-test")
+        first=storage._preparation_block_input_contract(definition, values, path, "base")
+        @test storage._preparation_block_input_contract(definition, values, path, "base") == first
+        values[end]=nextfloat(values[end])
+        changed=storage._preparation_block_input_contract(definition, values, path, "base")
+        @test changed != first
+        @test storage._preparation_block_input_contract(definition, values, path, "base") == changed
+        @test storage._preparation_block_input_contract(
+            definition,
+            reshape(values, 100, 100),
+            path,
+            "base",
+        ) != changed
+        signed=storage._preparation_block_input_contract(definition, [0.0], path, "base")
+        @test storage._preparation_block_input_contract(definition, [-0.0], path, "base") != signed
+        document=storage.read_task_input_file(path*".input.toml").document
+        @test document["schema"] == "wanniernlqg.preparation-block-input/1"
+        @test !isfile(path)
     end
 end
 
@@ -500,12 +783,23 @@ end
 end
 
 module AcceptedMatrixResolutionTests
-using Test, WannierNLQG
-const W = WannierNLQG.Wannierization
-const E = first(W._load_wannierization_extension!()).WorkflowOrchestration
-@testset "resolved matrix checkpoint preserves payload and avoids generator" begin
+using Test, WannierNLQG, LinearAlgebra
+const W=WannierNLQG.Wannierization
+const IOW=WannierNLQG.IO
+const E=first(W._load_wannierization_extension!()).WorkflowOrchestration
+@testset "accepted matrices restore from actual input and artifact values" begin
     mktempdir() do directory
-        mmn = WannierNLQG.IO.WannierMMN(
+        structure=WannierNLQG.SymmetryFoundation.CrystalStructure(
+            Matrix{Float64}(I, 3, 3),
+            ["X"],
+            zeros(3, 1),
+        )
+        basis=WannierNLQG.WannierProjection.build_wannier_projection_basis(
+            ["X:s"];
+            structure,
+            num_wannier = 1,
+        )
+        mmn=IOW.WannierMMN(
             1,
             1,
             1,
@@ -513,54 +807,84 @@ const E = first(W._load_wannierization_extension!()).WorkflowOrchestration
             ones(Int, 1, 1),
             zeros(Int, 3, 1, 1),
         )
-        file=joinpath(directory, "input.mmn")
-        WannierNLQG.IO.write_wannier_mmn(file, mmn)
+        file=joinpath(directory, "resolved.mmn");
+        IOW.write_wannier_mmn(file, mmn)
+        input=joinpath(directory, "input-values.bin")
+        open(input, "w") do stream
+            IOW.write_native_definition_value(
+                stream,
+                (coefficients = ones(ComplexF64, 1, 1), lattice = structure.lattice),
+            )
+        end
+        eig=joinpath(directory, "input.eig");
+        write(eig, "1 1 0.0\n")
+        config=W.WannierizationConfig(
+            input = W.WannierizationInputConfig(
+                eig_file = eig,
+                mmn_file = file,
+                wannierization_mode = :ordinary,
+                projection_basis = basis,
+                num_wannier = 1,
+            ),
+        )
+        files=[input, eig]
         resolved=(;
             mmn,
             amn = nothing,
             mmn_file = file,
             amn_file = nothing,
             raw_amn_file = nothing,
-            source_kind = "native_fixture",
+            source_kind = "matrix_values_storage_fixture",
             paw_result = nothing,
-            gauge_sha256 = "",
             gauge_provenance_file = nothing,
         )
-        path=joinpath(directory, "accepted.bin")
         count=Ref(0)
-        first_result=E._cached_resolved_matrices(path, "bound-inputs-v1") do
+        captured=E._capture_native_matrix_acceptance(config, basis, files, directory) do
             count[]+=1
             resolved
         end
-        second_result=E._cached_resolved_matrices(path, "bound-inputs-v1") do
-            error("MATRIX_REGENERATION_FORBIDDEN")
-        end
+        reference=captured.accepted_matrix_reference
+        @test reference["schema"]=="native-matrix-acceptance-v2"
+        @test reference["content_authentication"]=="NOT_PERFORMED"
+        @test !haskey(reference, "input_identity_sha256") && !haskey(reference, "payload_sha256")
+        before=read(reference["path"])
+        restored=E._restore_accepted_matrix_reference(reference, config, basis, files)
         @test count[]==1
-        @test second_result.mmn.data==first_result.mmn.data
-        @test second_result.source_kind==first_result.source_kind
-        @test read(file, String)==read(second_result.mmn_file, String)
-        bound = E._cached_resolved_matrices(
-            () -> error("REBUILD_FORBIDDEN"),
-            path,
-            "bound-inputs-v1";
-            acceptance_identity = "native-inputs-v1",
+        @test restored.mmn.data==captured.mmn.data
+        @test restored.source_kind==captured.source_kind
+        @test read(reference["path"])==before
+        changed=W._replace_wannierization_config(config; input = (outer_max_ev = 2.0,))
+        @test_throws ArgumentError E._restore_accepted_matrix_reference(
+            reference,
+            changed,
+            basis,
+            files,
         )
-        reference = bound.accepted_matrix_reference
-        before = read(path)
-        restored = E._restore_accepted_matrix_reference(reference, "native-inputs-v1")
-        @test restored.mmn.data == resolved.mmn.data
-        @test read(path) == before
-        @test_throws ArgumentError E._restore_accepted_matrix_reference(reference, "changed-inputs")
-        bad = merge(reference, Dict("payload_sha256" => repeat("0", 64)))
-        @test_throws ArgumentError E._restore_accepted_matrix_reference(bad, "native-inputs-v1")
-        open(file, "a") do io
-            write(io, "tampered")
-        end
-        @test_throws ArgumentError E._cached_resolved_matrices(
-            ()->error("MATRIX_REGENERATION_FORBIDDEN"),
-            path,
-            "bound-inputs-v1",
+        legacy=merge(reference, Dict("schema"=>"native-matrix-acceptance-v1"))
+        @test_throws ArgumentError E._restore_accepted_matrix_reference(
+            legacy,
+            config,
+            basis,
+            files,
         )
+        input_bytes=read(input);
+        open(io->write(io, "changed"), input, "a")
+        @test_throws ArgumentError E._restore_accepted_matrix_reference(
+            reference,
+            config,
+            basis,
+            files,
+        )
+        write(input, input_bytes)
+        @test E._restore_accepted_matrix_reference(reference, config, basis, files).mmn.data==mmn.data
+        open(io->write(io, "changed"), file, "a")
+        @test_throws ArgumentError E._restore_accepted_matrix_reference(
+            reference,
+            config,
+            basis,
+            files,
+        )
+        @test count[]==1
     end
 end
 end

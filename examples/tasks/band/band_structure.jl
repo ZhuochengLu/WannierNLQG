@@ -35,7 +35,7 @@ function build_config(;
                 id = "band_structure",
                 quantity = "Band",
                 physics = BandParameters(fermi_energy = 0.0),
-                numerics = BandNumerics(hermiticity_tolerance = 1.0e-10),
+                numerics = Numerics(hermiticity_tolerance = 1.0e-10),
             ),
         ],
         execution = ExecutionOptions(fourier_backend = "direct"),

@@ -40,7 +40,8 @@ end
 function synthetic_c1_projection_adapter_fixture()
     scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
         trues(1, 1),
-        trues(1, 1),
+        trues(1, 1);
+        content_authentication = false,
     )
     contract = PROJECTION_SEARCH_W.TargetSubspaceQualificationContract(
         scope;
@@ -205,11 +206,11 @@ end
     @test result.complete
     @test result.total_solution_count == 1
     @test length(result.solutions) == 1
-    @test result.compatibility_info.parity_eligible
-    @test result.compatibility_info.scope == :spinless_unitary
+    @test result.algorithm_info.canonical_reduction_eligible
+    @test result.algorithm_info.scope == :spinless_unitary
     @test only(result.solutions).validation_status ==
           PROJECTION_SEARCH_W.PROJECTION_VALIDATION_PASSED
-    @test length(only(result.solutions).validation_sha256) == 64
+    @test !hasproperty(only(result.solutions), :validation_sha256)
 
     unvalidated_config = PROJECTION_SEARCH_W.ProjectionRepresentationSearchConfig(
         band_representation = fixture.representation,
@@ -223,7 +224,7 @@ end
     @test only(unvalidated.solutions).validation_status ==
           PROJECTION_SEARCH_W.PROJECTION_VALIDATION_NOT_RUN
     @test isempty(only(unvalidated.solutions).embedding_residuals)
-    @test length(only(unvalidated.solutions).validation_sha256) == 64
+    @test !hasproperty(only(unvalidated.solutions), :validation_sha256)
 end
 
 @testset "independent embedding validation states" begin

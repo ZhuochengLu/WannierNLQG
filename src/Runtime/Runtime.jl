@@ -4,13 +4,27 @@ using Dates
 using LinearAlgebra
 using Printf
 using SHA
+import ..Core.ESKernel: WorkspacePlanning
 using ..Core
+import ..Core: native_physical_dimension, complete_native_reference_lattice
 using ..IO
+import ..IO: WannierNNKPProjection
+import ..IO: _read_task_input_fourier_record, read_wannier_tb_lattice
 import ..IO: spectral_response_source_digest
 import ..IO: _read_wannier_tb_centers
+import ..IO: _load_operator_bundle_extension!
+import ..IO: write_photon_momentum_path_record
 using ..MatrixElements
 using ..Responses
-using ..SymmetryFoundation: response_symmetry_group_report
+import ..Wannierization
+import ..WannierProjection
+import ..Symmetrization
+import ..WannierProjection: read_wannier_win
+import ..SymmetryFoundation
+import ..Responses: HarmonicFrequencyPolicy
+import ..SymmetryFoundation: activate_symmetry_foundation_backend!
+using ..SymmetryFoundation:
+    response_symmetry_group_report, CrystalStructure, high_symmetry_band_path, read_poscar_structure
 import ..MatrixElements:
     MatrixElementDirectionRequirements,
     matrix_element_axis_required,
@@ -20,10 +34,15 @@ import ..MatrixElements:
 
 include("Environment.jl")
 include("QualificationTypes.jl")
+include("ThirdOrderConfiguration.jl")
+include("BerryMultipoleConfiguration.jl")
+include("IntegrationAlgorithms.jl")
+include("Planning/PhotonMomentumPath.jl")
 include("Config.jl")
 include("Planning/TaskRegistry.jl")
 include("Validation.jl")
 include("TaskConfiguration.jl")
+include("BerryMultipoleTaskConfiguration.jl")
 include("MPI.jl")
 include("Progress.jl")
 include("ResponseSymmetryRuntime.jl")
@@ -39,6 +58,29 @@ include("Execution/KPathDriver.jl")
 include("Execution/BandStructureKernel.jl")
 include("BandStructure.jl")
 include("Dispatch.jl")
+include("NativeModelRuntime.jl")
+include("NativeResponseSymmetryRuntime.jl")
+include("BandTaskInput.jl")
+include("TaskInput.jl")
+include("WorkflowTaskInput.jl")
+include("WannierApplication.jl")
+include("Planning/WannierWorkflowDataRequirements.jl")
+include("MeshScreeningTaskInput.jl")
+include("WannierMeshResolution.jl")
+include("WannierGeometryTaskInput.jl")
+include("NativeWannierTaskInput.jl")
+include("WannierTaskInput.jl")
+include("ProjectionTaskInput.jl")
+include("WorkflowTaskInputTemplates.jl")
+include("TaskInputCLI.jl")
+export TaskInputResolution,
+    read_task_input,
+    resolve_task_input,
+    explain_task_input,
+    write_task_input_template,
+    write_task_input_resolution,
+    run_task_input
+export PointOrbitalSymmetryOperation, write_native_response_symmetry
 
 export ACTIVE_PROGRESS,
     BUNDLE_HAS_MPI,
@@ -80,28 +122,38 @@ export ACTIVE_PROGRESS,
     NormalizedTaskSpec,
     TaskConfig,
     TaskSpec,
+    Numerics,
+    JerkParameters,
+    THGParameters,
+    TensorComponents,
     ModelInput,
+    RealSpaceTBInput,
+    AnalyticKInput,
     BZMesh,
+    KRegion,
     KSlice,
     KPath,
+    automatic_kpath,
+    AbstractIntegrationAlgorithm,
+    UniformIntegration,
+    HAdaptiveCubature,
+    IntegrationDomain,
+    IntegrationDomain2D,
+    ResponseIntegralResult,
+    integrate_response,
     ExecutionOptions,
     OutputOptions,
     OpticalParameters,
     SeparateRelaxation,
-    FermiSurfaceBroadening,
+    IntrinsicHallParameters,
+    BerryMultipoleParameters,
     LinearTransportParameters,
     LinearOpticalResponseParameters,
     OrbitalMagnetizationParameters,
-    LinearResponseNumerics,
-    OrbitalNumerics,
     SHGParameters,
-    SHGNumerics,
     FiniteQOpticalParameters,
     GeometryParameters,
     BandParameters,
-    OpticalNumerics,
-    GeometryNumerics,
-    BandNumerics,
     BandTargets,
     Subspace,
     Subspaces,

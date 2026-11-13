@@ -1,19 +1,20 @@
 #!/usr/bin/env julia
 
 using WannierNLQG
+using Test
 
 const ROOT = normpath(joinpath(@__DIR__, ".."))
 const GUIDE = joinpath(ROOT, "docs", "WANNIERIZATION.md")
 const EXAMPLE_DIRECTORY = joinpath(ROOT, "examples", "templates", "wannierization")
 const EXAMPLE_FILES =
-    ("generate_uiu_qe.jl", "generate_uiu_vasp.jl", "prepare_exact_operator_bundle.jl")
-const CONFIG_MIGRATION = joinpath(ROOT, "docs", "WANNIERIZATION_CONFIG_MIGRATION.md")
-const PUBLIC_MIGRATION = joinpath(ROOT, "docs", "MIGRATION_1.0.0.md")
+    ("generate_uiu_qe.jl", "generate_uiu_vasp.jl", "prepare_full_uiu_operator_bundle.jl")
+const CONFIG_MIGRATION = joinpath(ROOT, "docs", "WANNIERIZATION_CONFIG.md")
+const PUBLIC_MIGRATION = joinpath(ROOT, "docs", "PUBLIC_API.md")
 const EXPECTED_WANNIERIZATION_FACADE = Set((
     :Wannierization,
-    :SymmetryAdaptedWannierizationConfig,
+    :WannierizationConfig,
     :WannierizationResult,
-    :construct_symmetry_adapted_wannier_functions,
+    :construct_wannier_functions,
 ))
 
 function documentation_check(condition::Bool, message::AbstractString)
@@ -22,8 +23,8 @@ function documentation_check(condition::Bool, message::AbstractString)
 end
 
 documentation_check(isfile(GUIDE), "missing WANNIERIZATION.md")
-documentation_check(isfile(CONFIG_MIGRATION), "missing WANNIERIZATION_CONFIG_MIGRATION.md")
-documentation_check(isfile(PUBLIC_MIGRATION), "missing MIGRATION_1.0.0.md")
+documentation_check(isfile(CONFIG_MIGRATION), "missing WANNIERIZATION_CONFIG.md")
+documentation_check(isfile(PUBLIC_MIGRATION), "missing PUBLIC_API.md")
 text = read(GUIDE, String)
 migration_text = read(CONFIG_MIGRATION, String)
 public_migration_text = read(PUBLIC_MIGRATION, String)
@@ -36,35 +37,88 @@ documentation_check(
     !occursin("checkpoint_hdf5 = \"checkpoint.h5\"", public_migration_text),
     "public migration retains a rejected generic checkpoint suffix",
 )
-documentation_check(
-    occursin("demo_wannierization_tb.dat.diagnostics.json", text),
-    "guide omits the neutral Wannier90 diagnostic sidecar",
-)
+# The maintained guide documents normalized TOML, not the archived Julia group layout.
+function check_normalized_wannierization_guide(text::AbstractString)
+    for marker in (
+        "Runtime.read_task_input",
+        "Runtime.run_task_input",
+        "relative to that file",
+        "wannierization",
+        "ordinary",
+        "symmetry_adapted",
+        "symmetrization",
+        "mesh_screening",
+        "[wannierization.*]",
+        "[symmetrization.*]",
+        "namespaces are rejected",
+        "## Solver and accepted state",
+        "## Operators, symmetry and migration",
+        "operator_tasks",
+        "mutually exclusive",
+        "checkpoint",
+        "recovery path",
+    )
+        documentation_check(occursin(marker, text), "normalized guide omits $(marker)")
+    end
+    defaults = WannierNLQG.Wannierization.WannierizationSolverConfig().stage_controls
+    for name in (:dis_num_iter, :dis_conv_tol, :dis_conv_window, :num_iter, :conv_tol, :conv_window)
+        pattern = Regex("(?<![A-Za-z_])" * string(name) * "\\s*=\\s*([0-9.eE+\\-]+)")
+        found = match(pattern, text)
+        documentation_check(found !== nothing, "guide omits solver default $(name)")
+        documentation_check(
+            parse(Float64, found.captures[1]) == getproperty(defaults, name),
+            "guide solver default differs for $(name)",
+        )
+    end
+    source = read(
+        joinpath(ROOT, "ext", "WannierNLQGWannierizationExt", "hdf5", "FixedSubspace.jl"),
+        String,
+    )
+    found = match(r"const WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION\s*=\s*\"([^\"]+)\"", source)
+    documentation_check(found !== nothing, "current checkpoint wire declaration is missing")
+    documentation_check(
+        occursin("The default embedded checkpoint wire is $(found.captures[1]).", text),
+        "guide does not name the default embedded checkpoint wire",
+    )
+    referenced = match(
+        r"const WANNIERIZATION_REFERENCED_CHECKPOINT_SCHEMA_VERSION\s*=\s*\"([^\"]+)\"",
+        source,
+    )
+    documentation_check(referenced !== nothing, "referenced checkpoint wire declaration is missing")
+    documentation_check(
+        occursin(
+            "wire $(referenced.captures[1]) and an explicitly bound retained source root",
+            text,
+        ),
+        "guide does not name the referenced checkpoint wire and source-root requirement",
+    )
+    return true
+end
+check_normalized_wannierization_guide(text)
 
-documentation_check(
-    occursin("import WannierNLQG.Wannierization as W", text),
-    "guide must demonstrate qualified expert access",
-)
-documentation_check(
-    !occursin("using WannierNLQG.Wannierization", text),
-    "guide retains the former broad import example",
-)
-for contract in (
-    "symmetry_detection_backend_provenance",
-    "WannierizationInternalSupport",
-    "RepresentationPreparation",
-    "ProjectionSearch",
-    "PAWMatrixElements",
-    "SolverCheckpoint",
-    "OperatorExport",
-    "WorkflowOrchestration",
-    "WannierNLQG.wannierization_checkpoint/1.1",
-    "Packed HDF5 1.1",
-)
-    documentation_check(occursin(contract, text), "guide omits $(contract)")
+@testset "normalized guide rejects stale defaults and legacy-boundary omissions" begin
+    @test check_normalized_wannierization_guide(text)
+    for (old, new) in (
+        ("dis_num_iter=200", "dis_num_iter=201"),
+        ("namespaces are rejected", "namespaces are accepted"),
+        (
+            match(r"The default embedded checkpoint wire is [0-9.]+\.", text).match,
+            "The default embedded checkpoint wire is unsupported.",
+        ),
+        (
+            match(r"wire [0-9.]+ and an explicitly bound retained source root", text).match,
+            "wire unsupported and an explicitly bound retained source root",
+        ),
+        ("## Solver and accepted state", "## Missing solver reference"),
+    )
+        @test count(old, text) == 1
+        @test_throws ErrorException check_normalized_wannierization_guide(
+            replace(text, old => new; count = 1),
+        )
+    end
 end
 
-section = split(split(text, "## 4."; limit = 2)[2], "## 5."; limit = 2)[1]
+# The internal typed compatibility layout is retained independently of TOML syntax.
 config_groups = (
     (:input, WannierNLQG.Wannierization.WannierizationInputConfig),
     (:solver, WannierNLQG.Wannierization.WannierizationSolverConfig),
@@ -73,25 +127,18 @@ config_groups = (
     (:output, WannierNLQG.Wannierization.WannierizationOutputConfig),
 )
 leaf_count = sum(length(fieldnames(group_type)) for (_, group_type) in config_groups)
-for field in fieldnames(WannierNLQG.Wannierization.SymmetryAdaptedWannierizationConfig)
-    row = "| `$(field)` |"
-    documentation_check(
-        count(line -> startswith(line, row), split(section, '\n')) == 1,
-        "guide must list top-level group $(field) exactly once",
-    )
-end
-for (group, group_type) in config_groups, field in fieldnames(group_type)
-    row = "| `$(field)` |"
-    documentation_check(
-        count(line -> startswith(line, row), split(section, '\n')) == 1,
-        "guide must list $(group).$(field) exactly once",
-    )
-    documentation_check(
-        occursin("| `$(field)` | `$(group).$(field)` |", migration_text),
-        "migration table omits $(field) -> $(group).$(field)",
-    )
-end
-documentation_check(leaf_count == 75, "grouped configuration must contain 75 leaves")
+documentation_check(
+    leaf_count == 77 &&
+        Set(fieldnames(WannierNLQG.Wannierization.WannierizationCheckpointConfig)) == Set((
+            :restart_hdf5,
+            :checkpoint_hdf5,
+            :num_dump_cycles,
+            :recovery,
+            :storage,
+            :reference_root,
+        )),
+    "grouped Julia compatibility configuration must contain the 77 declared leaves and checkpoint storage fields",
+)
 
 documentation_check(
     Set(names(WannierNLQG.Wannierization; all = false, imported = false)) ==

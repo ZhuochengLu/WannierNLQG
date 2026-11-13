@@ -6,7 +6,10 @@ using SHA
 using Spglib
 using WannierNLQG
 
-parent_extension = Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt)
+parent_extension = first(WannierNLQG.Wannierization._load_wannierization_extension!())
+Threads.nthreads() == parse(Int, ENV["JULIA_NUM_THREADS"]) || error("VASP thread count differs")
+BLAS.get_num_threads() == 1 || error("VASP BLAS thread count differs")
+println(stderr, "VASP_THREAD_ACTUAL=", Threads.nthreads())
 extension = parent_extension.PAWMatrixElements
 preparation = parent_extension.RepresentationPreparation
 extension === nothing && error("wannierization extension did not load")

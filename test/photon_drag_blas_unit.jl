@@ -87,7 +87,12 @@ function run_pdic_matrix_kernel!(
         active_pair_count = active_pair_count,
         _matrix_scratch_1 = matrix_scratch_1,
         _matrix_scratch_2 = matrix_scratch_2,
+        # This fixture has arbitrary synthetic frames, not a Wannier H/A input.
+        # Retain the old scalar/BLAS arithmetic oracle as an explicit historical test.
+        _historical_center_overlap_reference = true,
         _pdic_matrix_strategy = strategy,
+        valence_velocity_vertices = valence_data.source_gauge_velocity_vertices,
+        conduction_velocity_vertices = conduction_data.source_gauge_velocity_vertices,
     )
 end
 
@@ -318,4 +323,216 @@ end
         nothing,
         nothing,
     )
+end
+
+@testset "Finite-q component plans retain complete endpoint velocity" begin
+    E=WannierNLQG.MatrixElements
+    R=WannierNLQG.Runtime
+    response=WannierNLQG.Responses
+    model_path=joinpath(dirname(@__DIR__), "examples/fixtures/synthetic_runtime/synthetic_tb.dat")
+    model=WannierNLQG.IO.read_wannier_tb(model_path)
+    centers=permutedims(R._runtime_wannier_centers_fractional(model))
+    component=[2, 1, 3]
+    n=model.num_orbitals
+    @test size(centers)==(3, n)
+    for (quantity, method) in (("PDICK", "Conventional"), ("PDSCK", "Geometric_Loop")),
+        convention in ("Convention_I", "Convention_II")
+
+        task=TaskSpec(
+            id = "component_velocity",
+            quantity = quantity,
+            method = method,
+            physics = FiniteQOpticalParameters(
+                photon_energies = [0.73],
+                fermi_energy = 0.0,
+                temperature = 0.0,
+                photon_momentum = (0.003, 0.001, 0.002),
+            ),
+            observable = KSliceSelection(
+                component = TensorComponent(component...),
+                bands = Transition(conduction = [2], valence = [1]),
+            ),
+        )
+        input=TaskConfig(
+            model = ModelInput(model_file = model_path, wannier_center_convention = convention),
+            sampling = KSlice(
+                k_mesh = (2, 2),
+                spatial_dimension = 3,
+                origin = (0.0, 0.0, 0.0),
+                vector_1 = (1.0, 0.0, 0.0),
+                vector_2 = (0.0, 1.0, 0.0),
+            ),
+            tasks = [task],
+            execution = ExecutionOptions(fourier_backend = "Direct"),
+        )
+        cfg=R.compile_task_config(input, task);
+        specs=R.normalize_task_specs(cfg)
+        plan=R.bundle_matrix_element_plan(specs, cfg, component)
+        fullplan=R.bundle_matrix_element_plan(specs, cfg)
+        for kind in (E.BERRY_CONNECTION, E.GAUGE_CORRECTION, E.VELOCITY_VERTICES)
+            @test !E.has_capability(plan, kind)
+        end
+        @test E._axis_required(plan, E.INTERNAL_CONNECTION, 1) &&
+              E._axis_required(plan, E.INTERNAL_CONNECTION, 3)
+        # q_y is nonzero even though optical polarizations are x/z: raw A_y is mandatory.
+        @test E._axis_required(plan, E.INTERNAL_CONNECTION, 2)
+        @test Set(a for a in 1:3 if E._axis_required(plan, E.INTERNAL_CONNECTION, a)) ==
+              Set((1, 2, 3))
+        @test E._axis_required(plan, E.HAMILTONIAN_DERIVATIVES, 2)==(quantity=="PDICK")
+        narrow=[E.MatrixElementWorkspace(model, plan) for _ in 1:2]
+        full=[E.MatrixElementWorkspace(model, fullplan) for _ in 1:2]
+        foreach(ws->E.prepare_real_space!(ws, model), vcat(narrow, full))
+        for sign in (-1, 1)
+            k=[0.17, 0.23, 0.31];
+            q=sign*[0.003, 0.001, 0.002];
+            points=(k-q/2, k+q/2)
+            data=[E.compute_kpoint!(narrow[i], model, points[i]) for i in 1:2]
+            reference=[E.compute_kpoint!(full[i], model, points[i]) for i in 1:2]
+            for leg in 1:2
+                @test any(x->!iszero(x), data[leg].position.wannier_gauge[:, :, [1, 3]])
+                velocity=E.physical_velocity_vertices(data[leg]; source_gauge = true)
+                retained=E.physical_velocity_vertices(reference[leg]; source_gauge = true)
+                @test reinterpret(
+                    UInt64,
+                    vec(velocity[:, :, [1, 3]]),
+                )==reinterpret(UInt64, vec(retained[:, :, [1, 3]]))
+                if quantity=="PDICK"
+                    @test reinterpret(
+                        UInt64,
+                        diag(data[leg].source_gauge_hamiltonian_derivatives[:, :, 2]),
+                    )==reinterpret(
+                        UInt64,
+                        diag(reference[leg].source_gauge_hamiltonian_derivatives[:, :, 2]),
+                    )
+                end
+                @test !E._has_capability(data[leg].computed_mask, E.GAUGE_CORRECTION)
+            end
+            overlap1=zeros(ComplexF64, n, n);
+            overlap2=similar(overlap1)
+            response.photon_drag_compute_overlaps!(
+                overlap1,
+                overlap2,
+                data[1],
+                data[2],
+                points[1],
+                points[2],
+                centers,
+                true,
+                n,
+            )
+            phase_forward=Diagonal([cis(2pi*dot(points[1]-points[2], centers[:, i])) for i in 1:n])
+            phase_backward=Diagonal([cis(2pi*dot(points[2]-points[1], centers[:, i])) for i in 1:n])
+            Uv=data[1].spectrum.source_eigenvectors;
+            Uc=data[2].spectrum.source_eigenvectors
+            @test overlap1 ≈ Uv'*phase_forward*Uc atol=1e-13 rtol=1e-13
+            @test overlap2 ≈ Uc'*phase_backward*Uv atol=1e-13 rtol=1e-13
+            forward=zeros(ComplexF64, n, n, 3);
+            backward=similar(forward);
+            fullforward=similar(forward);
+            fullbackward=similar(forward)
+            scratch1=zeros(ComplexF64, n, n);
+            scratch2=similar(scratch1)
+            response._photon_drag_compute_velocity_vertices_blas!(
+                forward,
+                backward,
+                scratch1,
+                scratch2,
+                overlap1,
+                overlap2,
+                data[1],
+                data[2],
+                3,
+                component,
+            )
+            response._photon_drag_compute_velocity_vertices_blas!(
+                fullforward,
+                fullbackward,
+                scratch1,
+                scratch2,
+                overlap1,
+                overlap2,
+                reference[1],
+                reference[2],
+                3,
+                nothing,
+            )
+            @test reinterpret(
+                UInt64,
+                vec(forward[:, :, 3]),
+            )==reinterpret(UInt64, vec(fullforward[:, :, 3]))
+            @test reinterpret(
+                UInt64,
+                vec(backward[:, :, 1]),
+            )==reinterpret(UInt64, vec(fullbackward[:, :, 1]))
+            @test any(x->!iszero(x), forward[:, :, 3]) && any(x->!iszero(x), backward[:, :, 1])
+        end
+    end
+end
+
+include("phased_photon_overlaps_unit.jl")
+
+include("active_photon_drag_insertions_unit.jl")
+
+function dense_panel_storage_allocation(output, indices, factors::Vararg{Any, N}) where {N}
+    return @allocated PDIC_BLAS_MATRIX_ELEMENTS._dense_column_panel_storage_eligible(
+        output,
+        indices,
+        factors...,
+    )
+end
+
+@testset "Two matrix readers share storage admission without merging column semantics" begin
+    me = PDIC_BLAS_MATRIX_ELEMENTS
+    rng = MersenneTwister(2641)
+    for n in (128, 132, 256)
+        left = randn(rng, ComplexF64, n, n)
+        right = randn(rng, ComplexF64, n, n)
+        overlap = randn(rng, ComplexF64, n, n)
+        sentinel = ComplexF64(-7.0, 13.0)
+        indices = Int[2, 63]
+        actual = fill(sentinel, n, n);
+        expected = copy(actual)
+        @views mul!(expected[:, 1:64], left, right[:, 1:64])
+        me._compute_convention_link_columns!(actual, left, right, indices)
+        @test reinterpret(UInt64, vec(actual)) == reinterpret(UInt64, vec(expected))
+        actual .= sentinel;
+        expected .= sentinel
+        @views mul!(expected[:, 1:64], left, overlap[:, 1:64])
+        @views mul!(expected[:, 1:64], overlap, right[:, 1:64], 1.0, 1.0)
+        me.active_velocity_selected_columns!(actual, left, right, overlap, indices)
+        @test reinterpret(UInt64, vec(actual)) == reinterpret(UInt64, vec(expected))
+        @test me._dense_column_panel_storage_eligible(actual, indices, left, right)
+        @test me._dense_column_panel_storage_eligible(actual, indices, left, right, overlap)
+        @test !me._dense_column_panel_storage_eligible(left, indices, left, right)
+        @test !me._dense_column_panel_storage_eligible(actual, indices, left[:, 1:(end - 1)], right)
+        @test !me._dense_column_panel_storage_eligible(actual, Int[], left, right)
+        dense_panel_storage_allocation(actual, indices, left, right)
+        dense_panel_storage_allocation(actual, indices, left, right, overlap)
+        @test dense_panel_storage_allocation(actual, indices, left, right) == 0
+        @test dense_panel_storage_allocation(actual, indices, left, right, overlap) == 0
+        # Existing caller validation still rejects a duplicated, unsorted group.
+        me._compute_convention_link_columns!(actual, left, right, Int[63, 2])
+        mul!(expected, left, right)
+        @test reinterpret(UInt64, vec(actual)) == reinterpret(UInt64, vec(expected))
+    end
+    n = 256
+    left = randn(rng, ComplexF64, n, n);
+    right = randn(rng, ComplexF64, n, n);
+    overlap = randn(rng, ComplexF64, n, n)
+    actual=fill(ComplexF64(-7, 13), n, n);
+    expected=copy(actual);
+    indices=Int[2, 130]
+    # Link needs one continuous span of three panels and falls back to full output.
+    mul!(expected, left, right);
+    me._compute_convention_link_columns!(actual, left, right, indices)
+    @test reinterpret(UInt64, vec(actual)) == reinterpret(UInt64, vec(expected))
+    # Velocity insertion keeps two disjoint panels, not the link's span policy.
+    actual .= ComplexF64(-7, 13);
+    expected .= ComplexF64(-7, 13)
+    for columns in (1:64, 129:192)
+        @views mul!(expected[:, columns], left, overlap[:, columns])
+        @views mul!(expected[:, columns], overlap, right[:, columns], 1.0, 1.0)
+    end
+    me.active_velocity_selected_columns!(actual, left, right, overlap, indices)
+    @test reinterpret(UInt64, vec(actual)) == reinterpret(UInt64, vec(expected))
 end

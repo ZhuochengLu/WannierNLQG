@@ -4,12 +4,82 @@ isdefined(@__MODULE__, :standard_export_fixture) ||
 isdefined(@__MODULE__, :_profile_modified_config) ||
     include(joinpath(@__DIR__, "WannierOperatorProfileTestSupport.jl"))
 
+# Fresh probes need the same current-publication negative-fixture helper.
+isdefined(@__MODULE__, :with_republished_bundle_fixture) ||
+    include(joinpath(@__DIR__, "OperatorBundleTestSupport.jl"))
+
+isdefined(@__MODULE__, :fresh_response_command) ||
+    include(joinpath(@__DIR__, "FreshResponseProcessSupport.jl"))
+
 const OTS_C = WannierNLQG.Core
 const OTS_IO = WannierNLQG.IO
 const OTS_R = WannierNLQG.Runtime
 const OTS_W = WannierNLQG.Wannierization
 
+# Compile required BCD/BCQ task physics through the public path; no model is read or solved.
+function ots_runtime_demand_configuration(
+    definition;
+    tensor_indices = ntuple(_ -> 1, Int(definition.tensor_rank)),
+    wannier_center_convention = "Convention_II",
+    integral_form = :fermi_surface,
+    full_tensor = false,
+)
+    quantity = OTS_R.quantity_symbol(definition.quantity)
+    method = OTS_R.method_symbol(definition.method)
+    calculation = OTS_R.calculation_symbol(definition.calculation)
+    if !(
+        quantity in
+        (:berry_curvature_dipole_conductivity, :berry_curvature_quadrupole_conductivity)
+    )
+        return OTS_R.EffectiveTaskConfig(
+            tasks = [(String(quantity), String(method), String(calculation))],
+            fourier_backend = "direct",
+            spatial_dimension = 3,
+            tensor_indices = tensor_indices,
+            wannier_center_convention = wannier_center_convention,
+            # This registry-closure fixture explicitly exercises the total metric.
+            include_external = quantity in OTS_R.EXTERNAL_METRIC_QUANTITIES,
+        )
+    end
+    task = TaskSpec(
+        id = "operator_demand",
+        quantity = String(quantity),
+        method = String(method),
+        physics = BerryMultipoleParameters(
+            fermi_energies = [0.13],
+            temperature = 300.0,
+            relaxation_time_fs = 7.0,
+            integral_form = integral_form,
+        ),
+        observable = full_tensor ? FullTensor() :
+                     TensorComponents(TensorComponent(tensor_indices...)),
+    )
+    config = TaskConfig(
+        model = ModelInput(
+            model_file = joinpath(
+                @__DIR__,
+                "..",
+                "examples",
+                "fixtures",
+                "spectral_response",
+                "closed_tb.dat",
+            ),
+            wannier_center_convention = wannier_center_convention,
+        ),
+        sampling = BZMesh(k_mesh = (2, 2, 2), spatial_dimension = 3),
+        tasks = [task],
+        execution = ExecutionOptions(fourier_backend = "direct"),
+        output = OutputOptions(output_root = tempdir(), progress_enabled = false),
+    )
+    return OTS_R.compile_task_config(config, task)
+end
+
 function ots_fixture(directory; nonzero_neighbors = false, neighbor_permutation = :identity)
+    nonzero_neighbors && throw(
+        ArgumentError(
+            "use frozen_gram_fixture for independent Gram algebra; never overwrite native-generated operator files",
+        ),
+    )
     fixture = standard_export_fixture()
     stencil = WannierNLQG.MatrixElements.build_finite_difference_stencil(
         something(fixture.result.wannier_chk),
@@ -60,102 +130,42 @@ function ots_fixture(directory; nonzero_neighbors = false, neighbor_permutation 
         reordered_neighbors,
         reordered_shifts,
     )
-    fixture = standard_export_fixture(; mmn_override = mmn)
-    r = fixture.result
-    eligible = OTS_W.WannierizationResult(
-        OTS_W.COMPLETED,
-        r.v_matrix,
-        r.wannier_centers_cartesian,
-        r.spreads_angstrom2,
-        r.history,
-        OTS_W.WannierizationDiagnostic[],
-        merge(
-            r.input_summary,
-            Dict(
-                "hard_gate_frozen"=>"0.0",
-                "solver_convergence"=>"CONVERGED",
-                "stopping_reason"=>"CONVERGED",
-            ),
-        ),
-        r.wannier_chk,
-        nothing,
-        r.restart_state,
-        r.artifacts,
-        r.initialization_report,
-    )
     parent = first(OTS_W._load_wannierization_extension!())
     extension = parent.OperatorExport
-    prepared, quality, _, _, _ =
-        Base.invokelatest(extension._prepare_wannierization_tb_state, eligible, fixture.config)
-    @test quality == "PASS"
     authority = Base.invokelatest(extension._native_authoritative_band_hamiltonian, fixture.eig)
     gauge = _profile_gauge_contract(parent, :ordinary, 2, 2)
-    model = Base.invokelatest(extension.build_wannier_tight_binding_model, prepared, authority, mmn)
-    inputs = Base.invokelatest(_profile_write_inputs, directory, mmn, authority, gauge, parent)
-    if nonzero_neighbors
-        # Replaying the frozen Julia 1.11.2 draw keeps scalar baselines stable on
-        # every supported Julia version; MersenneTwister randn changed in 1.10.
-        frozen = JSON3.read(
-            read(
-                joinpath(@__DIR__, "fixtures", "ots_nonzero_neighbors_v1.11_seed928.json"),
-                String,
-            ),
-        )
-        frozen.schema == "wanniernlqg.test.nonzero-neighbor-operators.v1" ||
-            error("unexpected nonzero-neighbor test fixture schema")
-        (mmn.num_neighbors, mmn.num_kpts) == (8, 2) || error(
-            "unexpected nonzero-neighbor test fixture shape: $(mmn.num_neighbors), $(mmn.num_kpts)",
-        )
-        x = reshape(
-            [
-                reshape(ComplexF64[complex(pair[1], pair[2]) for pair in row], 4, 2) for
-                row in frozen.x
-            ],
-            8,
-            2,
-        )
-        energy = [
-            reshape(ComplexF64[complex(pair[1], pair[2]) for pair in row], 4, 4) for
-            row in frozen.energy
-        ]
-        OTS_IO.write_wannier_uiu(
-            inputs.uiu_file,
-            OTS_IO.WannierUIUHeader("nonzero Gram regression", 2, 2, mmn.num_neighbors),
-            (k, b, a, h)->x[source_to_internal[a, k], k]'*x[source_to_internal[b, k], k],
-        )
-        OTS_IO.write_wannier_uhu(
-            inputs.uhu_file,
-            OTS_IO.WannierUHUHeader("nonzero energy regression", 2, 2, mmn.num_neighbors),
-            (k, b, a, h)->x[source_to_internal[a, k], k]'*energy[k]*x[source_to_internal[b, k], k],
-        )
-        for (artifact, sidecar) in
-            ((inputs.uiu_file, inputs.uiu_provenance), (inputs.uhu_file, inputs.uhu_provenance))
-            payload=JSON3.read(read(sidecar, String), Dict{String, Any})
-            payload["output_sha256"]=bytes2hex(sha256(read(artifact)))
-            write(sidecar, JSON3.write(payload))
-        end
-    end
-    target = OTS_W.WannierOperatorTargetContract(
-        abspath(inputs.mmn_file),
-        bytes2hex(sha256(read(inputs.mmn_file))),
-        abspath(inputs.mmn_file),
-        bytes2hex(sha256(read(inputs.mmn_file))),
-        gauge.source_band_gauge,
-        gauge.target_band_gauge,
-        gauge.transform_sha256,
-        gauge.contract_sha256,
-        something(gauge.gauge_artifact_sha256, "NOT_APPLICABLE"),
-        authority.authority,
-        authority.digest,
-        mmn.num_bands,
-        mmn.num_kpts,
-        mmn.num_neighbors,
+    inputs = Base.invokelatest(
+        _profile_write_inputs,
+        directory,
+        mmn,
+        authority,
+        gauge,
+        parent;
+        eig = fixture.eig,
+        target_config = fixture.config,
     )
-    for sidecar in (inputs.uiu_provenance, inputs.uhu_provenance)
-        payload = JSON3.read(read(sidecar, String), Dict{String, Any})
-        payload["input_sha256"]["OPERATOR_TARGET_CONTRACT"] = target.contract_sha256
-        write(sidecar, JSON3.write(payload))
-    end
+    mmn = inputs.target_mmn
+    native = parent.PAWMatrixElements._read_augmentation_aware_native_source(inputs.links.source)
+    center = reshape(_profile_plane_wave_packet(1).center, 3, 1)
+    fixture = standard_export_fixture(;
+        mmn_override = mmn,
+        real_lattice_override = native.structure.lattice,
+        centers_override = permutedims(transpose(native.structure.lattice) * center),
+    )
+    r = fixture.result
+    # This is an algebraically specified accepted-frame fixture, not a solver run.
+    # Its specified native frame contains the frozen first band; export measures its isometry.
+    eligible = parent.WannierizationInternalSupport.updated_wannierization_result(
+        r;
+        input_summary = merge(r.input_summary, Dict("hard_gate_frozen" => "0.0")),
+    )
+    # Synthetic accepted state exercises export assembly, not a convergence claim.
+    prepared, quality, _, _, _ =
+        Base.invokelatest(extension._prepare_wannierization_tb_state, eligible, fixture.config)
+    model = Base.invokelatest(extension.build_wannier_tight_binding_model, prepared, authority, mmn)
+    target = inputs.target_contract
+    # Generator output and sidecars remain untouched: their actual source and
+    # target definitions are produced together through the public generation path.
     # Physically remove unneeded sources: assembly cannot accidentally rely on them.
     for path in (
         inputs.spn_file,
@@ -197,7 +207,7 @@ function ots_fixture(directory; nonzero_neighbors = false, neighbor_permutation 
     geometry = _profile_geometry(model)
     geometry["production_eligible"] = false
     eligibility = merge(
-        _profile_eligibility(authority),
+        _profile_model_semantics(authority),
         Dict("production_eligible"=>false, "scoped_production_eligible"=>false),
     )
     OTS_IO.write_real_space_operator_bundle(
@@ -210,7 +220,7 @@ function ots_fixture(directory; nonzero_neighbors = false, neighbor_permutation 
         provenance = merge(
             Dict(
                 "authoritative_hamiltonian"=>authority.authority,
-                "authoritative_hamiltonian_digest"=>authority.digest,
+                "authoritative_hamiltonian_definition"=>authority.definition,
             ),
             provenance,
         ),
@@ -227,8 +237,8 @@ function ots_fixture(directory; nonzero_neighbors = false, neighbor_permutation 
         geometry_config,
         authority,
     )
-    @test geometry_provenance["authoritative_hamiltonian_input_sha256"] ==
-          provenance["authoritative_hamiltonian_input_sha256"]
+    @test geometry_provenance["authoritative_hamiltonian_input_definitions"] ==
+          provenance["authoritative_hamiltonian_input_definitions"]
     geometry_output = joinpath(directory, "geometry.h5")
     OTS_IO.write_real_space_operator_bundle(
         geometry_output,

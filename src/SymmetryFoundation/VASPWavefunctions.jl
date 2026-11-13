@@ -242,6 +242,7 @@ function read_vasp_wavefunctions(
     normalize_coefficients::Bool = true,
     require_spin_basis::Bool = true,
     point_provider = nothing,
+    content_authentication::Bool = true,
 )
     header = read_vasp_wavecar_header(source.wavecar_file)
     saxis = _read_vasp_saxis(source)
@@ -346,6 +347,21 @@ function read_vasp_wavefunctions(
             length(bands),
             detected_spinor ? 2 : 1,
         )
+    source_definition = if content_authentication
+        nothing
+    else
+        source_files = Dict("POSCAR" => source.poscar_file, "WAVECAR" => source.wavecar_file)
+        source.incar_file === nothing || (source_files["INCAR"] = source.incar_file)
+        source.potcar_file === nothing || (source_files["POTCAR"] = source.potcar_file)
+        source.outcar_file === nothing || (source_files["OUTCAR"] = source.outcar_file)
+        # A caller may explicitly bind the common, canonical local source root.
+        # The referenced definition still reads and validates every source byte,
+        # but its scratch file contains only the source-slice index. This avoids
+        # one full WAVECAR copy for every native operator entry.
+        reference_root = get(ENV, "WANNIERNLQG_VASP_SOURCE_REFERENCE_ROOT", "")
+        isempty(reference_root) ? IO.scientific_source_collection_definition(source_files) :
+        IO.scientific_source_collection_definition(source_files; reference_root = reference_root)
+    end
     return NativeWavefunctionData(
         :vasp,
         structure,
@@ -353,6 +369,7 @@ function read_vasp_wavefunctions(
         infer_mp_grid(kpoint_matrix),
         detected_spinor,
         points,
+        content_authentication ?
         merge(
             Dict(
                 "POSCAR" => sha256_file(source.poscar_file),
@@ -367,7 +384,7 @@ function read_vasp_wavefunctions(
                 "MAGNETIC_MOMENTS_CARTESIAN" =>
                     magnetic_moments_sha256(something(source.magnetic_moments_cartesian)),
             ),
-        ),
+        ) : Dict{String, String}(),
         merge(
             Dict(
                 "spin_mode" =>
@@ -382,12 +399,18 @@ function read_vasp_wavefunctions(
             ),
             source.magnetic_moments_cartesian === nothing ? Dict{String, String}() :
             Dict(
-                "magnetic_moments_sha256" =>
-                    magnetic_moments_sha256(something(source.magnetic_moments_cartesian)),
+                (
+                    content_authentication ? "magnetic_moments_sha256" :
+                    "magnetic_moments_complete_values"
+                ) =>
+                    content_authentication ?
+                    magnetic_moments_sha256(something(source.magnetic_moments_cartesian)) :
+                    repr(something(source.magnetic_moments_cartesian)),
                 "magnetic_moments_coordinate_system" => "cartesian",
                 "magnetic_moments_vector_kind" => "axial",
                 "magnetic_moments_secondary_source" => String(moment_source_status),
             ),
-        ),
+        );
+        source_definition,
     )
 end

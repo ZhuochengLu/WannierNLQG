@@ -2,11 +2,17 @@
 
 WannierNLQG source code is distributed under the GNU General Public License
 version 2 only (`GPL-2.0-only`). Julia packages listed in `Project.toml` and
-`Manifest.toml` remain under their respective licenses; their source code is
-not vendored here.
+`Manifest.toml` remain under their respective licenses; their source code is not bundled wholesale. The attributed adaptive tree
+controller below retains its upstream license.
 
-Wannier90, Quantum ESPRESSO, VASP, WannierBerri, MPI implementations, and
-other external programs or libraries mentioned by the documentation are not
+The project-owned private numerical helpers under `src/Core/ESKernel` are part
+of WannierNLQG and covered by its root GPL-2.0-only license. They are not a
+separately released dependency. Their LinearAlgebra/LAPACK and FFTW calls use
+the external packages and libraries under their respective licenses; no
+third-party algorithm source was copied into these helpers.
+
+External programs, MPI implementations, and libraries mentioned by the
+documentation are not
 redistributed by this repository. Users must obtain them separately and follow
 their licenses.
 
@@ -15,9 +21,9 @@ their licenses.
 The 1651-to-122 magnetic-point-group records distributed with WannierNLQG are
 generated solely from the magnetic symmetry operations supplied by the pinned
 Spglib dependency. The project-owned classification and display algorithm is
-published with the generator and its deterministic receipt. No ISO-MAG or
-PythMPG data, source code, dictionary, ordering, or generated result is used by
-the active generation chain or included as an active runtime oracle.
+published with the generator and its deterministic receipt. The active
+generation chain uses only its declared operation inputs and the project-owned
+classification algorithm.
 
 The release environment pins Spglib.jl 1.2.0 and its `spglib_jll` 2.7.0+0
 dependency, which wraps Spglib C 2.7.0. Exact commits, package and artifact
@@ -122,3 +128,33 @@ pseudopotentials. Synthetic wavefunction parser fixtures are included. These
 files are not reference-material datasets. Do not add
 third-party or proprietary research data without an explicit redistribution
 review.
+
+## HCubature adaptive tree controller
+
+`src/Runtime/Execution/ResponseCubatureTree.jl` adapts the HCubature.jl 1.8.0
+controller to accept a batch rule executor. Its tree decisions, heap operations,
+arithmetic and stopping order are retained; numerical rules continue to use the
+installed dependency. Source: https://github.com/JuliaMath/HCubature.jl/tree/v1.8.0
+
+The HCubature.jl package is licensed under the MIT "Expat" License:
+
+> Copyright (c) 2017: Steven G. Johnson.
+> 
+> Permission is hereby granted, free of charge, to any person obtaining a copy
+> of this software and associated documentation files (the "Software"), to deal
+> in the Software without restriction, including without limitation the rights
+> to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+> copies of the Software, and to permit persons to whom the Software is
+> furnished to do so, subject to the following conditions:
+> 
+> The above copyright notice and this permission notice shall be included in all
+> copies or substantial portions of the Software.
+> 
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+> IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+> FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+> AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+> LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+> OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+> SOFTWARE.
+> 

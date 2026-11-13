@@ -1,0 +1,30 @@
+# Synthetic public input; paths are relative to this file.
+[model]
+source = "wannier"
+model_file = "../fixtures/synthetic_runtime/synthetic_tb.dat"
+
+[response]
+fermi_energy_min_ev = -0.2
+fermi_energy_max_ev = 0.2
+fermi_energy_num_points = 3
+temperature_k = 300.0
+
+[response.relaxation]
+gamma_intra_ev = 0.02
+gamma_inter_ev = 0.03
+
+[response.sampling]
+kind = "bz_mesh"
+k_mesh = [1, 1, 1]
+spatial_dimension = 3
+
+[response.execution]
+fourier_backend = "direct"
+
+[response.tasks.lt]
+kind = "LT"
+method = "Conventional"
+
+[output]
+output_root = "results/fermi-scan"
+progress_enabled = false

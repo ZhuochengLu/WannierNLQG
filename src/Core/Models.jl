@@ -1,3 +1,6 @@
+"""A finite-dimensional response model with an explicitly dispatched basis metric."""
+abstract type AbstractResponseModel end
+
 """
 Real-space tight-binding data in the Wannier representation.
 
@@ -5,7 +8,8 @@ The model contains only Hamiltonian and position data. Optional observables such
 spin and spin velocity are represented by peer real-space data objects in
 `WannierNLQG.MatrixElements`.
 """
-struct TightBindingModel{H <: AbstractArray{ComplexF64, 3}, P <: AbstractArray{ComplexF64, 4}}
+struct TightBindingModel{H <: AbstractArray{ComplexF64, 3}, P <: AbstractArray{ComplexF64, 4}} <:
+       AbstractResponseModel
     lattice::Matrix{Float64}
     num_orbitals::Int
     num_r_vectors::Int
@@ -13,6 +17,8 @@ struct TightBindingModel{H <: AbstractArray{ComplexF64, 3}, P <: AbstractArray{C
     r_vectors::Matrix{Int}
     hamiltonian_r::H
     position_r::P
+    data_owner::ScientificDataOwner
+    position_model::Symbol
 
     function TightBindingModel(
         lattice,
@@ -23,7 +29,10 @@ struct TightBindingModel{H <: AbstractArray{ComplexF64, 3}, P <: AbstractArray{C
         hamiltonian_r,
         position_r;
         copy_data::Bool = true,
+        _position_model::Symbol = :wannier,
     )
+        _position_model in (:wannier, :point_orbitals) ||
+            throw(ArgumentError("unsupported internal position-model contract"))
         orbital_count = Int(num_orbitals)
         r_vector_count = Int(num_r_vectors)
         orbital_count > 0 || throw(ArgumentError("num_orbitals must be positive"))
@@ -59,9 +68,18 @@ struct TightBindingModel{H <: AbstractArray{ComplexF64, 3}, P <: AbstractArray{C
             vectors,
             hamiltonian,
             position,
+            ScientificDataOwner(),
+            _position_model,
         )
     end
 end
+
+"""Observe a model lifetime without scanning H/r arrays."""
+scientific_data_generation(model::TightBindingModel) = scientific_data_generation(model.data_owner)
+
+"""Retire this model and all cache entries derived from its owned arrays."""
+invalidate_scientific_data!(model::TightBindingModel) =
+    invalidate_scientific_data!(model.data_owner)
 
 """Shared eigensystem data composed into every k-point matrix-element object."""
 mutable struct KPointSpectrum

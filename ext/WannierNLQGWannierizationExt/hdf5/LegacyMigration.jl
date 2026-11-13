@@ -15,8 +15,6 @@ function _reset_legacy_localization_gradient_history(
         legacy.rejected_steps,
         legacy.residual_reference,
         legacy.previous_merit,
-        legacy.anderson_z_history,
-        legacy.anderson_residual_history,
         legacy.phase,
         legacy.z_stability_count,
         0,
@@ -49,13 +47,8 @@ function _reset_legacy_localization_gradient_history(
         :LEGACY_U_PHASE_CHART_RESET,
         legacy.last_anderson_reason,
         LOCALIZATION_GRADIENT_CONTRACT,
-        "",
         0,
         NaN,
-        zeros(ComplexF64, 0, 0, 0, 0),
-        zeros(ComplexF64, 0, 0, 0, 0),
-        Float64[],
-        0,
         :LEGACY_U_PHASE_CHART_RESET,
     )
     restart_state = WannierizationRestartState(
@@ -67,15 +60,12 @@ function _reset_legacy_localization_gradient_history(
         state.convergence_values,
         state.included_bands,
         state.elapsed_seconds,
-        state.config_sha256,
-        state.representation_sha256,
         state.stencil,
-        state.projection_basis_sha256,
-        state.amn_sha256,
         optimizer,
         state.fixed_subspace_projectors,
         state.fixed_subspace_frames,
         state.localization_initial_frames,
+        state.input_definition,
     )
     summary = Dict{String, String}(result.input_summary)
     summary["checkpoint_localization_gradient_contract"] = "LEGACY_PRE_V2_7_UNSPECIFIED"
@@ -133,8 +123,6 @@ function _reset_legacy_joint_update_history(result::WannierizationResult)
             legacy.rejected_steps,
             (NaN, NaN, NaN, NaN),
             NaN,
-            zeros(Float64, 0, 0),
-            zeros(Float64, 0, 0),
             legacy.phase,
             0,
             0,
@@ -167,13 +155,8 @@ function _reset_legacy_joint_update_history(result::WannierizationResult)
             :LEGACY_JOINT_UPDATE_CONTRACT_RESET,
             :LEGACY_JOINT_UPDATE_CONTRACT_RESET,
             LOCALIZATION_GRADIENT_CONTRACT,
-            "",
             0,
             NaN,
-            zeros(ComplexF64, 0, 0, 0, 0),
-            zeros(ComplexF64, 0, 0, 0, 0),
-            Float64[],
-            0,
             :LEGACY_JOINT_UPDATE_CONTRACT_RESET,
         )
         restart_state = WannierizationRestartState(
@@ -185,15 +168,12 @@ function _reset_legacy_joint_update_history(result::WannierizationResult)
             state.convergence_values,
             state.included_bands,
             state.elapsed_seconds,
-            state.config_sha256,
-            state.representation_sha256,
             state.stencil,
-            state.projection_basis_sha256,
-            state.amn_sha256,
             optimizer,
             state.fixed_subspace_projectors,
             state.fixed_subspace_frames,
             state.localization_initial_frames,
+            state.input_definition,
         )
         summary["optimizer_history_compatibility"] = "LEGACY_JOINT_UPDATE_CONTRACT_RESET"
         summary["restart_continuation_semantics"] = "STATE_PRESERVED_JOINT_HISTORY_RESET_NOT_BITWISE"

@@ -8,7 +8,7 @@ function _raw_amn_localization_reference(
     apply_symmetry::Bool,
     outer_indices::Vector{Vector{Int}},
     frozen_indices::Vector{Vector{Int}},
-    wannier90_reference::Bool = false,
+    recursive_localization::Bool = false,
 )
     frames = [Matrix{ComplexF64}(@view amn[:, :, kpoint]) for kpoint in axes(amn, 3)]
     all(frame -> all(isfinite, frame), frames) || return (
@@ -17,31 +17,26 @@ function _raw_amn_localization_reference(
         frames,
         algorithm = :unavailable,
     )
-    if wannier90_reference
+    if recursive_localization
         apply_symmetry && return (
             success = false,
-            code = :WANNIER90_REFERENCE_MODE_MISMATCH,
+            code = :RECURSIVE_LOCALIZATION_MODE_MISMATCH,
             frames,
             algorithm = :unavailable,
         )
         for kpoint in eachindex(frames)
             outer = outer_indices[kpoint]
-            decomposition = _wannier90_reference_dis_project(@view amn[outer, :, kpoint])
+            decomposition = _recursive_localization_dis_project(@view amn[outer, :, kpoint])
             decomposition.success || return (
                 success = false,
-                code = :WANNIER90_REFERENCE_AMN_SVD_FAILED,
+                code = :RECURSIVE_LOCALIZATION_AMN_SVD_FAILED,
                 frames,
-                algorithm = :wannier90_4_0_1_dis_project_reconstructed_amn,
+                algorithm = :projected_window_reconstructed_amn,
             )
             frames[kpoint] .= 0.0
             frames[kpoint][outer, :] .= decomposition.reconstructed
         end
-        return (
-            success = true,
-            code = :OK,
-            frames,
-            algorithm = :wannier90_4_0_1_dis_project_reconstructed_amn,
-        )
+        return (success = true, code = :OK, frames, algorithm = :projected_window_reconstructed_amn)
     end
     if apply_symmetry && any(indices -> !isempty(indices), frozen_indices)
         try
@@ -244,14 +239,14 @@ function _sealed_amn_polar(
     )
 end
 
-"""Wannier90 4.0.1 `internal_find_u` full-SVD polar.
+"""Wannier 4.0.1 `internal_find_u` full-SVD polar.
 
 The upstream routine multiplies every left and right singular vector returned
 by ZGESVD, including numerically small directions.  The reference route must
 therefore not apply the projectability rank threshold or deterministic null
 completion used by the conditioned expert routes.
 """
-function _wannier90_reference_amn_polar(projected_amn::AbstractMatrix{<:Complex})
+function _recursive_localization_amn_polar(projected_amn::AbstractMatrix{<:Complex})
     size(projected_amn, 1) == size(projected_amn, 2) || return (
         success = false,
         code = :SINGULAR_LOCALIZATION_ALIGNMENT,
@@ -261,11 +256,11 @@ function _wannier90_reference_amn_polar(projected_amn::AbstractMatrix{<:Complex}
         condition = Inf,
         completion_count = 0,
     )
-    decomposition = _wannier90_reference_dis_project(projected_amn)
+    decomposition = _recursive_localization_dis_project(projected_amn)
     singular_values = decomposition.singular_values
     decomposition.success || return (
         success = false,
-        code = :WANNIER90_REFERENCE_AMN_SVD_FAILED,
+        code = :RECURSIVE_LOCALIZATION_AMN_SVD_FAILED,
         unitary = zeros(ComplexF64, size(projected_amn)),
         singular_values,
         rank = 0,
@@ -286,7 +281,7 @@ function _wannier90_reference_amn_polar(projected_amn::AbstractMatrix{<:Complex}
     # with ZGEMM.  Reusing `decomposition.frame` here therefore implements the
     # wrong arithmetic contract even though the SVD itself is identical.
     # Preserve the two upstream paths separately.
-    unitary = _wannier90_reference_zgemm(
+    unitary = _recursive_localization_zgemm(
         @view(decomposition.left_vectors[:, 1:size(projected_amn, 1)]),
         'N',
         @view(decomposition.right_adjoint[1:size(projected_amn, 1), :]),
@@ -325,7 +320,7 @@ function _projected_reference_alignment(
     minimum_singular_value::Float64,
     apply_symmetry::Bool,
     restore_fixed_subspace::Bool = false,
-    wannier90_reference::Bool = false,
+    recursive_localization::Bool = false,
     outer_indices::Union{Nothing, Vector{Vector{Int}}} = nothing,
 )
     aligned = deepcopy(subspace_frames)
@@ -335,7 +330,7 @@ function _projected_reference_alignment(
     conditions = fill(NaN, length(subspace_frames))
     unitaries = [Matrix{ComplexF64}(I, size(frame, 2), size(frame, 2)) for frame in subspace_frames]
     for kpoint in representation.irreducible_indices
-        # Wannier90's `internal_find_u` forms C_AA = U_opt^H A and the
+        # Wannier's `internal_find_u` forms C_AA = U_opt^H A and the
         # completed localization frame with the LP64 ZGEMM linked into the
         # registered 4.0.1 oracle.  Generic Julia `*` is algebraically
         # equivalent, but it changes the reduction order at this stage and
@@ -343,15 +338,15 @@ function _projected_reference_alignment(
         # Keep this dedicated numerical contract confined to the explicit
         # reference algorithm; all other localization backends retain their
         # existing multiplication path.
-        projected = if wannier90_reference
+        projected = if recursive_localization
             outer_indices === nothing && throw(
                 ArgumentError(
-                    "Wannier90-reference AMN alignment requires explicit outer-window indices",
+                    "Wannier-reference AMN alignment requires explicit outer-window indices",
                 ),
             )
             length(something(outer_indices)) == length(subspace_frames) ||
-                throw(DimensionMismatch("Wannier90-reference outer-window list is incomplete"))
-            _wannier90_reference_logical_window_caa(
+                throw(DimensionMismatch("Wannier-reference outer-window list is incomplete"))
+            _recursive_localization_logical_window_caa(
                 subspace_frames[kpoint],
                 reference_frames[kpoint],
                 something(outer_indices)[kpoint],
@@ -360,7 +355,7 @@ function _projected_reference_alignment(
             subspace_frames[kpoint]' * reference_frames[kpoint]
         end
         polar =
-            wannier90_reference ? _wannier90_reference_amn_polar(projected) :
+            recursive_localization ? _recursive_localization_amn_polar(projected) :
             _sealed_amn_polar(projected, minimum_singular_value, maximum_condition)
         polar.success || return merge(polar, (kpoint = kpoint,))
         spectra[kpoint] = polar.singular_values
@@ -369,8 +364,8 @@ function _projected_reference_alignment(
         conditions[kpoint] = polar.condition
         unitaries[kpoint] = polar.unitary
         aligned[kpoint] =
-            wannier90_reference ?
-            _wannier90_reference_zgemm(subspace_frames[kpoint], 'N', polar.unitary, 'N') :
+            recursive_localization ?
+            _recursive_localization_zgemm(subspace_frames[kpoint], 'N', polar.unitary, 'N') :
             subspace_frames[kpoint] * polar.unitary
     end
     aligned = apply_symmetry ? _expand_ibz_frames(aligned, representation, plan) : aligned
@@ -386,7 +381,7 @@ function _projected_reference_alignment(
     end
     reference_projectors = [subspace * subspace' for subspace in subspace_frames]
     projector_drift = _maximum_projector_drift(aligned, reference_projectors)
-    projector_drift_tolerance = wannier90_reference ? 1.0e-10 : 1.0e-12
+    projector_drift_tolerance = recursive_localization ? 1.0e-10 : 1.0e-12
     projector_drift <= projector_drift_tolerance || return (
         success = false,
         code = :FIXED_SUBSPACE_PROJECTOR_DRIFT,
@@ -717,8 +712,9 @@ function _transport_selected_subspace_corepresentation(
     relative_tolerance::Float64,
     maximum_condition::Float64,
     covariance_tolerance::Float64;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
+    validate_ordinary_construction_policy(construction_policy)
     length(subspaces) == length(reference_frames) || return (
         success = false,
         code = :SUBSPACE_COREPRESENTATION_TRANSPORT_DIMENSION_MISMATCH,
@@ -905,10 +901,7 @@ function _transport_selected_subspace_corepresentation(
         invariant_residual = projector_drift,
     )
     target_symmetry = _maximum_target_frame_symmetry_error(transported, representation, plan)
-    (
-        isfinite(target_symmetry) &&
-        (construction_policy == :standard || target_symmetry <= covariance_tolerance)
-    ) || return (
+    isfinite(target_symmetry) || return (
         success = false,
         code = :SUBSPACE_COREPRESENTATION_TRANSPORT_FAILED,
         message = "transported selected frame does not realize the accepted target corepresentation",
@@ -966,7 +959,7 @@ end
 
 """Commit a two-stage Z candidate without entering any localization code."""
 function _disentanglement_candidate(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     representation::BandRepresentation,
     mmn::WannierMMN,
     plan::WannierSymmetryPlan,
@@ -1062,20 +1055,16 @@ function _disentanglement_candidate(
         transport_maximum_condition = NaN,
         transported_omega_i = omega_i,
         u_phase_contract = LOCALIZATION_GRADIENT_CONTRACT,
-        u_active_orbit_sha256 = "",
+        u_active_orbit_definition = "",
         u_active_orbit_count = 0,
         generalized_gradient_rms = Inf,
-        u_lbfgs_s_history = Vector{Vector{Matrix{ComplexF64}}}(),
-        u_lbfgs_y_history = Vector{Vector{Matrix{ComplexF64}}}(),
-        u_lbfgs_rho_history = Float64[],
-        u_lbfgs_restart_count = 0,
         u_optimizer_restart_reason = :NOT_APPLICABLE,
     )
 end
 
 # Select the fixed outer subspace and run the configured synchronized U sweeps.
 function _outer_iteration_candidate(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     representation::BandRepresentation,
     mmn::WannierMMN,
     plan::WannierSymmetryPlan,
@@ -1094,6 +1083,9 @@ function _outer_iteration_candidate(
     localize::Bool,
     localization_algorithm::Symbol,
     ;
+    geometry::Union{Nothing, LocalizationGeometryWorkspace} = nothing,
+    dot_workspace::Union{Nothing, ReferenceDotWorkspace} = nothing,
+    accepted_evaluation::Union{Nothing, AcceptedReferenceEvaluationWorkspace} = nothing,
     fixed_stage_subspaces::Union{Nothing, Vector{Matrix{ComplexF64}}} = nothing,
     fixed_stage_projectors::Union{Nothing, Vector{Matrix{ComplexF64}}} = nothing,
     localization_reference_frames::Union{Nothing, Vector{Matrix{ComplexF64}}} = nothing,
@@ -1103,14 +1095,10 @@ function _outer_iteration_candidate(
     previous_u_direction::Union{Nothing, Vector{Matrix{ComplexF64}}} = nothing,
     u_cg_iteration::Int = 0,
     u_cg_restart_count::Int = 0,
-    u_lbfgs_s_history::Vector{Vector{Matrix{ComplexF64}}} = Vector{Vector{Matrix{ComplexF64}}}(),
-    u_lbfgs_y_history::Vector{Vector{Matrix{ComplexF64}}} = Vector{Vector{Matrix{ComplexF64}}}(),
-    u_lbfgs_rho_history::Vector{Float64} = Float64[],
-    u_lbfgs_restart_count::Int = 0,
     u_branch_signature::String = "",
-    wannier90_reference_overlaps::Union{Nothing, Array{ComplexF64, 4}} = nothing,
-    wannier90_reference_omega_i::Union{Nothing, Float64} = nothing,
-    wannier90_reference_unitaries::Union{Nothing, Vector{Matrix{ComplexF64}}} = nothing,
+    recursive_localization_overlaps::Union{Nothing, Array{ComplexF64, 4}} = nothing,
+    recursive_localization_omega_i::Union{Nothing, Float64} = nothing,
+    recursive_localization_unitaries::Union{Nothing, Vector{Matrix{ComplexF64}}} = nothing,
 )
     corepresentation_transport_applied = false
     corepresentation_transport_minimum_singular_value = NaN
@@ -1148,7 +1136,7 @@ function _outer_iteration_candidate(
             end
             reference_z = disentanglement_algorithm == :smv_fletcher_reeves_two_stage
             selected = if reference_z
-                _wannier90_reference_maximum_subspace_result(
+                _recursive_localization_maximum_subspace_result(
                     z_proposal[kpoint],
                     outer_indices[kpoint],
                     frozen_indices[kpoint],
@@ -1305,21 +1293,20 @@ function _outer_iteration_candidate(
         tangent_plans,
         localize,
         localization_algorithm,
+        geometry = geometry,
+        dot_workspace = dot_workspace,
+        accepted_evaluation = accepted_evaluation,
         fixed_projectors = localization_projectors,
         previous_u_gradient = previous_u_gradient,
         previous_u_direction = previous_u_direction,
         u_cg_iteration = u_cg_iteration,
         u_cg_restart_count = u_cg_restart_count,
-        u_lbfgs_s_history = u_lbfgs_s_history,
-        u_lbfgs_y_history = u_lbfgs_y_history,
-        u_lbfgs_rho_history = u_lbfgs_rho_history,
-        u_lbfgs_restart_count = u_lbfgs_restart_count,
         u_branch_signature = u_branch_signature,
-        wannier90_reference_overlaps = wannier90_reference_overlaps,
-        wannier90_reference_omega_i = wannier90_reference_omega_i,
-        wannier90_reference_unitaries = wannier90_reference_unitaries === nothing &&
-                                        alignment !== nothing ? alignment.unitaries :
-                                        wannier90_reference_unitaries,
+        recursive_localization_overlaps = recursive_localization_overlaps,
+        recursive_localization_omega_i = recursive_localization_omega_i,
+        recursive_localization_unitaries = recursive_localization_unitaries === nothing &&
+                                           alignment !== nothing ? alignment.unitaries :
+                                           recursive_localization_unitaries,
     )
     if localization_algorithm == :smv_fletcher_reeves_two_stage && config.solver.parallel == :mpi
         all_ranks_success = _mpi_all_ranks_success(result.success, config.solver.parallel)
@@ -1329,13 +1316,13 @@ function _outer_iteration_candidate(
                 root_message = hasproperty(result, :message) ? result.message : "NOT_RECORDED"
                 println(
                     stderr,
-                    "WANNIER90_REFERENCE_MPI_CANDIDATE_HOLD root_code=$(root_code) root_message=$(root_message)",
+                    "RECURSIVE_LOCALIZATION_MPI_CANDIDATE_HOLD root_code=$(root_code) root_message=$(root_message)",
                 )
             end
             return (
                 success = false,
                 code = :MPI_REFERENCE_CANDIDATE_CONSENSUS_HOLD,
-                message = "at least one MPI rank rejected the Wannier90-reference localization candidate",
+                message = "at least one MPI rank rejected the Wannier-reference localization candidate",
                 kpoint = 0,
                 sweep = 0,
                 singular_values = Float64[],
@@ -1390,7 +1377,7 @@ function _raw_z_field(
     ;
     full_bz::Bool = false,
     storage_backend::Symbol = :legacy_vector,
-    wannier90_reference::Bool = false,
+    recursive_localization::Bool = false,
 )
     nb, nk = size(representation.energies_ev)
     effective_backend = storage_backend == :auto ? :legacy_vector : storage_backend
@@ -1404,14 +1391,14 @@ function _raw_z_field(
         for neighbor in 1:mmn.num_neighbors
             target = mmn.neighbors[neighbor, kpoint]
             overlap = @view mmn.data[outer, :, neighbor, kpoint]
-            if wannier90_reference
+            if recursive_localization
                 # `internal_zmatrix` reaches this contraction through LP64
                 # ZGEMM in the same OpenBLAS linked by the reference build.
                 # A generic `*` may dispatch through Julia's configured BLAS;
                 # its last-bit differences are amplified by the nearly
                 # degenerate Cr top-eigenspace boundary.
-                transported_frame = _wannier90_reference_zgemm(overlap, 'N', frames[target], 'N')
-                # Match Wannier90 `internal_zmatrix`: accumulate the upper
+                transported_frame = _recursive_localization_zgemm(overlap, 'N', frames[target], 'N')
+                # Match Wannier `internal_zmatrix`: accumulate the upper
                 # Hermitian triangle in (neighbor,n,m,l) order rather than
                 # replacing the l contraction by a second GEMM.  Both are
                 # algebraically identical, but the explicit order is required
@@ -1419,7 +1406,7 @@ function _raw_z_field(
                 for column in axes(local_z, 2), row in 1:column
                     contracted = zero(ComplexF64)
                     for wannier in axes(transported_frame, 2)
-                        contracted += _wannier90_reference_gfortran_complex_product(
+                        contracted += _recursive_localization_ordered_complex_product(
                             transported_frame[row, wannier],
                             conj(transported_frame[column, wannier]),
                         )
@@ -1482,62 +1469,6 @@ function _raw_z_field(
     return z_raw
 end
 
-"""Retract one strict top-eigenspace proposal inside a bounded Grassmann ball."""
-function _grassmann_trust_region_step(
-    current_frames::Vector{Matrix{ComplexF64}},
-    proposed_frames::Vector{Matrix{ComplexF64}},
-    radius::Float64,
-    outer_indices::Vector{Vector{Int}},
-    frozen_indices::Vector{Vector{Int}},
-    num_wannier::Int,
-    representation::BandRepresentation,
-    plan::WannierSymmetryPlan,
-    config::SymmetryAdaptedWannierizationConfig,
-)
-    representatives = representation.irreducible_indices
-    trial = deepcopy(current_frames)
-    maximum_angle = 0.0
-    for kpoint in representatives
-        overlap = svd(current_frames[kpoint]' * proposed_frames[kpoint])
-        singular_values = clamp.(Float64.(overlap.S), 0.0, 1.0)
-        local_angle = isempty(singular_values) ? 0.0 : maximum(acos.(singular_values))
-        maximum_angle = max(maximum_angle, local_angle)
-        alpha = local_angle <= eps(Float64) ? 1.0 : min(1.0, radius / local_angle)
-        aligned_proposal = proposed_frames[kpoint] * (overlap.V * overlap.U')
-        blended = (1.0 - alpha) .* current_frames[kpoint] .+ alpha .* aligned_proposal
-        retract = qr(blended)
-        retracted = Matrix(retract.Q[:, 1:num_wannier])
-        projector_evidence = retracted * retracted'
-        selected = _maximum_subspace_result(
-            projector_evidence,
-            outer_indices[kpoint],
-            frozen_indices[kpoint],
-            num_wannier,
-            config.input.representation_tolerance;
-            reference_frame = current_frames[kpoint],
-            maximum_reference_condition = config.solver.numerical_thresholds.maximum_transport_condition,
-            numerical_thresholds = config.solver.numerical_thresholds,
-            context = "grassmann_trust_region:kpoint=$(kpoint)",
-        )
-        selected.success ||
-            return (success = false, code = selected.code, frames = trial, maximum_angle, alpha)
-        trial[kpoint] = something(selected.frame)
-    end
-    trial = _complete_selected_subspace_star(
-        trial,
-        representation,
-        plan,
-        symmetry_constraints_applied(config, representation),
-    )
-    return (
-        success = true,
-        code = :OK,
-        frames = trial,
-        maximum_angle,
-        alpha = maximum_angle <= eps(Float64) ? 1.0 : min(1.0, radius / maximum_angle),
-    )
-end
-
 """Select a deterministic multi-start winner without consulting held-out bands."""
 function _select_wannierization_multistart(
     results::AbstractVector{<:WannierizationResult};
@@ -1591,19 +1522,19 @@ function _deterministic_sealed_subspace_perturbation(
     return perturbed
 end
 
-# The Wannier90-reference path carries the accepted U matrix without applying
+# The Wannier-reference path carries the accepted U matrix without applying
 # a polar repair between localization iterations. Forming F = S*U and then
 # reconstructing F*F' consequently accumulates a few ulps more roundoff than
 # the generic retracted optimizers. Use one named implementation tolerance for
 # both the base and trial fixed-projector checks; finite/isometry/rank gates and
 # the immutable sealed-subspace digest remain independent hard gates.
 const _GENERIC_FIXED_SUBSPACE_PROJECTOR_DRIFT_ATOL = 1.0e-12
-const _WANNIER90_REFERENCE_FIXED_SUBSPACE_PROJECTOR_DRIFT_ATOL = 1.0e-10
+const _RECURSIVE_LOCALIZATION_FIXED_SUBSPACE_PROJECTOR_DRIFT_ATOL = 1.0e-10
 
 """Return the fixed-subspace drift tolerance for one localization backend."""
 @inline function _fixed_subspace_projector_drift_tolerance(localization_algorithm::Symbol)
     return localization_algorithm == :smv_fletcher_reeves_two_stage ?
-           _WANNIER90_REFERENCE_FIXED_SUBSPACE_PROJECTOR_DRIFT_ATOL :
+           _RECURSIVE_LOCALIZATION_FIXED_SUBSPACE_PROJECTOR_DRIFT_ATOL :
            _GENERIC_FIXED_SUBSPACE_PROJECTOR_DRIFT_ATOL
 end
 
@@ -1665,8 +1596,9 @@ function _candidate_invariant_failure(
     tolerance::Float64,
     covariance_tolerance::Float64,
     apply_symmetry::Bool = true;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
+    validate_ordinary_construction_policy(construction_policy)
     all(isfinite, centers) &&
     all(isfinite, spreads) &&
     all(frame -> all(isfinite, frame), frames) || return (:NONFINITE_SOLVER_TRIAL, Inf)
@@ -1679,13 +1611,6 @@ function _candidate_invariant_failure(
         isfinite(residuals.covariance) || return (:NONFINITE_SOLVER_TRIAL, Inf)
         target = _maximum_target_frame_symmetry_error(frames, representation, plan)
         isfinite(target) || return (:NONFINITE_SOLVER_TRIAL, Inf)
-    end
-    if apply_symmetry && construction_policy == :strict
-        residuals.covariance <= covariance_tolerance ||
-            return (:SOLVER_TRIAL_COVARIANCE_FAILED, residuals.covariance)
-        target_symmetry = _maximum_target_frame_symmetry_error(frames, representation, plan)
-        target_symmetry <= covariance_tolerance ||
-            return (:SOLVER_TRIAL_TARGET_SYMMETRY_FAILED, target_symmetry)
     end
     return nothing
 end
@@ -1730,11 +1655,9 @@ function _accepted_state_structural_residuals(
     )
 end
 
-# A nonconverged disentanglement subspace may enter diagnostic localization
-# only when the retained Z field is finite and every selected frame remains
-# full-rank, isometric, frozen-containing, and symmetry covariant.  The Z
-# matrices themselves are not required to be full-rank because their null
-# space outside the selected outer window is part of the construction.
+# Distinguish optimizer continuation invariants from terminal availability.
+# A terminal retained state is assessed for finite values and numerical rank;
+# finite residuals are reported at export rather than used as blanket gates.
 function _qualify_nonconverged_disentanglement_state(
     frames::Vector{Matrix{ComplexF64}},
     z_field,
@@ -1746,8 +1669,10 @@ function _qualify_nonconverged_disentanglement_state(
     tolerance::Float64,
     covariance_tolerance::Float64,
     apply_symmetry::Bool;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
+    terminal_retained_state::Bool = false,
 )
+    validate_ordinary_construction_policy(construction_policy)
     z_finite = z_field !== nothing && all(matrix -> all(isfinite, matrix), something(z_field))
     residuals = _candidate_invariant_residuals(frames, frozen_indices, representation)
     target_symmetry_residual =
@@ -1778,24 +1703,31 @@ function _qualify_nonconverged_disentanglement_state(
     end
     minimum_rank = isempty(numerical_ranks) ? 0 : minimum(numerical_ranks)
     isempty(numerical_ranks) && (minimum_singular_value = 0.0)
-    invariant_failure = _candidate_invariant_failure(
-        frames,
-        centers,
-        spreads,
-        frozen_indices,
-        representation,
-        plan,
-        tolerance,
-        covariance_tolerance,
-        apply_symmetry;
-        construction_policy,
-    )
+    invariant_failure = if terminal_retained_state
+        all(isfinite, centers) &&
+            all(isfinite, spreads) &&
+            all(frame -> all(isfinite, frame), frames) &&
+            isfinite(residuals.isometry) &&
+            isfinite(residuals.frozen) ? nothing : (:NONFINITE_RETAINED_STATE, Inf)
+    else
+        _candidate_invariant_failure(
+            frames,
+            centers,
+            spreads,
+            frozen_indices,
+            representation,
+            plan,
+            tolerance,
+            covariance_tolerance,
+            apply_symmetry;
+            construction_policy,
+        )
+    end
     failure_code = if !z_finite
         :NONFINITE_DISENTANGLEMENT_STATE
     elseif minimum_rank < required_rank
         :RANK_DEFICIENT_DISENTANGLEMENT_PROJECTOR
-    elseif !isfinite(corepresentation_residual) ||
-           (construction_policy == :strict && corepresentation_residual > covariance_tolerance)
+    elseif !isfinite(corepresentation_residual)
         :DISENTANGLEMENT_COREPRESENTATION_CONTINUATION_GATE_FAILED
     elseif invariant_failure !== nothing
         first(something(invariant_failure))
@@ -1841,24 +1773,31 @@ function _record_terminal_state!(
     input_summary["convergence_metric"] =
         isempty(history) ? "Inf" : string(last(history).spread_standard_deviation)
     stopping_code = isempty(diagnostics) ? Symbol(string(status)) : last(diagnostics).code
-    input_summary["solver_convergence"] = if status in (COMPLETED, COMPLETED_WITH_WARNINGS)
-        "CONVERGED"
-    elseif status == MAX_ITERATIONS
-        "MAX_ITERATIONS"
-    elseif stopping_code in (
-        :SPREAD_INCREASE_BACKTRACKING_EXHAUSTED,
-        :SPREAD_GRADIENT_LINE_SEARCH_FAILED,
-        :LOCALIZATION_BACKTRACKING_EXHAUSTED,
-        :LOCALIZATION_LINE_SEARCH_EXHAUSTED,
-        :NON_DESCENT_LOCALIZATION_DIRECTION,
-        :NONFINITE_LOCALIZATION_DIRECTION,
-    )
-        "LINE_SEARCH_EXHAUSTED"
-    elseif last_accepted_iteration < 0
-        "NOT_STARTED"
-    else
-        "FAILED_NUMERICAL"
-    end
+    skipped_stages =
+        get(input_summary, "stopping_contract", "") == "accepted-objective-change/1" &&
+        get(input_summary, "disentanglement_convergence", "") == "SKIPPED_ZERO_STEPS" &&
+        get(input_summary, "localization_convergence", "") == "SKIPPED_ZERO_STEPS"
+    input_summary["solver_convergence"] =
+        if skipped_stages && status in (COMPLETED, COMPLETED_WITH_WARNINGS)
+            "SKIPPED"
+        elseif status in (COMPLETED, COMPLETED_WITH_WARNINGS)
+            "CONVERGED"
+        elseif status == MAX_ITERATIONS
+            "MAX_ITERATIONS"
+        elseif stopping_code in (
+            :SPREAD_INCREASE_BACKTRACKING_EXHAUSTED,
+            :SPREAD_GRADIENT_LINE_SEARCH_FAILED,
+            :LOCALIZATION_BACKTRACKING_EXHAUSTED,
+            :LOCALIZATION_LINE_SEARCH_EXHAUSTED,
+            :NON_DESCENT_LOCALIZATION_DIRECTION,
+            :NONFINITE_LOCALIZATION_DIRECTION,
+        )
+            "LINE_SEARCH_EXHAUSTED"
+        elseif last_accepted_iteration < 0
+            "NOT_STARTED"
+        else
+            "FAILED_NUMERICAL"
+        end
     if hard_gate_residuals !== nothing
         for name in propertynames(hard_gate_residuals)
             input_summary["hard_gate_$(name)"] = string(getproperty(hard_gate_residuals, name))
@@ -1869,17 +1808,17 @@ function _record_terminal_state!(
                 string(getproperty(hard_gate_residuals, :covariance))
         end
     end
-    if get(input_summary, "construction_policy", "strict") == "standard"
-        if get(input_summary, "construction_quality_failed", "false") == "true" ||
-           any(diagnostic -> get(diagnostic.context, "gate_result", "") == "FAIL", diagnostics)
-            input_summary["construction_quality_failed"] = "true"
-        end
-        input_summary["quality_review_recommended"] = "true"
-        startswith(get(input_summary, "model_qualification", ""), "STANDARD") ||
-            (input_summary["model_qualification"] = "STANDARD")
-        input_summary["scoped_production_eligible"] = "false"
-        input_summary["global_production_eligible"] = "false"
-    end
+    quality_failed =
+        get(input_summary, "construction_quality_failed", "false") == "true" ||
+        any(diagnostic -> get(diagnostic.context, "gate_result", "") == "FAIL", diagnostics)
+    input_summary["construction_quality_failed"] = string(quality_failed)
+    review = quality_failed || !(status in (COMPLETED, COMPLETED_WITH_WARNINGS))
+    input_summary["quality_review_recommended"] = string(review)
+    input_summary["quality_review_status"] = review ? "RECOMMENDED" : "NO_REPORTED_WARNING"
+    input_summary["ordinary_calculation_policy_version"] = "1.0"
+    input_summary["model_qualification"] = "COMPUTATION_READY"
+    input_summary["scoped_production_eligible"] = "false"
+    input_summary["global_production_eligible"] = "false"
     return input_summary
 end
 
@@ -1979,15 +1918,12 @@ function _restart_state(
     convergence_values,
     included_bands,
     elapsed_seconds,
-    config_sha256,
-    representation_sha256,
     stencil,
-    projection_basis_sha256,
-    amn_sha256,
     optimizer_state;
     fixed_subspace_projectors = nothing,
     fixed_subspace_frames = nothing,
     localization_initial_frames = nothing,
+    input_definition = nothing,
 )
     values =
         isempty(convergence_values) ? zeros(Float64, length(vec(centers)) + length(spreads), 0) :
@@ -2002,17 +1938,14 @@ function _restart_state(
         Matrix{Float64}(values),
         masks,
         Float64(elapsed_seconds),
-        String(config_sha256),
-        String(representation_sha256),
         stencil,
-        String(projection_basis_sha256),
-        String(amn_sha256),
         optimizer_state,
         fixed_subspace_projectors === nothing ? nothing :
         _pack_matrix_field(fixed_subspace_projectors),
         fixed_subspace_frames === nothing ? nothing : _pack_matrix_field(fixed_subspace_frames),
         localization_initial_frames === nothing ? nothing :
         _pack_matrix_field(localization_initial_frames),
+        input_definition,
     )
 end
 
@@ -2062,7 +1995,7 @@ end
 # finite-cutoff representation uses its measured internal group-law residual as
 # a covariance budget. Paired-oracle evidence is diagnostic only.
 function _projector_covariance_tolerance(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     compatibility::RepresentationCompatibilityReport,
 )
     compatibility.validation_profile == :empirical || return config.input.representation_tolerance
@@ -2071,28 +2004,8 @@ function _projector_covariance_tolerance(
     return max(config.input.representation_tolerance, measured_floor, declared_budget)
 end
 
-# Hash sorted sewing and gauge diagnostics that constrain restart provenance.
-function _strict_sewing_diagnostics_sha256(representation::BandRepresentation)
-    selected = sort!([
-        key for key in keys(representation.conventions) if key == "sewing_backend" ||
-        key == "sewing_metric" ||
-        key == "augmentation_backend" ||
-        key == "paw_sewing_thresholds" ||
-        startswith(key, "wavefunction_gauge") ||
-        startswith(key, "strict_") ||
-        startswith(key, "raw_group_law") ||
-        startswith(key, "raw_projective_group_law") ||
-        startswith(key, "raw_cocycle_phase") ||
-        startswith(key, "raw_little_group") ||
-        startswith(key, "raw_reciprocal_cocycle") ||
-        startswith(key, "generalized_norm")
-    ],)
-    buffer = IOBuffer()
-    for key in selected
-        write(buffer, key, '=', representation.conventions[key], '\n')
-    end
-    return bytes2hex(SHA.sha256(take!(buffer)))
-end
+# Complete sewing/gauge conventions are retained by the restart input definition.
+# No additional digest or duplicate diagnostic serialization is required.
 
 # A Hamiltonian authority selects the matrix values, whereas this contract
 # selects the only physical qualification scope.  In particular, native DFT
@@ -2104,15 +2017,11 @@ function _representation_target_subspace_contract(representation::BandRepresenta
     qualification_scope = get(conventions, "qualification_scope", "full_parent")
     target_authority = get(conventions, "target_authority", "NOT_APPLICABLE")
     parent_audit_policy = get(conventions, "parent_audit_policy", "legacy_hard_gate")
-    contract_sha256 = get(
-        conventions,
-        "target_subspace_contract_sha256",
-        get(representation.input_sha256, "TARGET_SUBSPACE_CONTRACT_SHA256", "NOT_RECORDED"),
-    )
+    contract_definition = get(conventions, "target_subspace_contract_definition", "NOT_RECORDED")
     target_leakage_semantics =
         get(conventions, "target_leakage_semantics", "LEGACY_AMPLITUDE_LEAKAGE_CONTRACT")
-    target_leakage_formula_sha256 =
-        get(conventions, "target_leakage_formula_sha256", "NOT_RECORDED")
+    target_leakage_formula_definition =
+        get(conventions, "target_leakage_formula_definition", "NOT_RECORDED")
     target_leakage_threshold = get(conventions, "target_leakage_threshold", "NOT_RECORDED")
     declares_target_scope =
         qualification_scope == "target_subspace" || target_authority == "outer_window"
@@ -2121,9 +2030,9 @@ function _representation_target_subspace_contract(representation::BandRepresenta
         qualification_scope,
         target_authority,
         parent_audit_policy,
-        contract_sha256,
+        contract_definition,
         target_leakage_semantics,
-        target_leakage_formula_sha256,
+        target_leakage_formula_definition,
         target_leakage_threshold,
     )
     representation.schema_version in ("1.0", "1.17") || throw(
@@ -2142,9 +2051,13 @@ function _representation_target_subspace_contract(representation::BandRepresenta
     parent_audit_policy == "audit_only" || throw(
         ArgumentError("TARGET_SUBSPACE_CONTRACT_MISMATCH: parent_audit_policy must be audit_only"),
     )
-    occursin(r"^[0-9a-f]{64}$", contract_sha256) || throw(
+    (
+        !isempty(contract_definition) &&
+        iseven(length(contract_definition)) &&
+        occursin(r"^[0-9a-f]+$", contract_definition)
+    ) || throw(
         ArgumentError(
-            "TARGET_SUBSPACE_CONTRACT_MISMATCH: target_subspace_contract_sha256 is invalid",
+            "TARGET_SUBSPACE_CONTRACT_MISMATCH: target_subspace_contract_definition is invalid",
         ),
     )
     target_leakage_semantics == "physical_paw_s_leakage_weight_v1" || throw(
@@ -2152,9 +2065,10 @@ function _representation_target_subspace_contract(representation::BandRepresenta
             "UNSUPPORTED_LEGACY_TARGET_LEAKAGE_SEMANTICS: target representation does not declare PAW-S weights",
         ),
     )
-    target_leakage_formula_sha256 ==
-    "bac0eb8b0df105c221d0e5a253be1890ac7933e51c776bf9aa760fb91362a3b7" || throw(
-        ArgumentError("TARGET_SUBSPACE_CONTRACT_MISMATCH: leakage formula digest is unsupported"),
+    target_leakage_formula_definition == TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION || throw(
+        ArgumentError(
+            "TARGET_SUBSPACE_CONTRACT_MISMATCH: leakage formula definition is unsupported",
+        ),
     )
     threshold = tryparse(Float64, target_leakage_threshold)
     threshold !== nothing && isfinite(something(threshold)) && something(threshold) > 0.0 || throw(
@@ -2165,9 +2079,9 @@ function _representation_target_subspace_contract(representation::BandRepresenta
         qualification_scope,
         target_authority,
         parent_audit_policy,
-        contract_sha256,
+        contract_definition,
         target_leakage_semantics,
-        target_leakage_formula_sha256,
+        target_leakage_formula_definition,
         target_leakage_threshold,
     )
 end
@@ -2180,8 +2094,21 @@ spreads are in square angstroms. Each stage retains the existing array ownership
 and exact arithmetic order. Invalid inputs and failed trials return a diagnostic
 result; an accepted restart state survives later observer or convergence failure.
 """
+function _terminal_postprocess_state_matches(accepted, restart, old, history, summary)
+    return old !== nothing &&
+           restart !== nothing &&
+           accepted.status in (COMPLETED, COMPLETED_WITH_WARNINGS, MAX_ITERATIONS) &&
+           accepted.restart_state === old &&
+           accepted.v_matrix === restart &&
+           accepted.history === history &&
+           accepted.input_summary === summary &&
+           isequal(old.frames, accepted.v_matrix) &&
+           isequal(old.centers_cartesian, accepted.wannier_centers_cartesian) &&
+           isequal(old.spreads_angstrom2, accepted.spreads_angstrom2)
+end
+# Solve from validated inputs, or retain an explicitly matched terminal postprocess state.
 function _solve_symmetry_adapted_wannierization(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     representation::BandRepresentation,
     eig::WannierEIG,
     mmn::WannierMMN,
@@ -2191,19 +2118,17 @@ function _solve_symmetry_adapted_wannierization(
     restart_state::Union{Nothing, WannierizationRestartState} = nothing,
     restart_history::Vector{WannierizationIteration} = WannierizationIteration[],
     restart_input_summary::AbstractDict{String, String} = Dict{String, String}(),
-    fixed_subspace::Union{Nothing, WannierizationFixedSubspace} = nothing,
     observer = nothing,
     compatibility_report::Union{Nothing, RepresentationCompatibilityReport} = nothing,
-    initialization_amn_sha256::AbstractString = "",
     paw_scdm_input::Union{Nothing, PAWSCDMInputArtifact} = nothing,
+    terminal_postprocess_result::Union{Nothing, WannierizationResult} = nothing,
 )
+    validate_ordinary_construction_policy(config.input.construction_policy)
     state = (;
         amn,
         compatibility_report,
         config,
         eig,
-        fixed_subspace,
-        initialization_amn_sha256,
         mmn,
         observer,
         paw_scdm_input,
@@ -2222,6 +2147,51 @@ function _solve_symmetry_adapted_wannierization(
     state isa WannierizationResult && return state
     state = _initialize_solver_frames(state)
     state isa WannierizationResult && return state
+    if terminal_postprocess_result !== nothing
+        accepted = terminal_postprocess_result
+        old = restart_state
+        _terminal_postprocess_state_matches(
+            accepted,
+            restart,
+            old,
+            restart_history,
+            restart_input_summary,
+        ) || throw(ArgumentError("TERMINAL_POSTPROCESS_ACCEPTED_STATE_MISMATCH"))
+        # Rebind only the validated input definition (which may now include the
+        # already validated extra operator sources). Preserve every optimizer,
+        # frame, history and qualification field from the original terminal state.
+        rebound = WannierizationRestartState(
+            old.iteration,
+            old.frames,
+            old.z_previous,
+            old.centers_cartesian,
+            old.spreads_angstrom2,
+            old.convergence_values,
+            old.included_bands,
+            old.elapsed_seconds,
+            old.stencil,
+            old.optimizer_state,
+            old.fixed_subspace_projectors,
+            old.fixed_subspace_frames,
+            old.localization_initial_frames,
+            state.input_definition,
+        )
+        return WannierizationResult(
+            accepted.status,
+            accepted.v_matrix,
+            accepted.wannier_centers_cartesian,
+            accepted.spreads_angstrom2,
+            accepted.history,
+            accepted.diagnostics,
+            accepted.input_summary,
+            accepted.wannier_chk,
+            accepted.checkpoint_file,
+            rebound,
+            accepted.artifacts,
+            accepted.initialization_report,
+            accepted.tb_symmetry_qualification,
+        )
+    end
     state = _initialize_solver_optimizer(state)
     state isa WannierizationResult && return state
     state = _run_solver_iterations(state)

@@ -1,4 +1,4 @@
-# Remove Wannier90/Fortran inline comments before parsing one mesh line.
+# Remove Wannier/Fortran inline comments before parsing one mesh line.
 function _strip_wannierization_win_comment(line::AbstractString)
     return strip(first(split(first(split(String(line), '!'; limit = 2)), '#'; limit = 2)))
 end
@@ -31,9 +31,13 @@ function _read_wannierization_win_mesh(filename::AbstractString)
             push!(lattice_lines, line)
         elseif active_block == "kpoints"
             push!(kpoint_lines, line)
-        elseif active_block === nothing && occursin('=', line)
-            key, value = split(line, '='; limit = 2)
-            lowercase(strip(key)) == "mp_grid" || continue
+        elseif active_block === nothing
+            # WIN permits whitespace, '=' or ':' after a complete keyword.
+            # Consume at most one delimiter; malformed repeated delimiters remain
+            # in the value and fail the existing integer checks below.
+            keyword = match(r"(?i)^mp_grid(?=\s|=|:|$)\s*(?:[=:]\s*)?(.*)$", line)
+            keyword === nothing && continue
+            value = only(keyword.captures)
             mp_grid === nothing || throw(ArgumentError("WIN file defines mp_grid more than once"))
             tokens = split(replace(strip(value), ',' => ' '))
             length(tokens) == 3 || throw(ArgumentError("mp_grid must contain three integers"))
@@ -87,12 +91,23 @@ end
 
 # Build the identity-only structural representation used by symmetry-free runs.
 function _identity_band_representation(
-    config::Union{SymmetryAdaptedWannierizationConfig, BandRepresentationPreparationConfig},
+    config::Union{WannierizationConfig, BandRepresentationPreparationConfig},
     basis::WannierProjectionBasis,
     eig::WannierEIG,
 )
-    input = config isa SymmetryAdaptedWannierizationConfig ? config.input : config
-    geometry = _read_wannierization_win_mesh(input.win_file)
+    input = config isa WannierizationConfig ? config.input : config
+    geometry = if input.geometry === nothing
+        _read_wannierization_win_mesh(something(input.win_file))
+    else
+        data = input.geometry
+        lattice = data.structure.lattice
+        (
+            lattice = lattice,
+            reciprocal_lattice = 2.0*pi*inv(lattice)',
+            mp_grid = data.mp_grid,
+            kpoints_fractional = data.kpoints_fractional,
+        )
+    end
     eig.num_kpts == size(geometry.kpoints_fractional, 1) ||
         throw(ArgumentError("EIG and WIN k-point counts disagree"))
     num_bands = eig.num_bands
@@ -108,7 +123,7 @@ function _identity_band_representation(
     augmentation_metric = input.sewing_backend isa AugmentationAwareSewing
     return BandRepresentation(
         "1.16",
-        :wannier90_ordinary,
+        :ordinary_localization,
         basis.spinor,
         geometry.lattice,
         geometry.reciprocal_lattice,
@@ -124,11 +139,18 @@ function _identity_band_representation(
         collect(1:num_kpoints),
         ones(Int, num_kpoints);
         conventions = Dict(
+            (
+                input.geometry === nothing ? Dict{String, String}() :
+                Dict(
+                    "normalized_geometry_contract" => "1",
+                    "content_authentication" => "NOT_PERFORMED",
+                )
+            )...,
             "requested_wannierization_mode" => String(input.wannierization_mode),
             "effective_wannierization_mode" => "ordinary",
             "representation_source" => "identity",
             "symmetry_constraints_applied" => "false",
-            "kpoint_authority" => "WIN_full_BZ",
+            "kpoint_authority" => input.geometry === nothing ? "WIN_full_BZ" : "normalized_full_BZ",
             "band_block_policy" => "singleton",
             "sewing_backend" => backend_key,
             "sewing_metric" => augmentation_metric ? "paw_s_identity_operation" : "identity",
@@ -259,7 +281,6 @@ function _no_symmetry_compatibility_contract(representation::BandRepresentation,
         0.0,
         0.0,
         0.0,
-        representation_static_sha256(representation),
         diagnostics,
         :not_applicable,
         GATE_NOT_EVALUATED,
@@ -268,5 +289,6 @@ function _no_symmetry_compatibility_contract(representation::BandRepresentation,
         nothing,
         nothing,
         :analytic,
+        representation_static_definition(representation),
     )
 end

@@ -51,9 +51,29 @@ function run_disk_bounded_test(directory)
         end
         @test DP._qe_bounded_contract(file)
         @test bounded.diagnostics == oracle.diagnostics
-        @test DP._star_payload_sha256(bounded.payload) == DP._star_payload_sha256(oracle.payload)
-        @test DP._star_metric_sha256(bounded.payload.metric) ==
-              DP._star_metric_sha256(oracle.payload.metric)
+        @test DI.validate_scientific_input_definitions_equal(
+            bounded.payload.native.source_definition,
+            oracle.payload.native.source_definition,
+        ) === nothing
+        for field in (
+            :kpoint_map,
+            :reciprocal_shifts,
+            :representative_for_kpoint,
+            :canonical_operation_for_kpoint,
+            :star_representatives,
+            :extra_bands_per_star,
+            :rotations,
+            :target_band_range,
+            :parent_band_range,
+            :maxima,
+            :maximum_contexts,
+            :input_sha256,
+            :source_metadata,
+            :sealed_completed_frame_corrections,
+        )
+            @test isequal(getfield(bounded.payload, field), getfield(oracle.payload, field))
+        end
+        @test DP._star_metric_definitions_equal(bounded.payload.metric, oracle.payload.metric)
         for k in [1, 1, 1]
             @test isequal(
                 bounded.payload.native.kpoints[k].coefficients,
@@ -112,7 +132,7 @@ function run_disk_bounded_test(directory)
                 (n, m, r, w)
             end
             @test residual == lr && worst == lw
-            @test DP._star_metric_sha256(metric) == DP._star_metric_sha256(lm)
+            @test DP._star_metric_definitions_equal(metric, lm)
             @test isequal(metric.projectors[1], lm.projectors[1])
             @test isequal(metric.projector_bases[1], lm.projector_bases[1])
             nnkp=DP.read_wannier_nnkp(pawfixture.nnkp_file)
@@ -196,12 +216,12 @@ function run_disk_bounded_test(directory)
         end
         write(path, "changed")
         @test_throws ArgumentError guarded[3]
-        # HDF5 producer handle is already closed; late payload hashing still succeeds.
-        @test length(DP._star_payload_sha256(bounded.payload)) == 64
+        # The producer handle is closed; bounded mathematical data remain readable.
+        @test all(isfinite, bounded.payload.native.kpoints[1].coefficients)
         HDF5.h5open(file, "r+") do h
             HDF5.attributes(h)["test_mutation"]="changed"
         end
-        @test_throws ArgumentError DP._star_payload_sha256(bounded.payload)
+        @test_throws ArgumentError bounded.payload.native.kpoints[1]
     end
 
     println("SMALL_FIXTURE_PEAK_RSS_BYTES=", Sys.maxrss())

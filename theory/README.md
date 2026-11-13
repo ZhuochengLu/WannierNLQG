@@ -12,7 +12,7 @@ This directory documents the theoretical definitions, physical pictures, and for
 | 4 | `Injection_Spin_Current` | [InjectionSpinCurrent](InjectionSpinCurrent.md) | `Conventional` | `Integral`, `K-slice` |
 | 5 | `Shift_Spin_Current` | [ShiftSpinCurrent](ShiftSpinCurrent.md) | `Conventional` | `Integral`, `K-slice` |
 | 6 | `Photon_Drag_Injection_Current` | [PhotonDragInjectionCurrent](PhotonDragInjectionCurrent.md) | `Conventional` | `Integral`, `K-slice` |
-| 7 | `Quantum_Hermitian_Connection` | [QuantumHermitianConnection](QuantumGeometry/QuantumHermitianConnection.md) | `Conventional`, `Projector`, `Geometric_Loop`, `Wilson_Loop` | `K-slice` |
+| 7 | `Quantum_Hermitian_Connection` | [QuantumHermitianConnection](QuantumGeometry/QuantumHermitianConnection.md) | `Conventional`, `Projector`, `Wilson_Loop` | `K-slice` |
 | 8 | `Hermitian_Curvature_Tensor` | [HermitianCurvatureTensor](QuantumGeometry/HermitianCurvatureTensor.md) | `Conventional` | `K-slice` |
 | 9 | `Shift_Vector` | [ShiftVector](QuantumGeometry/ShiftVector.md) | `Geometric_Loop`, `Wilson_Loop` | `K-slice` |
 | 10 | `Berry_Curvature` | [BerryCurvature](QuantumGeometry/BerryCurvature.md) | `Conventional` | `K-slice` |
@@ -96,11 +96,11 @@ The release also retains the complete ordered band-pair sum. Prefactors are effe
 - The QHC, ordinary interband QGT, and Zeeman interband QGT use the Cartesian-product average over $A\times B$, namely division by $N_A N_B$.
 - Berry curvature and quantum metric for a target subspace retain only transitions from that subspace to its complement and exclude intra-subspace transitions. This makes the result invariant under basis rotations within the subspace.
 - The HCT uses an ordinary trace, with no division by $N_M$ or $N_N$.
-- Degenerate band groups in the Projector, Wilson-loop, and geometric-loop formulations use closed block contractions. QHC diagnostics use the Cartesian-product average over band groups, whereas response quantities retain the complete physical trace or band-pair normalization of their respective references.
+- Supported Projector/Wilson-loop formulations and Geometric Loop Shift Current, Photon Drag Shift Current, and Shift Vector use closed block contractions. Geometric Loop QHC is unsupported. Supported QHC diagnostics use the Cartesian-product average over band groups, whereas response quantities retain the complete physical trace or band-pair normalization of their respective references.
 - Spin quantities use the dimensionless Pauli matrix $\sigma^s$, whose eigenvalues are $\pm1$, rather than $S^s=\hbar\sigma^s/2$. Multiply the final result by $\hbar/2$ to obtain a physical spin current in angular-momentum units.
 
 ## Scope
 
-The K-slice formulas in this directory define local geometric textures. They do not automatically include Fermi occupations, an energy shell, or a Brillouin-zone integral. The Berry-curvature family includes the external non-Abelian curvature terms available within the finite window of the release. The quantum-metric family contains the internal contribution of that finite window and omits the symmetric external contribution that requires additional $uIu/FF_R$-type information. Each document states this physical boundary without discussing how the quantity is computed.
+The K-slice formulas in this directory define local geometric textures. They do not automatically include Fermi occupations, an energy shell, or a Brillouin-zone integral. The Berry-curvature family includes the external non-Abelian curvature terms available within the finite window of the release. Ordinary Quantum Metric and its dipole, quadrupole, and Christoffel tasks default to the internal contribution of that finite window. With explicit `include_external=true`, orthogonal input adds the symmetric external contribution requiring qualified full $uIu/FF_R$-type information; nonorthogonal external completion is unsupported. Interband-pair and Zeeman-interband metrics retain their separate definitions and do not acquire this option. Each document states this physical boundary without discussing how the quantity is computed.
 
 - [Second-harmonic generation](SecondHarmonicGeneration.md): distinct numerical kernels, corrected BCD contraction, and normalization.

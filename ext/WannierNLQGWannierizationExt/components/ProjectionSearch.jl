@@ -7,7 +7,7 @@ import SHA
 import WannierNLQG.SymmetryFoundation:
     BandRepresentation,
     WannierSymmetryPlan,
-    qualification_mask_sha256,
+    qualification_mask_definition,
     read_band_representation_hdf5
 import WannierNLQG.WannierProjection:
     ProjectionRadialTransformConfig,
@@ -26,7 +26,7 @@ import WannierNLQG.Wannierization:
     PROJECTION_VALIDATION_NUMERICAL_UNCERTAIN,
     PROJECTION_VALIDATION_PASSED,
     ProjectionCandidateSpec,
-    ProjectionRepresentationCompatibilityInfo,
+    ProjectionRepresentationAlgorithmInfo,
     ProjectionRepresentationEmbeddingCertificate,
     ProjectionRepresentationProblem,
     ProjectionRepresentationSearchConfig,
@@ -34,19 +34,20 @@ import WannierNLQG.Wannierization:
     ProjectionRepresentationSearchThresholds,
     ProjectionRepresentationSignature,
     ProjectionRepresentationSolution,
-    SymmetryAdaptedWannierizationConfig,
+    WannierizationConfig,
     TargetSubspaceQualificationContract
 import ..WannierizationInternalSupport:
     atomic_hdf5_write,
     replace_wannierization_config,
     target_representation,
     window_masks_from_energies
-import ..RepresentationPreparation: build_representation_product_table, representation_static_sha256
+import ..RepresentationPreparation:
+    build_representation_product_table, representation_static_definition
 
 include("../ProjectionRepresentationGroupAlgebra.jl")
 include("../ProjectionRepresentationCorepresentations.jl")
 include("../ProjectionRepresentationIntertwiners.jl")
-include("../ProjectionRepresentationCompatibility.jl")
+include("../ProjectionCharacterReduction.jl")
 include("../ProjectionRepresentationSearch.jl")
 include("../ProjectionRepresentationSearchHDF5.jl")
 include("../ProjectionRepresentationMaterialization.jl")

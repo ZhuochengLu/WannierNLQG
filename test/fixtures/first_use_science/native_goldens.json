@@ -92,11 +92,11 @@
       "id": "generate_vasp_paw_spn",
       "native_report": "native_vasp_spn_provenance.json",
       "actual": "actual_12.json",
-      "actual_sha256": "fdf49ea38b3557efa40b05ec3f12ca21ccf3fd1b59ae0139d08b7c1631920618",
+      "actual_sha256": "831994ae4c97cb22fcc809ffe06e0f7687cd5ee9f65df676f7b48fd345d8aa95",
       "integrity": {
         "kind": "vasp_spn",
         "side": "portable",
-        "artifact_sha256": "7ce56ab9aa9eebd65e9775e83a7a4ca38a648f6d2b0cbe2cc77d66e4f3e6e177",
+        "artifact_sha256": "1a8abe59673cca4d96a8a5d0f126443a24aaec7867a32e41ac1488f4047bf701",
         "official_digest_and_readback": true,
         "verified_digest_fields": [
           {
@@ -239,7 +239,7 @@
       "id": "write_projection_representation_search_hdf5",
       "native_report": "native_science.json",
       "actual": "actual_26.json",
-      "actual_sha256": "5f1ad31eda0f2cb6e034e0f069c22d59d7cc1c9432bf33d6276c06ec9ad2e627",
+      "actual_sha256": "5edcf85356b9d2b5610ea3bc45ae56114a322e4457cffda06f7e4f5ac082d6d6",
       "integrity": null,
       "original_actual_report_sha256": "6e8d05332cbabb92e245cde495d7dc52e5eeb55ccdfbb278711507f302d3c18f"
     },
@@ -247,7 +247,7 @@
       "id": "write_response_symmetry_artifact",
       "native_report": "native_output.json",
       "actual": "actual_27.json",
-      "actual_sha256": "0d69ffa3572d0f82ed00bea11afb3c1b578bb58b337776c5665939c39763ba0d",
+      "actual_sha256": "c7eab8be04519b082fba52c44affd7e5f6aaa5b6b822629e9eea82f3cd55d628",
       "integrity": null,
       "original_actual_report_sha256": "d069b16de0d967242bbffd203b0bd63fabbf72fb92fdff3b95931544c6427abf"
     },
@@ -261,6 +261,16 @@
     }
   ],
   "exact_metadata_relocation_for_test_only": true,
-  "raw_artifacts_unchanged": true,
-  "official_field_readback_qualification_sha256": "4045356984bff376b772e250e58e58b8eeae8ef47c93a553d462ed61e888a498"
+  "raw_artifacts_unchanged": false,
+  "official_field_readback_qualification_sha256": "4045356984bff376b772e250e58e58b8eeae8ef47c93a553d462ed61e888a498",
+  "privacy_transport": {
+    "record": "generate_vasp_paw_spn",
+    "receipt": "docs/fixture_privacy_transport.json",
+    "numeric_oracles_unchanged": true,
+    "original_qualification_is_historical": true,
+    "original_hashes": {
+      "actual_sha256": "fdf49ea38b3557efa40b05ec3f12ca21ccf3fd1b59ae0139d08b7c1631920618",
+      "artifact_sha256": "7ce56ab9aa9eebd65e9775e83a7a4ca38a648f6d2b0cbe2cc77d66e4f3e6e177"
+    }
+  }
 }

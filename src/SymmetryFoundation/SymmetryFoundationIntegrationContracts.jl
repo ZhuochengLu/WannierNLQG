@@ -12,7 +12,10 @@ const SYMMETRY_FOUNDATION_INTEGRATION_API = (
     :HARTREE_TO_EV,
     :SYMMETRY_FOUNDATION_INTEGRATION_API,
     :VASPWavecarHeader,
+    :activate_symmetry_foundation_backend!,
     :band_representation_schema_version,
+    :band_representation_input_definition,
+    :qualification_mask_definition,
     :build_band_product_table,
     :build_canonical_band_representation,
     :build_canonical_kpoint_action,
@@ -22,6 +25,7 @@ const SYMMETRY_FOUNDATION_INTEGRATION_API = (
     :canonical_plane_wave_sewing_matrix,
     :configure_band_qualification_window!,
     :detect_tb_compatibility_symmetry_operations,
+    :finite_symmetry_group_tables,
     :group_invariant_cartesian_rotation_data,
     :infer_mp_grid,
     :is_identity_group_representation,
@@ -58,3 +62,15 @@ const SYMMETRY_FOUNDATION_INTEGRATION_API = (
     :native_point_metadata,
     :write_band_representation_summary,
 )
+
+"""
+Activate the symmetry backend before a sibling layer enters its geometry call tree.
+
+This integration port loads the existing weak-dependency image without planning
+a path, reading a model or initializing MPI. Loading failures propagate normally;
+the caller still owns input validation and its world-age-safe resolver handoff.
+"""
+function activate_symmetry_foundation_backend!()
+    _load_symmetry_foundation_extension!()
+    return nothing
+end

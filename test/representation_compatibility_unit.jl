@@ -1,3 +1,13 @@
+
+# Actual reference values replace the retired digest-only oracle receipt.
+function actual_oracle_record(representation, residuals)
+    definition = WannierNLQG.SymmetryFoundation.band_representation_input_definition(representation)
+    return (
+        representation_definition = definition,
+        oracle_definition = definition,
+        oracle_excess_group_law_residuals = Tuple(Float64.(residuals)),
+    )
+end
 using HDF5
 using LinearAlgebra
 using Test
@@ -85,7 +95,7 @@ end
             wavecar_file = "WAVECAR",
             incar_file = incar,
             spin_basis_saxis = (1.0, 0.0, 0.0),
-            eig_file = "wannier90.eig",
+            eig_file = "wannier.eig",
             output_hdf5_file = "representation.h5",
         )
         @test config.incar_file == incar
@@ -398,7 +408,7 @@ end
         outer_mask = [trues(2), trues(2)],
         tolerance = 1.0e-12,
         oracle_excess_group_law_residuals = zeros(4),
-        qualification_sha256 = repeat("a", 64),
+        qualification_record = actual_oracle_record(empirical, zeros(4)),
     )
     @test qualified.passed
     @test qualified.assessment_status == REPRESENTATION_WANNIERIZATION.REPRESENTATION_COMPATIBLE
@@ -408,7 +418,7 @@ end
         outer_mask = [trues(2), trues(2)],
         tolerance = 1.0e-12,
         oracle_excess_group_law_residuals = fill(1.0e-6, 4),
-        qualification_sha256 = repeat("b", 64),
+        qualification_record = actual_oracle_record(empirical, fill(1.0e-6, 4)),
     )
     @test reference_difference.passed
     @test any(
@@ -517,23 +527,61 @@ end
             projection_basis = BandPublicSchemaTestSupport.single_site_s_basis(spinor = true),
         )
         fixture = merge(raw_fixture, (; representation = prepared.representation))
+        scope = prepared.qualification_scope
+        @test scope.outer_mask == trues(2, 2)
+        @test scope.frozen_mask == falses(2, 2)
+        # These are the real preparation-selected masks, not a synthetic receipt.
+        outer = [BitVector(scope.outer_mask[:, k]) for k in axes(scope.outer_mask, 2)]
+        frozen = [BitVector(scope.frozen_mask[:, k]) for k in axes(scope.frozen_mask, 2)]
+        read_math(path) = WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(
+            path;
+            content_authentication = false,
+        )
+        write_math(path, representation, validation) =
+            WannierNLQG.SymmetryFoundation.write_band_representation_hdf5(
+                path,
+                representation,
+                validation;
+                content_authentication = false,
+                qualification_scope = scope,
+            )
+        function reject_math(path, expected_reason)
+            exception = try
+                read_math(path)
+                nothing
+            catch error
+                error
+            end
+            @test exception isa ArgumentError
+            @test exception isa ArgumentError &&
+                  occursin(expected_reason, sprint(showerror, exception))
+        end
         report = REPRESENTATION_WANNIERIZATION.validate_band_representation_compatibility(
             fixture.representation,
             fixture.plan;
-            outer_mask = [trues(2), trues(2)],
-            frozen_mask = [trues(2), trues(2)],
+            outer_mask = outer,
+            frozen_mask = frozen,
             tolerance = 1.0e-12,
         )
         filename = joinpath(directory, "representation.h5")
-        output = WannierNLQG.SymmetryFoundation.write_band_representation_hdf5(
-            filename,
+        # Explicit expert authentication must still reject an unbound report.
+        authenticated = joinpath(directory, "unbound-authenticated.h5")
+        @test_throws ArgumentError WannierNLQG.SymmetryFoundation.write_band_representation_hdf5(
+            authenticated,
             fixture.representation,
             report,
+        )
+        @test !isfile(authenticated)
+        output = write_math(filename, fixture.representation, report)
+        @test_throws ArgumentError WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(
+            filename,
         )
         @test output == abspath(filename)
         HDF5.h5open(filename, "r") do handle
             @test read(HDF5.attributes(handle)["schema_version"]) == "1.0"
-            @test length(String(read(HDF5.attributes(handle)["preparation_digest"]))) == 64
+            @test !haskey(HDF5.attributes(handle), "preparation_digest")
+            @test read(HDF5.attributes(handle["compatibility"])["content_authentication"]) ==
+                  "NOT_PERFORMED"
             @test all(
                 name -> haskey(handle, name),
                 ("inventory", "qualification_scope", "raw_diagnostics", "compatibility_policy"),
@@ -554,62 +602,70 @@ end
             @test read(HDF5.attributes(handle["compatibility"])["gate_definition_status"]) ==
                   "GATE_VALID"
         end
-        restored = WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(filename)
+        restored = read_math(filename)
         @test restored.schema_version == "1.0"
         @test restored.kpoints_fractional == fixture.representation.kpoints_fractional
         @test restored.sewing_matrices == fixture.representation.sewing_matrices
-        @test REPRESENTATION_WANNIERIZATION._representation_static_sha256(restored) ==
-              report.representation_sha256
+        @test restored.real_lattice == fixture.representation.real_lattice
+        # SymmetryOperation contains newly allocated arrays and has no value ==.
+        # Compare every mathematical field rather than object identity.
+        @test length(restored.operations) == length(fixture.representation.operations)
+        for (actual, expected) in zip(restored.operations, fixture.representation.operations)
+            @test actual.rotation_fractional == expected.rotation_fractional
+            @test actual.translation_fractional == expected.translation_fractional
+            @test actual.rotation_cartesian == expected.rotation_cartesian
+            @test actual.antiunitary === expected.antiunitary
+        end
 
         second = joinpath(directory, "representation-second.h5")
-        WannierNLQG.SymmetryFoundation.write_band_representation_hdf5(second, restored, report)
-        second_restored = WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(second)
+        write_math(second, restored, report)
+        second_restored = read_math(second)
         @test second_restored.sewing_matrices == restored.sewing_matrices
-        @test REPRESENTATION_WANNIERIZATION._representation_static_sha256(second_restored) ==
-              REPRESENTATION_WANNIERIZATION._representation_static_sha256(restored)
+        @test REPRESENTATION_WANNIERIZATION._representation_static_definition(second_restored) ==
+              REPRESENTATION_WANNIERIZATION._representation_static_definition(restored)
 
         legacy = joinpath(directory, "legacy-v1.0.h5")
         write_legacy_v10_representation(legacy, fixture.representation)
-        @test_throws ArgumentError WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(
-            legacy,
-        )
+        reject_math(legacy, "public band representation is missing products")
 
         legacy_v11 = joinpath(directory, "legacy-v1.1.h5")
         cp(filename, legacy_v11)
+        chmod(legacy_v11, 0o600)
         HDF5.h5open(legacy_v11, "r+") do handle
-            write(HDF5.attributes(handle)["schema_version"], "1.1")
+            @test read(HDF5.attributes(handle)["schema_version"]) == "1.0"
+            BandPublicSchemaTestSupport.replace_band_attribute!(handle, "schema_version", "1.1")
         end
-        @test_throws ArgumentError WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(
-            legacy_v11,
-        )
+        HDF5.h5open(legacy_v11, "r") do handle
+            @test read(HDF5.attributes(handle)["schema_version"]) == "1.1"
+        end
+        reject_math(legacy_v11, "unsupported band-representation schema 1.1")
         extension = Base.get_extension(WannierNLQG, :WannierNLQGSymmetryFoundationExt)
         @test extension !== nothing
         @test_throws ArgumentError Base.invokelatest(
             extension._read_band_representation_qualification_hdf5,
-            legacy_v11,
+            legacy_v11;
+            content_authentication = false,
         )
 
-        incompatible_report = REPRESENTATION_WANNIERIZATION.RepresentationCompatibilityReport(
-            report.schema_version,
-            report.supported_contract,
-            false,
-            report.tolerance,
-            report.product_table,
-            report.maximum_group_law_residuals,
-            report.maximum_reciprocal_shift_residual,
-            report.theta_squared_residual,
-            report.maximum_kramers_residual,
-            report.representation_sha256,
-            [
+        incompatible_changes = (
+            passed = false,
+            assessment_status = REPRESENTATION_WANNIERIZATION.REPRESENTATION_INCOMPATIBLE_ASSESSMENT,
+            diagnostics = [
                 REPRESENTATION_WANNIERIZATION.WannierizationDiagnostic(
                     :THETA_SQUARED_FAILED,
                     :error,
                     "synthetic failure",
                 ),
             ],
-            :computed,
+            metadata_origin = :computed,
         )
-        incompatible = WannierNLQG.SymmetryFoundation.write_band_representation_hdf5(
+        incompatible_report = REPRESENTATION_WANNIERIZATION.RepresentationCompatibilityReport(
+            (
+                haskey(incompatible_changes, name) ? getproperty(incompatible_changes, name) :
+                getfield(report, name) for name in fieldnames(typeof(report))
+            )...,
+        )
+        incompatible = write_math(
             joinpath(directory, "failed.h5"),
             fixture.representation,
             incompatible_report,
@@ -621,63 +677,78 @@ end
         qualified = REPRESENTATION_WANNIERIZATION.validate_band_representation_compatibility(
             empirical,
             fixture.plan;
-            outer_mask = [trues(2), trues(2)],
+            outer_mask = outer,
             tolerance = 1.0e-12,
             oracle_excess_group_law_residuals = zeros(4),
-            qualification_sha256 = repeat("b", 64),
+            qualification_record = actual_oracle_record(empirical, zeros(4)),
         )
-        qualified_file = WannierNLQG.SymmetryFoundation.write_band_representation_hdf5(
-            joinpath(directory, "qualified.h5"),
-            empirical,
-            qualified,
-        )
+        qualified_file = write_math(joinpath(directory, "qualified.h5"), empirical, qualified)
         qualification = Base.invokelatest(
             extension._read_band_representation_qualification_hdf5,
-            qualified_file,
+            qualified_file;
+            content_authentication = false,
         )
-        @test qualification.qualification_sha256 == repeat("b", 64)
+        @test qualification.qualification_record == actual_oracle_record(empirical, zeros(4))
         @test qualification.oracle_excess_group_law_residuals == (0.0, 0.0, 0.0, 0.0)
 
         tampered = joinpath(directory, "tampered.h5")
         cp(filename, tampered)
+        chmod(tampered, 0o600)
         HDF5.h5open(tampered, "r+") do handle
+            @test handle["products/product_index"][1, 1] == 1
             handle["products/product_index"][1, 1] = 2
         end
-        @test_throws ArgumentError WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(
-            tampered,
-        )
+        HDF5.h5open(tampered, "r") do handle
+            @test handle["products/product_index"][1, 1] == 2
+        end
+        reject_math(tampered, "product table contradicts operation metadata")
 
         bad_axes = joinpath(directory, "bad-axes.h5")
         cp(filename, bad_axes)
+        chmod(bad_axes, 0o600)
         HDF5.h5open(bad_axes, "r+") do handle
-            write(
-                HDF5.attributes(handle["action/sewing_matrices"])["axis_order"],
+            @test read(HDF5.attributes(handle["action/sewing_matrices"])["axis_order"]) ==
+                  "kpoint,operation,target_band,source_band"
+            BandPublicSchemaTestSupport.replace_band_attribute!(
+                handle["action/sewing_matrices"],
+                "axis_order",
                 "kpoint,operation,source_band,target_band",
             )
         end
-        @test_throws ArgumentError WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(
-            bad_axes,
-        )
+        HDF5.h5open(bad_axes, "r") do handle
+            @test read(HDF5.attributes(handle["action/sewing_matrices"])["axis_order"]) ==
+                  "kpoint,operation,source_band,target_band"
+        end
+        reject_math(bad_axes, "HDF5 axis_order")
 
         bad_gate = joinpath(directory, "bad-gate.h5")
         cp(filename, bad_gate)
+        chmod(bad_gate, 0o600)
         HDF5.h5open(bad_gate, "r+") do handle
-            write(
-                HDF5.attributes(handle["compatibility"])["gate_definition_status"],
+            @test read(HDF5.attributes(handle["compatibility"])["gate_definition_status"]) ==
+                  "GATE_VALID"
+            BandPublicSchemaTestSupport.replace_band_attribute!(
+                handle["compatibility"],
+                "gate_definition_status",
                 "GATE_DEFINITION_INVALID",
             )
         end
-        @test_throws ArgumentError WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(
-            bad_gate,
-        )
+        HDF5.h5open(bad_gate, "r") do handle
+            @test read(HDF5.attributes(handle["compatibility"])["gate_definition_status"]) ==
+                  "GATE_DEFINITION_INVALID"
+        end
+        reject_math(bad_gate, "compatible result has an invalid gate")
 
         future = joinpath(directory, "future.h5")
         cp(filename, future)
+        chmod(future, 0o600)
         HDF5.h5open(future, "r+") do handle
-            write(HDF5.attributes(handle)["schema_version"], "2.0")
+            @test read(HDF5.attributes(handle)["schema_version"]) == "1.0"
+            BandPublicSchemaTestSupport.replace_band_attribute!(handle, "schema_version", "2.0")
         end
-        @test_throws ArgumentError WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(
-            future,
-        )
+        HDF5.h5open(future, "r") do handle
+            @test read(HDF5.attributes(handle)["schema_version"]) == "2.0"
+        end
+        reject_math(future, "unsupported band-representation schema 2.0")
     end
 end

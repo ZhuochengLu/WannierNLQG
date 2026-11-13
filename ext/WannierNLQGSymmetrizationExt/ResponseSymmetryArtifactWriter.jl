@@ -981,7 +981,7 @@ function write_response_symmetry_artifact(
             "gates" => Dict(
                 "structure_magnetic_symmetry" =>
                     Dict("status" => structural_pass ? "PASS" : "FAIL"),
-                "wannier90_gauge" => Dict("status" => downstream_status),
+                "wannier_frame" => Dict("status" => downstream_status),
                 "hamiltonian_covariance" => Dict("status" => "NOT_RUN_DOWNSTREAM_BLOCKED"),
                 "mmn_covariance" => Dict("status" => "NOT_RUN_DOWNSTREAM_BLOCKED"),
                 "integrand_covariance" => formal_integrand,

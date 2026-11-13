@@ -5,7 +5,7 @@ using TOML
 using WannierNLQG
 
 const ROOT = normpath(joinpath(@__DIR__, ".."))
-const EXPECTED_VERSION = v"1.1.1"
+const EXPECTED_VERSION = v"1.2.0"
 const GPL2_ONLY_SPDX_IDENTIFIER = "GPL-2.0-only"
 const GPL2_ONLY_LICENSE_SHA256 = "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
 const GPL2_ONLY_METADATA_MARKERS = (
@@ -15,7 +15,7 @@ const GPL2_ONLY_METADATA_MARKERS = (
     ("THIRD_PARTY_NOTICE.md", "GPL-2.0-only"),
     (
         "THIRD_PARTY_NOTICE.md",
-        "remain under their respective licenses; their source code is not vendored here",
+        "remain under their respective licenses; their source code is not bundled wholesale",
     ),
 )
 const RESPONSE_SUMMARY_SCHEMA_DOCUMENTATION_PATH = "docs/STORAGE_SCHEMAS.md"
@@ -75,9 +75,14 @@ end
 
 check_response_summary_schema_documentation(ROOT)
 
-project = TOML.parsefile(joinpath(ROOT, "Project.toml"))
-VersionNumber(project["version"]) == EXPECTED_VERSION ||
-    error("Project.toml version is not $(EXPECTED_VERSION)")
+function check_software_project_version(root::AbstractString)
+    project = TOML.parsefile(joinpath(root, "Project.toml"))
+    VersionNumber(project["version"]) == EXPECTED_VERSION ||
+        error("Project.toml version is not $(EXPECTED_VERSION)")
+    return true
+end
+
+check_software_project_version(ROOT)
 Base.pkgversion(WannierNLQG) == EXPECTED_VERSION ||
     error("loaded package version is not $(EXPECTED_VERSION)")
 
@@ -86,8 +91,8 @@ for relative_path in
     occursin(string(EXPECTED_VERSION), read(joinpath(ROOT, relative_path), String)) ||
         error("current release identity is missing from $(relative_path)")
 end
-occursin("1.0.0", read(joinpath(ROOT, "docs", "MIGRATION_1.0.0.md"), String)) ||
-    error("the version 1.0.0 public API baseline is missing from docs/MIGRATION_1.0.0.md")
+occursin("1.2", read(joinpath(ROOT, "docs", "PUBLIC_API.md"), String)) ||
+    error("current public API documentation is missing from docs/PUBLIC_API.md")
 
 for relative_path in (
     "LICENSE",
@@ -111,89 +116,135 @@ end
 # Independent file identifiers are checked separately from retained logical contracts.
 # Band uses its existing schema name, a single accepted wire version, and no
 # historical migration. Its behavioral regression remains a required suite entry.
-const INDEPENDENT_SCHEMA_CONSTANTS = (
-    ("src/IO/RealSpaceOperatorBundles.jl", "OPERATOR_BUNDLE_SCHEMA_VERSION"),
+# Read literal declarations without executing producer source or accepting comments.
+function _schema_metadata_expressions(value)
+    value isa Expr || return Expr[]
+    value.head == :quote && return Expr[]
+    result = Expr[value]
+    for argument in value.args
+        append!(result, _schema_metadata_expressions(argument))
+    end
+    return result
+end
+
+function check_schema_constant(root::AbstractString, relative_path, name, expected)
+    declarations = Any[]
+    source = Meta.parseall(read(joinpath(root, relative_path), String))
+    for expression in _schema_metadata_expressions(source)
+        expression.head == :const || continue
+        assignment = only(expression.args)
+        assignment isa Expr && assignment.head == :(=) && assignment.args[1] == Symbol(name) ||
+            continue
+        push!(declarations, assignment.args[2])
+    end
+    length(declarations) == 1 ||
+        error("schema declaration must occur exactly once: $(name) in $(relative_path)")
+    value = only(declarations)
+    if value isa Expr && value.head == :tuple && all(x -> x isa String, value.args)
+        value = Tuple(value.args)
+    end
+    value == expected || error(
+        "independent storage declaration differs: $(name) in $(relative_path); expected $(repr(expected))",
+    )
+    return true
+end
+
+# Each mathematical format has its own wire contract; there is no default version.
+const INDEPENDENT_SCHEMA_DECLARATIONS = (
+    ("src/IO/RealSpaceOperatorBundles.jl", "OPERATOR_BUNDLE_SCHEMA_VERSION", "3.0"),
     (
         "ext/WannierNLQGSymmetryFoundationExt/BandRepresentationPersistence.jl",
         "BAND_REPRESENTATION_SCHEMA_VERSION",
+        "1.0",
     ),
     (
         "ext/WannierNLQGWannierizationExt/hdf5/FixedSubspace.jl",
         "WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION",
+        "3.0",
     ),
     (
         "ext/WannierNLQGWannierizationExt/hdf5/FixedSubspace.jl",
         "WANNIERIZATION_FIXED_SUBSPACE_SCHEMA_VERSION",
+        "2.0",
     ),
     (
         "ext/WannierNLQGWannierizationExt/hdf5/FixedSubspace.jl",
         "WANNIERIZATION_U_CONVERGENCE_DIAGNOSTICS_SCHEMA_VERSION",
+        "1.1",
     ),
     (
         "ext/WannierNLQGWannierizationExt/star_gauge/FrameContract.jl",
         "STAR_COVARIANT_PAW_GAUGE_SCHEMA_VERSION",
+        "2.0",
     ),
     (
         "ext/WannierNLQGWannierizationExt/ProjectionRepresentationSearchHDF5.jl",
         "PROJECTION_REPRESENTATION_SEARCH_SCHEMA_VERSION",
+        "4.0",
     ),
     (
         "ext/WannierNLQGWannierizationExt/VASPPawMatrixElements.jl",
         "VASP_PAW_MATRIX_ELEMENT_SCHEMA_VERSION",
+        "2.0",
     ),
     (
         "ext/WannierNLQGWannierizationExt/VASPPawSpinMatrixElements.jl",
         "VASP_PAW_SPN_SCHEMA_VERSION",
+        "2.0",
     ),
-    ("ext/WannierNLQGWannierizationExt/QEPAWSpinMatrixElements.jl", "QE_PAW_SPN_SCHEMA_VERSION"),
+    (
+        "ext/WannierNLQGWannierizationExt/QEPAWSpinMatrixElements.jl",
+        "QE_PAW_SPN_SCHEMA_VERSION",
+        "2.0",
+    ),
     (
         "ext/WannierNLQGWannierizationExt/QEPAWMatrixElements.jl",
         "QE_PAW_MATRIX_ELEMENT_SCHEMA_VERSION",
+        "2.0",
     ),
     (
         "ext/WannierNLQGWannierizationExt/QEPAWMatrixElements.jl",
         "QE_PAW_ORACLE_PROVENANCE_SCHEMA_VERSION",
+        "2.0",
     ),
     (
         "ext/WannierNLQGWannierizationExt/SymmetryCompletedQEPAWMatrixElements.jl",
         "SYMMETRY_COMPLETED_QE_PAW_SCHEMA_VERSION",
+        "2.0",
     ),
-    ("ext/WannierNLQGWannierizationExt/PAWSCDMInitialization.jl", "PAW_SCDM_INPUT_SCHEMA_VERSION"),
+    (
+        "ext/WannierNLQGWannierizationExt/PAWSCDMInitialization.jl",
+        "PAW_SCDM_INPUT_SCHEMA_VERSION",
+        "2.0",
+    ),
     (
         "ext/WannierNLQGWannierizationExt/PAWBlockPartitionAudit.jl",
         "PAW_BLOCK_PARTITION_AUDIT_SCHEMA_VERSION",
+        "2.0",
     ),
     (
         "ext/WannierNLQGWannierizationExt/WannierUIUGeneration.jl",
         "WANNIER_UIU_GENERATION_SCHEMA_VERSION",
+        "2.0",
     ),
     (
         "ext/WannierNLQGWannierizationExt/WannierHamiltonianOperatorGeneration.jl",
         "WANNIER_HAMILTONIAN_OPERATOR_GENERATION_SCHEMA_VERSION",
+        "2.0",
     ),
     (
         "ext/WannierNLQGWannierizationExt/WannierGaugeChainDiagnostics.jl",
         "WANNIER_GAUGE_CHAIN_DIAGNOSTIC_SCHEMA_VERSION",
+        "2.0",
+    ),
+    (
+        "ext/WannierNLQGOperatorBundleExt/CurrentModelFormat.jl",
+        "CURRENT_MODEL_FORMAT_VERSION",
+        "3.0",
     ),
 )
-for (relative_path, name) in INDEPENDENT_SCHEMA_CONSTANTS
-    source = read(joinpath(ROOT, relative_path), String)
-    expected_version = get(
-        Dict(
-            "OPERATOR_BUNDLE_SCHEMA_VERSION" => "1.1",
-            "WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION" => "1.2",
-            "WANNIERIZATION_FIXED_SUBSPACE_SCHEMA_VERSION" => "2.0",
-            "VASP_PAW_SPN_SCHEMA_VERSION" => "1.1",
-            "QE_PAW_SPN_SCHEMA_VERSION" => "1.1",
-            "QE_PAW_MATRIX_ELEMENT_SCHEMA_VERSION" => "1.1",
-            "WANNIER_UIU_GENERATION_SCHEMA_VERSION" => "1.1",
-            "WANNIER_HAMILTONIAN_OPERATOR_GENERATION_SCHEMA_VERSION" => "1.1",
-        ),
-        name,
-        "1.0",
-    )
-    occursin(name * " = \"$(expected_version)\"", source) ||
-        error("independent storage schema is not $(expected_version): $(name) in $(relative_path)")
+for (relative_path, name, expected) in INDEPENDENT_SCHEMA_DECLARATIONS
+    check_schema_constant(ROOT, relative_path, name, expected)
 end
 
 # Parse literal Band header declarations so spacing changes do not weaken or break
@@ -218,9 +269,23 @@ readable_band_versions =
 readable_band_versions isa Expr &&
 readable_band_versions.head == :tuple &&
 readable_band_versions.args == ["1.0"] || error("Band readers must accept only wire schema 1.0")
-isfile(joinpath(ROOT, "test", "band_public_schema_unit.jl")) &&
-occursin("\"band_public_schema_unit.jl\"", read(joinpath(ROOT, "test", "runtests.jl"), String)) ||
-    error("Band public-schema rejection regression is missing or unregistered")
+# The declared inventory, rather than an incidental string in runtests, owns registration.
+module VersionConsistencyTestInventory
+include(joinpath(@__DIR__, "..", "test", "CITestPlan.jl"))
+end
+VersionConsistencyTestInventory.CITestPlan.validate_ci_test_plan()
+
+function check_band_regression_registration(root::AbstractString, registered_files)
+    isfile(joinpath(root, "test", "band_public_schema_unit.jl")) &&
+    "band_public_schema_unit.jl" in registered_files ||
+        error("Band public-schema rejection regression is missing or unregistered")
+    syntax = Meta.parseall(read(joinpath(root, "test", "runtests.jl"), String))
+    expected = :(foreach(include_test_file, CITestPlan.FAST_TEST_FILES))
+    any(expression -> expression == expected, _schema_metadata_expressions(syntax)) ||
+        error("Fast driver does not consume the declared regression inventory")
+    return true
+end
+check_band_regression_registration(ROOT, VersionConsistencyTestInventory.CITestPlan.FAST_TEST_FILES)
 
 # URI-style file identifiers and literal writer fields have no version constant.
 const INDEPENDENT_SCHEMA_MARKERS = (
@@ -230,18 +295,14 @@ const INDEPENDENT_SCHEMA_MARKERS = (
     ),
     (
         "src/Runtime/ResponseSymmetryRuntime.jl",
-        "\"schema\" => \"wanniernlqg.response-symmetry-summary/1.0\"",
+        r"\"schema\"\s*=>\s*plan\.artifact_schema\s*==\s*NATIVE_RESPONSE_SYMMETRY_SCHEMA\s*\?\s*\"wanniernlqg\.response-symmetry-summary/2\.0\"\s*:\s*\"wanniernlqg\.response-symmetry-summary/1\.0\"",
     ),
     (
         "ext/WannierNLQGSymmetrizationExt/ResponseSymmetryQualification.jl",
-        "RESPONSE_W90_QUALIFICATION_SCHEMA = \"wanniernlqg.response-symmetry-qualification/1.0\"",
+        "RESPONSE_SYMMETRY_QUALIFICATION_SCHEMA = \"wanniernlqg.response-symmetry-qualification/1.0\"",
     ),
     (
         "ext/WannierNLQGSymmetrizationExt/components/persistence/OperatorPersistence.jl",
-        "\"schema_version\" => \"1.0\"",
-    ),
-    (
-        "ext/WannierNLQGSymmetrizationExt/components/persistence/GaugeAwarePersistence.jl",
         "\"schema_version\" => \"1.0\"",
     ),
     (
@@ -250,19 +311,15 @@ const INDEPENDENT_SCHEMA_MARKERS = (
     ),
     (
         "ext/WannierNLQGWannierizationExt/BandRepresentationBuilder.jl",
-        "attributes[\"schema_version\"] = \"1.0\"",
+        "attributes[\"schema_version\"] = \"2.0\"",
     ),
     (
         "ext/WannierNLQGWannierizationExt/WannierizationWorkflow.jl",
-        "attributes[\"schema_version\"] = \"1.0\"",
+        "attributes[\"schema_version\"] = \"2.0\"",
     ),
-    ("src/Runtime/Execution/KPathDriver.jl", "schema_version = \"1.0\""),
-    ("scripts/visualization/model_lattice_probe.jl", "\"schema_version\" => \"1.0\""),
+    ("src/Runtime/Execution/KPathDriver.jl", "schema_version = \"2.0\""),
+    ("scripts/visualization/model_lattice_probe.jl", "\"schema_version\" => \"1.1\""),
     ("scripts/visualization/common.py", "\"schema_version\": \"1.0\""),
-    (
-        "ext/WannierNLQGOperatorBundleExt/WannierNLQGOperatorBundleExt.jl",
-        "[\"minimum_reader_schema\"] = OPERATOR_BUNDLE_SCHEMA_VERSION",
-    ),
 )
 for (relative_path, marker) in INDEPENDENT_SCHEMA_MARKERS
     occursin(marker, read(joinpath(ROOT, relative_path), String)) ||
@@ -273,16 +330,16 @@ end
 const RETAINED_INTERNAL_SCHEMA_MARKERS = (
     (
         "ext/WannierNLQGWannierizationExt/OperatorProfileAssembly.jl",
-        "OPERATOR_QUALIFICATION_SCHEMA_VERSION = \"1.3\"",
+        "OPERATOR_QUALIFICATION_SCHEMA_VERSION = \"1.5\"",
     ),
     (
         "src/Wannierization/models/DiagnosticsQualification.jl",
-        "TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION = \"1.7\"",
+        "TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION = \"2.0\"",
     ),
     ("scripts/EvidenceHashing.jl", "EVIDENCE_HASH_SCHEMA_VERSION = \"2.1\""),
     (
         "ext/WannierNLQGWannierizationExt/ProjectionRepresentationSearchHDF5.jl",
-        "WannierNLQG.projection_search_hdf5_mirror/2.1",
+        "WannierNLQG.projection_search_hdf5_mirror/3.0",
     ),
 )
 for (relative_path, marker) in RETAINED_INTERNAL_SCHEMA_MARKERS
@@ -292,16 +349,91 @@ end
 isfile(joinpath(ROOT, "docs", "STORAGE_SCHEMAS.md")) ||
     error("independent/internal storage schema inventory is missing")
 
-bundle_extension = read(
-    joinpath(ROOT, "ext", "WannierNLQGOperatorBundleExt", "WannierNLQGOperatorBundleExt.jl"),
-    String,
-)
-occursin("string(Base.pkgversion(WannierNLQG))", bundle_extension) ||
-    error("Packed writer software provenance is not bound to package version")
-for identity in ("1.1.1", "1.1.0", "1.0.1", "1.0.0", "2.4.0", "2.3.0", "2.1.0", "2.0.0")
-    occursin(identity, bundle_extension) ||
-        error("Packed reader compatibility identity is missing: $(identity)")
+# Verify the effective mathematical implementation and keep legacy migration separate.
+function _schema_metadata_function(source, name::Symbol)
+    matches = Expr[]
+    for expression in _schema_metadata_expressions(Meta.parseall(source))
+        expression.head == :function || continue
+        signature = expression.args[1]
+        signature isa Expr && signature.head == :call && signature.args[1] == name || continue
+        push!(matches, expression)
+    end
+    length(matches) == 1 || error("expected one current model function: $(name)")
+    return only(matches)
 end
+
+_schema_metadata_contains(expression, expected) =
+    any(node -> node == expected, _schema_metadata_expressions(expression))
+
+function check_current_model_format(root::AbstractString)
+    relative = "ext/WannierNLQGOperatorBundleExt/CurrentModelFormat.jl"
+    check_schema_constant(root, relative, "CURRENT_MODEL_FORMAT_VERSION", "3.0")
+    extension = Meta.parseall(
+        read(
+            joinpath(
+                root,
+                "ext",
+                "WannierNLQGOperatorBundleExt",
+                "WannierNLQGOperatorBundleExt.jl",
+            ),
+            String,
+        ),
+    )
+    modules = filter(node -> node isa Expr && node.head == :module, extension.args)
+    length(modules) == 1 || error("operator bundle extension module is ambiguous")
+    statements = filter(node -> !(node isa LineNumberNode), only(modules).args[end].args)
+    current_include = Expr(:call, :include, "CurrentModelFormat.jl")
+    current_positions = findall(==(current_include), statements)
+    length(current_positions) == 1 ||
+        error("current mathematical model implementation include is ambiguous")
+    suffix = statements[only(current_positions):end]
+    suffix == [
+        Expr(:call, :include, name) for name in (
+            "CurrentModelFormat.jl",
+            "RepresentativeOperatorWorkloads.jl",
+            "OperatorBundleExtFirstUsePrecompile.jl",
+        )
+    ] || error(
+        "current mathematical model implementation or its maintained first-use include order differs",
+    )
+    source = read(joinpath(root, relative), String)
+    writer = _schema_metadata_function(source, :write_real_space_operator_bundle)
+    _schema_metadata_contains(writer, :(("schema_version", CURRENT_MODEL_FORMAT_VERSION))) ||
+        error("current model writer is not bound to its wire version")
+    groups = String[]
+    for node in _schema_metadata_expressions(writer)
+        node.head == :call &&
+        length(node.args) == 3 &&
+        node.args[1] == :create_group &&
+        node.args[3] isa String || continue
+        push!(groups, node.args[3])
+    end
+    all(
+        name -> name in groups,
+        ("model", "geometry", "payload", "index", "operators", "definitions"),
+    ) || error("current model mathematical inventory is incomplete")
+    isempty(
+        intersect(
+            Set(groups),
+            Set(("software", "compatibility", "qualification", "construction_evidence")),
+        ),
+    ) || error("legacy identity or qualification group reintroduced into current model writer")
+    reader = _schema_metadata_function(source, :_manifest_from_handle)
+    any(
+        node -> node.head == :kw && node.args == Any[:(legacy_migration::Bool), false],
+        _schema_metadata_expressions(reader.args[1]),
+    ) || error("ordinary model reader defaults to legacy migration")
+    boundaries = filter(_schema_metadata_expressions(reader)) do node
+        node.head == :if &&
+            length(node.args) == 3 &&
+            node.args[1] == :legacy_migration &&
+            _schema_metadata_contains(node.args[2], :(version in ("1.1", "1.2", "1.3"))) &&
+            _schema_metadata_contains(node.args[3], :(version == CURRENT_MODEL_FORMAT_VERSION))
+    end
+    length(boundaries) == 1 || error("ordinary and legacy model wire boundaries differ")
+    return true
+end
+check_current_model_format(ROOT)
 
 superseded_version = join(("3", "0", "0"), '.')
 for (directory, directories, files) in walkdir(ROOT)
@@ -316,6 +448,6 @@ for (directory, directories, files) in walkdir(ROOT)
 end
 
 println(
-    "version consistency passed: software=$(EXPECTED_VERSION) checkpoint=1.2 packed_hdf5=1.1 other_independent_storage=1.0 internal_contracts=preserved " *
+    "version consistency passed: software=$(EXPECTED_VERSION) checkpoint=3.0 packed_hdf5=3.0 other_independent_storage=individually_checked internal_contracts=preserved " *
     "internal_predecessor=2.4.0",
 )

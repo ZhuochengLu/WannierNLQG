@@ -270,7 +270,7 @@ Hamiltonian weighted, EIG, so
 no SCF mesh or electronic-structure input file is consumed.
 """
 function construct_wannier_derivative_operators(
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     chk::WannierCHK,
     eig::WannierEIG,
     mmn::WannierMMN;

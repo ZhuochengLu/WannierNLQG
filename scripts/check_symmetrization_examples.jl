@@ -48,7 +48,7 @@ function check_fixture()
     return nothing
 end
 
-function check_json(path::AbstractString, expected_profile::String, expected_operator_count::Int)
+function check_json(path::AbstractString, expected_profile::String, expected_operators::Tuple)
     gate_check(isfile(path), "missing report $(path)")
     payload = JSON3.read(read(path, String), Dict{String, Any})
     gate_check(payload["schema"] == "wanniernlqg.symmetrization-report", "wrong JSON schema")
@@ -56,22 +56,18 @@ function check_json(path::AbstractString, expected_profile::String, expected_ope
     gate_check(payload["status"] == "PASS", "report status is not PASS")
     gate_check(payload["operator_profile"] == expected_profile, "wrong operator profile")
     gate_check(
-        length(payload["operator_inventory"]) == expected_operator_count,
-        "unexpected operator inventory size in $(path)",
+        length(payload["operator_inventory"]) == length(expected_operators) &&
+            Set(String.(payload["operator_inventory"])) == Set(expected_operators),
+        "unexpected operator inventory in $(path)",
     )
     gate_check(
-        length(payload["validation"]) == expected_operator_count,
-        "unexpected validation operator count in $(path)",
+        Set(keys(payload["validation"])) == Set(expected_operators),
+        "unexpected validation operator inventory in $(path)",
     )
     return nothing
 end
 
-function check_hdf5(
-    path::AbstractString,
-    expected_profile::Symbol,
-    expected_operator_count::Int,
-    expected_production_eligible::Bool,
-)
+function check_hdf5(path::AbstractString, expected_profile::Symbol, expected_operators::Tuple)
     gate_check(isfile(path), "missing operator bundle $(path)")
     HDF5.h5open(path, "r") do handle
         attributes = HDF5.attributes(handle)
@@ -81,56 +77,55 @@ function check_hdf5(
         )
         schema_version = String(read(attributes["schema_version"]))
         gate_check(
-            schema_version in (
-                "5.0",
-                "5.1",
-                "5.2",
-                "5.3",
-                "5.4",
-                "5.5",
-                "5.6",
-                "5.7",
-                "5.8",
-                "5.9",
-                WannierNLQG.IO.OPERATOR_BUNDLE_SCHEMA_VERSION,
-            ),
+            schema_version == WannierNLQG.IO.OPERATOR_BUNDLE_SCHEMA_VERSION,
             "unsupported HDF5 schema version $(schema_version)",
         )
+        # Current files store mathematical capabilities, not profile or permission labels.
         gate_check(
-            Symbol(read(attributes["operator_profile"])) == expected_profile,
-            "wrong HDF5 profile",
+            Set(keys(handle["operators"])) == Set(expected_operators),
+            "wrong mathematical operator inventory",
         )
-        gate_check(read(attributes["operator_count"]) == expected_operator_count, "wrong count")
-        gate_check(
-            read(attributes["symmetrization_status"]) == "applied",
-            "symmetrization status is not applied",
+        for retired in (
+            "operator_profile",
+            "operator_count",
+            "symmetrization_status",
+            "production_eligible",
+            "spin_family_production_eligible",
         )
+            gate_check(!haskey(attributes, retired), "retired root label $(retired) was persisted")
+        end
         gate_check(haskey(handle, "geometry"), "geometry lifecycle group is missing")
+        geometry_attributes = HDF5.attributes(handle["geometry"])
         gate_check(
-            read(attributes["wannier_center_policy"]) == "symmetrize",
+            read(geometry_attributes["wannier_center_policy"]) == "symmetrize",
             "wrong Wannier-center policy",
         )
         gate_check(
-            read(attributes["real_space_replica_policy"]) == "minimum_distance",
+            read(geometry_attributes["real_space_replica_policy"]) == "minimum_distance",
             "wrong replica policy",
         )
         gate_check(
-            read(attributes["production_eligible"]) == expected_production_eligible,
-            "unexpected production eligibility",
+            read(geometry_attributes["minimum_distance_materialized"]),
+            "minimum-distance replicas were not materialized",
         )
-        if expected_profile == :hamiltonian_position_spin
-            gate_check(
-                !read(attributes["spin_family_production_eligible"]),
-                "unqualified spin example must remain diagnostic-only",
-            )
-        end
         gate_check(haskey(handle, "payload/complex128"), "packed payload is missing")
+        gate_check(haskey(handle, "definitions"), "mathematical definitions group is missing")
     end
     manifest = WannierNLQG.IO.read_real_space_operator_bundle_manifest(path)
     gate_check(manifest.profile == expected_profile, "strict reader profile mismatch")
     gate_check(
-        length(manifest.inventory) == expected_operator_count,
-        "strict reader count mismatch",
+        Set(WannierNLQG.Core.real_space_operator_name.(manifest.inventory)) ==
+        Set(expected_operators),
+        "strict reader mathematical inventory mismatch",
+    )
+    gate_check(
+        manifest.wannier_center_policy == :symmetrize,
+        "strict reader center policy mismatch",
+    )
+    gate_check(
+        manifest.real_space_replica_policy == :minimum_distance &&
+            manifest.minimum_distance_materialized,
+        "strict reader replica semantics mismatch",
     )
     return nothing
 end
@@ -147,17 +142,28 @@ mktempdir() do output_root
     Base.run(addenv(command, "WANNIERNLQG_SYMMETRIZATION_OUTPUT_ROOT" => output_root))
 
     profiles = (
-        ("tb_only", "hamiltonian_position", 2, true),
-        ("derivative", "derivative", 7, true),
-        ("spin_only", "hamiltonian_position_spin", 3, false),
+        ("tb_only", "hamiltonian_position", ("hamiltonian", "position")),
+        (
+            "derivative",
+            "derivative",
+            (
+                "hamiltonian",
+                "position",
+                "hamiltonian_weighted_connection",
+                "hamiltonian_weighted_axial_derivative_overlap",
+                "derivative_overlap_tensor",
+                "axial_derivative_overlap",
+                "symmetric_derivative_overlap",
+            ),
+        ),
+        ("spin_only", "hamiltonian_position_spin", ("hamiltonian", "position", "spin")),
     )
-    for (directory, profile, count, production_eligible) in profiles
-        check_json(joinpath(output_root, directory, "symmetrization.json"), profile, count)
+    for (directory, profile, operators) in profiles
+        check_json(joinpath(output_root, directory, "symmetrization.json"), profile, operators)
         check_hdf5(
             joinpath(output_root, directory, "wannierNLQG_tb.h5"),
             Symbol(profile),
-            count,
-            production_eligible,
+            operators,
         )
         checksum_file = joinpath(output_root, directory, "SHA256SUMS")
         gate_check(isfile(checksum_file), "missing SHA256SUMS for $(directory)")

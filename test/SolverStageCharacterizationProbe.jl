@@ -104,6 +104,7 @@ function characterize_solver_stages(output_file)
     completed_scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
         trues(2, 2),
         BitMatrix([true true; false false]),
+        content_authentication = false,
     )
     completed_internal = Base.invokelatest(
         workflow._representation_with_target_subspace_contract,

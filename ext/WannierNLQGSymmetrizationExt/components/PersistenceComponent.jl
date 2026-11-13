@@ -2,4 +2,3 @@
 
 include("../ResponseSymmetryArtifactWriter.jl")
 include("persistence/OperatorPersistence.jl")
-include("persistence/GaugeAwarePersistence.jl")

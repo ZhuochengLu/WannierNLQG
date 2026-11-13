@@ -2132,14 +2132,14 @@
       "path": "/input_summary/@attribute/u_phase_branch_tolerance",
       "value": "1.0e-6"
     },
-    "/input_summary/@attribute/u_w90_restart_interval": {
+    "/input_summary/@attribute/u_recursive_localization_restart_interval": {
       "kind": "metadata",
-      "path": "/input_summary/@attribute/u_w90_restart_interval",
+      "path": "/input_summary/@attribute/u_recursive_localization_restart_interval",
       "value": "5"
     },
-    "/input_summary/@attribute/u_w90_trial_step": {
+    "/input_summary/@attribute/u_recursive_localization_trial_step": {
       "kind": "metadata",
-      "path": "/input_summary/@attribute/u_w90_trial_step",
+      "path": "/input_summary/@attribute/u_recursive_localization_trial_step",
       "value": "2.0"
     },
     "/input_summary/@attribute/u_wolfe_c2": {
@@ -2587,12 +2587,12 @@
       "path": "/restart_state/optimizer/@attribute/u_steps",
       "shape": []
     },
-    "/restart_state/optimizer/@attribute/wannier90_reference_omega_i": {
+    "/restart_state/optimizer/@attribute/recursive_localization_omega_i": {
       "bit_sha256": "74999fd28ab18ccca2bee199f260d19764603a3c78353d773d16d215eebe8e19",
       "bytes": 8,
       "element_type": "Float64",
       "kind": "bits",
-      "path": "/restart_state/optimizer/@attribute/wannier90_reference_omega_i",
+      "path": "/restart_state/optimizer/@attribute/recursive_localization_omega_i",
       "shape": []
     },
     "/restart_state/optimizer/@attribute/z_mix_ratio": {
@@ -2854,12 +2854,12 @@
         0
       ]
     },
-    "/restart_state/optimizer/wannier90_reference_overlaps": {
+    "/restart_state/optimizer/recursive_localization_overlaps": {
       "bit_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0,
       "element_type": "ComplexF64",
       "kind": "bits",
-      "path": "/restart_state/optimizer/wannier90_reference_overlaps",
+      "path": "/restart_state/optimizer/recursive_localization_overlaps",
       "shape": [
         0,
         0,
@@ -2867,12 +2867,12 @@
         0
       ]
     },
-    "/restart_state/optimizer/wannier90_reference_unitaries": {
+    "/restart_state/optimizer/recursive_localization_unitaries": {
       "bit_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0,
       "element_type": "ComplexF64",
       "kind": "bits",
-      "path": "/restart_state/optimizer/wannier90_reference_unitaries",
+      "path": "/restart_state/optimizer/recursive_localization_unitaries",
       "shape": [
         0,
         0,
@@ -6064,17 +6064,17 @@
       "payload": "0600000000000000",
       "type": "Int64"
     },
-    "result.restart_state.optimizer_state.wannier90_reference_omega_i": {
+    "result.restart_state.optimizer_state.recursive_localization_omega_i": {
       "finite": false,
-      "path": "result.restart_state.optimizer_state.wannier90_reference_omega_i",
+      "path": "result.restart_state.optimizer_state.recursive_localization_omega_i",
       "payload": "000000000000f87f",
       "type": "Float64"
     },
-    "result.restart_state.optimizer_state.wannier90_reference_overlaps": {
+    "result.restart_state.optimizer_state.recursive_localization_overlaps": {
       "finite": true,
       "max_abs": 0,
       "max_abs_nonfinite_repr": null,
-      "path": "result.restart_state.optimizer_state.wannier90_reference_overlaps",
+      "path": "result.restart_state.optimizer_state.recursive_localization_overlaps",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "shape": [
         0,
@@ -6084,11 +6084,11 @@
       ],
       "type": "Array{ComplexF64, 4}"
     },
-    "result.restart_state.optimizer_state.wannier90_reference_unitaries": {
+    "result.restart_state.optimizer_state.recursive_localization_unitaries": {
       "finite": true,
       "max_abs": 0,
       "max_abs_nonfinite_repr": null,
-      "path": "result.restart_state.optimizer_state.wannier90_reference_unitaries",
+      "path": "result.restart_state.optimizer_state.recursive_localization_unitaries",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "shape": [
         0,

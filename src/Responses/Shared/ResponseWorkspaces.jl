@@ -30,13 +30,13 @@ Constructor overloads fill newly required scratch while retaining the caller's s
 mutable struct ShiftCurrentConventionalWorkspace{W, D}
     scratch::W
     data::D
-    generalized_position_derivative::Array{ComplexF64, 4}
-    generalized_derivative_scratch::_ConventionalGeneralizedDerivativeScratch
-    response_kernel::Array{ComplexF64, 5}
-    local_response::Array{ComplexF64, 4}
+    generalized_position_derivative::Union{Nothing, Array{ComplexF64, 4}}
+    generalized_derivative_scratch::Union{Nothing, _ConventionalGeneralizedDerivativeScratch}
+    response_kernel::Union{Nothing, Array{ComplexF64, 5}}
+    local_response::Union{Nothing, Array{ComplexF64, 4}}
     frequency_weights::Vector{Float64}
-    frequency_contraction_scratch::_FrequencyContractionScratch
-    spin_frequency_contraction_scratch::_FrequencyContractionScratch
+    frequency_contraction_scratch::Union{Nothing, _FrequencyContractionScratch}
+    spin_frequency_contraction_scratch::Union{Nothing, _FrequencyContractionScratch}
 end
 
 # Shared interpolation data plus generalized-position derivatives, rank-three response kernel, local spectrum and frequency-contraction buffers.
@@ -92,14 +92,18 @@ mutable struct ShiftSpinCurrentConventionalWorkspace{W, D}
     matrix_scratch_3::Matrix{ComplexF64}
     matrix_scratch_4::Matrix{ComplexF64}
     frequency_weights::Vector{Float64}
-    frequency_pair_weights::Matrix{Float64}
-    frequency_contraction_scratch::_FrequencyContractionScratch
+    frequency_pair_weights::Union{Nothing, Matrix{Float64}}
+    frequency_contraction_scratch::Union{Nothing, _FrequencyContractionScratch}
 end
 
 """
 Allocate conventional shift-spin-current buffers sized by orbitals, spatial dimension and photon energies.
 
 Request spin velocity, connection derivatives and Hamiltonian Hessians; optionally share a supplied matrix workspace and central data while keeping response scratch private.
+
+Default construction retains frequency contraction storage. K-slice alone may set
+`frequency_contraction_required=false` for its scalar component consumer; omitted
+contraction scratch and pair weights are `nothing`.
 """
 function make_shift_spin_current_conventional_workspace(
     num_orbitals::Int64,
@@ -108,7 +112,11 @@ function make_shift_spin_current_conventional_workspace(
     num_photon_energies::Int64 = 1;
     matrix_elements = nothing,
     central_data = nothing,
+    frequency_contraction_required::Bool = true,
 )
+    num_photon_energies > 0 || throw(ArgumentError("frequency_count must be positive."))
+    spatial_dimension > 0 || throw(ArgumentError("spatial_dimension must be positive."))
+    num_orbitals > 0 || throw(ArgumentError("num_orbitals must be positive."))
     plan = compile_matrix_plan(
         MatrixElementRequest(
             SPIN_VELOCITY,
@@ -147,12 +155,13 @@ function make_shift_spin_current_conventional_workspace(
         zeros(ComplexF64, num_orbitals, num_orbitals),
         zeros(ComplexF64, num_orbitals, num_orbitals),
         zeros(Float64, num_photon_energies),
-        zeros(Float64, num_orbitals, num_orbitals),
+        frequency_contraction_required ? zeros(Float64, num_orbitals, num_orbitals) : nothing,
+        frequency_contraction_required ?
         _FrequencyContractionScratch(
             num_photon_energies,
             3 * spatial_dimension^3;
             pair_block = min(256, num_orbitals^2),
-        ),
+        ) : nothing,
     )
 end
 
@@ -160,6 +169,13 @@ end
 Allocate generalized-derivative, rank-three current and frequency-contraction buffers.
 
 Compile the required connection/velocity/Hessian plan when matrix storage is not supplied; supplied matrix workspace and central data are aliased deliberately.
+
+Default and positional expert construction retain all shift-current buffers. Runtime
+may set `shift_current_required=false` only after proving no shift-current consumer
+exists. K-slice may also set `frequency_contraction_required=false` after proving
+that its scalar component path has no frequency-contraction consumer. Integral,
+adaptive and default expert construction retain both scratch objects.
+Omitted response buffers are `nothing`, never empty arrays with misleading axes.
 """
 function make_shift_current_conventional_workspace(
     num_orbitals::Int64,
@@ -169,7 +185,12 @@ function make_shift_current_conventional_workspace(
     ;
     matrix_elements = nothing,
     central_data = nothing,
+    shift_current_required::Bool = true,
+    frequency_contraction_required::Bool = true,
 )
+    num_photon_energies > 0 || throw(ArgumentError("frequency_count must be positive."))
+    spatial_dimension > 0 || throw(ArgumentError("spatial_dimension must be positive."))
+    num_orbitals > 0 || throw(ArgumentError("num_orbitals must be positive."))
     plan = compile_matrix_plan(
         MatrixElementRequest(
             BERRY_CONNECTION,
@@ -187,8 +208,11 @@ function make_shift_current_conventional_workspace(
     return ShiftCurrentConventionalWorkspace(
         shared_matrix_elements,
         data,
-        zeros(ComplexF64, num_orbitals, num_orbitals, spatial_dimension, spatial_dimension),
-        _ConventionalGeneralizedDerivativeScratch(num_orbitals),
+        shift_current_required ?
+        zeros(ComplexF64, num_orbitals, num_orbitals, spatial_dimension, spatial_dimension) :
+        nothing,
+        shift_current_required ? _ConventionalGeneralizedDerivativeScratch(num_orbitals) : nothing,
+        shift_current_required ?
         zeros(
             ComplexF64,
             num_orbitals,
@@ -196,25 +220,28 @@ function make_shift_current_conventional_workspace(
             spatial_dimension,
             spatial_dimension,
             spatial_dimension,
-        ),
+        ) : nothing,
+        shift_current_required ?
         zeros(
             ComplexF64,
             num_photon_energies,
             spatial_dimension,
             spatial_dimension,
             spatial_dimension,
-        ),
+        ) : nothing,
         zeros(Float64, num_photon_energies),
+        frequency_contraction_required ?
         _FrequencyContractionScratch(
             num_photon_energies,
             spatial_dimension^3;
             pair_block = min(256, num_orbitals^2),
-        ),
+        ) : nothing,
+        frequency_contraction_required ?
         _FrequencyContractionScratch(
             num_photon_energies,
             3 * spatial_dimension^3;
             pair_block = min(256, num_orbitals^2),
-        ),
+        ) : nothing,
     )
 end
 
@@ -227,7 +254,26 @@ mutable struct ConventionalQuantumGeometryWorkspace{W, D, B}
     scratch::W
     data::D
     matrix_batch::B
+    metric_contribution::Symbol
+    analytic_geometry::Union{Nothing, MatrixElements.OrthogonalBandDerivativeWorkspace}
+    isolation_threshold_ev::Union{Nothing, Float64}
+    minimum_isolated_gap_ev::Float64
 end
+
+# Preserve the existing workspace constructor; the primary output is the complete metric.
+ConventionalQuantumGeometryWorkspace(scratch, data, batch) =
+    ConventionalQuantumGeometryWorkspace(scratch, data, batch, :total, nothing, nothing, Inf)
+# Preserve the positional geometry-workspace constructor while initializing optional cached geometry state.
+ConventionalQuantumGeometryWorkspace(scratch, data, batch, metric_contribution::Symbol) =
+    ConventionalQuantumGeometryWorkspace(
+        scratch,
+        data,
+        batch,
+        metric_contribution,
+        nothing,
+        nothing,
+        Inf,
+    )
 
 """
 Construct conventional geometry storage with connection, curvature, connection-derivative, Hessian and velocity capabilities.
@@ -259,7 +305,13 @@ function make_conventional_quantum_geometry_workspace(
         matrix_elements === nothing ? MatrixElementWorkspace(num_orbitals, num_r_vectors, plan) :
         matrix_elements
     data = central_data === nothing ? shared_matrix_elements.data : central_data
-    return ConventionalQuantumGeometryWorkspace(shared_matrix_elements, data, matrix_batch)
+    workspace = ConventionalQuantumGeometryWorkspace(shared_matrix_elements, data, matrix_batch)
+    if shared_matrix_elements.plan.geometry_derivatives !== nothing
+        derivative_plan = shared_matrix_elements.plan.geometry_derivatives
+        jets = MatrixElements.OrthogonalGeometryJets(num_orbitals, derivative_plan)
+        workspace.analytic_geometry = MatrixElements.OrthogonalBandDerivativeWorkspace(jets)
+    end
+    return workspace
 end
 
 """
@@ -370,6 +422,7 @@ Six central/shifted band frames, convention transport, overlap links, velocity i
 Validity masks track populated directions/pairs; response kernels and local spectra are owned by one worker.
 """
 mutable struct GeometricLoopResponseWorkspace{W, D, F <: ConventionFrameConnector}
+    active_insertions::MatrixElements.ActiveVelocityInsertionWorkspace
     scratch::W
     valence_central_data::D
     conduction_central_data::D
@@ -377,6 +430,10 @@ mutable struct GeometricLoopResponseWorkspace{W, D, F <: ConventionFrameConnecto
     conduction_forward_data::D
     valence_backward_data::D
     conduction_backward_data::D
+    optical_center_data::D
+    optical_q_cartesian::Vector{Float64}
+    optical_orbital_link::Matrix{ComplexF64}
+    optical_temporary::Matrix{ComplexF64}
     frame_connector::F
     frame_phase_factors::Vector{ComplexF64}
     frame_rotated_eigenvectors::Matrix{ComplexF64}
@@ -438,6 +495,7 @@ function make_geometric_loop_response_workspace(
         conduction_central_common === nothing ? make_data() :
         GeometricLoopMatrixData(conduction_central_common)
     return GeometricLoopResponseWorkspace(
+        MatrixElements.ActiveVelocityInsertionWorkspace(num_orbitals),
         scratch,
         valence_central,
         conduction_central,
@@ -445,6 +503,10 @@ function make_geometric_loop_response_workspace(
         make_data(),
         make_data(),
         make_data(),
+        make_data(),
+        zeros(Float64, 3),
+        zeros(ComplexF64, num_orbitals, num_orbitals),
+        zeros(ComplexF64, num_orbitals, num_orbitals),
         frame_connector,
         ones(ComplexF64, num_orbitals),
         zeros(ComplexF64, num_orbitals, num_orbitals),
@@ -631,6 +693,7 @@ mutable struct PhotonDragInjectionCurrentConventionalWorkspace{W, D}
     scratch::W
     valence_data::D
     conduction_data::D
+    optical_center_data::D
     explicit_center_phase_enabled::Bool
     overlap_1::Matrix{ComplexF64}
     overlap_2::Matrix{ComplexF64}
@@ -640,7 +703,7 @@ mutable struct PhotonDragInjectionCurrentConventionalWorkspace{W, D}
     backward_velocity_vertex::Array{ComplexF64, 3}
     response_kernel::Array{ComplexF64, 5}
     local_response::Array{ComplexF64, 4}
-    frequency_denominator_weights::Vector{Float64}
+    frequency_contraction_weights::Vector{Float64}
     frequency_weight_scratch::Vector{Float64}
     frequency_contraction_scratch::_FrequencyContractionScratch
 end
@@ -664,10 +727,8 @@ function make_photon_drag_injection_current_conventional_workspace(
 )
     plan = compile_matrix_plan(
         MatrixElementRequest(
-            BERRY_CONNECTION,
-            INTERNAL_CONNECTION_DERIVATIVES,
-            HAMILTONIAN_SECOND_DERIVATIVES,
-            VELOCITY_VERTICES;
+            HAMILTONIAN_DERIVATIVES,
+            INTERNAL_CONNECTION;
             spatial_dimension = spatial_dimension,
         ),
     )
@@ -680,25 +741,17 @@ function make_photon_drag_injection_current_conventional_workspace(
     conduction_common =
         conduction_data === nothing ?
         KPointMatrixData(num_orbitals, num_r_vectors, shared_matrix_elements.plan) : conduction_data
-    frequency_denominator_weights = zeros(Float64, num_photon_energies)
+    # The transition-gap factor is already in the shared weighted occupations.
+    frequency_contraction_weights = ones(Float64, num_photon_energies)
     if photon_energies !== nothing
-        length(photon_energies) == num_photon_energies || throw(
-            DimensionMismatch(
-                "photon_energies length=$(length(photon_energies)) does not match " *
-                "num_photon_energies=$(num_photon_energies).",
-            ),
-        )
-        frequency_denominator_weights .=
-            real(
-                (
-                    Float64[energy for energy in photon_energies] .+ 1.0im * Float64(denominator_regularization)
-                ) .^ (-1),
-            ) .^ 2
+        length(photon_energies) == num_photon_energies ||
+            throw(DimensionMismatch("photon energy axis and workspace differ"))
     end
     return PhotonDragInjectionCurrentConventionalWorkspace(
         shared_matrix_elements,
         valence_common,
         conduction_common,
+        KPointMatrixData(num_orbitals, num_r_vectors, shared_matrix_elements.plan),
         shared_matrix_elements.plan.wannier_center_convention == CONVENTION_II,
         zeros(ComplexF64, num_orbitals, num_orbitals),
         zeros(ComplexF64, num_orbitals, num_orbitals),
@@ -721,7 +774,7 @@ function make_photon_drag_injection_current_conventional_workspace(
             spatial_dimension,
             spatial_dimension,
         ),
-        frequency_denominator_weights,
+        frequency_contraction_weights,
         zeros(Float64, num_photon_energies),
         _FrequencyContractionScratch(
             num_photon_energies,

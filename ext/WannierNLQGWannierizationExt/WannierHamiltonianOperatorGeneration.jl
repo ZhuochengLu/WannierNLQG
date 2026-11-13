@@ -1,5 +1,5 @@
 const WANNIER_HAMILTONIAN_OPERATOR_GENERATION_SCHEMA = "WannierNLQG.wannier_hamiltonian_operator_generation"
-const WANNIER_HAMILTONIAN_OPERATOR_GENERATION_SCHEMA_VERSION = "1.1"
+const WANNIER_HAMILTONIAN_OPERATOR_GENERATION_SCHEMA_VERSION = "2.0"
 const WANNIER_HAMILTONIAN_OPERATOR_GENERATION_ALGORITHM_VERSION = "finite-band-paw-metric-galerkin-v5-structural-source-generation-with-audited-truncation"
 const WANNIER_HAMILTONIAN_OPERATOR_CLOSURE_SEMANTICS = "dimensionless_probability_weight"
 const WANNIER_HAMILTONIAN_OPERATOR_CLOSURE_FORMULA = "max_endpoint_lambda_max(V_dagger*(I-M_dagger_M_or_I-M_M_dagger)*V)"
@@ -20,15 +20,26 @@ function _operator_center_checkpoint(
     path =
         directory === nothing ? nothing :
         joinpath(directory, string(operator), "center-$(center).bin")
-    binding = contract * ":" * string(center)
+    binding = "hamiltonian-center-values/2:" * string(operator) * ":" * string(center)
     saved =
         path === nothing || !execution.resume ? nothing :
         IO.read_preparation_checkpoint(path, binding)
-    payload = saved === nothing ? builder() : saved
+    if path !== nothing && execution.resume && isfile(path)
+        saved isa NamedTuple &&
+        keys(saved)==(:definition, :payload) &&
+        saved.definition isa IO.ScientificInputDefinition ||
+            throw(ArgumentError("OPERATOR_CENTER_COMPLETE_INPUTS_REQUIRED: select a new workspace"))
+        IO.validate_scientific_input_definitions_equal(
+            contract,
+            saved.definition;
+            mismatch_error = "OPERATOR_CENTER_INPUT_MISMATCH",
+        )
+    end
+    payload = saved === nothing ? builder() : saved.payload
     validator(payload) ||
         throw(ArgumentError("OPERATOR_CENTER_CHECKPOINT_INVALID: $(operator) center $(center)"))
     if path !== nothing && saved === nothing
-        IO.write_preparation_checkpoint(path, binding, payload)
+        IO.write_preparation_checkpoint(path, binding, (; definition = contract, payload))
     end
     return payload
 end
@@ -39,13 +50,13 @@ function _hamiltonian_operator_paths(
     authoritative_mmn_file = nothing,
     allow_completed_reuse::Bool = false,
 )
-    config.construction_policy in (:standard, :strict) ||
-        throw(ArgumentError("construction_policy must be :standard or :strict"))
+    validate_ordinary_construction_policy(config.construction_policy)
     output = abspath(config.output_file)
     provenance = abspath(config.provenance_json)
+    references = provenance * ".references.h5"
     target = config.target_contract
     validate_generation_output_paths(
-        (; output, provenance),
+        (; output, provenance, references),
         (
             config.topology_file,
             config.eig_file,
@@ -77,11 +88,16 @@ function _hamiltonian_operator_paths(
         !config.overwrite &&
         !allow_completed_reuse &&
         throw(ArgumentError("refusing to overwrite operator provenance: $(provenance)"))
+    ispath(references) &&
+        !config.overwrite &&
+        !recover_publication &&
+        !allow_completed_reuse &&
+        throw(ArgumentError("refusing to overwrite operator source references: $(references)"))
     isfinite(config.closure_tolerance) && config.closure_tolerance > 0.0 ||
         throw(ArgumentError("closure_tolerance must be positive and finite"))
     config.max_cached_wavefunction_kpoints >= 2 ||
         throw(ArgumentError("max_cached_wavefunction_kpoints must be at least two"))
-    return (; output, provenance, recover_publication)
+    return (; output, provenance, references, recover_publication)
 end
 
 """Construct the configured Hamiltonian authority for uHu, sHu, or sIu."""
@@ -137,8 +153,8 @@ function _hamiltonian_operator_closure_scope_sha256(
     artifact_sha256,
     frame_contract_sha256,
     topology_sha256,
-    outer_mask_sha256,
-    frozen_mask_sha256,
+    outer_mask_definition,
+    frozen_mask_definition,
     num_bands,
     num_kpoints,
 )
@@ -150,8 +166,8 @@ function _hamiltonian_operator_closure_scope_sha256(
         artifact_sha256,
         frame_contract_sha256,
         topology_sha256,
-        outer_mask_sha256,
-        frozen_mask_sha256,
+        outer_mask_definition,
+        frozen_mask_definition,
         num_bands,
         num_kpoints,
         WANNIER_HAMILTONIAN_OPERATOR_CLOSURE_SEMANTICS,
@@ -159,7 +175,7 @@ function _hamiltonian_operator_closure_scope_sha256(
     )
         write(buffer, string(value), '\n')
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return "operator-closure-values/2:" * bytes2hex(take!(buffer))
 end
 
 """Validate topology dimensions and directed endpoint indices for the closure gate."""
@@ -172,8 +188,8 @@ function _validate_hamiltonian_operator_closure_topology(topology)
         throw(ArgumentError("CLOSURE_TOPOLOGY_INVALID: reciprocal-shift dimensions differ"))
     all(index -> 1 <= index <= topology.num_kpts, topology.neighbors) ||
         throw(ArgumentError("CLOSURE_TOPOLOGY_INVALID: neighbor index is out of range"))
-    isempty(topology.source_sha256) &&
-        throw(ArgumentError("CLOSURE_TOPOLOGY_INVALID: source digest is empty"))
+    isempty(topology.source_definition) &&
+        throw(ArgumentError("CLOSURE_TOPOLOGY_INVALID: actual topology definition is empty"))
     return nothing
 end
 
@@ -183,7 +199,7 @@ function _hamiltonian_operator_native_identity_scope(
     topology,
     target_contract = nothing,
 )
-    gauge_contract.gauge_artifact_sha256 === nothing || throw(
+    gauge_contract.gauge_definition === nothing || throw(
         ArgumentError("CLOSURE_SCOPE_ARTIFACT_MISMATCH: native identity scope has an artifact"),
     )
     gauge_contract.transforms === nothing || throw(
@@ -191,7 +207,6 @@ function _hamiltonian_operator_native_identity_scope(
             "CLOSURE_QUALIFICATION_SCOPE_REQUIRED: nonidentity frame requires a schema-1.11 outer-window scope",
         ),
     )
-    gauge_contract.status == "PASS" || throw(ArgumentError("BAND_FRAME_CONTRACT_NOT_QUALIFIED"))
     if target_contract === nothing
         outer_mask = trues(topology.num_bands, topology.num_kpts)
         frozen_mask = falses(topology.num_bands, topology.num_kpts)
@@ -211,8 +226,8 @@ function _hamiltonian_operator_native_identity_scope(
             scope = target_contract.qualification_scope
             size(scope.outer_mask) == (topology.num_bands, topology.num_kpts) ||
                 throw(ArgumentError("CLOSURE_SCOPE_MASK_DIMENSION_MISMATCH"))
-            qualification_mask_sha256(scope.outer_mask) == scope.outer_mask_sha256 &&
-            qualification_mask_sha256(scope.frozen_mask) == scope.frozen_mask_sha256 ||
+            qualification_mask_definition(scope.outer_mask) == scope.outer_mask_definition &&
+            qualification_mask_definition(scope.frozen_mask) == scope.frozen_mask_definition ||
                 throw(ArgumentError("CLOSURE_SCOPE_MASK_DIGEST_MISMATCH"))
             outer_mask = scope.outer_mask
             frozen_mask = scope.frozen_mask
@@ -220,17 +235,17 @@ function _hamiltonian_operator_native_identity_scope(
             parent_audit_policy = "audit_only"
         end
     end
-    outer_mask_sha256 = qualification_mask_sha256(outer_mask)
-    frozen_mask_sha256 = qualification_mask_sha256(frozen_mask)
+    outer_mask_definition = qualification_mask_definition(outer_mask)
+    frozen_mask_definition = qualification_mask_definition(frozen_mask)
     artifact_sha256 = "NOT_APPLICABLE"
     contract_sha256 = _hamiltonian_operator_closure_scope_sha256(
         authority,
         parent_audit_policy,
         artifact_sha256,
-        gauge_contract.contract_sha256,
-        topology.source_sha256,
-        outer_mask_sha256,
-        frozen_mask_sha256,
+        gauge_contract.contract_definition,
+        topology.source_definition,
+        outer_mask_definition,
+        frozen_mask_definition,
         topology.num_bands,
         topology.num_kpts,
     )
@@ -240,8 +255,8 @@ function _hamiltonian_operator_native_identity_scope(
         artifact_sha256,
         outer_mask = BitMatrix(outer_mask),
         frozen_mask = BitMatrix(frozen_mask),
-        outer_mask_sha256,
-        frozen_mask_sha256,
+        outer_mask_definition,
+        frozen_mask_definition,
         outer_rank_minimum = minimum(count(@view outer_mask[:, k]) for k in 1:topology.num_kpts),
         outer_rank_maximum = maximum(count(@view outer_mask[:, k]) for k in 1:topology.num_kpts),
         frozen_rank_minimum = minimum(count(@view frozen_mask[:, k]) for k in 1:topology.num_kpts),
@@ -255,11 +270,10 @@ function _hamiltonian_operator_closure_scope(
     gauge_hdf5,
     gauge_contract,
     topology;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
     target_contract = nothing,
 )
-    construction_policy in (:standard, :strict) ||
-        throw(ArgumentError("construction_policy must be :standard or :strict"))
+    validate_ordinary_construction_policy(construction_policy)
     _validate_hamiltonian_operator_closure_topology(topology)
     gauge_hdf5 === nothing && return _hamiltonian_operator_native_identity_scope(
         gauge_contract,
@@ -269,51 +283,46 @@ function _hamiltonian_operator_closure_scope(
 
     path = abspath(something(gauge_hdf5))
     isfile(path) || throw(ArgumentError("CLOSURE_SCOPE_ARTIFACT_MISSING: $(path)"))
-    artifact_sha256 = sha256_file(path)
-    artifact_sha256 == gauge_contract.gauge_artifact_sha256 ||
-        throw(ArgumentError("CLOSURE_SCOPE_ARTIFACT_DIGEST_MISMATCH"))
-    gauge_contract.status == "PASS" && !gauge_contract.legacy ||
-        throw(ArgumentError("CLOSURE_SCOPE_FRAME_CONTRACT_NOT_FORMALLY_QUALIFIED"))
+    artifact_sha256 = something(gauge_contract.gauge_definition, "NOT_APPLICABLE")
+    !gauge_contract.legacy || throw(ArgumentError("CLOSURE_SCOPE_COMPLETE_FRAME_DATA_REQUIRED"))
 
     authority = ""
     parent_audit_policy = ""
     outer_mask = BitMatrix(undef, 0, 0)
     frozen_mask = BitMatrix(undef, 0, 0)
-    outer_mask_sha256 = ""
-    frozen_mask_sha256 = ""
+    outer_mask_definition = ""
+    frozen_mask_definition = ""
     HDF5.h5open(path, "r") do handle
         root_attributes = HDF5.attributes(handle)
-        for key in ("schema", "schema_version", "status")
+        for key in ("schema", "schema_version")
             haskey(root_attributes, key) ||
                 throw(ArgumentError("CLOSURE_SCOPE_ARTIFACT_INVALID: missing $(key)"))
         end
         String(read(root_attributes["schema"])) == STAR_COVARIANT_PAW_GAUGE_SCHEMA ||
             throw(ArgumentError("CLOSURE_SCOPE_ARTIFACT_INVALID: schema differs"))
-        String(read(root_attributes["schema_version"])) in ("1.0", "1.11") || throw(
+        String(read(root_attributes["schema_version"])) == "2.0" || throw(
             ArgumentError(
-                "CLOSURE_QUALIFICATION_SCOPE_REQUIRED: formal nonidentity generation requires schema-1.11",
+                "CLOSURE_SCOPE_SCHEMA_MISMATCH: nonidentity generation requires schema-2.0",
             ),
         )
-        artifact_status = String(read(root_attributes["status"]))
-        artifact_status == "PASS" ||
-            (
-                construction_policy == :standard &&
-                artifact_status in ("STANDARD", "DIAGNOSTIC_ONLY")
-            ) ||
-            throw(ArgumentError("CLOSURE_SCOPE_ARTIFACT_NOT_QUALIFIED"))
-        haskey(handle, "qualification_scope") || throw(
-            ArgumentError(
-                "CLOSURE_QUALIFICATION_SCOPE_REQUIRED: schema-1.11 artifact has no qualification_scope",
-            ),
+        for (key, expected) in (
+            "band_frame_contract_definition" => gauge_contract.contract_definition,
+            "band_frame_transform_definition" => gauge_contract.transform_definition,
         )
+            haskey(root_attributes, key) && String(read(root_attributes[key])) == expected ||
+                throw(ArgumentError("CLOSURE_SCOPE_FRAME_DEFINITION_MISMATCH: $(key)"))
+        end
+        haskey(handle, "qualification_scope") ||
+            throw(ArgumentError("CLOSURE_SCOPE_DATA_MISSING: outer and frozen masks are required"))
         group = handle["qualification_scope"]
         group_attributes = HDF5.attributes(group)
-        for key in ("authority", "parent_audit_policy", "outer_mask_sha256", "frozen_mask_sha256")
+        for key in
+            ("authority", "parent_audit_policy", "outer_mask_definition", "frozen_mask_definition")
             haskey(group_attributes, key) ||
                 throw(ArgumentError("CLOSURE_SCOPE_ARTIFACT_INVALID: missing $(key)"))
         end
         haskey(group, "outer_mask") && haskey(group, "frozen_mask") ||
-            throw(ArgumentError("CLOSURE_QUALIFICATION_SCOPE_REQUIRED: mask datasets are missing"))
+            throw(ArgumentError("CLOSURE_SCOPE_MASK_DATA_MISSING"))
         authority = String(read(group_attributes["authority"]))
         parent_audit_policy = String(read(group_attributes["parent_audit_policy"]))
         authority == "outer_window" || throw(ArgumentError("CLOSURE_SCOPE_AUTHORITY_MISMATCH"))
@@ -330,10 +339,10 @@ function _hamiltonian_operator_closure_scope(
             throw(ArgumentError("CLOSURE_SCOPE_MASK_DIMENSION_MISMATCH"))
         all((.!frozen_mask) .| outer_mask) ||
             throw(ArgumentError("CLOSURE_SCOPE_MASK_INVALID: frozen mask exceeds outer mask"))
-        outer_mask_sha256 = String(read(group_attributes["outer_mask_sha256"]))
-        frozen_mask_sha256 = String(read(group_attributes["frozen_mask_sha256"]))
-        outer_mask_sha256 == qualification_mask_sha256(outer_mask) &&
-        frozen_mask_sha256 == qualification_mask_sha256(frozen_mask) ||
+        outer_mask_definition = String(read(group_attributes["outer_mask_definition"]))
+        frozen_mask_definition = String(read(group_attributes["frozen_mask_definition"]))
+        outer_mask_definition == qualification_mask_definition(outer_mask) &&
+        frozen_mask_definition == qualification_mask_definition(frozen_mask) ||
             throw(ArgumentError("CLOSURE_SCOPE_MASK_DIGEST_MISMATCH"))
     end
 
@@ -345,10 +354,10 @@ function _hamiltonian_operator_closure_scope(
         authority,
         parent_audit_policy,
         artifact_sha256,
-        gauge_contract.contract_sha256,
-        topology.source_sha256,
-        outer_mask_sha256,
-        frozen_mask_sha256,
+        gauge_contract.contract_definition,
+        topology.source_definition,
+        outer_mask_definition,
+        frozen_mask_definition,
         topology.num_bands,
         topology.num_kpts,
     )
@@ -358,8 +367,8 @@ function _hamiltonian_operator_closure_scope(
         artifact_sha256,
         outer_mask,
         frozen_mask,
-        outer_mask_sha256,
-        frozen_mask_sha256,
+        outer_mask_definition,
+        frozen_mask_definition,
         outer_rank_minimum = minimum(outer_ranks),
         outer_rank_maximum = maximum(outer_ranks),
         frozen_rank_minimum = minimum(frozen_ranks),
@@ -541,7 +550,7 @@ function _hamiltonian_operator_neighbor_overlaps(state, gauge_contract)
     for center in 1:topology.num_kpts, neighbor in 1:topology.num_neighbors
         native_matrix = uiu_center_neighbor_block(state, center, neighbor)
         right_index = topology.neighbors[neighbor, center]
-        matrix = rotate_generation_link(native_matrix, gauge_contract, center, right_index)
+        matrix = transform_generation_link(native_matrix, gauge_contract, center, right_index)
         all(isfinite, matrix) ||
             throw(ArgumentError("physical-metric neighbor overlap contains NaN or Inf"))
         overlaps[:, :, neighbor, center] .= matrix
@@ -663,7 +672,7 @@ end
 function _generation_spn(config, state, gauge_contract)
     config.spn_file === nothing && throw(
         ArgumentError(
-            "SPN_FILE_REQUIRED: sHu/sIu generation requires a same-gauge Wannier90 SPN file",
+            "SPN_FILE_REQUIRED: sHu/sIu generation requires a same-gauge Wannier SPN file",
         ),
     )
     path = abspath(something(config.spn_file))
@@ -679,18 +688,16 @@ function _generation_spn(config, state, gauge_contract)
     spn = IO.read_wannier_spn(path; formatted = config.spn_formatted)
     spn.num_bands == state.topology.num_bands && spn.num_kpts == state.topology.num_kpts ||
         throw(ArgumentError("SPN dimensions differ from the physical-metric topology"))
-    gauge_artifact_sha256 =
-        config.wavefunction_gauge_hdf5 === nothing ? nothing :
-        sha256_file(something(config.wavefunction_gauge_hdf5))
+    gauge_definition = gauge_contract.gauge_definition
     provenance = read_and_validate_spn_provenance(
         provenance_path,
         path;
         expected_num_bands = state.topology.num_bands,
         expected_num_kpoints = state.topology.num_kpts,
         target_authority = config.authoritative_hamiltonian,
-        gauge_artifact_sha256,
-        band_frame_transform_sha256 = gauge_contract.transform_sha256,
-        band_frame_contract_sha256 = gauge_contract.contract_sha256,
+        gauge_definition,
+        band_frame_transform_definition = gauge_contract.transform_definition,
+        band_frame_contract_definition = gauge_contract.contract_definition,
     )
     validate_generation_spn_provenance(provenance, path, state)
     return spn, path, provenance_path, provenance
@@ -726,9 +733,16 @@ function _hamiltonian_operator_provenance(
         "operator" => String(operator),
         "qualification_stage" => "SOURCE_OPERATOR_GENERATION",
         "construction_policy" => String(config.construction_policy),
-        "model_qualification" => config.construction_policy == :standard ? "STANDARD" : status,
-        "quality_review_recommended" => config.construction_policy == :standard,
-        "production_eligible" => config.construction_policy == :strict && artifact_published,
+        "model_qualification" => "COMPUTATION_READY",
+        "quality_review_recommended" =>
+            !source_generation_qualified ||
+            !isempty(
+                _hamiltonian_operator_closure_audit_findings(
+                    closure_metrics,
+                    config.closure_tolerance,
+                ),
+            ),
+        "production_eligible" => false,
         "status" => status,
         "passed" => source_generation_qualified,
         "source_generation_qualified" => source_generation_qualified,
@@ -799,8 +813,8 @@ function _hamiltonian_operator_provenance(
             "authority" => closure_scope.authority,
             "contract_sha256" => closure_scope.contract_sha256,
             "artifact_sha256" => closure_scope.artifact_sha256,
-            "outer_mask_sha256" => closure_scope.outer_mask_sha256,
-            "frozen_mask_sha256" => closure_scope.frozen_mask_sha256,
+            "outer_mask_definition" => closure_scope.outer_mask_definition,
+            "frozen_mask_definition" => closure_scope.frozen_mask_definition,
             "outer_rank_minimum" => closure_scope.outer_rank_minimum,
             "outer_rank_maximum" => closure_scope.outer_rank_maximum,
             "frozen_rank_minimum" => closure_scope.frozen_rank_minimum,
@@ -814,26 +828,21 @@ function _hamiltonian_operator_provenance(
         "galerkin_cancellation_audit" =>
             _hamiltonian_operator_cancellation_audit_payload(block_audit),
         "authoritative_hamiltonian" => authority.authority,
-        "authoritative_hamiltonian_digest" => authority.digest,
+        "authoritative_hamiltonian_definition" => authority.definition,
         "authoritative_hamiltonian_algorithm_version" => authority.algorithm_version,
         "source_band_gauge" => gauge_contract.source_band_gauge,
         "target_band_gauge" => gauge_contract.target_band_gauge,
-        "band_frame_transform_sha256" => gauge_contract.transform_sha256,
-        "band_frame_contract_sha256" => gauge_contract.contract_sha256,
+        "band_frame_transform_definition" => gauge_contract.transform_definition,
+        "band_frame_contract_definition" => gauge_contract.contract_definition,
         "band_frame_contract" => band_frame_contract_summary(gauge_contract),
-        "band_gauge_rotation_sha256" => gauge_contract.transform_sha256,
-        "band_gauge_rotation_semantics" => "legacy_alias_of_band_frame_transform_sha256",
         "native_hamiltonian_gauge_covariance_max_absolute_ev" =>
             native_hamiltonian_gauge_covariance_residual(authority, gauge_contract),
-        "gauge_artifact_sha256" =>
-            something(gauge_contract.gauge_artifact_sha256, "NOT_APPLICABLE"),
-        "spn_provenance_sha256" =>
-            spn_provenance === nothing ? "NOT_APPLICABLE" : spn_provenance.provenance_sha256,
-        "spn_source_sha256" =>
-            spn_provenance === nothing ? "NOT_APPLICABLE" : spn_provenance.spn_sha256,
+        "gauge_definition" => something(gauge_contract.gauge_definition, "NOT_APPLICABLE"),
+        "spn_contract_definition" =>
+            spn_provenance === nothing ? "NOT_APPLICABLE" : spn_provenance.contract_definition,
         "output_file" => output_path,
-        "output_sha256" => artifact_published ? sha256_file(something(output_path)) : nothing,
-        "input_sha256" => input_sha256,
+        "input_definitions" => input_sha256,
+        "content_authentication" => "NOT_PERFORMED",
         "diagnostics" => diagnostics,
     )
 end
@@ -841,23 +850,23 @@ end
 """Verify that Hamiltonian data and operator matrices share one sealed band frame."""
 function _validate_hamiltonian_authority_frame_binding(authority, gauge_contract)
     if authority.authority == SYMMETRIZED_DFT_BAND_GAUGE
-        authority.gauge_artifact_sha256 == gauge_contract.gauge_artifact_sha256 || throw(
+        authority.gauge_definition == gauge_contract.gauge_definition || throw(
             ArgumentError(
                 "HAMILTONIAN_REFERENCE_MISMATCH: authority and operator gauge artifacts differ",
             ),
         )
-        get(authority.input_sha256, "BAND_FRAME_TRANSFORM", "") ==
-        gauge_contract.transform_sha256 || throw(
+        get(authority.input_definitions, "BAND_FRAME_TRANSFORM", "") ==
+        gauge_contract.transform_definition || throw(
             ArgumentError(
                 "HAMILTONIAN_REFERENCE_MISMATCH: authority and operator frame transforms differ",
             ),
         )
-        get(authority.input_sha256, "BAND_FRAME_CONTRACT", "") == gauge_contract.contract_sha256 ||
-            throw(
-                ArgumentError(
-                    "HAMILTONIAN_REFERENCE_MISMATCH: authority and operator frame contracts differ",
-                ),
-            )
+        get(authority.input_definitions, "BAND_FRAME_CONTRACT", "") ==
+        gauge_contract.contract_definition || throw(
+            ArgumentError(
+                "HAMILTONIAN_REFERENCE_MISMATCH: authority and operator frame contracts differ",
+            ),
+        )
     else
         native_hamiltonian_gauge_covariance_residual(authority, gauge_contract)
     end
@@ -1032,8 +1041,7 @@ function _generate_hamiltonian_operator_impl(
             isfile(something(path)) || throw(ArgumentError("$(label): $(abspath(something(path)))"))
         end
     end
-    authoritative_mmn_sha256 =
-        validate_authoritative_mmn_binding(config.topology_file, authoritative_mmn_file)
+    validate_authoritative_mmn_binding(config.topology_file, authoritative_mmn_file)
     state = _hamiltonian_operator_overlap_state(config)
     authority = _generation_authoritative_hamiltonian(config)
     size(authority.matrices_ev) ==
@@ -1055,7 +1063,7 @@ function _generate_hamiltonian_operator_impl(
         state.topology.num_bands,
         state.topology.num_kpts,
         state.topology.num_neighbors;
-        authoritative_hamiltonian_digest = authority.digest,
+        authoritative_hamiltonian_definition = authority.definition,
     )
     spin_input = operator in (:sHu, :sIu) ? _generation_spn(config, state, gauge_contract) : nothing
     closure_scope = _hamiltonian_operator_closure_scope(
@@ -1079,28 +1087,25 @@ function _generate_hamiltonian_operator_impl(
     audit_findings =
         _hamiltonian_operator_closure_audit_findings(closure_metrics, config.closure_tolerance)
     input_sha256 = copy(state.input_sha256)
-    input_sha256["EIG"] = sha256_file(config.eig_file)
-    input_sha256["TOPOLOGY"] = state.topology.source_sha256
-    authoritative_mmn_sha256 === nothing ||
-        (input_sha256["AUTHORITATIVE_MMN"] = authoritative_mmn_sha256)
+    input_sha256["EIG"] = authority.definition
+    input_sha256["TOPOLOGY"] = state.topology.source_definition
     config.target_contract === nothing ||
-        (input_sha256["OPERATOR_TARGET_CONTRACT"] = config.target_contract.contract_sha256)
-    authority.gauge_artifact_sha256 === nothing ||
-        (input_sha256["WAVEFUNCTION_GAUGE_HDF5"] = something(authority.gauge_artifact_sha256))
+        (input_sha256["OPERATOR_TARGET_CONTRACT"] = config.target_contract.definition)
+    authority.gauge_definition === nothing ||
+        (input_sha256["WAVEFUNCTION_GAUGE_HDF5"] = something(authority.gauge_definition))
     spn = nothing
     spn_provenance = nothing
     if spin_input !== nothing
         spn_value, spn_path, spn_provenance_path, spn_provenance_value = something(spin_input)
         spn = spn_value
         spn_provenance = spn_provenance_value
-        input_sha256["SPN"] = sha256_file(spn_path)
-        input_sha256["SPN_PROVENANCE"] = sha256_file(spn_provenance_path)
+        input_sha256["SPN_CONTRACT"] = spn_provenance.contract_definition
     end
-    input_sha256["BAND_FRAME_TRANSFORM"] = gauge_contract.transform_sha256
-    input_sha256["BAND_FRAME_CONTRACT"] = gauge_contract.contract_sha256
+    input_sha256["BAND_FRAME_TRANSFORM"] = gauge_contract.transform_definition
+    input_sha256["BAND_FRAME_CONTRACT"] = gauge_contract.contract_definition
     input_sha256["OPERATOR_CLOSURE_SCOPE"] = closure_scope.contract_sha256
-    input_sha256["OPERATOR_CLOSURE_OUTER_MASK"] = closure_scope.outer_mask_sha256
-    input_sha256["OPERATOR_CLOSURE_FROZEN_MASK"] = closure_scope.frozen_mask_sha256
+    input_sha256["OPERATOR_CLOSURE_OUTER_MASK"] = closure_scope.outer_mask_definition
+    input_sha256["OPERATOR_CLOSURE_FROZEN_MASK"] = closure_scope.frozen_mask_definition
     diagnostics = copy(state.diagnostics)
     append!(diagnostics, audit_findings)
     push!(diagnostics, "FINITE_BAND_TRUNCATION_AUDIT_ONLY")
@@ -1110,20 +1115,52 @@ function _generate_hamiltonian_operator_impl(
     topology = state.topology
     numerical_tolerance = closure_metrics.numerical_tolerance
     block_audit = _HamiltonianOperatorGalerkinBlockAudit()
-    center_contract = bytes2hex(
-        SHA.sha256(
-            join(
-                [
-                    WANNIER_HAMILTONIAN_OPERATOR_GENERATION_ALGORITHM_VERSION,
-                    sha256_file(@__FILE__),
-                    authority.digest,
-                    gauge_contract.contract_sha256,
-                    repr(sort!(collect(input_sha256); by = first)),
-                ],
-                "\n",
-            ),
-        ),
+    source_files = Dict("TOPOLOGY"=>abspath(config.topology_file), "EIG"=>abspath(config.eig_file))
+    config.wavefunction_gauge_hdf5 === nothing ||
+        (source_files["GAUGE"]=abspath(config.wavefunction_gauge_hdf5))
+    if spin_input !== nothing
+        source_files["SPN"]=abspath(spin_input[2])
+        source_files["SPN_PROVENANCE"]=abspath(spin_input[3])
+    end
+    state.native.source_definition === nothing &&
+        throw(ArgumentError("HAMILTONIAN_NATIVE_SOURCE_REFERENCE_REQUIRED"))
+    reference_root=config.source_reference_root
+    reference_directory=something(reference_root, tempdir())
+    auxiliary_reference=IO.scientific_source_collection_definition(
+        source_files;
+        reference_root,
+        directory = reference_directory,
     )
+    center_contract =
+        config.execution.checkpoint_directory === nothing ? nothing :
+        IO.scientific_input_definition_bytes(;
+            reference_root,
+            directory = reference_directory,
+        ) do stream
+            IO.write_native_definition_value(
+                stream,
+                (
+                    "hamiltonian-center-values/2",
+                    operator,
+                    authority.definition,
+                    gauge_contract.contract_definition,
+                    input_sha256,
+                    config.closure_tolerance,
+                ),
+            )
+            for reference in (state.native.source_definition, auxiliary_reference)
+                IO.write_native_definition_value(stream, reference.byte_count)
+                if stream isa IO.ScientificReferenceBuilder
+                    IO.append_scientific_input_reference!(stream, reference)
+                    continue
+                end
+                IO.with_scientific_input_definition_bytes(reference) do source
+                    while !eof(source)
+                        write(stream, read(source, 65536))
+                    end
+                end
+            end
+        end
     write_path =
         paths.recover_publication ? IO.operator_publication_candidate(paths.output) : paths.output
     if operator == :uHu
@@ -1194,11 +1231,6 @@ function _generate_hamiltonian_operator_impl(
                 max(block_audit.exchange_hermiticity_tolerance, exchange.tolerance)
             isfinite(exchange.maximum_residual) ||
                 throw(ArgumentError("FATAL_INTEGRITY: nonfinite UHU exchange residual"))
-            (config.construction_policy == :standard || exchange.status == "PASS") || throw(
-                ArgumentError(
-                    "UHU_EXCHANGE_HERMITICITY_FAILED: residual $(exchange.maximum_residual) exceeds $(exchange.tolerance)",
-                ),
-            )
             cached_center[] = center
             return nothing
         end
@@ -1261,7 +1293,7 @@ function _generate_hamiltonian_operator_impl(
                     for local_neighbor in 1:topology.num_neighbors, component in 1:3
                         native_spin = @view something(spn).data[:, :, component, center]
                         rotated_spin =
-                            rotate_generation_single(native_spin, gauge_contract, center)
+                            transform_generation_single(native_spin, gauge_contract, center)
                         link = @view overlaps[:, :, local_neighbor, center]
                         blocks[local_neighbor, component] =
                             operator == :sHu ?
@@ -1273,7 +1305,7 @@ function _generate_hamiltonian_operator_impl(
                 cached_spin_center[] = center
             end
             native_spin_matrix = @view something(spn).data[:, :, ispol, center]
-            spin_matrix = rotate_generation_single(native_spin_matrix, gauge_contract, center)
+            spin_matrix = transform_generation_single(native_spin_matrix, gauge_contract, center)
             overlap = @view overlaps[:, :, neighbor, center]
             block = cached_spin_blocks[][neighbor, ispol]
             bound = if operator == :sHu
@@ -1323,6 +1355,50 @@ function _generate_hamiltonian_operator_impl(
         input_sha256,
         diagnostics,
     )
+    IO.validate_scientific_source_collection(source_files, auxiliary_reference)
+    if ispath(paths.references) && !config.overwrite
+        paths.recover_publication ||
+            throw(ArgumentError("refusing to overwrite Hamiltonian source references"))
+        HDF5.h5open(paths.references, "r") do h
+            for (name, expected) in (
+                ("native_source_reference", state.native.source_definition),
+                ("auxiliary_source_reference", auxiliary_reference),
+            )
+                IO.validate_scientific_input_definitions_equal(
+                    expected,
+                    read_scientific_input_reference_hdf5(h, name; reference_root);
+                    mismatch_error = "HAMILTONIAN_PUBLICATION_SOURCE_MISMATCH",
+                )
+            end
+        end
+    else
+        atomic_hdf5_write(paths.references) do temporary
+            HDF5.h5open(temporary, "w") do h
+                HDF5.attributes(h)["content_authentication"]="NOT_PERFORMED"
+                write_scientific_input_reference_hdf5(
+                    h,
+                    "native_source_reference",
+                    state.native.source_definition;
+                    reference_root,
+                )
+                write_scientific_input_reference_hdf5(
+                    h,
+                    "auxiliary_source_reference",
+                    auxiliary_reference;
+                    reference_root,
+                )
+                if spin_input !== nothing
+                    write_scientific_input_reference_hdf5(
+                        h,
+                        "spn_reference",
+                        spn_provenance.spn_reference;
+                        reference_root,
+                    )
+                end
+            end
+        end
+    end
+    payload["references_hdf5"]=paths.references
     uiu_atomic_json(paths.provenance, payload)
     return WannierHamiltonianOperatorGenerationResult(
         operator,
@@ -1338,7 +1414,7 @@ function _generate_hamiltonian_operator_impl(
         WANNIER_HAMILTONIAN_OPERATOR_ACTUAL_ERROR_STATUS,
         WANNIER_HAMILTONIAN_OPERATOR_NBANDS_CONVERGENCE_STATUS,
         authority.authority,
-        authority.digest,
+        authority.definition,
         input_sha256,
         diagnostics,
     )

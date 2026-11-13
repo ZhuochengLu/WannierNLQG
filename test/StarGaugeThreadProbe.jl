@@ -1,3 +1,6 @@
+if !isdefined(@__MODULE__, :CurrentScientificValues)
+    include(joinpath(@__DIR__, "support/CurrentScientificValues.jl"))
+end
 using SHA
 using WannierNLQG
 
@@ -26,7 +29,8 @@ authority =
 target_subspace_contract = if policy_key == "target"
     scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
         trues(1, 1),
-        trues(1, 1),
+        trues(1, 1);
+        content_authentication = false,
     )
     WannierNLQG.Wannierization.TargetSubspaceQualificationContract(
         scope;
@@ -42,7 +46,7 @@ end
 gauge_hdf5 = joinpath(output_directory, "star_gauge.h5")
 result = WannierNLQG.Wannierization.prepare_symmetry_covariant_wavefunctions(
     WannierNLQG.Wannierization.SymmetryCovariantWavefunctionPreparationConfig(
-        construction_policy = :strict,
+        construction_policy = :standard,
         source = source,
         wavefunction_gauge_backend = WannierNLQG.Wannierization.StarCovariantPAWGauge(
             buffer_policy = WannierNLQG.Wannierization.ClosureDrivenBandBuffer(max_extra_bands = 0),
@@ -55,7 +59,8 @@ result = WannierNLQG.Wannierization.prepare_symmetry_covariant_wavefunctions(
         target_band_count = 1,
     ),
 )
-result.status == :PASS || error("star-gauge preparation did not pass")
+result.status == :STANDARD || error("star-gauge ordinary preparation did not complete")
+gauge_hdf5 = something(result.output_hdf5)
 matrices = WannierNLQG.Wannierization.generate_symmetry_completed_qe_paw_matrix_elements(
     source,
     gauge_hdf5,
@@ -64,9 +69,14 @@ matrices = WannierNLQG.Wannierization.generate_symmetry_completed_qe_paw_matrix_
 )
 matrices.passed || error("completed matrix parity did not pass")
 extension = first(WannierNLQG.Wannierization._load_wannierization_extension!()).PAWMatrixElements
-restored = Base.invokelatest(extension._read_star_covariant_paw_gauge_hdf5, gauge_hdf5; source)
+restored = Base.invokelatest(
+    extension._read_star_covariant_paw_gauge_hdf5,
+    gauge_hdf5;
+    source,
+    construction_policy = :standard,
+)
 buffer = IOBuffer()
-write(buffer, Base.invokelatest(extension._star_payload_sha256, restored.payload), '\n')
+write(buffer, Base.invokelatest(CurrentScientificValues.payload_values, restored.payload), '\n')
 write(buffer, reinterpret(UInt8, vec(matrices.mmn.data)))
 write(buffer, reinterpret(UInt8, vec(matrices.amn.data)))
 write(buffer, reinterpret(UInt8, vec(restored.payload.rotations)))

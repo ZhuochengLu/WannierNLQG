@@ -1,5 +1,5 @@
 const WANNIER_UIU_GENERATION_SCHEMA = "WannierNLQG.wannier_uiu_generation"
-const WANNIER_UIU_GENERATION_SCHEMA_VERSION = "1.1"
+const WANNIER_UIU_GENERATION_SCHEMA_VERSION = "2.0"
 const WANNIER_UIU_ALGORITHM_VERSION = "paw-neighbor-neighbor-v4-frame-contract-bound"
 
 """Validated topology shared by MMN- and NNKP-authoritative uIu generation."""
@@ -13,7 +13,7 @@ struct WannierNeighborTopology
     real_lattice::Union{Nothing, Matrix{Float64}}
     reciprocal_lattice::Union{Nothing, Matrix{Float64}}
     source_kind::Symbol
-    source_sha256::String
+    source_definition::String
 end
 
 """Publish one JSON payload by same-filesystem atomic replacement."""
@@ -48,7 +48,7 @@ end
 """Encode integer values using the uIu Int32 header representation."""
 _uiu_int32_bytes(values) = collect(reinterpret(UInt8, collect(Int32, values)))
 
-"""Encode a complex matrix in Wannier90 uIu record order."""
+"""Encode a complex matrix in Wannier uIu record order."""
 function _uiu_matrix_bytes(matrix::AbstractMatrix{<:Complex})
     serialized = vec(copy(transpose(ComplexF64.(matrix))))
     return collect(reinterpret(UInt8, serialized))
@@ -80,10 +80,10 @@ function _uiu_topology(filename::AbstractString, native)
             nothing,
             nothing,
             :mmn,
-            sha256_file(path),
+            IO.wannier_topology_definition(mmn),
         )
     elseif extension == ".nnkp"
-        nnkp = read_wannier_nnkp(path)
+        nnkp = read_wannier_nnkp(path; content_authentication = false)
         WannierNeighborTopology(
             bands,
             size(nnkp.kpoints_fractional, 1),
@@ -94,7 +94,7 @@ function _uiu_topology(filename::AbstractString, native)
             copy(nnkp.real_lattice),
             copy(nnkp.reciprocal_lattice),
             :nnkp,
-            nnkp.source_sha256,
+            IO.wannier_topology_definition(nnkp),
         )
     else
         throw(ArgumentError("topology_file must use .mmn or .nnkp"))
@@ -151,22 +151,21 @@ function _validate_authoritative_mmn_binding(
     authoritative_path = abspath(something(authoritative_mmn_file))
     isfile(authoritative_path) ||
         throw(ArgumentError("AUTHORITATIVE_MMN_MISSING: $(authoritative_path)"))
-    authoritative_sha256 = sha256_file(authoritative_path)
     oracle_mmn_file === nothing || begin
         oracle_path = abspath(something(oracle_mmn_file))
         isfile(oracle_path) || throw(ArgumentError("UIU_MMN_ORACLE_REQUIRED"))
-        sha256_file(oracle_path) == authoritative_sha256 ||
-            throw(ArgumentError("AUTHORITATIVE_MMN_MISMATCH: oracle MMN digest differs"))
+        IO.scientific_source_contents_equal(oracle_path, authoritative_path) ||
+            throw(ArgumentError("AUTHORITATIVE_MMN_MISMATCH: oracle MMN actual bytes differ"))
     end
     topology_path = abspath(topology_file)
     isfile(topology_path) || throw(ArgumentError("UIU_TOPOLOGY_MISSING: $(topology_path)"))
     extension = lowercase(splitext(topology_path)[2])
     if extension == ".mmn"
-        sha256_file(topology_path) == authoritative_sha256 ||
-            throw(ArgumentError("AUTHORITATIVE_MMN_MISMATCH: topology MMN digest differs"))
+        IO.scientific_source_contents_equal(topology_path, authoritative_path) ||
+            throw(ArgumentError("AUTHORITATIVE_MMN_MISMATCH: topology MMN actual bytes differ"))
     elseif extension == ".nnkp"
         authoritative = read_wannier_mmn_topology(authoritative_path)
-        topology = read_wannier_nnkp(topology_path)
+        topology = read_wannier_nnkp(topology_path; content_authentication = false)
         size(topology.neighbors) == size(authoritative.neighbors) &&
         topology.neighbors == authoritative.neighbors &&
         topology.reciprocal_shifts == authoritative.reciprocal_shifts ||
@@ -174,7 +173,7 @@ function _validate_authoritative_mmn_binding(
     else
         throw(ArgumentError("topology_file must use .mmn or .nnkp"))
     end
-    return authoritative_sha256
+    return nothing
 end
 
 """Validate the immutable part of a target contract before source-wavefunction I/O."""
@@ -183,55 +182,36 @@ function _validate_operator_target_contract_files(contract::WannierOperatorTarge
         throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: oracle MMN path is not absolute"))
     contract.solver_mmn_file == abspath(contract.solver_mmn_file) ||
         throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: solver MMN path is not absolute"))
-    expected_contract_sha256 = if contract.parent_audit_policy == "audit_only"
-        wannier_operator_target_contract_sha256(
-            contract.operator_oracle_mmn_file,
-            contract.operator_oracle_mmn_sha256,
-            contract.solver_mmn_file,
-            contract.solver_mmn_sha256,
-            contract.source_band_gauge,
-            contract.target_band_gauge,
-            contract.band_frame_transform_sha256,
-            contract.band_frame_contract_sha256,
-            contract.gauge_artifact_sha256,
-            contract.authoritative_hamiltonian,
-            contract.authoritative_hamiltonian_digest,
-            contract.num_bands,
-            contract.num_kpoints,
-            contract.num_neighbors,
-            contract.qualification_scope.outer_mask_sha256,
-            contract.qualification_scope.frozen_mask_sha256,
-            contract.target_authority,
-            contract.parent_audit_policy,
-        )
-    else
-        wannier_operator_target_contract_sha256(
-            contract.operator_oracle_mmn_file,
-            contract.operator_oracle_mmn_sha256,
-            contract.solver_mmn_file,
-            contract.solver_mmn_sha256,
-            contract.source_band_gauge,
-            contract.target_band_gauge,
-            contract.band_frame_transform_sha256,
-            contract.band_frame_contract_sha256,
-            contract.gauge_artifact_sha256,
-            contract.authoritative_hamiltonian,
-            contract.authoritative_hamiltonian_digest,
-            contract.num_bands,
-            contract.num_kpoints,
-            contract.num_neighbors,
-        )
-    end
-    contract.contract_sha256 == expected_contract_sha256 ||
-        throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: contract digest differs"))
+    expected_definition=wannier_operator_target_definition(
+        contract.operator_oracle_mmn_file,
+        contract.solver_mmn_file,
+        contract.source_band_gauge,
+        contract.target_band_gauge,
+        contract.band_frame_transform_definition,
+        contract.band_frame_contract_definition,
+        contract.gauge_definition,
+        contract.authoritative_hamiltonian,
+        contract.authoritative_hamiltonian_definition,
+        contract.num_bands,
+        contract.num_kpoints,
+        contract.num_neighbors,
+        contract.qualification_scope,
+        contract.target_authority,
+        contract.parent_audit_policy,
+    )
+    contract.definition==expected_definition ||
+        throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: complete target values differ"))
     for (role, path, expected) in (
-        ("operator oracle", contract.operator_oracle_mmn_file, contract.operator_oracle_mmn_sha256),
-        ("solver", contract.solver_mmn_file, contract.solver_mmn_sha256),
+        (
+            "operator oracle",
+            contract.operator_oracle_mmn_file,
+            contract.operator_oracle_mmn_reference,
+        ),
+        ("solver", contract.solver_mmn_file, contract.solver_mmn_reference),
     )
         isfile(path) ||
             throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISSING: $(role) MMN $(path)"))
-        sha256_file(path) == expected ||
-            throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: $(role) MMN digest differs"))
+        IO.validate_scientific_source_collection(Dict("MMN"=>path), expected)
     end
     return nothing
 end
@@ -253,7 +233,7 @@ function _validate_operator_target_contract_config(
                 "OPERATOR_TARGET_CONTRACT_MISMATCH: target Hamiltonian gauge artifact is missing",
             ),
         )
-        contract.gauge_artifact_sha256 == "NOT_APPLICABLE" || throw(
+        contract.gauge_definition == "NOT_APPLICABLE" || throw(
             ArgumentError(
                 "OPERATOR_TARGET_CONTRACT_MISMATCH: gauge artifact is required by target contract",
             ),
@@ -264,13 +244,13 @@ function _validate_operator_target_contract_config(
     end
     path = abspath(something(gauge_hdf5))
     isfile(path) || throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISSING: gauge artifact $(path)"))
-    contract.gauge_artifact_sha256 != "NOT_APPLICABLE" || throw(
+    contract.gauge_definition != "NOT_APPLICABLE" || throw(
         ArgumentError(
             "OPERATOR_TARGET_CONTRACT_MISMATCH: gauge artifact is not applicable in target contract",
         ),
     )
-    sha256_file(path) == contract.gauge_artifact_sha256 ||
-        throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: gauge artifact digest differs"))
+    # The realized gauge is checked against the complete frame by
+    # _validate_operator_target_contract_frame after strict source replay.
     expected_target_gauge =
         authority isa SymmetrizedDFTHamiltonian ? SYMMETRIZED_DFT_BAND_GAUGE :
         authority isa NativeDFTHamiltonian ? SAWF_COMPLETED_NATIVE_DFT_BAND_GAUGE :
@@ -406,19 +386,18 @@ function _validate_operator_target_contract_frame(
     num_bands::Integer,
     num_kpoints::Integer,
     num_neighbors::Integer;
-    authoritative_hamiltonian_digest::Union{Nothing, AbstractString} = nothing,
+    authoritative_hamiltonian_definition::Union{Nothing, AbstractString} = nothing,
 )
     contract.source_band_gauge == gauge_contract.source_band_gauge &&
     contract.target_band_gauge == gauge_contract.target_band_gauge &&
-    contract.band_frame_transform_sha256 == gauge_contract.transform_sha256 &&
-    contract.band_frame_contract_sha256 == gauge_contract.contract_sha256 &&
-    contract.gauge_artifact_sha256 ==
-    something(gauge_contract.gauge_artifact_sha256, "NOT_APPLICABLE") ||
+    contract.band_frame_transform_definition == gauge_contract.transform_definition &&
+    contract.band_frame_contract_definition == gauge_contract.contract_definition &&
+    contract.gauge_definition == something(gauge_contract.gauge_definition, "NOT_APPLICABLE") ||
         throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: band-frame contract differs"))
     contract.authoritative_hamiltonian == authoritative_hamiltonian ||
         throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: Hamiltonian authority differs"))
-    authoritative_hamiltonian_digest === nothing ||
-        contract.authoritative_hamiltonian_digest == authoritative_hamiltonian_digest ||
+    authoritative_hamiltonian_definition === nothing ||
+        contract.authoritative_hamiltonian_definition == authoritative_hamiltonian_definition ||
         throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: Hamiltonian digest differs"))
     (contract.num_bands, contract.num_kpoints, contract.num_neighbors) ==
     (num_bands, num_kpoints, num_neighbors) ||
@@ -467,6 +446,7 @@ function _uiu_vasp_state(source::VASPWavefunctionSource, topology_file::Abstract
         throw(ArgumentError("VASP_PAW_RAW_COEFFICIENTS_REQUIRED: uIu requires the full cutoff"))
     native = read_vasp_wavefunctions(
         source;
+        content_authentication = false,
         point_provider = native_vasp_point_provider,
         normalize_coefficients = false,
         # An explicit basis is already available and must carry the same
@@ -487,7 +467,7 @@ function _uiu_vasp_state(source::VASPWavefunctionSource, topology_file::Abstract
     ) = prepared
     input_sha256 = merge(
         _vasp_operator_input_sha256(source, native),
-        Dict("TOPOLOGY" => topology.source_sha256),
+        Dict("TOPOLOGY" => topology.source_definition),
     )
     preparation_identity = _vasp_raw_context_identity(source, native, input_sha256)
     finite_b_cache = Dict{Tuple{String, NTuple{3, Float64}}, Matrix{ComplexF64}}()
@@ -539,6 +519,7 @@ struct QEUIULazyNative
     selected_bands::Vector{Int}
     input_sha256::Dict{String, String}
     source_metadata::Dict{String, String}
+    source_definition::IO.ScientificInputDefinition
 end
 
 """Return the selected QE band count."""
@@ -704,7 +685,7 @@ end
 function _qe_uiu_selected_bands(total_bands::Int, topology_path::AbstractString)
     extension = lowercase(splitext(topology_path)[2])
     if extension == ".nnkp"
-        nnkp = read_wannier_nnkp(topology_path)
+        nnkp = read_wannier_nnkp(topology_path; content_authentication = false)
         all(index -> 1 <= index <= total_bands, nnkp.excluded_bands) ||
             throw(ArgumentError("QE_NNKP_BAND_AUTHORITY_REQUIRED: excluded band is out of range"))
         excluded = Set(nnkp.excluded_bands)
@@ -742,6 +723,17 @@ end
 _qe_operator_state_key(source, topology_file, cache_size) =
     (repr(source), realpath(topology_file), cache_size)
 
+"""Protect a local native read lifetime without asserting content authentication."""
+function with_native_source_lifetime(f::F, paths) where {F}
+    declarations = unique(abspath.(String.(paths)))
+    states = [IO.scientific_file_state(realpath(path)) for path in declarations]
+    result = f()
+    for (path, state) in zip(declarations, states)
+        IO.validate_scientific_source_state(state; declared_path = path)
+    end
+    return result
+end
+
 """Reuse only the owner task's explicitly prepared QE state."""
 function _uiu_qe_state(source::QuantumEspressoWavefunctionSource, topology_file, cache_size)
     prepared = get(task_local_storage(), :wannier_qe_operator_preparation, nothing)
@@ -750,8 +742,11 @@ function _uiu_qe_state(source::QuantumEspressoWavefunctionSource, topology_file,
             throw(ArgumentError("QE_OPERATOR_STATE_REQUIRES_PRIVATE_WORKER_CONTEXT"))
         prepared.key == _qe_operator_state_key(source, topology_file, cache_size) ||
             throw(ArgumentError("QE_OPERATOR_PREPARATION_CONTEXT_MISMATCH"))
-        # Registry lookups check input identity without repeating their content hashes.
-        foreach(sha256_file, prepared.paths)
+        # Reuse is limited to this observed read lifetime. Changed metadata is
+        # rejected conservatively; it is never accepted via an old fingerprint.
+        for (path, state) in zip(prepared.paths, prepared.source_states)
+            IO.validate_scientific_source_state(state; declared_path = path)
+        end
         state = prepared.state[]
         if state === nothing
             state = _build_uiu_qe_state(source, topology_file, cache_size)
@@ -798,7 +793,10 @@ function _with_qe_operator_preparation(
        existing.key == _qe_operator_state_key(source, topology_file, cache_size)
         # Recheck inherited identities and new dependencies, but do not parse XML
         # or replace the already validated native state for a nested stage.
-        return with_verified_file_digests(vcat(existing.paths, additional_inputs)) do
+        for (path, state) in zip(existing.paths, existing.source_states)
+            IO.validate_scientific_source_state(state; declared_path = path)
+        end
+        return with_native_source_lifetime(vcat(existing.paths, additional_inputs)) do
             _with_spn_provenance_reuse(f)
         end
     end
@@ -809,9 +807,8 @@ function _with_qe_operator_preparation(
         paths,
         [qe_wavefunction_file(source, index) for index in eachindex(metadata.kpoint_nodes)],
     )
-    native_paths = copy(paths)
     append!(paths, additional_inputs)
-    return with_verified_file_digests(paths) do
+    return with_native_source_lifetime(paths) do
         run = function ()
             # Target verification and completed-stage reuse need no coefficient
             # replay. Materialize native state only for a missing operator block.
@@ -821,6 +818,7 @@ function _with_qe_operator_preparation(
                 state = state,
                 owner = current_task(),
                 paths = paths,
+                source_states = [IO.scientific_file_state(realpath(path)) for path in paths],
             )
             task_local_storage(
                 () -> _with_spn_provenance_reuse(f),
@@ -828,10 +826,9 @@ function _with_qe_operator_preparation(
                 prepared,
             )
         end
-        checkpoint_directory === nothing && return run()
-        inputs = sort!([(realpath(path), sha256_file(path)) for path in unique(native_paths)])
-        contract = bytes2hex(SHA.sha256(implementation_contract * repr((source, inputs))))
-        with_preparation_artifact_cache(run, checkpoint_directory, contract)
+        # Persistent predecessor caches contain digest-only source identities.
+        # Keep useful owned state within this call, but never adopt those files.
+        return task_local_storage(run, :wannier_preparation_artifact_cache, nothing)
     end
 end
 
@@ -853,26 +850,8 @@ function _with_qe_operator_artifacts(
             task_local_storage(f, :wannier_qe_operator_preparation, nothing)
         end
     end
-    root, implementation = _preparation_implementation_paths()
-    return with_verified_file_digests(implementation) do
-        contract = bytes2hex(
-            SHA.sha256(repr([(relpath(path, root), sha256_file(path)) for path in implementation])),
-        )
-        directory =
-            selected === nothing || selected.checkpoint_directory === nothing ?
-            joinpath(output_directory, ".wannier_preparation", "qe") :
-            joinpath(selected.checkpoint_directory, "shared-qe-native")
-        return task_local_storage(:wannier_preparation_execution, selected) do
-            _with_qe_operator_preparation(
-                f,
-                source,
-                topology_file,
-                cache_size;
-                checkpoint_directory = directory,
-                implementation_contract = contract,
-                additional_inputs = additional_inputs,
-            )
-        end
+    return task_local_storage(:wannier_preparation_execution, selected) do
+        _with_qe_operator_preparation(f, source, topology_file, cache_size; additional_inputs)
     end
 end
 
@@ -893,16 +872,11 @@ function _build_uiu_qe_state(
     spin_components = metadata.noncollinear ? 2 : 1
     wavefunction_files = String[]
     headers = NamedTuple[]
-    input_sha256 = Dict("data-file-schema.xml" => sha256_file(metadata.xml_file))
-    for label in sort!(collect(keys(metadata.upf_files)))
-        upf_file = metadata.upf_files[label]
-        input_sha256["UPF:$(label):$(basename(upf_file))"] = sha256_file(upf_file)
-    end
+    input_sha256 = Dict{String, String}()
     for index in eachindex(metadata.kpoint_nodes)
         wavefunction_file = qe_wavefunction_file(source, index)
         push!(wavefunction_files, wavefunction_file)
         push!(headers, read_qe_wavefunction_header(wavefunction_file, spin_components))
-        input_sha256[basename(wavefunction_file)] = sha256_file(wavefunction_file)
     end
     isempty(headers) && throw(ArgumentError("QE source contains no wavefunction files"))
     total_bands = first(headers).num_bands
@@ -931,22 +905,16 @@ function _build_uiu_qe_state(
             "coefficient_normalization" => "qe_raw",
             "nnkp_selected_bands" => join(selected_bands, ','),
         ),
+        IO.scientific_source_collection_definition(_star_current_source_files(source)),
     )
     topology = _uiu_topology(topology_path, native)
     if lowercase(splitext(topology_path)[2]) == ".nnkp"
-        nnkp = read_wannier_nnkp(topology_path)
+        nnkp = read_wannier_nnkp(topology_path; content_authentication = false)
         native.spinor == nnkp.spinor ||
             throw(ArgumentError("QE_NNKP_SPIN_MISMATCH: native and NNKP spinor conventions differ"))
     end
-    preparation_identity = bytes2hex(
-        SHA.sha256(
-            repr((
-                sort!(collect(input_sha256); by = first),
-                topology.source_sha256,
-                selected_bands,
-            )),
-        ),
-    )
+    preparation_identity =
+        repr((sort!(collect(input_sha256); by = first), topology.source_definition, selected_bands))
     upf_data = cached_preparation_artifact("qe-upf", () -> preparation_identity) do
         Dict(
             label => read_qe_upf_data(path) for
@@ -1139,7 +1107,7 @@ function _build_uiu_qe_state(
             ) : nothing
         (spin..., local_norm)
     end
-    input_sha256["TOPOLOGY"] = topology.source_sha256
+    input_sha256["TOPOLOGY"] = topology.source_definition
     diagnostics = String[
         "generalized_norm_worst=$(generalized_norm_worst)",
         "qe_metric_kinds=$(join(metadata.metric_kinds, ','))",
@@ -1192,8 +1160,8 @@ function _uiu_state_with_qualification_scope(state, target_contract)
                 parent_generalized_norm_worst = (0, 0, 0),
                 target_authority = "full_parent",
                 parent_audit_policy = "legacy_hard_gate",
-                outer_mask_sha256 = "LEGACY_NOT_RECORDED",
-                frozen_mask_sha256 = "LEGACY_NOT_RECORDED",
+                outer_mask_definition = "LEGACY_NOT_RECORDED",
+                frozen_mask_definition = "LEGACY_NOT_RECORDED",
             ),
         )
     end
@@ -1207,8 +1175,8 @@ function _uiu_state_with_qualification_scope(state, target_contract)
                 parent_generalized_norm_worst = (0, 0, 0),
                 target_authority = "full_parent",
                 parent_audit_policy = "legacy_hard_gate",
-                outer_mask_sha256 = contract.qualification_scope.outer_mask_sha256,
-                frozen_mask_sha256 = contract.qualification_scope.frozen_mask_sha256,
+                outer_mask_definition = contract.qualification_scope.outer_mask_definition,
+                frozen_mask_definition = contract.qualification_scope.frozen_mask_definition,
             ),
         )
     end
@@ -1219,9 +1187,9 @@ function _uiu_state_with_qualification_scope(state, target_contract)
     scope = contract.qualification_scope
     size(scope.outer_mask) == (state.topology.num_bands, state.topology.num_kpts) ||
         throw(ArgumentError("UIU_QUALIFICATION_SCOPE_DIMENSION_MISMATCH"))
-    _operator_qualification_mask_sha256(scope.outer_mask) == scope.outer_mask_sha256 ||
+    _operator_qualification_mask_definition(scope.outer_mask) == scope.outer_mask_definition ||
         throw(ArgumentError("UIU_OUTER_MASK_DIGEST_MISMATCH"))
-    _operator_qualification_mask_sha256(scope.frozen_mask) == scope.frozen_mask_sha256 ||
+    _operator_qualification_mask_definition(scope.frozen_mask) == scope.frozen_mask_definition ||
         throw(ArgumentError("UIU_FROZEN_MASK_DIGEST_MISMATCH"))
     target_maximum = 0.0
     target_worst = (0, 0, 0)
@@ -1253,8 +1221,8 @@ function _uiu_state_with_qualification_scope(state, target_contract)
             parent_generalized_norm_worst = (0, 0, 0),
             target_authority = "outer_window",
             parent_audit_policy = "audit_only",
-            outer_mask_sha256 = scope.outer_mask_sha256,
-            frozen_mask_sha256 = scope.frozen_mask_sha256,
+            outer_mask_definition = scope.outer_mask_definition,
+            frozen_mask_definition = scope.frozen_mask_definition,
             diagnostics,
         ),
     )
@@ -1331,7 +1299,7 @@ function _uiu_mmn_passes(metric::WannierUIUParityMetrics, thresholds)
            metric.relative_l2 <= thresholds.mmn_relative_l2
 end
 
-"""Hash the complete input, policy, and topology identity used by restart validation."""
+"""Encode actual input definitions and topology policy used by restart validation."""
 function _uiu_input_fingerprint(
     input_sha256::Dict{String, String},
     topology,
@@ -1354,7 +1322,7 @@ function _uiu_input_fingerprint(
         String(construction_policy),
         '\n',
     )
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return "uiu-input-values/2:" * bytes2hex(take!(buffer))
 end
 
 """Resolve output, provenance, scratch, partial, and checkpoint paths."""
@@ -1368,7 +1336,86 @@ function _uiu_partial_paths(config::WannierUIUGenerationConfig)
         abspath(something(config.scratch_directory))
     partial = joinpath(scratch, basename(output) * ".partial")
     checkpoint = partial * ".json"
-    return (; output, provenance, scratch, partial, checkpoint)
+    references = provenance * ".references.h5"
+    return (; output, provenance, scratch, partial, checkpoint, references)
+end
+
+"""Bind resumable generation to complete sources; never adopt digest-only partials."""
+function _uiu_prepare_source_references!(paths, state, config, oracle, authoritative; reuse::Bool)
+    reference_root=config.source_reference_root
+    native = state.native.source_definition
+    native === nothing && throw(ArgumentError("UIU_NATIVE_SOURCE_REFERENCE_REQUIRED"))
+    sources = Dict("TOPOLOGY" => abspath(config.topology_file))
+    oracle === nothing || (sources["ORACLE_MMN"] = abspath(oracle))
+    authoritative === nothing || (sources["AUTHORITATIVE_MMN"] = abspath(authoritative))
+    config.wavefunction_gauge_hdf5 === nothing ||
+        (sources["GAUGE"] = abspath(config.wavefunction_gauge_hdf5))
+    if reuse
+        isfile(paths.references) || throw(ArgumentError("UIU_RESUME_COMPLETE_SOURCE_DATA_REQUIRED"))
+        HDF5.h5open(paths.references, "r") do file
+            haskey(file, "native_source_reference") && haskey(file, "auxiliary_source_reference") ||
+                throw(ArgumentError("UIU_RESUME_EXPLICIT_MIGRATION_REQUIRED"))
+            IO.validate_scientific_input_definitions_equal(
+                native,
+                read_scientific_input_reference_hdf5(
+                    file,
+                    "native_source_reference";
+                    reference_root,
+                );
+                mismatch_error = "UIU_RESUME_NATIVE_SOURCE_MISMATCH",
+            )
+            IO.validate_scientific_source_collection(
+                sources,
+                read_scientific_input_reference_hdf5(
+                    file,
+                    "auxiliary_source_reference";
+                    reference_root,
+                ),
+            )
+        end
+    else
+        ispath(paths.references) &&
+            !config.overwrite &&
+            throw(ArgumentError("refusing to overwrite uIu source references"))
+        reference = IO.scientific_source_collection_definition(
+            sources;
+            reference_root,
+            directory = something(reference_root, tempdir()),
+        )
+        temporary = paths.references * ".tmp"
+        ispath(temporary) && throw(ArgumentError("UIU_SOURCE_REFERENCE_TEMP_EXISTS"))
+        try
+            HDF5.h5open(temporary, "w") do file
+                HDF5.attributes(file)["content_authentication"] = "NOT_PERFORMED"
+                write_scientific_input_reference_hdf5(
+                    file,
+                    "native_source_reference",
+                    native;
+                    reference_root,
+                )
+                write_scientific_input_reference_hdf5(
+                    file,
+                    "auxiliary_source_reference",
+                    reference;
+                    reference_root,
+                )
+                oracle === nothing || write_scientific_input_reference_hdf5(
+                    file,
+                    "oracle_mmn_reference",
+                    IO.scientific_source_collection_definition(
+                        Dict("MMN" => abspath(oracle));
+                        reference_root,
+                        directory = something(reference_root, tempdir()),
+                    );
+                    reference_root,
+                )
+            end
+            mv(temporary, paths.references; force = config.overwrite)
+        finally
+            isfile(temporary) && rm(temporary)
+        end
+    end
+    return nothing
 end
 
 """Create validated uIu output directories only after all early input gates pass."""
@@ -1410,9 +1457,9 @@ function _uiu_scan_partial(
     topology::WannierNeighborTopology;
     repair_truncated::Bool = true,
 )
-    isfile(partial) || return (0, String[], 0.0, 0.0)
+    isfile(partial) || return (0, Int[], 0.0, 0.0)
     completed = 0
-    checksums = String[]
+    record_counts = Int[]
     diagonal_maximum = 0.0
     hermiticity_maximum = 0.0
     truncate_at = nothing
@@ -1422,7 +1469,6 @@ function _uiu_scan_partial(
             kpoint_start = position(io)
             blocks =
                 Matrix{Matrix{ComplexF64}}(undef, topology.num_neighbors, topology.num_neighbors)
-            digest_buffer = IOBuffer()
             complete_center = true
             for second in 1:topology.num_neighbors, first in 1:topology.num_neighbors
                 expected_record_bytes = topology.num_bands^2 * sizeof(ComplexF64) + 8
@@ -1442,7 +1488,6 @@ function _uiu_scan_partial(
                 end
                 length(bytes) == topology.num_bands^2 * sizeof(ComplexF64) ||
                     throw(ArgumentError("UIU_PARTIAL_BLOCK_SIZE_MISMATCH"))
-                write(digest_buffer, bytes)
                 raw = reshape(
                     collect(reinterpret(ComplexF64, bytes)),
                     topology.num_bands,
@@ -1464,7 +1509,9 @@ function _uiu_scan_partial(
                     )
                 end
             end
-            push!(checksums, bytes2hex(SHA.sha256(take!(digest_buffer))))
+            all(block -> all(isfinite, block), blocks) ||
+                throw(ArgumentError("UIU_PARTIAL_NONFINITE"))
+            push!(record_counts, topology.num_neighbors^2)
             completed = center
         end
         if truncate_at === nothing && !eof(io)
@@ -1477,7 +1524,7 @@ function _uiu_scan_partial(
             truncate(io, something(truncate_at))
         end
     end
-    return completed, checksums, diagonal_maximum, hermiticity_maximum
+    return completed, record_counts, diagonal_maximum, hermiticity_maximum
 end
 
 """Recover an interrupted final rename only after read-only payload verification."""
@@ -1528,12 +1575,12 @@ function _uiu_checkpoint_payload(fingerprint, topology, completed, checksums, ex
         "schema_version" => WANNIER_UIU_GENERATION_SCHEMA_VERSION,
         "algorithm_version" => WANNIER_UIU_ALGORITHM_VERSION,
         "execution_contract" => execution_contract,
-        "input_fingerprint_sha256" => fingerprint,
+        "input_definition" => fingerprint,
         "num_bands" => topology.num_bands,
         "num_kpts" => topology.num_kpts,
         "num_neighbors" => topology.num_neighbors,
         "completed_kpoints" => completed,
-        "kpoint_payload_sha256" => checksums,
+        "kpoint_record_counts" => checksums,
     )
 end
 
@@ -1541,16 +1588,21 @@ end
 function _uiu_validate_checkpoint(checkpoint, fingerprint, completed, checksums, execution_contract)
     isfile(checkpoint) || return nothing
     payload = JSON3.read(read(checkpoint, String))
-    String(payload.input_fingerprint_sha256) == fingerprint ||
+    hasproperty(payload, :schema_version) &&
+    String(payload.schema_version) == "2.0" &&
+    hasproperty(payload, :input_definition) ||
+        throw(ArgumentError("UIU_RESUME_EXPLICIT_MIGRATION_REQUIRED"))
+    String(payload.input_definition) == fingerprint ||
         throw(ArgumentError("UIU_RESUME_INPUT_FINGERPRINT_MISMATCH"))
     hasproperty(payload, :execution_contract) &&
     String(payload.execution_contract) == execution_contract ||
         throw(ArgumentError("UIU_RESUME_EXECUTION_CONTRACT_MISMATCH"))
     recorded = Int(payload.completed_kpoints)
     recorded <= completed || throw(ArgumentError("UIU_RESUME_CHECKPOINT_AHEAD_OF_PARTIAL"))
-    recorded_checksums = String.(payload.kpoint_payload_sha256)
+    0 <= recorded <= length(checksums) || throw(ArgumentError("UIU_RESUME_RECORD_COUNT_INVALID"))
+    recorded_checksums = Int.(payload.kpoint_record_counts)
     recorded_checksums == checksums[1:recorded] ||
-        throw(ArgumentError("UIU_RESUME_RECORD_CHECKSUM_MISMATCH"))
+        throw(ArgumentError("UIU_RESUME_RECORD_COUNT_MISMATCH"))
     return nothing
 end
 
@@ -1581,7 +1633,7 @@ end
 function _uiu_center_pair_order(state, count::Int)
     cache = state.wavefunction_cache
     # Use one deterministic block-evaluation order for every streamed QE cache
-    # size.  The record writer below still emits Wannier90's ik->nn2->nn1
+    # size.  The record writer below still emits Wannier's ik->nn2->nn1
     # order; this only fixes the order in which the cached wavefunctions enter
     # BLAS.  Keeping that order cache-size independent is required for the
     # cache=2/cache=8 bit-exact oracle on real spinor wavefunctions.
@@ -1601,24 +1653,24 @@ function _uiu_compute_center_blocks(state, center::Int, gauge_contract = nothing
         native_block = state.overlap(left_index, right_index, shift, b_fractional)
         blocks[first, second] =
             gauge_contract === nothing ? native_block :
-            _rotate_generation_link(native_block, gauge_contract, left_index, right_index)
+            _transform_generation_link(native_block, gauge_contract, left_index, right_index)
     end
     return blocks
 end
 
-"""Append one center's blocks in Wannier90 record order and return its checksum."""
+"""Append one center in Wannier order and return the actual written record count."""
 function _uiu_write_center!(io, blocks, topology)
-    digest_buffer = IOBuffer()
     for second in 1:topology.num_neighbors, first in 1:topology.num_neighbors
         bytes = _uiu_matrix_bytes(blocks[first, second])
         _uiu_write_fortran_record(io, bytes)
-        write(digest_buffer, bytes)
     end
-    return bytes2hex(SHA.sha256(take!(digest_buffer)))
+    return topology.num_neighbors^2
 end
 
 """Measure diagonal-identity and exchange-Hermiticity residuals for one center."""
 function _uiu_block_diagnostics(blocks, topology)
+    all(block -> all(isfinite, block), blocks) ||
+        throw(ArgumentError("FATAL_INTEGRITY: nonfinite uIu operator block"))
     diagonal = 0.0
     hermiticity = 0.0
     for first in 1:topology.num_neighbors
@@ -1680,11 +1732,7 @@ function _uiu_provenance_payload(
     diagnostics,
 )
     json_number(value) = isfinite(value) ? value : nothing
-    output_hash = isfile(paths.output) ? sha256_file(paths.output) : "NOT_PUBLISHED"
-    published_warning =
-        !passed &&
-        config.construction_policy == :standard &&
-        "UIU_GENERATION_NUMERICAL_WARNING" in diagnostics
+    published_warning = !passed && "UIU_GENERATION_NUMERICAL_WARNING" in diagnostics
     published = passed || published_warning
     return Dict(
         "schema" => WANNIER_UIU_GENERATION_SCHEMA,
@@ -1693,20 +1741,16 @@ function _uiu_provenance_payload(
         "source_code" => String(state.native.source_code),
         "source_band_gauge" => gauge_contract.source_band_gauge,
         "target_band_gauge" => gauge_contract.target_band_gauge,
-        "band_frame_transform_sha256" => gauge_contract.transform_sha256,
-        "band_frame_contract_sha256" => gauge_contract.contract_sha256,
+        "band_frame_transform_definition" => gauge_contract.transform_definition,
+        "band_frame_contract_definition" => gauge_contract.contract_definition,
         "band_frame_contract" => band_frame_contract_summary(gauge_contract),
-        "band_gauge_rotation_sha256" => gauge_contract.transform_sha256,
-        "band_gauge_rotation_semantics" => "legacy_alias_of_band_frame_transform_sha256",
-        "gauge_artifact_sha256" =>
-            something(gauge_contract.gauge_artifact_sha256, "NOT_APPLICABLE"),
+        "gauge_definition" => something(gauge_contract.gauge_definition, "NOT_APPLICABLE"),
         "authoritative_hamiltonian" =>
             authoritative_hamiltonian_key(config.authoritative_hamiltonian),
         "construction_policy" => String(config.construction_policy),
-        "model_qualification" =>
-            config.construction_policy == :standard ? "STANDARD" : passed ? "PASS" : "FAILED_GATE",
-        "quality_review_recommended" => config.construction_policy == :standard,
-        "production_eligible" => config.construction_policy == :strict && passed,
+        "model_qualification" => published ? "COMPUTATION_READY" : "UNAVAILABLE",
+        "quality_review_recommended" => published_warning,
+        "production_eligible" => false,
         "status" => passed ? "PASS" : published_warning ? "EXPORTED_WITH_WARNING" : "FAILED_GATE",
         "physical_overlap_available" => published,
         "passed" => passed,
@@ -1726,11 +1770,11 @@ function _uiu_provenance_payload(
             state.parent_generalized_norm <= config.thresholds.generalized_norm_max_absolute &&
             diagonal <= config.thresholds.diagonal_identity_max_absolute ? "PASS" :
             "AUDIT_EXCEEDED",
-        "outer_mask_sha256" => state.outer_mask_sha256,
-        "frozen_mask_sha256" => state.frozen_mask_sha256,
-        "operator_target_contract_sha256" =>
+        "outer_mask_definition" => state.outer_mask_definition,
+        "frozen_mask_definition" => state.frozen_mask_definition,
+        "operator_target_contract_definition" =>
             config.target_contract === nothing ? "LEGACY_NOT_RECORDED" :
-            config.target_contract.contract_sha256,
+            config.target_contract.definition,
         "radial_q_max_absolute" => state.radial_q_maximum,
         "mmn_parity" =>
             mmn_parity === nothing ? nothing :
@@ -1747,12 +1791,13 @@ function _uiu_provenance_payload(
             String(field) => getfield(config.thresholds, field) for
             field in fieldnames(WannierUIUGenerationThresholds)
         ),
-        "input_fingerprint_sha256" => fingerprint,
-        "input_sha256" => state.input_sha256,
+        "input_definition" => fingerprint,
+        "input_definitions" => state.input_sha256,
         "output_file" => paths.output,
-        "output_sha256" => output_hash,
+        "content_authentication" => "NOT_PERFORMED",
+        "references_hdf5" => paths.references,
         "resumed_from_kpoint" => resumed,
-        "kpoint_payload_sha256" => checksums,
+        "kpoint_record_counts" => checksums,
         "peak_memory_bytes" => peak_memory,
         "wavefunction_cache" => _uiu_cache_payload(state),
         "julia_version" => string(VERSION),
@@ -1814,7 +1859,7 @@ end
 """
     generate_wannier_uiu(config)
 
-Generate, qualify, checkpoint, and atomically publish a native PAW Wannier90 uIu file.
+Generate, qualify, checkpoint, and atomically publish a native PAW Wannier uIu file.
 """
 function generate_wannier_uiu(config::WannierUIUGenerationConfig)
     execution =
@@ -1828,8 +1873,7 @@ function generate_wannier_uiu(config::WannierUIUGenerationConfig)
     if config.source isa VASPWavefunctionSource && config.source.potcar_file === nothing
         return _generate_wannier_uiu_scoped(config)
     end
-    config.construction_policy in (:standard, :strict) ||
-        throw(ArgumentError("construction_policy must be :standard or :strict"))
+    validate_ordinary_construction_policy(config.construction_policy)
     config.max_cached_wavefunction_kpoints >= 2 ||
         throw(ArgumentError("max_cached_wavefunction_kpoints must be at least two"))
     oracle = _effective_uiu_oracle_mmn_file(config)
@@ -1849,7 +1893,7 @@ function generate_wannier_uiu(config::WannierUIUGenerationConfig)
         )
     end
     _validate_generation_output_paths(paths, inputs, config.source)
-    return with_verified_file_digests(inputs) do
+    return with_native_source_lifetime(inputs) do
         _validate_authoritative_mmn_binding(
             config.topology_file,
             authority_mmn;
@@ -1877,8 +1921,7 @@ function _generate_wannier_uiu_scoped(config::WannierUIUGenerationConfig)
     if !(config.source isa VASPWavefunctionSource) && config.execution === nothing
         return _generate_wannier_uiu_impl(config)
     end
-    config.construction_policy in (:standard, :strict) ||
-        throw(ArgumentError("construction_policy must be :standard or :strict"))
+    validate_ordinary_construction_policy(config.construction_policy)
     config.max_cached_wavefunction_kpoints >= 2 ||
         throw(ArgumentError("max_cached_wavefunction_kpoints must be at least two"))
     paths = _uiu_partial_paths(config)
@@ -1919,38 +1962,15 @@ function _generate_wannier_uiu_scoped(config::WannierUIUGenerationConfig)
         !config.overwrite &&
         throw(ArgumentError("refusing to overwrite uIu provenance: $(paths.provenance)"))
     if config.source isa QuantumEspressoWavefunctionSource
-        execution = something(config.execution)
-        reuse = execution.resume && execution.mode != :dense_reference
-        root, implementation = _preparation_implementation_paths()
-        return with_verified_file_digests(implementation) do
-            contract = bytes2hex(
-                SHA.sha256(
-                    repr([(relpath(path, root), sha256_file(path)) for path in implementation]),
-                ),
-            )
-            directory =
-                reuse ?
-                joinpath(
-                    something(execution.checkpoint_directory, dirname(paths.output)),
-                    "shared-qe-native",
-                ) : nothing
-            run =
-                () -> _with_qe_operator_preparation(
-                    () -> _generate_wannier_uiu_impl(config),
-                    config.source,
-                    config.topology_file,
-                    config.max_cached_wavefunction_kpoints;
-                    checkpoint_directory = directory,
-                    implementation_contract = contract,
-                    additional_inputs = inputs,
-                )
-            task_local_storage(:wannier_preparation_execution, execution) do
-                reuse && return run()
-                task_local_storage(:wannier_preparation_artifact_cache, nothing) do
-                    task_local_storage(run, :wannier_qe_operator_preparation, nothing)
-                end
-            end
-        end
+        return _with_qe_operator_artifacts(
+            () -> _generate_wannier_uiu_impl(config),
+            config.source,
+            config.topology_file,
+            dirname(paths.output),
+            config.max_cached_wavefunction_kpoints;
+            execution = config.execution,
+            additional_inputs = inputs,
+        )
     end
     config.source.potcar_file === nothing &&
         throw(ArgumentError("VASP_PAW_DATA_REQUIRED: uIu generation requires POTCAR"))
@@ -1966,15 +1986,14 @@ end
 
 """Execute the existing uIu validation, scientific kernels and publication within its scope."""
 function _generate_wannier_uiu_impl(config::WannierUIUGenerationConfig)
-    config.construction_policy in (:standard, :strict) ||
-        throw(ArgumentError("construction_policy must be :standard or :strict"))
+    validate_ordinary_construction_policy(config.construction_policy)
     config.max_cached_wavefunction_kpoints >= 2 ||
         throw(ArgumentError("max_cached_wavefunction_kpoints must be at least two"))
     effective_oracle_mmn_file = _effective_uiu_oracle_mmn_file(config)
     authoritative_mmn_file =
         _operator_target_oracle_mmn_file(config.authoritative_mmn_file, config.target_contract)
     authoritative_mmn_file === nothing && (authoritative_mmn_file = effective_oracle_mmn_file)
-    authoritative_mmn_sha256 = _validate_authoritative_mmn_binding(
+    _validate_authoritative_mmn_binding(
         config.topology_file,
         authoritative_mmn_file;
         oracle_mmn_file = effective_oracle_mmn_file,
@@ -2040,23 +2059,16 @@ function _generate_wannier_uiu_impl(config::WannierUIUGenerationConfig)
         state.topology.num_kpts,
         state.topology.num_neighbors,
     )
-    state.input_sha256["BAND_FRAME_TRANSFORM"] = gauge_contract.transform_sha256
-    state.input_sha256["BAND_FRAME_CONTRACT"] = gauge_contract.contract_sha256
-    gauge_contract.gauge_artifact_sha256 === nothing || (
-        state.input_sha256["WAVEFUNCTION_GAUGE_HDF5"] =
-            something(gauge_contract.gauge_artifact_sha256)
-    )
+    state.input_sha256["BAND_FRAME_TRANSFORM"] = gauge_contract.transform_definition
+    state.input_sha256["BAND_FRAME_CONTRACT"] = gauge_contract.contract_definition
+    gauge_contract.gauge_definition === nothing ||
+        (state.input_sha256["WAVEFUNCTION_GAUGE_HDF5"] = something(gauge_contract.gauge_definition))
     @info "uIu native source loaded" source = state.native.source_code bands =
         state.topology.num_bands kpoints = state.topology.num_kpts neighbors =
         state.topology.num_neighbors
     oracle_available = effective_oracle_mmn_file !== nothing
-    if oracle_available
-        state.input_sha256["ORACLE_MMN"] = sha256_file(something(effective_oracle_mmn_file))
-    end
-    authoritative_mmn_sha256 === nothing ||
-        (state.input_sha256["AUTHORITATIVE_MMN"] = authoritative_mmn_sha256)
     config.target_contract === nothing ||
-        (state.input_sha256["OPERATOR_TARGET_CONTRACT"] = config.target_contract.contract_sha256)
+        (state.input_sha256["OPERATOR_TARGET_CONTRACT"] = config.target_contract.definition)
     fingerprint =
         _uiu_input_fingerprint(state.input_sha256, state.topology, config.construction_policy)
     execution_contract = _uiu_execution_contract(state)
@@ -2066,7 +2078,7 @@ function _generate_wannier_uiu_impl(config::WannierUIUGenerationConfig)
         state.radial_q_maximum mmn_max = (mmn_parity === nothing ? NaN : mmn_parity.max_absolute) mmn_rms =
         (mmn_parity === nothing ? NaN : mmn_parity.root_mean_square) mmn_relative_l2 =
         (mmn_parity === nothing ? NaN : mmn_parity.relative_l2)
-    if config.construction_policy == :standard
+    begin
         all(isfinite, (state.generalized_norm, state.radial_q_maximum)) ||
             throw(ArgumentError("FATAL_INTEGRITY: nonfinite uIu native metric residual"))
         if mmn_parity !== nothing
@@ -2080,20 +2092,16 @@ function _generate_wannier_uiu_impl(config::WannierUIUGenerationConfig)
         state.generalized_norm <= config.thresholds.generalized_norm_max_absolute &&
         state.radial_q_maximum <= config.thresholds.radial_q_max_absolute &&
         (!config.require_mmn_oracle || _uiu_mmn_passes(something(mmn_parity), config.thresholds))
-    if !preflight_pass &&
-       (config.target_contract !== nothing || config.construction_policy != :standard)
-        diagnostics =
-            vcat(state.diagnostics, _uiu_cache_diagnostics(state), ["UIU_PREFLIGHT_GATE_FAILED"])
-        return _uiu_failed_result(
-            config,
-            state,
-            gauge_contract,
-            paths,
-            fingerprint,
-            mmn_parity,
-            diagnostics,
-        )
-    end
+
+    _uiu_prepare_source_references!(
+        paths,
+        state,
+        config,
+        effective_oracle_mmn_file,
+        authoritative_mmn_file;
+        reuse = config.resume &&
+                (isfile(paths.partial) || isfile(paths.checkpoint) || recover_publication),
+    )
 
     if recover_publication
         _uiu_recover_publication!(paths, state.topology, fingerprint, execution_contract)
@@ -2140,44 +2148,17 @@ function _generate_wannier_uiu_impl(config::WannierUIUGenerationConfig)
             @info "uIu generation progress" center state.topology.num_kpts diagonal hermiticity
         end
     end
-    completed_after, verified_checksums, verified_diagonal, verified_hermiticity =
-        _uiu_scan_partial(paths.partial, state.topology)
-    completed_after == state.topology.num_kpts ||
+    length(checksums) == state.topology.num_kpts ||
         throw(ArgumentError("UIU_WRITE_INCOMPLETE_AFTER_FINALIZATION"))
-    verified_checksums == checksums || throw(ArgumentError("UIU_WRITE_CHECKSUM_READBACK_FAILED"))
-    diagonal = max(diagonal, verified_diagonal)
-    hermiticity = max(hermiticity, verified_hermiticity)
     # The diagonal uIu block is the same q=0 PAW metric qualified above.
     # Its outer-window residual is the hard gate; the complete-parent maximum
     # remains a required audit, but must not disqualify excluded high bands.
     output_pass =
         state.generalized_norm <= config.thresholds.diagonal_identity_max_absolute &&
         hermiticity <= config.thresholds.exchange_hermiticity_max_absolute
-    if !output_pass && config.construction_policy != :standard
-        diagnostics =
-            vcat(state.diagnostics, _uiu_cache_diagnostics(state), ["UIU_OUTPUT_GATE_FAILED"])
-        return _uiu_failed_result(
-            config,
-            state,
-            gauge_contract,
-            paths,
-            fingerprint,
-            mmn_parity,
-            diagnostics,
-        )
-    end
+    all(isfinite, (diagonal, hermiticity)) ||
+        throw(ArgumentError("FATAL_INTEGRITY: nonfinite uIu output residual"))
     mv(paths.partial, paths.output; force = config.overwrite)
-    count = Ref(0)
-    foreach_wannier_uiu_block(
-        paths.output;
-        expected_num_bands = state.topology.num_bands,
-        expected_num_kpts = state.topology.num_kpts,
-        expected_num_neighbors = state.topology.num_neighbors,
-    ) do _, _, _, _, _
-        count[] += 1
-    end
-    count[] == state.topology.num_kpts * state.topology.num_neighbors^2 ||
-        throw(ArgumentError("UIU_FINAL_READBACK_RECORD_COUNT_MISMATCH"))
     peak_memory = try
         Int(Sys.maxrss())
     catch
@@ -2218,8 +2199,7 @@ function _generate_wannier_uiu_impl(config::WannierUIUGenerationConfig)
     artifacts = Dict(
         "uiu" => paths.output,
         "provenance_json" => paths.provenance,
-        "uiu_sha256" => sha256_file(paths.output),
-        "provenance_sha256" => sha256_file(paths.provenance),
+        "references_hdf5" => paths.references,
     )
     return WannierUIUGenerationResult(
         state.native.source_code,

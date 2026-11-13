@@ -104,6 +104,7 @@ struct NativeWavefunctionData
     kpoints::AbstractVector{PlaneWaveKPoint}
     input_sha256::Dict{String, String}
     source_metadata::Dict{String, String}
+    source_definition::Union{Nothing, IO.ScientificInputDefinition}
 
     function NativeWavefunctionData(
         source_code,
@@ -113,7 +114,8 @@ struct NativeWavefunctionData
         spinor,
         kpoints,
         input_sha256,
-        source_metadata = Dict{String, String}(),
+        source_metadata = Dict{String, String}();
+        source_definition::Union{Nothing, IO.ScientificInputDefinition} = nothing,
     )
         reciprocal = Matrix{Float64}(reciprocal_lattice)
         mesh = Tuple(Int.(mp_grid))
@@ -128,6 +130,17 @@ struct NativeWavefunctionData
         band_count, spin_components = _native_point_dimensions(points)
         Bool(spinor) == (spin_components == 2) ||
             throw(ArgumentError("native spinor flag disagrees with coefficient storage"))
+        source_definition === nothing ||
+            isempty(input_sha256) ||
+            throw(ArgumentError("NATIVE_SOURCE_MIXED_AUTHENTICATION_CONTRACT"))
+        metadata = Dict{String, String}(source_metadata)
+        get(metadata, "content_authentication", "") == "NOT_PERFORMED" &&
+            source_definition === nothing &&
+            throw(ArgumentError("NATIVE_SOURCE_COMPLETE_DEFINITION_REQUIRED"))
+        if source_definition !== nothing
+            metadata["content_authentication"] = "NOT_PERFORMED"
+            metadata["source_consistency"] = "complete_labelled_source_bytes"
+        end
         return new(
             Symbol(source_code),
             structure,
@@ -136,7 +149,8 @@ struct NativeWavefunctionData
             Bool(spinor),
             points,
             Dict{String, String}(input_sha256),
-            Dict{String, String}(source_metadata),
+            metadata,
+            source_definition,
         )
     end
 end
@@ -160,7 +174,8 @@ function _normalized_native_wavefunctions(native::NativeWavefunctionData)
         native.spinor,
         points,
         native.input_sha256,
-        native.source_metadata,
+        native.source_metadata;
+        source_definition = native.source_definition,
     )
 end
 
@@ -189,103 +204,19 @@ function native_point_metadata(native::NativeWavefunctionData, index::Int)
     )
 end
 
-"""Verify content again after a metadata-only identity change.
+"""Forward preparation credential verification to the shared IO implementation."""
+verified_file_digest_identity(args...; kwargs...) =
+    IO.verified_file_digest_identity(args...; kwargs...)
 
-The identity is `(device, inode, size, mtime, ctime)` and the digest is the
-previously verified hexadecimal SHA-256. Return an updated identity without
-mutating the caller's credential. A changed ctime can reflect filesystem metadata
-updates; accept it only after comparing a fresh content digest. Other identity
-changes or a content mismatch raise an ArgumentError with `change_error`.
+"""Forward preparation streaming hashes to IO without caching undeclared outputs."""
+sha256_file(filename::AbstractString) = IO.sha256_file(filename)
 
-This non-exported integration contract is shared by preparation and operator
-attestations; unchanged identities require no content read.
-"""
-function verified_file_digest_identity(
-    path,
-    identity,
-    digest;
-    file_hasher = p -> open(io -> bytes2hex(SHA.sha256(io)), p, "r"),
-    change_error = "VERIFIED_INPUT_CHANGED",
-)
-    current = _digest_file_identity(path)
-    current == identity && return current
-    current[1:4] == identity[1:4] || throw(ArgumentError("$(change_error): $(path)"))
-    observed = file_hasher(path)
-    after = _digest_file_identity(path)
-    after[1:4] == current[1:4] && observed == digest ||
-        throw(ArgumentError("$(change_error): $(path)"))
-    # Keep the identity captured immediately before the verified content read.
-    # Some filesystems publish a delayed ctime-only refresh after metadata
-    # changes.  Returning `after` would then force an unnecessary third hash
-    # on the next lookup despite the checked content and stable device/inode,
-    # size, and mtime.  A later identity change still re-enters this strict
-    # verification path.
-    return current
-end
+"""Preserve the preparation identity helper through the shared IO owner."""
+_digest_file_identity(path::AbstractString) = IO.file_digest_identity(path)
 
-"""Compute a streaming SHA-256, reusing a verified execution-scoped credential."""
-function sha256_file(filename::AbstractString)
-    isfile(filename) || throw(ArgumentError("input file does not exist: $(filename)"))
-    registry = get(task_local_storage(), :wannier_verified_file_digests, nothing)
-    if registry !== nothing
-        path = realpath(filename)
-        if haskey(registry, path)
-            identity, digest = registry[path]
-            current = verified_file_digest_identity(path, identity, digest)
-            if current != identity
-                refreshed = copy(registry)
-                refreshed[path] = (current, digest)
-                task_local_storage(:wannier_verified_file_digests, refreshed)
-            end
-            return digest
-        end
-    end
-    return open(filename, "r") do io
-        bytes2hex(SHA.sha256(io))
-    end
-end
-
-"""Identify changes to an already content-verified input within one execution scope."""
-function _digest_file_identity(path::AbstractString)
-    information = stat(path)
-    return (
-        information.device,
-        information.inode,
-        information.size,
-        information.mtime,
-        information.ctime,
-    )
-end
-
-"""Verify declared inputs once and reuse their digests only for the callback lifetime.
-
-The registry is immutable once shared and never serialized. Nested scopes and
-metadata refreshes use private copies. A ctime-only change requires a fresh
-content match before replacing the task-local credential. Undeclared files retain
-streaming hashes.
-"""
-function with_verified_file_digests(f::F, paths; file_hasher = sha256_file) where {F}
-    parent = get(task_local_storage(), :wannier_verified_file_digests, nothing)
-    registry = parent === nothing ? Dict{String, Tuple{Tuple, String}}() : copy(parent)
-    for filename in paths
-        path = realpath(filename)
-        if haskey(registry, path)
-            identity, digest = registry[path]
-            registry[path] = (verified_file_digest_identity(path, identity, digest), digest)
-            continue
-        end
-        before = _digest_file_identity(path)
-        digest = file_hasher(path)
-        after = verified_file_digest_identity(
-            path,
-            before,
-            digest;
-            change_error = "INPUT_CHANGED_DURING_DIGEST",
-        )
-        registry[path] = (after, digest)
-    end
-    return task_local_storage(f, :wannier_verified_file_digests, registry)
-end
+"""Forward callback-scoped declared-input credentials to the shared IO owner."""
+with_verified_file_digests(f::F, paths; kwargs...) where {F} =
+    IO.with_verified_file_digests(f, paths; kwargs...)
 
 """
 Infer a complete Monkhorst-Pack grid from fractional coordinates modulo one.

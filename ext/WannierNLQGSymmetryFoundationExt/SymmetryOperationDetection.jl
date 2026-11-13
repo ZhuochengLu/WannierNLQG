@@ -4,6 +4,36 @@ function _species_type_numbers(species::Vector{String})
     return [get!(type_by_species, label, length(type_by_species) + 1) for label in species]
 end
 
+"""
+Return the actual standardized crystal data consumed by structural Band paths.
+
+The native Spglib call belongs to this extension. Preserve ordered species,
+fractional positions and the row-lattice Angstrom convention. Return conventional
+basis vectors, the Cartesian standard rotation, primitive lattice and space-group
+number without interpreting Hamiltonian symmetry or a two-dimensional plane group.
+"""
+function standardize_crystal_band_cell(
+    structure::CrystalStructure;
+    spglib_symprec_angstrom::Real = 1.0e-5,
+)
+    positions =
+        [collect(structure.positions_fractional[:, atom]) for atom in eachindex(structure.species)]
+    cell = Spglib.Cell(
+        transpose(structure.lattice),
+        positions,
+        _species_type_numbers(structure.species),
+    )
+    dataset = Spglib.get_dataset(cell, Float64(spglib_symprec_angstrom))
+    return (
+        space_group_number = Int(dataset.spacegroup_number),
+        standard_lattice_vectors_angstrom = [
+            collect(vector) for vector in Spglib.basisvectors(dataset.std_lattice)
+        ],
+        standard_rotation_matrix = Matrix{Float64}(dataset.std_rotation_matrix),
+        primitive_lattice = Matrix{Float64}(dataset.primitive_lattice),
+    )
+end
+
 # Normalize tiny fractional translations for deterministic operation matching.
 function _clean_fractional_translation(translation)
     result = mod.(Vector{Float64}(translation), 1.0)

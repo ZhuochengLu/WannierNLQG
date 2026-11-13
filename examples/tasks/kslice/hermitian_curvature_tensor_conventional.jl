@@ -34,7 +34,7 @@ function build_config(;
                 quantity = "HCTK",
                 method = "Conventional",
                 physics = GeometryParameters(),
-                numerics = GeometryNumerics(denominator_regularization = 0.001),
+                numerics = Numerics(denominator_regularization = 0.001),
                 observable = KSliceSelection(
                     component = TensorComponent(2, 2, 1, 2),
                     bands = InterbandGroups(first = [3, 4], second = [1, 2]),

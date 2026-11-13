@@ -3,13 +3,26 @@ module Core
 using LinearAlgebra
 using SHA
 
+# Private project-owned numerical infrastructure; not a separate package or facade API.
+include("ESKernel/ESKernel.jl")
+
 include("Constants.jl")
+include("OrdinaryCalculationPolicy.jl")
+export validate_ordinary_construction_policy
 include("WannierCenterConventions.jl")
 include("RealSpaceOperators.jl")
 include("OperatorTaskRequirements.jl")
+include("ScientificDataOwnership.jl")
 include("Models.jl")
+include("NativePhysicalGeometry.jl")
+include("NativeModelInputs.jl")
+include("NonorthogonalLocalizedModels.jl")
+export NonorthogonalLocalizedModel, NonorthogonalLocalizedInput
+include("PointOrbitalSymmetry.jl")
+export PointOrbitalSymmetryOperation
 include("Coordinates.jl")
 include("CalculationUtils.jl")
+include("CartesianRegionGrid.jl")
 include("FermiEnergyAxes.jl")
 
 export ELEMENTARY_CHARGE_C
@@ -20,6 +33,9 @@ export COMPLEX_ZERO
 export WannierCenterConvention, CONVENTION_I, CONVENTION_II
 export wannier_center_convention_name
 export TightBindingModel, KPointSpectrum
+export ScientificDataOwner, scientific_data_generation, invalidate_scientific_data!
+export AbstractResponseModel,
+    AbstractNativeModelInput, RealSpaceTBInput, AnalyticKInput, AnalyticKModel
 export RealSpaceOperatorKind, RealSpaceOperatorSymmetrySpec, RealSpaceOperator
 export REAL_SPACE_OPERATOR_REGISTRY, REAL_SPACE_OPERATOR_CANONICAL_NAMES
 export real_space_operator_name
@@ -38,9 +54,13 @@ export operator_task_requirement, registered_operator_task_methods
 export registered_operator_task_quantities, resolve_operator_requirements
 export real_space_cartesian_to_fractional, reciprocal_cartesian_to_fractional
 export reciprocal_lattice, finite_difference_step_matrix
-export IntegralKGrid, KSliceGrid2D
+export IntegralKGrid, KSliceGrid2D, CartesianRegionGrid
+export CartesianAffineRegion,
+    CartesianAffineGrid, CartesianParallelogram, CartesianParallelogramGrid
+export CartesianParallelepiped, affine_dimension, cartesian_affine_point, cartesian_affine_bounds
+export cartesian_parallelogram_point, cartesian_parallelogram_bounds
 export fermi_dirac, fermi_dirac!, gaussian_broadening, lorentzian_broadening
-export FERMI_ENERGY_AXIS_DOMAIN, validate_fermi_energies, fermi_energy_axis_sha256
+export FERMI_ENERGY_AXIS_DOMAIN, validate_fermi_energies, fermi_energy_axis_definition
 export select_band_window, has_active_transition
 export validate_kslice_input, normalize_cartesian_indices
 export integral_kpoint!, kslice_indices, kslice_kpoint!, make_kslice_grid, make_kslice_points

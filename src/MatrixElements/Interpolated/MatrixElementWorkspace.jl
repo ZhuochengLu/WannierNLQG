@@ -40,7 +40,7 @@ struct SpinVelocityRealSpaceData{S, H, R, HR}
     spin_hamiltonian_r::H
     spin_position_r::R
     spin_hamiltonian_position_r::HR
-    diagnostics::SpinVelocityRealSpaceDiagnostics
+    diagnostics::Union{Nothing, SpinVelocityRealSpaceDiagnostics}
 end
 
 """
@@ -79,15 +79,17 @@ end
 #
 # If both spin inputs are supplied they must share the same `SpinRealSpaceData` object; otherwise spin is inherited from the spin-velocity source.
 function MatrixElementSources(;
-    spin::Union{Nothing, SpinRealSpaceData} = nothing,
-    spin_velocity::Union{Nothing, SpinVelocityRealSpaceData} = nothing,
-    derivative_overlap::Union{Nothing, DerivativeOverlapRealSpaceData} = nothing,
+    spin = nothing,
+    spin_velocity = nothing,
+    derivative_overlap = nothing,
 )
-    if spin !== nothing && spin_velocity !== nothing
+    if spin !== nothing && spin_velocity isa SpinVelocityRealSpaceData
         spin === spin_velocity.spin ||
             error("spin and spin_velocity must share the same SpinRealSpaceData object.")
     end
-    resolved_spin = spin === nothing && spin_velocity !== nothing ? spin_velocity.spin : spin
+    resolved_spin =
+        spin === nothing && spin_velocity !== nothing ?
+        (spin_velocity isa SpinVelocityRealSpaceData ? spin_velocity.spin : spin_velocity) : spin
     return MatrixElementSources(resolved_spin, spin_velocity, derivative_overlap)
 end
 
@@ -166,6 +168,39 @@ mutable struct KPointMatrixData{H, P, S, V}
     computed_mask::UInt64
     generation::UInt64
     kpoint::Vector{Float64}
+    subspace_position::Union{Nothing, SubspacePositionCache}
+    spectral_gap_tolerance::Float64
+    position_regularization_ev::Float64
+    spin_degeneracy_threshold_ev::Float64
+    metric_external::Union{Nothing, Array{ComplexF64, 4}}
+    metric_external_generation::UInt64
+    metric_completion_required::Bool
+end
+
+# Numerical cache keys belong to each borrowed data slot, rather than the shared plan.
+# Retain the eigensystem and raw h/A; invalidate only consumers of changed parameters.
+function _invalidate_numerical_capabilities!(data::KPointMatrixData, plan::MatrixElementPlan)
+    if has_capability(plan, SPIN_VELOCITY)
+        isfinite(plan.denominator_regularization) && plan.denominator_regularization > 0 || throw(
+            ArgumentError(
+                "SPIN_CURRENT_REGULARIZATION_POSITIVE_REQUIRED: denominator_regularization must be finite and positive for SPIN_VELOCITY.",
+            ),
+        )
+    end
+    if data.position_regularization_ev != plan.denominator_regularization
+        data.computed_mask &= ~_POSITION_REGULARIZATION_DEPENDENTS
+        # Spin velocity consumes raw spin gauges before Hermitian closure. A new
+        # eta must rebuild that prerequisite as well as its dependent vertex.
+        has_capability(plan, SPIN_VELOCITY) && (data.computed_mask &= ~_capability_bit(SPIN))
+    end
+    return data
+end
+
+# Stamp only after all required capabilities have completed successfully.
+function _record_numerical_parameters!(data::KPointMatrixData, plan::MatrixElementPlan)
+    data.position_regularization_ev = plan.denominator_regularization
+    data.spin_degeneracy_threshold_ev = plan.degeneracy_threshold
+    return data
 end
 
 # Expose compatibility matrix-property names through the shared k-point payload; read all other names as stored fields.
@@ -212,16 +247,20 @@ mutable struct HamiltonianMatrixScratch{G, H, GR, HR}
     hessian_wannier::H
     gradient_real_space::GR
     hessian_real_space::HR
+    source_nonzero_indices::Vector{Int}
 end
 
 """
 Wannier connection, Cartesian derivative and source-frame multiplication scratch selected by the matrix plan.
 """
-mutable struct PositionMatrixScratch{W, G, GR, S}
+mutable struct PositionMatrixScratch{W, G, GR, S, C, CR}
     wannier_gauge::W
     gradient_wannier::G
     gradient_real_space::GR
     source_internal_temporary::S
+    curl_wannier::C
+    curl_real_space::CR
+    curl_pairs::Vector{Tuple{Int, Int}}
 end
 
 """
@@ -301,18 +340,26 @@ end
 #
 # Constructors preallocate requested offsets, while `matrix_data!` allocates additional slots lazily.
 function KPointBatchWorkspace(
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     plan::MatrixElementPlan,
     offsets::AbstractVector{KPointOffset} = KPointOffset[KPointOffset()],
-    sources::MatrixElementSources = MatrixElementSources(),
+    sources::MatrixElementSources = MatrixElementSources();
+    spectral_gap_tolerance::Real = 1e-10,
+    metric_completion_required::Bool = false,
 )
     matrix_elements = MatrixElementWorkspace(model, plan, sources)
+    matrix_elements.data.spectral_gap_tolerance = spectral_gap_tolerance
+    matrix_elements.data.metric_completion_required = metric_completion_required
     data_type = typeof(matrix_elements.data)
     slots = Dict{KPointOffset, data_type}()
     slots[KPointOffset()] = matrix_elements.data
     for offset in offsets
         haskey(slots, offset) ||
             (slots[offset] = KPointMatrixData(model.num_orbitals, model.num_r_vectors, plan))
+    end
+    for data in values(slots)
+        data.spectral_gap_tolerance = spectral_gap_tolerance
+        data.metric_completion_required = metric_completion_required
     end
     return KPointBatchWorkspace(matrix_elements, slots)
 end
@@ -324,11 +371,14 @@ The returned buffers alias the batch cache and may be overwritten by later evalu
 """
 function matrix_data!(batch::KPointBatchWorkspace, offset::KPointOffset)
     return get!(batch.slots, offset) do
-        KPointMatrixData(
+        data = KPointMatrixData(
             length(batch.matrix_elements.data.spectrum.energies),
             length(batch.matrix_elements.scratch.fourier_factors),
             batch.matrix_elements.plan,
         )
+        data.spectral_gap_tolerance = batch.matrix_elements.data.spectral_gap_tolerance
+        data.metric_completion_required = batch.matrix_elements.data.metric_completion_required
+        data
     end
 end
 
@@ -486,6 +536,13 @@ function KPointMatrixData(num_orbitals::Integer, num_r_vectors::Integer, plan::M
         UInt64(0),
         UInt64(0),
         zeros(Float64, 3),
+        nothing,
+        1e-10,
+        NaN,
+        NaN,
+        nothing,
+        typemax(UInt64),
+        false,
     )
 end
 
@@ -520,6 +577,7 @@ function _make_hamiltonian_scratch(
         hessian_wannier,
         gradient_real_space,
         hessian_real_space,
+        needs_gradient ? zeros(Int, num_orbitals) : Int[],
     )
 end
 
@@ -532,7 +590,8 @@ function _make_position_scratch(
 )
     needs_wannier = has_capability(plan, WANNIER_POSITION)
     needs_gradient = has_capability(plan, INTERNAL_CONNECTION_DERIVATIVES)
-    if !(needs_wannier || needs_gradient)
+    needs_curl = _uses_position_curl(plan)
+    if !(needs_wannier || needs_gradient || needs_curl)
         return nothing
     end
     wannier_channels = _axis_channel_count(plan, WANNIER_POSITION)
@@ -548,6 +607,15 @@ function _make_position_scratch(
             num_r_vectors,
         ),
         _optional_array(has_capability(plan, BERRY_CONNECTION), num_orbitals, num_orbitals),
+        _optional_array(needs_curl, num_orbitals, num_orbitals, _position_curl_channel_count(plan)),
+        _optional_array(
+            needs_curl,
+            num_orbitals,
+            num_orbitals,
+            _position_curl_channel_count(plan),
+            num_r_vectors,
+        ),
+        needs_curl ? _position_curl_pairs(plan) : Tuple{Int, Int}[],
     )
 end
 
@@ -615,7 +683,7 @@ end
 # Shared Fourier factors, Hamiltonian/multiplication buffers, Wannier-center phases and optional capability-specific scratch.
 #
 # Construction sizes buffers from the compiled plan; this mutable storage must be owned by one execution slot.
-MatrixElementScratch(model::TightBindingModel, plan::MatrixElementPlan) =
+MatrixElementScratch(model::AbstractResponseModel, plan::MatrixElementPlan) =
     MatrixElementScratch(model.num_orbitals, model.num_r_vectors, plan)
 
 # Reject missing spin, spin-velocity or derivative-overlap inputs required by the compiled matrix capability plan.
@@ -660,11 +728,17 @@ end
 # One execution slot's compiled plan, validated sources, cached k-point data, scratch, preparation flag and counters.
 #
 # Constructors validate required operator sources and share Fourier-factor storage between data and scratch; do not share a mutable workspace across concurrent evaluations.
+"""Allocate matrix-element workspace from the model orbital and lattice-vector counts and the explicit plan and sources."""
 MatrixElementWorkspace(
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     plan::MatrixElementPlan,
     sources::MatrixElementSources = MatrixElementSources(),
-) = MatrixElementWorkspace(model.num_orbitals, model.num_r_vectors, plan, sources)
+) = begin
+    _uses_position_curl(plan) &&
+        !(model isa TightBindingModel) &&
+        throw(ArgumentError("curl-only workspace requires orthogonal real-space TB"))
+    MatrixElementWorkspace(model.num_orbitals, model.num_r_vectors, plan, sources)
+end
 
 """
 Return the workspace-owned matrix or spectrum for an explicitly requested capability.
@@ -705,6 +779,12 @@ function matrix(workspace::MatrixElementWorkspace, kind::MatrixElementKind)
         return data.spin_velocity.spin_times_hamiltonian_position
     elseif kind == SPIN_VELOCITY
         return data.spin_velocity.hamiltonian_gauge
+    elseif kind == OPTICAL_CUTOFF_VERTICES
+        return cutoff_optical_position_vertices(
+            data,
+            workspace.plan.denominator_regularization,
+            false,
+        )
     end
     error("Unhandled MatrixElementKind $(kind).")
 end

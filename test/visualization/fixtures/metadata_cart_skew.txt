@@ -7,8 +7,15 @@ method = conventional
 [Input]
 case_root = .
 model_file = skew_tb.dat
-model_sha256 = 1979e4f0d761b3117fd9038791694b909cbc54aa2f4e23d9b35c0c6aa6499243
+model_identity = 1979e4f0d761b3117fd9038791694b909cbc54aa2f4e23d9b35c0c6aa6499243
 model_input_mode = legacy
+
+[Geometry]
+schema = wanniernlqg.model-geometry/1
+lattice_convention = row-lattice: R_cart = R_frac(row) * lattice; q_frac = lattice * q_cart / 2pi
+lattice_row.1_angstrom = (2.0, 0.0, 0.0)
+lattice_row.2_angstrom = (0.7, 2.5, 0.0)
+lattice_row.3_angstrom = (0.2, 0.4, 3.0)
 
 [Numerics]
 k_mesh = (2, 2)

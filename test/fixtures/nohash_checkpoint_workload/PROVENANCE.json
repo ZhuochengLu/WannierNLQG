@@ -1,0 +1,11 @@
+{
+  "schema": "wanniernlqg.fixture-packaging-provenance/1",
+  "original_fixture_sha256": "c22050ed28356748acaee93d569c21a620b7c0a8e4b7f9c0f97c5644b678d9b9",
+  "source_run": "wannier-plan755-001",
+  "source_artifact": "execute/current-fixture/tiny_wannierization_tb.dat.quality.json",
+  "original_binary_preserved": true,
+  "packaged_derivative_byte_identity": "NOT_CLAIMED",
+  "informational_change": "input_summary/wannierization_quality_metadata is empty: that old external quality sidecar is not shipped",
+  "mathematical_fields_changed": false,
+  "validation_record": "engineering-packaging1294; no solver or physics qualification"
+}

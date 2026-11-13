@@ -1,3 +1,5 @@
+# Exact-band/completion reference tests below use the positive eta->0 limit.
+# Default finite eta and symmetric boundaries have separate independent tests.
 
 using Test, LinearAlgebra, Random
 using WannierNLQG
@@ -132,6 +134,7 @@ end
         conventional=response.orbital_magnetization_response(
             geometry,
             completion;
+            denominator_regularization = 1e-12,
             fermi_energies = Float64[0.01],
             temperature,
         )[
@@ -142,6 +145,7 @@ end
         projector=response.orbital_magnetization_response(
             geometry,
             completion;
+            denominator_regularization = 1e-12,
             fermi_energies = Float64[0.01],
             temperature,
             projector = true,
@@ -171,12 +175,14 @@ end
         a=response.orbital_magnetization_response(
             geometry,
             completion;
+            denominator_regularization = 1e-12,
             fermi_energies = Float64[0.01],
             temperature = 200.0,
         )
         b=response.orbital_magnetization_response(
             shifted,
             completion;
+            denominator_regularization = 1e-12,
             fermi_energies = Float64[0.01 + shift],
             temperature = 200.0,
         )
@@ -297,6 +303,7 @@ end
         reference=response.orbital_magnetization_response(
             full,
             matrices.finite_model_orbital_completion(6);
+            denominator_regularization = 1e-12,
             fermi_energies = Float64[0.01],
             temperature,
         )[
@@ -308,6 +315,7 @@ end
             value=response.orbital_magnetization_response(
                 reduced,
                 completion;
+                denominator_regularization = 1e-12,
                 fermi_energies = Float64[0.01],
                 temperature,
                 projector,
@@ -322,6 +330,7 @@ end
         incomplete=response.orbital_magnetization_response(
             reduced,
             matrices.finite_model_orbital_completion(4);
+            denominator_regularization = 1e-12,
             fermi_energies = Float64[0.01],
             temperature,
         )[
@@ -337,6 +346,7 @@ end
     left=response.orbital_magnetization_response(
         reduced,
         completion_with_cross;
+        denominator_regularization = 1e-12,
         fermi_energies = Float64[0.01],
         temperature = 200.0,
     )[
@@ -347,6 +357,7 @@ end
     right=response.orbital_magnetization_response(
         reduced,
         completion_with_cross;
+        denominator_regularization = 1e-12,
         fermi_energies = Float64[0.01],
         temperature = 200.0,
         projector = true,
@@ -387,7 +398,15 @@ end
     matrices.prepare_real_space!(workspace, model)
     center=[0.99, 0.21, 0.37]
     data=matrices.compute_kpoint!(workspace, model, center)
-    geometry=matrices.spectral_response_geometry(data)
+    # This independent exact-dP finite-difference oracle retains the expert
+    # spectral constructor, rather than using the regularized runtime r adapter.
+    geometry=matrices.spectral_response_geometry(
+        data.spectrum.energies,
+        data.spectrum.eigenvectors,
+        data.hamiltonian.derivatives,
+        data.position.internal_connection,
+        data.position.hamiltonian_curvature,
+    )
     u=copy(data.spectrum.eigenvectors);
     p=u[:, 1:1]*u[:, 1:1]';
     q=I(2)-p
@@ -640,3 +659,297 @@ end
     hash_conflict=m.validate_orbital_sources(manifest, :direct_energy_overlap, 0.0, 300.0)
     @test "orbital_response.operator_source_sha256.position" in hash_conflict.conflicting_contracts
 end
+
+module OrbitalRegularizationTests
+using Test, LinearAlgebra, Random, WannierNLQG
+const ME=WannierNLQG.MatrixElements
+const R=WannierNLQG.Responses
+const OM=R.OrbitalMagnetization
+maxabs(x)=maximum(abs, x; init = 0.0)
+
+# Local complete-velocity inputs, including a nonzero raw connection that must not be overwritten.
+function orbital_fixture(energies)
+    n=length(energies)
+    gx=ComplexF64[0.2 0.4+0.2im 0.3; 0.4-0.2im -0.3 0.2im; 0.3 -0.2im 0.4]
+    gy=ComplexF64[-0.1 0.2im 0.1+0.3im; -0.2im 0.5 0.4; 0.1-0.3im 0.4 0.1]
+    x=ComplexF64[0.1 0.3+0.1im 0.2; 0.3-0.1im -0.1 0.15im; 0.2 -0.15im 0]
+    a=cat(0.7x, -0.2x, zeros(ComplexF64, n, n); dims = 3)
+    g=cat(gx, gy, zeros(ComplexF64, n, n); dims = 3)
+    v=copy(g)
+    for axis in 1:3, m in 1:n, k in 1:n
+        ;
+        v[m, k, axis]+=im*(energies[m]-energies[k])*a[m, k, axis];
+    end
+    return ME.SpectralResponseGeometry(
+        copy(energies),
+        Matrix{ComplexF64}(I, n, n),
+        a,
+        v,
+        zeros(ComplexF64, n, n, 3, 3),
+        ME.spectral_subspace_blocks(energies; gap_tolerance = 0.0),
+    )
+end
+
+# Independent high-precision normal-equation solve, not the scalar band inverse.
+function orbital_sylvester_oracle(geometry, completion, occupied, eta, mu)
+    T=Complex{BigFloat};
+    n=length(geometry.energies)
+    h=Matrix{T}(Diagonal(BigFloat.(geometry.energies)))
+    p=Matrix{T}(Diagonal([j<=occupied ? one(BigFloat) : zero(BigFloat) for j in 1:n]));
+    q=I-p
+    identity=Matrix{T}(I, n, n)
+    liouville=kron(identity, h)-kron(transpose(h), identity)
+    system=liouville'*liouville+BigFloat(eta)^2*I
+    z=[
+        reshape(system\(-liouville'*vec(q*T.(geometry.covariant_hamiltonian[:, :, axis])*p)), n, n)
+        for axis in 1:3
+    ]
+    f=zeros(T, 3, 3);
+    g=similar(f);
+    k=similar(f)
+    for b in 1:3, a in 1:3
+        extf=T.(completion.derivative_overlap[:, :, a, b]);
+        extc=T.(completion.energy_overlap[:, :, a, b])
+        ba=T.(completion.energy_connection[:, :, a]);
+        bb=T.(completion.energy_connection[:, :, b])
+        overlap=z[a]'*z[b]+p*extf*p
+        f[a, b]=tr(overlap)
+        g[a, b]=tr(z[a]'*h*z[b]+im*p*ba'*z[b]-im*z[a]'*bb*p+p*extc*p)
+        k[a, b]=tr(h*overlap)
+    end
+    result=zeros(Float64, 3, 3)
+    factor=R.RESPONSE_CHARGE_C^2*1e-20/(2R.RESPONSE_HBAR_JS*R.RESPONSE_BOHR_MAGNETON)
+    for (axis, (a, b)) in enumerate(((2, 3), (3, 1), (1, 2)))
+        result[axis, 1]=factor*Float64(imag((g[a, b]-k[a, b])-(g[b, a]-k[b, a])))
+        result[axis, 2]=2factor*Float64(imag((k[a, b]-k[b, a])-BigFloat(mu)*(f[a, b]-f[b, a])))
+        result[axis, 3]=result[axis, 1]+result[axis, 2]
+    end
+    return result
+end
+
+# Nonzero completion tensors exercise the independent cross signs and energy weights.
+function orbital_completion_fixture()
+    rng=MersenneTwister(31001);
+    f=zeros(ComplexF64, 3, 3, 3, 3);
+    c=similar(f)
+    for b in 1:3, a in 1:b
+        f[:, :, a, b]=0.01randn(rng, ComplexF64, 3, 3);
+        c[:, :, a, b]=0.01randn(rng, ComplexF64, 3, 3)
+        f[:, :, b, a]=f[:, :, a, b]';
+        c[:, :, b, a]=c[:, :, a, b]'
+    end
+    return ME.OrbitalCompletion(f, 0.01randn(rng, ComplexF64, 3, 3, 3), c)
+end
+
+@testset "OM complete-V regularized Sylvester and independent traces" begin
+    for gap in (0.0, 1e-11, 0.001, 0.1), eta in (0.001, 0.02)
+        geometry=orbital_fixture([0.0, gap, 1.0]);
+        completion=orbital_completion_fixture()
+        occupied=gap==0 ? 2 : 1;
+        mu=gap==0 ? 0.3 : gap/4
+        saved=copy(geometry.connection)
+        expected=orbital_sylvester_oracle(geometry, completion, occupied, eta, mu)
+        for projector in (false, true)
+            actual=R.orbital_magnetization_response(
+                geometry,
+                completion;
+                projector,
+                denominator_regularization = eta,
+                fermi_energies = [mu],
+                temperature = 0.0,
+            )
+            @test dropdims(actual; dims = 1) ≈ expected atol=2e-12 rtol=2e-12
+            @test all(isfinite, actual)
+        end
+        @test geometry.connection==saved
+    end
+    geometry=orbital_fixture([0.0, 0.001, 1.0]);
+    completion=ME.finite_model_orbital_completion(3)
+    for eta in (0.0, -0.1, NaN, Inf)
+        @test_throws ArgumentError R.orbital_magnetization_response(
+            geometry,
+            completion;
+            denominator_regularization = eta,
+            fermi_energies = [0.3],
+            temperature = 0.0,
+        )
+    end
+    results=[
+        R.orbital_magnetization_response(
+            geometry,
+            completion;
+            denominator_regularization = eta,
+            fermi_energies = [0.00025],
+            temperature = 0.0,
+        ) for eta in (0.001, 0.02, 0.001)
+    ]
+    @test results[1]==results[3]
+    @test maxabs(results[1]-results[2])>1e-8
+end
+
+@testset "OM exact blocks and symmetric zeroT boundary" begin
+    rotation=ComplexF64[cos(0.37) im*sin(0.37) 0; im*sin(0.37) cos(0.37) 0; 0 0 1]
+    geometry=orbital_fixture([0.2, 0.2, 1.2]);
+    completion=ME.finite_model_orbital_completion(3)
+    rotated=ME.SpectralResponseGeometry(
+        geometry.energies,
+        rotation,
+        cat([rotation'*geometry.connection[:, :, a]*rotation for a in 1:3]...; dims = 3),
+        cat([rotation'*geometry.covariant_hamiltonian[:, :, a]*rotation for a in 1:3]...; dims = 3),
+        geometry.curvature,
+        geometry.blocks,
+    )
+    for projector in (false, true)
+        expected=(
+            orbital_sylvester_oracle(
+                geometry,
+                completion,
+                0,
+                0.001,
+                0.2,
+            )+orbital_sylvester_oracle(geometry, completion, 2, 0.001, 0.2)
+        )/2
+        actual=R.orbital_magnetization_response(
+            geometry,
+            completion;
+            projector,
+            fermi_energies = [0.2],
+            temperature = 0.0,
+        )
+        @test dropdims(actual; dims = 1) ≈ expected atol=2e-12 rtol=2e-12
+        other=R.orbital_magnetization_response(
+            rotated,
+            completion;
+            projector,
+            fermi_energies = [0.2],
+            temperature = 0.0,
+        )
+        @test actual ≈ other atol=2e-12 rtol=2e-12
+        positive=R.orbital_magnetization_response(
+            geometry,
+            completion;
+            projector,
+            fermi_energies = [0.2],
+            temperature = 3e-7,
+        )
+        @test actual ≈ positive atol=2e-12 rtol=2e-12
+        @test actual[:, :, 3] == actual[:, :, 1]+actual[:, :, 2]
+    end
+    @test maxabs((0.5Diagonal([1.0, 1.0, 0.0]))^2-0.5Diagonal([1.0, 1.0, 0.0]))==0.25
+end
+
+# Actual Fourier/center-convention model with flat, nonzero diagonal raw position.
+function orbital_center_model()
+    geometry=orbital_fixture([0.0, 0.001, 1.0]);
+    h=zeros(ComplexF64, 3, 3, 5)
+    h[:, :, 1]=Diagonal(geometry.energies)
+    gx=ComplexF64[0.2 0.4+0.2im 0.3; 0.4-0.2im -0.3 0.2im; 0.3 -0.2im 0.4]
+    gy=ComplexF64[-0.1 0.2im 0.1+0.3im; -0.2im 0.5 0.4; 0.1-0.3im 0.4 0.1]
+    h[:, :, 2]=-0.5im*gx;
+    h[:, :, 3]=h[:, :, 2]';
+    h[:, :, 4]=-0.5im*gy;
+    h[:, :, 5]=h[:, :, 4]'
+    pos=zeros(ComplexF64, 3, 3, 3, 5);
+    pos[:, :, 1, 1]=Diagonal([0.1, 0.3, -0.2]);
+    pos[:, :, 2, 1]=0.2Diagonal([0.1, 0.3, -0.2])
+    return WannierNLQG.Core.TightBindingModel(
+        Matrix{Float64}(I, 3, 3),
+        3,
+        5,
+        ones(Int, 5),
+        Int[0 1 -1 0 0; 0 0 0 1 -1; 0 0 0 0 0],
+        h,
+        pos,
+    )
+end
+
+@testset "OM actual center convention covariance" begin
+    model=orbital_center_model();
+    values=[]
+    for convention in (WannierNLQG.Core.CONVENTION_I, WannierNLQG.Core.CONVENTION_II)
+        request=ME.MatrixElementRequest(
+            ME.BERRY_CONNECTION,
+            ME.WANNIER_CURVATURE,
+            ME.VELOCITY_VERTICES;
+            denominator_regularization = 0.02,
+        )
+        workspace=ME.MatrixElementWorkspace(
+            model,
+            ME.compile_matrix_plan(
+                request;
+                source_gauge_required = false,
+                wannier_center_convention = convention,
+            ),
+        )
+        ME.prepare_real_space!(workspace, model);
+        data=ME.compute_kpoint!(workspace, model, [0.17, 0.11, 0.09])
+        geometry=ME.spectral_response_geometry(data; gap_tolerance = 0.0)
+        mu=(geometry.energies[1]+geometry.energies[2])/2
+        push!(
+            values,
+            R.orbital_magnetization_response(
+                geometry,
+                ME.finite_model_orbital_completion(3);
+                denominator_regularization = 0.02,
+                fermi_energies = [mu],
+                temperature = 0.0,
+            ),
+        )
+    end
+    @test values[1] ≈ values[2] atol=2e-12 rtol=2e-12
+end
+
+@testset "OM gap control is unsupported only in its task" begin
+    rt=WannierNLQG.Runtime
+    for value in (0.0, 1e-10, 0.1, nothing)
+        task=WannierNLQG.TaskSpec(
+            id = "om",
+            quantity = "orbital_magnetization",
+            physics = WannierNLQG.OrbitalMagnetizationParameters(
+                fermi_energies = [0.1],
+                temperature = 0.0,
+                input_semantics = :defined_finite_model,
+            ),
+            numerics = WannierNLQG.Numerics(gap_tolerance = value),
+        )
+        caught=try
+            ;
+            rt.resolved_numerical_values(task, :orbital_magnetization);
+            nothing;
+        catch err
+            ;
+            err;
+        end
+        @test caught isa ArgumentError
+        @test occursin("does not support gap_tolerance", sprint(showerror, caught))
+        @test !occursin("denominator_regularization", sprint(showerror, caught))
+    end
+    task=WannierNLQG.TaskSpec(
+        id = "om",
+        quantity = "orbital_magnetization",
+        physics = WannierNLQG.OrbitalMagnetizationParameters(
+            fermi_energies = [0.1],
+            temperature = 0.0,
+            input_semantics = :defined_finite_model,
+        ),
+    )
+    values=rt.resolved_numerical_values(task, :orbital_magnetization)
+    @test !haskey(values, :gap_tolerance)
+    @test values.denominator_regularization==0.001
+    other=WannierNLQG.TaskSpec(
+        id = "optical",
+        quantity = "linear_optical_response",
+        physics = WannierNLQG.LinearOpticalResponseParameters(
+            photon_energies = [0.1],
+            fermi_energy = 0.1,
+            temperature = 300.0,
+            relaxation = WannierNLQG.SeparateRelaxation(
+                gamma_intra_ev = 0.04,
+                gamma_inter_ev = 0.05,
+            ),
+        ),
+        numerics = WannierNLQG.Numerics(gap_tolerance = 0.01),
+    )
+    @test rt.resolved_numerical_values(other, :linear_optical_response).gap_tolerance==0.01
+end
+end # module OrbitalRegularizationTests

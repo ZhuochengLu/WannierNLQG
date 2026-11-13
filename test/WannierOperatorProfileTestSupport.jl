@@ -1,3 +1,4 @@
+include(joinpath(@__DIR__, "ProfileNativeLinkTestSupport.jl"))
 using HDF5
 using JSON3
 using LinearAlgebra
@@ -25,53 +26,11 @@ function _profile_modified_config(config; keywords...)
     )
 end
 
-function _profile_scientific_digest_for_schema(manifest, schema_version)
-    extension, _ = PROFILE_IO._load_operator_bundle_extension!()
-    return Base.invokelatest(
-        extension._scientific_content_digest,
-        manifest.profile,
-        manifest.inventory,
-        manifest.lattice,
-        manifest.r_vectors,
-        manifest.degeneracies,
-        getfield.(manifest.entries, :component_sha256),
-        manifest.paired_tb_sha256,
-        schema_version,
-        manifest.geometry_content_sha256,
-        manifest.authoritative_hamiltonian,
-        manifest.authoritative_hamiltonian_sha256,
-        manifest.energy_shift_qualification,
-        manifest.maximum_energy_shift_audit_reference_ev,
-        manifest.rms_energy_shift_audit_reference_ev,
-        manifest.target_energy_shift_audit_status,
-        manifest.symmetrized_parent_energy_shift_audit_status,
-        manifest.residual_gate_phase,
-        manifest.raw_preflight_diagnostic_status,
-        manifest.native_difference_qualification,
-        manifest.native_difference_audit_status,
-        manifest.qualification_scope,
-        manifest.target_anchor,
-        manifest.target_complement_completion,
-        manifest.target_complement_max_element_ev,
-        manifest.auxiliary_parent_qualification,
-        manifest.symmetrized_target_subspace_status,
-        manifest.auxiliary_parent_audit_status,
-        manifest.target_scope_production_eligible,
-        manifest.parent_audit_policy,
-        manifest.outer_mask_sha256,
-        manifest.frozen_mask_sha256,
-        manifest.target_subspace_contract_sha256,
-        manifest.target_leakage_semantics,
-        manifest.target_leakage_formula_sha256,
-        manifest.target_leakage_threshold,
-        manifest.derivative_overlap_source,
-        manifest.derivative_overlap_completeness,
-        something(manifest.derivative_overlap_source_sha256, "not_provided"),
-        manifest.derivative_overlap_algorithm_version,
-        manifest.target_authority,
-        manifest.operator_qualification_sha256,
-        manifest.band_frame_contract_sha256,
-    )
+# Only tag an unsupported wire version; do not synthesize a legacy content seal.
+function _profile_publication_for_unsupported_schema(manifest, schema_version)
+    schema_version!=PROFILE_IO.OPERATOR_BUNDLE_SCHEMA_VERSION ||
+        throw(ArgumentError("fixture requires an unsupported wire tag"))
+    return manifest.publication_identity
 end
 
 function _profile_geometry(model)
@@ -86,7 +45,7 @@ function _profile_geometry(model)
     return Dict(
         "wannier_center_policy" => "keep_input",
         "real_space_replica_policy" => "input",
-        "production_eligible" => true,
+        "production_eligible" => false,
         "minimum_distance_materialized" => false,
         "mp_grid" => [2, 1, 1],
         "wannier_center_tolerance" => 1.0e-8,
@@ -97,8 +56,212 @@ function _profile_geometry(model)
         "final_wannier_centers_cartesian" => centers,
         "final_wannier_centers_fractional" => centers * inv(model.lattice),
         "center_alignment_lattice_shifts" => zeros(Int, size(centers)),
-        "replica_mapping_sha256" => repeat("0", 64),
+        "replica_mapping_reference" => "INPUT_SUPPORT_UNMATERIALIZED",
     )
+end
+
+# Real native fixture: two orthogonal spinors at each of two k points.
+# It is not a claim that an arbitrary legacy MMN/Gram oracle came from this source.
+isdefined(@__MODULE__, :QEPAWMatrixElementsTestSupport) ||
+    include(joinpath(@__DIR__, "QEPAWMatrixElementsTestSupport.jl"))
+
+# Finite plane-wave basis for the existing 2-bohr cubic cell and 20-Ha cutoff.
+# At kx=1/2 the inversion closure is Gx -> -Gx-1, not Gx -> -Gx.
+# Use a kinetic-energy sphere about k, rather than appending only the last
+# missing vector or using the same G box at every k point.
+function _profile_plane_wave_packet(kpoint::Int)
+    kpoint in 1:2 || throw(ArgumentError("profile fixture has exactly two k points"))
+    k = [(kpoint - 1) / 2, 0.0, 0.0]
+    cutoff_radius_squared = 40.0 / pi^2
+    vectors = [
+        Int[x, y, z] for x in -3:3 for y in -3:3 for
+        z in -3:3 if sum(abs2, [x + k[1], y, z]) <= cutoff_radius_squared
+    ]
+    g = hcat(vectors...)
+    # The two equal-species sites are exchanged by {-I | 2*center}.
+    # This phase makes the spatial packet an inversion eigenvector, so the
+    # two spin states form an exactly closed native band subspace.
+    center = [0.37, 0.61, 0.83] ./ 4.0
+    packet =
+        ComplexF64[exp(-sum(abs2, k .+ v) / 2) * cis(-2pi * dot(k .+ v, center)) for v in vectors]
+    packet ./= norm(packet)
+    return (; k, g, packet, center, cutoff_radius_squared)
+end
+
+function _profile_native_source(directory, energies_ev)
+    size(energies_ev) == (2, 2) || error("profile native fixture requires two bands/two k points")
+    fixture = QEPAWMatrixElementsTestSupport.write_qe_paw_fixture(
+        directory;
+        spinor = true,
+        num_kpoints = 2,
+    )
+    xml = joinpath(fixture.save_directory, "data-file-schema.xml")
+    text = replace(read(xml, String), "<nbnd>1</nbnd>" => "<nbnd>2</nbnd>")
+    # A cubic one-site structure has axis-permuting symmetries that do not
+    # preserve this deliberately anisotropic 2x1x1 mesh. Two generic sites keep
+    # the source's actual detected symmetry compatible with that mesh; do not
+    # bypass the production k-point action or supply fabricated sewing matrices.
+    text = replace(
+        text,
+        "<atom name=\"X\">0.0 0.0 0.0</atom>" => "<atom name=\"X\">0.0 0.0 0.0</atom><atom name=\"X\">0.37 0.61 0.83</atom>",
+    )
+    row = Ref(0)
+    text = replace(
+        text,
+        r"<eigenvalues>[^<]*</eigenvalues>" =>
+            _ -> begin
+                row[] += 1
+                values = energies_ev[:, row[]] ./ WannierNLQG.SymmetryFoundation.HARTREE_TO_EV
+                "<eigenvalues>" * join(values, " ") * "</eigenvalues>"
+            end,
+    )
+    write(xml, text)
+    for kpoint in 1:2
+        data = _profile_plane_wave_packet(kpoint)
+        ng = size(data.g, 2)
+        HDF5.h5open(joinpath(fixture.save_directory, "wfc$(kpoint).hdf5"), "r+") do h
+            for (name, value) in (("nbnd", 2), ("igwx", ng))
+                HDF5.delete_attribute(h, name)
+                HDF5.attributes(h)[name] = value
+            end
+            HDF5.delete_object(h, "MillerIndices")
+            h["MillerIndices"] = data.g
+            attributes = HDF5.attributes(h["MillerIndices"])
+            for axis in 1:3
+                attributes["bg$(axis)"] = Matrix{Float64}(I, 3, 3)[axis, :]
+            end
+            packed = zeros(Float64, 4ng, 2)
+            packed[1:2:2ng, 1] .= real.(data.packet)
+            packed[2:2:2ng, 1] .= imag.(data.packet)
+            packed[(2ng + 1):2:4ng, 2] .= real.(data.packet)
+            packed[(2ng + 2):2:4ng, 2] .= imag.(data.packet)
+            HDF5.delete_object(h, "evc")
+            h["evc"] = packed
+        end
+    end
+    source = WannierNLQG.SymmetryFoundation.QuantumEspressoWavefunctionSource(
+        fixture.save_directory;
+        band_range = 1:2,
+        include_time_reversal = false,
+    )
+    return (; source, fixture)
+end
+
+# Preserve the solver's actual selection, including explicit frozen states and
+# degeneracy closure. The finite bounds below are only this fixture's existing
+# preparation witness; they must select exactly the same states.
+function _profile_preparation_scope(config, eig)
+    parent = first(PROFILE_W._load_wannierization_extension!())
+    scope = Base.invokelatest(parent.OperatorExport._operator_qualification_scope, config, eig)
+    witness = _profile_modified_config(
+        config;
+        outer_min_ev = -2.0,
+        outer_max_ev = 2.0,
+        frozen_min_ev = -2.0,
+        frozen_max_ev = 0.0,
+        frozen_states = Tuple{Int, Int}[],
+    )
+    expected = Base.invokelatest(parent.OperatorExport._operator_qualification_scope, witness, eig)
+    scope.outer_mask == expected.outer_mask && scope.frozen_mask == expected.frozen_mask ||
+        throw(ArgumentError("PROFILE_PREPARATION_SELECTION_MISMATCH"))
+    return scope
+end
+
+# Actual two-band/two-k target data for the symmetrized protocol fixture.
+# This full-target case does not qualify a nonempty parent complement.
+function _profile_symmetrized_gauge_config(source, eig, output_hdf5; target_config = nothing)
+    size(eig.data) == (2, 2) || error("symmetrized profile fixture requires two bands/two k points")
+    all(isfinite, eig.data) || error("symmetrized profile fixture requires finite energies")
+    outer_min_ev, outer_max_ev = -2.0, 2.0
+    frozen_min_ev, frozen_max_ev = -2.0, 0.0
+    outer = (outer_min_ev .<= eig.data) .& (eig.data .<= outer_max_ev)
+    frozen = (frozen_min_ev .<= eig.data) .& (eig.data .<= frozen_max_ev)
+    # The fixture is intentionally closed in its full two-band space; reject
+    # changes that would silently turn it into a different target/complement case.
+    all(outer) ||
+        error("symmetrized profile fixture energies must lie in its declared outer window")
+    scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
+        outer,
+        frozen;
+        content_authentication = false,
+    )
+    target_config === nothing || (scope = _profile_preparation_scope(target_config, eig))
+    thresholds = PROFILE_W.PAWGaugeThresholds()
+    authority = PROFILE_W.SymmetrizedDFTHamiltonian()
+    contract = PROFILE_W.TargetSubspaceQualificationContract(
+        scope;
+        outer_min_ev,
+        outer_max_ev,
+        frozen_min_ev,
+        frozen_max_ev,
+        num_wannier = target_config === nothing ? 2 : target_config.input.num_wannier,
+        scoped_paw_thresholds = thresholds,
+        target_complement_maximum_element_ev = authority.completion.target_complement_max_element_ev,
+    )
+    gauge = PROFILE_W.StarCovariantPAWGauge(
+        buffer_policy = PROFILE_W.ClosureDrivenBandBuffer(max_extra_bands = 0),
+        thresholds = thresholds,
+        block_partition_policy = PROFILE_W.HamiltonianWeightedPAWBlockPartition(),
+        hamiltonian_correction = PROFILE_W.FarBandCovarianceCorrection(
+            qualification_mode = :standard,
+        ),
+    )
+    return PROFILE_W.SymmetryCovariantWavefunctionPreparationConfig(
+        source = source,
+        authoritative_hamiltonian = authority,
+        target_subspace_contract = contract,
+        construction_policy = :standard,
+        wavefunction_gauge_backend = gauge,
+        target_band_count = 2,
+        output_hdf5 = output_hdf5,
+    )
+end
+
+function _profile_write_gauge(directory, route, eig; target_config = nothing)
+    route == :ordinary && return nothing
+    native = _profile_native_source(joinpath(directory, "gauge-source"), eig.data)
+    if route == :symmetrized_sawf
+        config = _profile_symmetrized_gauge_config(
+            native.source,
+            eig,
+            joinpath(directory, "$(route)-gauge.h5");
+            target_config,
+        )
+        result = PROFILE_W.prepare_symmetry_covariant_wavefunctions(config)
+        result.output_hdf5 === nothing &&
+            error("current symmetrized gauge preparation produced no HDF5: $(result.root_cause)")
+        return something(result.output_hdf5)
+    end
+    authority = PROFILE_W.NativeDFTHamiltonian()
+    thresholds = PROFILE_W.PAWGaugeThresholds()
+    target =
+        target_config === nothing ? nothing :
+        PROFILE_W.TargetSubspaceQualificationContract(
+            _profile_preparation_scope(target_config, eig);
+            outer_min_ev = -2.0,
+            outer_max_ev = 2.0,
+            frozen_min_ev = -2.0,
+            frozen_max_ev = 0.0,
+            num_wannier = target_config.input.num_wannier,
+            scoped_paw_thresholds = thresholds,
+        )
+    result = PROFILE_W.prepare_symmetry_covariant_wavefunctions(
+        PROFILE_W.SymmetryCovariantWavefunctionPreparationConfig(
+            source = native.source,
+            authoritative_hamiltonian = authority,
+            target_subspace_contract = target,
+            construction_policy = :standard,
+            target_band_count = 2,
+            wavefunction_gauge_backend = PROFILE_W.StarCovariantPAWGauge(
+                buffer_policy = PROFILE_W.ClosureDrivenBandBuffer(max_extra_bands = 0),
+            ),
+            output_hdf5 = joinpath(directory, "$(route)-gauge.h5"),
+        ),
+    )
+    # A failed preparation is an error; never manufacture a successful capsule.
+    result.output_hdf5 === nothing &&
+        error("current toy gauge preparation produced no HDF5: $(result.root_cause)")
+    return something(result.output_hdf5)
 end
 
 function _profile_gauge_contract(
@@ -106,298 +269,159 @@ function _profile_gauge_contract(
     route,
     num_bands,
     num_kpoints;
-    artifact_sha256 = nothing,
+    artifact_path = nothing,
+    source = nothing,
 )
     paw = parent_extension.PAWMatrixElements
-    support = parent_extension.WannierizationInternalSupport
-    operator_export = parent_extension.OperatorExport
-    if route == :ordinary
+    route == :ordinary &&
         return Base.invokelatest(paw._identity_band_frame_contract, num_bands, num_kpoints)
-    end
-    artifact_sha256 === nothing && error("SAWF focused contract requires an artifact digest")
-    rotations = zeros(ComplexF64, num_bands, num_bands, num_kpoints)
-    phase_offset = route == :native_sawf ? 0.17 : 0.31
-    for kpoint in 1:num_kpoints, band in 1:num_bands
-        rotations[band, band, kpoint] = cis(phase_offset * (band + kpoint))
-    end
-    transform_sha256 = Base.invokelatest(operator_export._authoritative_array_sha256, rotations)
-    target_band_gauge =
-        route == :native_sawf ? support.SAWF_COMPLETED_NATIVE_DFT_BAND_GAUGE :
-        support.SYMMETRIZED_DFT_BAND_GAUGE
-    contract_sha256 = bytes2hex(
-        SHA.sha256(
-            codeunits(
-                join(
-                    (
-                        support.NATIVE_DFT_BAND_GAUGE,
-                        target_band_gauge,
-                        transform_sha256,
-                        String(something(artifact_sha256)),
-                    ),
-                    '\0',
-                ),
-            ),
-        ),
-    )
+    artifact_path === nothing && error("SAWF fixture requires an actual gauge HDF5")
+    authority =
+        route == :symmetrized_sawf ? PROFILE_W.SymmetrizedDFTHamiltonian() :
+        PROFILE_W.NativeDFTHamiltonian()
     return Base.invokelatest(
-        support.BandFrameTransformContract,
-        support.NATIVE_DFT_BAND_GAUGE,
-        target_band_gauge,
-        rotations,
-        transform_sha256,
-        contract_sha256,
-        String(something(artifact_sha256)),
-        "focused_identity_metric",
-        0.0,
-        1.0e-8,
-        0.0,
-        1.0e-8,
-        0.0,
-        1.0,
-        1.0,
-        "WannierNLQG.band_frame_transform_contract",
-        "1.0",
-        "PASS",
-        false,
+        paw._generation_band_gauge_contract,
+        source,
+        authority,
+        artifact_path,
+        num_bands,
+        num_kpoints;
+        construction_policy = :standard,
     )
 end
 
-function _profile_symmetry_plan(route, num_wannier)
+function _profile_symmetry_plan(route, num_wannier; source, centers_fractional, spinors, parent)
     route == :ordinary && return nothing
-    identity = WannierNLQG.SymmetryFoundation.SymmetryOperation(
-        Matrix{Int}(I, 3, 3),
-        zeros(3),
-        Matrix{Float64}(I, 3, 3),
-        false,
-    )
-    if route == :native_sawf
-        return WannierNLQG.SymmetryFoundation.WannierSymmetryPlan(
-            [identity],
-            reshape(Matrix{ComplexF64}(I, num_wannier, num_wannier), num_wannier, num_wannier, 1),
-            zeros(Int, 3, num_wannier, 1),
-        )
-    end
-    inversion = WannierNLQG.SymmetryFoundation.SymmetryOperation(
-        -Matrix{Int}(I, 3, 3),
-        zeros(3),
-        -Matrix{Float64}(I, 3, 3),
-        false,
-    )
-    operations = [identity, inversion]
-    representations = zeros(ComplexF64, num_wannier, num_wannier, 2)
-    representations[:, :, 1] .= Matrix{ComplexF64}(I, num_wannier, num_wannier)
-    representations[:, :, 2] .=
-        Diagonal(ComplexF64[isodd(index) ? -1 : 1 for index in 1:num_wannier])
-    return WannierNLQG.SymmetryFoundation.WannierSymmetryPlan(
-        operations,
-        representations,
-        zeros(Int, 3, num_wannier, 2),
-    )
+    size(centers_fractional, 2) == num_wannier || error("profile center count mismatch")
+    return profile_source_symmetry_plan(source, centers_fractional, spinors, parent)
 end
 
-function _profile_write_inputs(directory, mmn, authority, gauge_contract, parent_extension)
-    paw = parent_extension.PAWMatrixElements
-    support = parent_extension.WannierizationInternalSupport
-    mmn_file = joinpath(directory, "fixture.mmn")
-    PROFILE_IO.write_wannier_mmn(mmn_file, mmn)
-    spn_data = zeros(ComplexF64, 2, 2, 3, 2)
-    pauli = (ComplexF64[0 1; 1 0], ComplexF64[0 -im; im 0], ComplexF64[1 0; 0 -1])
-    for kpoint in 1:2, axis in 1:3
-        spn_data[:, :, axis, kpoint] .= pauli[axis]
-    end
+function _profile_write_inputs(
+    directory,
+    mmn,
+    authority,
+    gauge_contract,
+    parent_extension;
+    gauge_hdf5 = nothing,
+    eig = nothing,
+    target_config,
+)
+    energies =
+        eig === nothing ? hcat([real.(diag(authority.matrices_ev[:, :, k])) for k in 1:2]...) :
+        eig.data
+    links = profile_native_link_inputs(
+        directory,
+        mmn,
+        PROFILE_IO.WannierEIG(2, 2, energies),
+        gauge_contract,
+        parent_extension;
+        gauge_hdf5,
+    )
+    native = (; source = links.operator_source)
+    mmn = links.target_mmn
+    mmn_file = links.solver_file
+    oracle_mmn_file = links.oracle_file
+    topology = links.topology
+    eig_file = joinpath(directory, "fixture.eig")
+    PROFILE_IO.write_wannier_eig(eig_file, PROFILE_IO.WannierEIG(2, 2, energies))
     spn_file = joinpath(directory, "fixture.spn")
-    PROFILE_IO.write_wannier_spn(spn_file, PROFILE_IO.WannierSPN(2, 2, spn_data))
-    spn_provenance = joinpath(directory, "fixture.spn.provenance.json")
-    write(spn_provenance, "{\"fixture\":\"normalized-schema-1.2-attestation\"}")
-    spn_sha256 = bytes2hex(SHA.sha256(read(spn_file)))
-    spn_provenance_sha256 = bytes2hex(SHA.sha256(read(spn_provenance)))
-    source_hashes = Dict("SOURCE_WAVEFUNCTIONS" => repeat("a", 64), "TOPOLOGY" => repeat("b", 64))
-    common_hashes = merge(
-        source_hashes,
-        Dict(
-            "BAND_FRAME_TRANSFORM" => gauge_contract.transform_sha256,
-            "BAND_FRAME_CONTRACT" => gauge_contract.contract_sha256,
-        ),
+    spn_provenance = spn_file * ".json"
+    spn = PROFILE_W.generate_qe_paw_spn(
+        native.source,
+        topology;
+        output_spn_file = spn_file,
+        provenance_json = spn_provenance,
+        max_cached_wavefunction_kpoints = 2,
     )
-    gauge_contract.gauge_artifact_sha256 === nothing ||
-        (common_hashes["WAVEFUNCTION_GAUGE_HDF5"] = something(gauge_contract.gauge_artifact_sha256))
-    native_spn_contract = Base.invokelatest(paw._identity_band_frame_contract, 2, 2)
-    spn_attestation = (
-        schema = "WannierNLQG.qe_paw_spn",
-        schema_version = "1.2",
-        source_code = :synthetic,
-        passed = true,
-        status = "PASS",
-        physical_metric = "PAW/USPP generalized overlap",
-        spinor = true,
-        num_bands = 2,
-        num_kpts = 2,
-        source_band_gauge = gauge_contract.source_band_gauge,
-        target_band_gauge = gauge_contract.source_band_gauge,
-        transform_sha256 = native_spn_contract.transform_sha256,
-        contract_sha256 = native_spn_contract.contract_sha256,
-        frame_contract = Dict{String, Any}(
-            String(key) => value for
-            (key, value) in pairs(support.band_frame_contract_summary(native_spn_contract))
-        ),
-        rotation_sha256 = native_spn_contract.transform_sha256,
-        input_sha256 = source_hashes,
-        diagnostics = String[],
-        spn_sha256,
-        provenance_sha256 = spn_provenance_sha256,
-        qualification_target_band_gauge = gauge_contract.target_band_gauge,
-        qualification_transform_sha256 = gauge_contract.transform_sha256,
-        qualification_contract_sha256 = gauge_contract.contract_sha256,
-        qualification_rotation_sha256 = gauge_contract.transform_sha256,
-        gauge_artifact_sha256 = something(gauge_contract.gauge_artifact_sha256, "NOT_APPLICABLE"),
+    spn.passed || error("actual profile SPN generation failed")
+    # Bind the same realized outer/frozen scope consumed by assembly. Do not use
+    # constructor defaults (full_parent) for a scoped solver contract.
+    scoped_config = _profile_modified_config(
+        target_config;
+        source = links.source,
+        mmn_file = mmn_file,
+        eig_file = eig_file,
+        wavefunction_gauge_hdf5 = gauge_hdf5,
+        authoritative_hamiltonian = authority.authority == "native_dft" ?
+                                    PROFILE_W.NativeDFTHamiltonian() :
+                                    PROFILE_W.SymmetrizedDFTHamiltonian(),
     )
-    spn_target = similar(spn_data)
-    for kpoint in 1:2, axis in 1:3
-        spn_target[:, :, axis, kpoint] .= Base.invokelatest(
-            paw._rotate_generation_single,
-            @view(spn_data[:, :, axis, kpoint]),
-            gauge_contract,
-            kpoint,
-        )
-    end
-    header_uiu = PROFILE_IO.WannierUIUHeader("profile", 2, 2, mmn.num_neighbors)
-    header_uhu = PROFILE_IO.WannierUHUHeader("profile", 2, 2, mmn.num_neighbors)
-    header_siu = PROFILE_IO.WannierSIUHeader("profile", 2, 2, mmn.num_neighbors)
-    header_shu = PROFILE_IO.WannierSHUHeader("profile", 2, 2, mmn.num_neighbors)
+    target = Base.invokelatest(
+        parent_extension.OperatorExport._wannier_operator_target_contract,
+        scoped_config,
+        PROFILE_IO.WannierEIG(2, 2, energies),
+        mmn,
+        oracle_mmn_file,
+        mmn_file,
+    )
+    backend =
+        authority.authority == "native_dft" ? PROFILE_W.NativeDFTHamiltonian() :
+        PROFILE_W.SymmetrizedDFTHamiltonian()
     uiu_file = joinpath(directory, "fixture.uIu")
-    uhu_file = joinpath(directory, "fixture.uHu")
-    siu_file = joinpath(directory, "fixture.sIu")
-    shu_file = joinpath(directory, "fixture.sHu")
-    PROFILE_IO.write_wannier_uiu(uiu_file, header_uiu) do _...
-        Matrix{ComplexF64}(I, 2, 2)
-    end
-    PROFILE_IO.write_wannier_uhu(uhu_file, header_uhu) do kpoint, _...
-        Matrix{ComplexF64}(@view authority.matrices_ev[:, :, kpoint])
-    end
-    PROFILE_IO.write_wannier_siu(siu_file, header_siu) do kpoint, _neighbor, axis, _
-        Matrix{ComplexF64}(@view spn_target[:, :, axis, kpoint])
-    end
-    PROFILE_IO.write_wannier_shu(shu_file, header_shu) do kpoint, _neighbor, axis, _
-        (@view spn_target[:, :, axis, kpoint]) * (@view authority.matrices_ev[:, :, kpoint])
-    end
     uiu_provenance = uiu_file * ".json"
-    open(uiu_provenance, "w") do io
-        JSON3.write(
-            io,
-            Dict(
-                "schema" => "WannierNLQG.wannier_uiu_generation",
-                "schema_version" => "1.2",
-                "algorithm_version" => "focused-profile-fixture",
-                "passed" => true,
-                "physical_overlap_available" => true,
-                "output_sha256" => bytes2hex(SHA.sha256(read(uiu_file))),
-                "source_band_gauge" => gauge_contract.source_band_gauge,
-                "target_band_gauge" => gauge_contract.target_band_gauge,
-                "band_frame_transform_sha256" => gauge_contract.transform_sha256,
-                "band_frame_contract_sha256" => gauge_contract.contract_sha256,
-                "band_frame_contract" => support.band_frame_contract_summary(gauge_contract),
-                "band_gauge_rotation_sha256" => gauge_contract.transform_sha256,
-                "band_gauge_rotation_semantics" => "legacy_alias_of_band_frame_transform_sha256",
-                "gauge_artifact_sha256" =>
-                    something(gauge_contract.gauge_artifact_sha256, "NOT_APPLICABLE"),
-                "input_sha256" => merge(
-                    common_hashes,
-                    Dict("ORACLE_MMN" => bytes2hex(SHA.sha256(read(mmn_file)))),
-                ),
-            ),
-        )
-    end
+    uiu = PROFILE_W.generate_wannier_uiu(
+        PROFILE_W.WannierUIUGenerationConfig(
+            source = native.source,
+            topology_file = topology,
+            output_file = uiu_file,
+            provenance_json = uiu_provenance,
+            oracle_mmn_file = oracle_mmn_file,
+            target_contract = target,
+            authoritative_hamiltonian = backend,
+            wavefunction_gauge_hdf5 = gauge_hdf5,
+            max_cached_wavefunction_kpoints = 2,
+        ),
+    )
+    uiu.passed || error("actual profile uIu generation/MMN oracle failed")
+    files = Dict{Symbol, String}()
     sidecars = Dict{Symbol, String}()
-    for (operator, path) in ((:uHu, uhu_file), (:sIu, siu_file), (:sHu, shu_file))
+    for operator in (:uHu, :sIu, :sHu)
+        path = joinpath(directory, "fixture.$operator")
         sidecar = path * ".json"
-        open(sidecar, "w") do io
-            JSON3.write(
-                io,
-                Dict(
-                    "schema" => "WannierNLQG.wannier_hamiltonian_operator_generation",
-                    "schema_version" => "1.3",
-                    "algorithm_version" => "focused-profile-fixture",
-                    "operator" => String(operator),
-                    "status" => "PASS",
-                    "passed" => true,
-                    "qualification_stage" => "SOURCE_OPERATOR_GENERATION",
-                    "source_generation_qualified" => true,
-                    "artifact_published" => true,
-                    "closure_residual" => 0.0,
-                    "diagnostic_reference" => 1.0e-6,
-                    "diagnostic_reference_status" =>
-                        operator == :uHu ? "ABOVE_REFERENCE" : "WITHIN_REFERENCE",
-                    "diagnostic_reference_policy" => "AUDIT_ONLY_NOT_AN_ACTUAL_OPERATOR_ERROR_BOUND",
-                    "actual_operator_error_status" => "NOT_AVAILABLE_WITHOUT_COMPLEMENT_HAMILTONIAN_OR_NBANDS_REFERENCE",
-                    "nbands_convergence_status" => "NOT_ESTABLISHED",
-                    "outer_probability_leakage_audit_maximum" => operator == :uHu ? 2.0e-6 : 0.0,
-                    "outer_probability_leakage_audit_status" =>
-                        operator == :uHu ? "ABOVE_REFERENCE" : "WITHIN_REFERENCE",
-                    "frozen_probability_leakage_audit_maximum" => 0.0,
-                    "frozen_probability_leakage_audit_status" => "WITHIN_REFERENCE",
-                    "parent_mutual_containment_audit_maximum" => 0.0,
-                    "parent_mutual_containment_audit_status" => "WITHIN_REFERENCE",
-                    "parent_overlap_contraction_excess_audit_maximum" => 0.0,
-                    "outer_overlap_contraction_excess_audit_maximum" => 0.0,
-                    "frozen_overlap_contraction_excess_audit_maximum" => 0.0,
-                    "galerkin_block_audit" => Dict(
-                        "status" => "RECORDED",
-                        "block_count" => 1,
-                        "norm_kind" => "frobenius",
-                        "maximum_frobenius_norm" => 1.0,
-                        "maximum_frobenius_product_bound" => 1.0,
-                        "minimum_block_to_bound_ratio" => 1.0,
-                        "maximum_frobenius_product_bound_slack_fraction" => 0.0,
-                        "exchange_hermiticity_max_absolute_ev" =>
-                            operator == :uHu ? 0.0 : nothing,
-                        "exchange_hermiticity_tolerance_ev" =>
-                            operator == :uHu ? 1.0e-12 : nothing,
-                        "exchange_hermiticity_status" =>
-                            operator == :uHu ? "PASS" : "NOT_APPLICABLE",
-                    ),
-                    "galerkin_cancellation_audit" => Dict(
-                        "status" => "NOT_AVAILABLE_BEFORE_FINAL_WANNIER_PROFILE_ASSEMBLY",
-                        "policy" => "DEFER_TO_FINITE_DIFFERENCE_PROFILE_CONTRACTION",
-                        "semantics" => "requires_absolute_sum_and_final_combination_in_the_actual_wannier_finite_difference_stencil",
-                        "absolute_sum" => nothing,
-                        "final_combination" => nothing,
-                        "cancellation_ratio" => nothing,
-                    ),
-                    "output_sha256" => bytes2hex(SHA.sha256(read(path))),
-                    "authoritative_hamiltonian" => authority.authority,
-                    "authoritative_hamiltonian_digest" => authority.digest,
-                    "source_band_gauge" => gauge_contract.source_band_gauge,
-                    "target_band_gauge" => gauge_contract.target_band_gauge,
-                    "band_frame_transform_sha256" => gauge_contract.transform_sha256,
-                    "band_frame_contract_sha256" => gauge_contract.contract_sha256,
-                    "band_frame_contract" => support.band_frame_contract_summary(gauge_contract),
-                    "band_gauge_rotation_sha256" => gauge_contract.transform_sha256,
-                    "band_gauge_rotation_semantics" => "legacy_alias_of_band_frame_transform_sha256",
-                    "gauge_artifact_sha256" =>
-                        something(gauge_contract.gauge_artifact_sha256, "NOT_APPLICABLE"),
-                    "spn_provenance_sha256" =>
-                        operator in (:sIu, :sHu) ? spn_provenance_sha256 : "NOT_APPLICABLE",
-                    "input_sha256" => merge(
-                        common_hashes,
-                        Dict("EIG" => first(values(authority.input_sha256))),
-                        operator in (:sIu, :sHu) ?
-                        Dict("SPN" => spn_sha256, "SPN_PROVENANCE" => spn_provenance_sha256) :
-                        Dict{String, String}(),
-                    ),
-                ),
-            )
-        end
+        config = PROFILE_W.WannierHamiltonianOperatorGenerationConfig(
+            source = native.source,
+            topology_file = topology,
+            eig_file = eig_file,
+            authoritative_mmn_file = oracle_mmn_file,
+            target_contract = target,
+            output_file = path,
+            provenance_json = sidecar,
+            spn_file = operator == :uHu ? nothing : spn_file,
+            spn_provenance_file = operator == :uHu ? nothing : spn_provenance,
+            authoritative_hamiltonian = backend,
+            wavefunction_gauge_hdf5 = gauge_hdf5,
+            max_cached_wavefunction_kpoints = 2,
+        )
+        result =
+            getproperty(PROFILE_W, Symbol("generate_wannier_", lowercase(String(operator))))(config)
+        result.artifact_published || error("actual profile $operator generation failed")
+        files[operator] = path;
         sidecars[operator] = sidecar
     end
+    spn_attestation = Base.invokelatest(
+        parent_extension.PAWMatrixElements.read_and_validate_spn_provenance,
+        spn_provenance,
+        spn_file;
+        expected_num_bands = mmn.num_bands,
+        expected_num_kpoints = mmn.num_kpts,
+        target_authority = backend,
+        gauge_definition = gauge_contract.gauge_definition,
+        band_frame_transform_definition = gauge_contract.transform_definition,
+        band_frame_contract_definition = gauge_contract.contract_definition,
+    )
     return (;
         mmn_file,
+        oracle_mmn_file,
+        target_mmn = mmn,
+        target_contract = target,
+        links,
         spn_file,
         spn_provenance,
         spn_attestation,
         uiu_file,
-        uhu_file,
-        siu_file,
-        shu_file,
+        uhu_file = files[:uHu],
+        siu_file = files[:sIu],
+        shu_file = files[:sHu],
         uiu_provenance,
         uhu_provenance = sidecars[:uHu],
         siu_provenance = sidecars[:sIu],
@@ -405,30 +429,40 @@ function _profile_write_inputs(directory, mmn, authority, gauge_contract, parent
     )
 end
 
-function _profile_eligibility(authority)
-    metadata = Dict{String, Any}(
+function _profile_model_semantics(authority)
+    # Source/frame/scope information must come from actual assembly provenance.
+    # Authority alone cannot establish target masks, convergence or production use.
+    return Dict{String, Any}(
         "authoritative_hamiltonian" => authority.authority,
-        "authoritative_hamiltonian_sha256" => authority.digest,
+        "authoritative_hamiltonian_definition" => authority.definition,
     )
-    authority.authority == "native_dft" && return metadata
-    merge!(
-        metadata,
-        Dict(
-            "energy_shift_qualification" => "audit_only",
-            "residual_gate_phase" => "post_symmetrization",
-            "native_difference_qualification" => "audit_only",
-            "qualification_scope" => "target_subspace",
-            "parent_audit_policy" => "audit_only",
-            "target_authority" => "outer_window",
-            "disentanglement_outer_mask_sha256" => repeat("1", 64),
-            "disentanglement_frozen_mask_sha256" => repeat("2", 64),
-            "target_subspace_contract_sha256" => repeat("3", 64),
-            "target_leakage_semantics" => PROFILE_W.TB_TARGET_LEAKAGE_WEIGHT_SEMANTICS,
-            "target_leakage_formula_sha256" => PROFILE_W.TB_TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256,
-            "target_leakage_threshold" => 1.0e-6,
-            "target_anchor" => "completed_symmetrized_target",
-            "auxiliary_parent_qualification" => "audit_only",
-        ),
+end
+
+# Build the actual consumed-input snapshot for a synthetic accepted-state test.
+# This records values; it does not grant source/physics/convergence qualification.
+function _profile_snapshot_result(parent, result, fixture, config)
+    solver = parent.SolverCheckpoint
+    definition = Base.invokelatest(
+        solver._restart_input_definition,
+        config,
+        fixture.representation,
+        fixture.mmn,
+        nothing,
+        solver.effective_wannierization_algorithms(config, fixture.representation),
+        solver.symmetry_constraints_applied(config, fixture.representation),
     )
-    return metadata
+    sources = Base.invokelatest(parent.OperatorExport.operator_profile_source_files, config)
+    definition.auxiliary_sources["operator_profile_sources"] =
+        PROFILE_IO.scientific_source_collection_definition(sources)
+    old = something(result.restart_state)
+    state = PROFILE_W.WannierizationRestartState(
+        (
+            name === :input_definition ? definition : getfield(old, name) for
+            name in fieldnames(PROFILE_W.WannierizationRestartState)
+        )...,
+    )
+    return parent.WannierizationInternalSupport.updated_wannierization_result(
+        result;
+        restart_state = state,
+    )
 end

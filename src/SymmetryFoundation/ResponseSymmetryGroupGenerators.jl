@@ -51,8 +51,14 @@ function _standard_operation_symbol(rotation::Matrix{Int}, antiunitary::Bool)
     return antiunitary ? symbol * "'" : symbol
 end
 
-"""Construct exact identity, inverse, and multiplication tables for a finite group."""
-function _finite_group_tables(operations; seitz::Bool, tolerance::Float64)
+"""Return ordered operations, the multiplication table, and the identity index.
+
+Records carry fractional rotation/translation, antiunitary parity and a source
+index. Seitz translations are compared modulo lattice translations at the
+caller's validated Float64 tolerance. Input order is not mutated; invalid closure
+or a nonunique identity is rejected. No generator report or band sewing is built.
+"""
+function finite_symmetry_group_tables(operations; seitz::Bool, tolerance::Float64)
     ordered = sort(collect(operations); by = _group_operation_key)
     isempty(ordered) && error("cannot generate an empty symmetry group")
     n = length(ordered)
@@ -127,7 +133,8 @@ deterministic reverse redundancy pass; it does not claim globally minimum size.
 function response_group_generators(operations; seitz::Bool, tolerance::Real = 1.0e-8)
     tol = Float64(tolerance)
     isfinite(tol) && tol > 0 || throw(ArgumentError("group tolerance must be positive"))
-    ordered, product_table, identity = _finite_group_tables(operations; seitz, tolerance = tol)
+    ordered, product_table, identity =
+        finite_symmetry_group_tables(operations; seitz, tolerance = tol)
     generators = Int[]
     generated = _generated_group_indices(generators, product_table, identity)
     for candidate in eachindex(ordered)

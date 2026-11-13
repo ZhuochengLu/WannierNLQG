@@ -29,17 +29,19 @@ end
 function _validate_constraint_kpoint_subgroup(mapping::Matrix{Int})
     ng, nk = size(mapping)
     ng > 0 && nk > 0 || throw(ArgumentError("constraint subgroup must be nonempty"))
-    row_digest(values) = bytes2hex(SHA.sha256(reinterpret(UInt8, Int64.(collect(values)))))
-    rows = Dict{String, Int}()
+    # Each key privately owns its ordered action and is never mutated. Use
+    # ordinary Dict equality rather than a digest; large meshes must not create
+    # enormous specialized tuple types merely to validate subgroup membership.
+    rows = Dict{Vector{Int}, Int}()
     for operation in 1:ng
-        key = row_digest(@view mapping[operation, :])
+        key = collect(@view mapping[operation, :])
         haskey(rows, key) &&
             throw(ArgumentError("CONSTRAINT_SCOPE_SUBGROUP_INVALID: duplicate k-point action"))
         rows[key] = operation
     end
     for left in 1:ng, right in 1:ng
         composition = [mapping[left, mapping[right, kpoint]] for kpoint in 1:nk]
-        haskey(rows, row_digest(composition)) || throw(
+        haskey(rows, composition) || throw(
             ArgumentError(
                 "CONSTRAINT_SCOPE_SUBGROUP_INVALID: selected k-point actions are not closed",
             ),
@@ -90,17 +92,14 @@ Derive the full, unitary-only, or identity operation representation.
 
 The `:full` branch returns the exact parent object so the default numerical
 trajectory remains elementwise unchanged.  The other branches are immutable
-diagnostic representations with independent operation and k-star digests.
+diagnostic representations with explicit operation selections and k-star maps.
 """
 function _constraint_scoped_representation(parent::BandRepresentation, scope::Symbol)
     scope in (:full, :unitary, :identity) ||
         throw(ArgumentError("unsupported constraint operation scope $(scope)"))
-    parent_sha256 = _representation_static_sha256(parent)
     if scope == :full
         return (
             representation = parent,
-            parent_sha256,
-            subgroup_sha256 = parent_sha256,
             parent_operation_indices = collect(eachindex(parent.operations)),
         )
     end
@@ -115,32 +114,13 @@ function _constraint_scoped_representation(parent::BandRepresentation, scope::Sy
     mapping = Matrix{Int}(parent.kpoint_map[selected, :])
     _validate_constraint_kpoint_subgroup(mapping)
     irreducible, full_to_irreducible, full_to_operation = _constraint_subgroup_orbits(mapping)
-    operation_keys = [_canonical_operation_key(parent.operations[index]) for index in selected]
-    subgroup_contract = join(
-        [
-            "parent=$(parent_sha256)",
-            "scope=$(scope)",
-            "indices=$(join(selected, ','))",
-            operation_keys...,
-        ],
-        '\n',
-    )
-    subgroup_sha256 = bytes2hex(SHA.sha256(codeunits(subgroup_contract)))
     conventions = merge(
         parent.conventions,
         Dict(
             "constraint_operation_scope" => String(scope),
-            "constraint_operation_parent_representation_sha256" => parent_sha256,
-            "constraint_operation_subgroup_sha256" => subgroup_sha256,
+            "content_authentication" => "NOT_PERFORMED",
             "constraint_operation_parent_indices" => join(selected, ','),
             "qualification" => "diagnostic_symmetry_ablation",
-        ),
-    )
-    input_sha256 = merge(
-        parent.input_sha256,
-        Dict(
-            "CONSTRAINT_OPERATION_PARENT_REPRESENTATION" => parent_sha256,
-            "CONSTRAINT_OPERATION_SUBGROUP" => subgroup_sha256,
         ),
     )
     representation = BandRepresentation(
@@ -161,25 +141,22 @@ function _constraint_scoped_representation(parent::BandRepresentation, scope::Sy
         full_to_irreducible,
         full_to_operation;
         conventions,
-        input_sha256,
+        input_sha256 = Dict{String, String}(),
+        input_definitions = parent.input_definitions,
     )
-    return (representation, parent_sha256, subgroup_sha256, parent_operation_indices = selected)
+    return (representation, parent_operation_indices = selected)
 end
 
 """Retarget a full-BZ fixed-subspace capsule to the effective subgroup IBZ."""
 function _constraint_scoped_fixed_subspace(
     fixed::WannierizationFixedSubspace,
     scoped_representation::BandRepresentation,
-    parent_sha256::AbstractString,
-    subgroup_sha256::AbstractString,
     scope::Symbol,
 )
     scope == :full && return fixed
     hashes = merge(
         fixed.source_sha256,
         Dict(
-            "constraint_operation_parent_representation_sha256" => String(parent_sha256),
-            "constraint_operation_subgroup_sha256" => String(subgroup_sha256),
             "constraint_operation_scope" => String(scope),
             "constraint_operation_scope_history_reset" => "LEGACY_CONSTRAINT_SCOPE_RESET",
         ),
@@ -192,4 +169,69 @@ function _constraint_scoped_fixed_subspace(
         source_sha256 = hashes,
         invariant_residuals = fixed.invariant_residuals,
     )
+end
+
+"""Select a true Seitz subgroup before native sewing and k-star construction.
+
+Parent classified inventory remains provenance only. We do not pretend that a
+selected subgroup inherits the parent's MSG/Hall/UNI classification. Existing
+persistence represents unavailable subgroup classification explicitly.
+"""
+function _select_detected_operations(
+    parent::SymmetryFoundation.MagneticSymmetryInventory,
+    requested,
+)
+    requested === nothing && return (
+        operations = parent.operations,
+        inventory = parent,
+        conventions = Dict{String, String}(),
+    )
+    indices = collect(requested)
+    !isempty(indices) &&
+    all(i -> i isa Integer && !(i isa Bool) && 1 <= i <= length(parent.operations), indices) ||
+        throw(ArgumentError("operation selection indices are outside the detected inventory"))
+    length(unique(indices)) == length(indices) ||
+        throw(ArgumentError("duplicate operation selection"))
+    operations = parent.operations[indices]
+    # Validate translations modulo the lattice and antiunitary composition.
+    # The helper's sorted return is deliberately not used: user order is bound.
+    try
+        records = [
+            (
+                rotation_fractional = op.rotation_fractional,
+                translation_fractional = op.translation_fractional,
+                antiunitary = op.antiunitary,
+                source_index = indices[i],
+            ) for (i, op) in enumerate(operations)
+        ]
+        SymmetryFoundation.finite_symmetry_group_tables(
+            records;
+            seitz = true,
+            tolerance = parent.symmetry_tolerance,
+        )
+    catch error
+        error isa ErrorException || rethrow()
+        throw(
+            ArgumentError(
+                "selected operations do not form a Seitz subgroup: $(sprint(showerror,error))",
+            ),
+        )
+    end
+    keys = _canonical_operation_key.(parent.operations)
+    conventions = Dict(
+        "operation_selection_contract" => "detected-seitz-subgroup/2",
+        "operation_selection_parent_indices" => join(indices, ','),
+        "content_authentication" => "NOT_PERFORMED",
+        "operation_selection_parent_operations" => repr(keys),
+        "operation_selection_operations" => repr(keys[indices]),
+        "operation_selection_parent_msg_type" => string(parent.msg_type),
+        "operation_selection_parent_uni_number" => string(parent.uni_number),
+        "operation_selection_parent_hall_number" => string(parent.hall_number),
+        "operation_selection_parent_count" => string(length(parent.operations)),
+        "operation_selection_unitary_count" => string(count(op -> !op.antiunitary, operations)),
+        "operation_selection_antiunitary_count" =>
+            string(count(op -> op.antiunitary, operations)),
+        "operation_selection_classification" => "unclassified_subgroup",
+    )
+    return (operations, inventory = nothing, conventions)
 end

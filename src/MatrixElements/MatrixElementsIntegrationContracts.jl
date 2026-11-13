@@ -6,25 +6,55 @@ absent from the tuple remain private to `MatrixElements` and must not be used by
 production code in another module.
 """
 const MATRIX_ELEMENTS_INTEGRATION_API = (
-    :REAL_SPACE_REPLICA_MAP_DIGEST_SCHEME,
+    :intrinsic_hall_position_between_occupations,
+    :regularized_orbital_geometry,
+    :validate_orthogonal_band_derivatives,
+    # Worker-local analytic geometry contracts consumed by Responses/Runtime.
+    # Recurrence arrays retain their prepared generation and gauge-dependent
+    # meaning; only response contractions expose physical observables.
+    :OrthogonalGeometryJets,
+    :OrthogonalBandDerivativeWorkspace,
+    :geometry_derivative_order,
+    :geometry_hamiltonian_derivative_source,
+    :geometry_position_derivative_source,
+    :geometry_isolated_spectrum_minimum_gap,
+    :geometry_position_channel,
+    :orthogonal_band_first_derivative!,
+    :orthogonal_band_second_derivative!,
+    :orthogonal_band_third_derivative!,
+    :orthogonal_geometry_storage_bytes,
+    :prepare_orthogonal_band_derivatives!,
+    :prepare_orthogonal_geometry_jets!,
+    :wannier_pair_wigner_seitz_plan_from_images,
+    # Existing cross-layer response fast paths; worker-private scratch and complete groups.
+    :ActiveVelocityInsertionWorkspace,
+    :supports_active_velocity_insertions,
+    :active_velocity_gradient,
+    :active_velocity_insertions!,
+    :active_velocity_paired_insertions!,
+    :spectral_subspace_blocks,
+    :mark_wilson_response_groups!,
+    :REAL_SPACE_REPLICA_MAP_REFERENCE_SCHEMA,
     :MatrixElementDirectionRequirements,
     :RealSpaceReplicaMap,
-    :SerializedWannier90ReplicaValues,
+    :RawReplicaValues,
     :SharedInterpolationCache,
     :apply_wannier_center_phases!,
     :begin_shared_interpolation!,
     :compute_spin_velocity_real_space_streaming_with_transform,
     :compute_spin_velocity_real_space_with_transform,
     :compute_loop_overlap!,
+    :compute_optical_momentum_overlap!,
     :derive_axial_and_symmetric_derivative_overlaps,
     :hermitianize_real_space_pairs,
     :input_real_space_replica_map,
-    :input_real_space_replica_mapping_sha256,
+    :input_real_space_support_definition,
     :matrix_element_axis_required,
     :matrix_element_pair_required,
     :materialize_replica_component,
     :materialize_replica_components,
     :reuse_completed_mixed_blocks!,
+    :has_mixed_fourier_provider,
     :minimum_distance_real_space_replica_map,
     :mp_residue_grid,
     :projector_block_velocity,
@@ -32,6 +62,7 @@ const MATRIX_ELEMENTS_INTEGRATION_API = (
     :real_space_replica_map_from_wsvec,
     :require_matrix_element_axes,
     :require_matrix_element_pairs,
+    :extend_matrix_element_directions,
     :shared_interpolation_stats,
     :transform_pair_wigner_seitz_spin_q_to_r,
     :unit_degeneracy_roundtrip_error,
@@ -62,6 +93,41 @@ function require_matrix_element_pairs(
     pairs,
 )
     return _require_pairs(requirements, kind, pairs)
+end
+
+"""
+Extend a direction contract without adding channels or changing ordered-pair meaning.
+
+Only the storage/preparation dimension grows; callers retain their response axes.
+Spatial pairs are re-encoded with the new stride, while spin pairs retain stride three.
+"""
+function extend_matrix_element_directions(
+    requirements::MatrixElementDirectionRequirements,
+    spatial_dimension::Integer,
+)
+    old_dimension = requirements.spatial_dimension
+    dimension = Int(spatial_dimension)
+    old_dimension <= dimension <= 3 ||
+        throw(ArgumentError("Direction extension must stay in old_dimension:3."))
+    dimension == old_dimension && return requirements
+    result = MatrixElementDirectionRequirements(dimension)
+    spatial_pairs =
+        (HAMILTONIAN_SECOND_DERIVATIVES, INTERNAL_CONNECTION_DERIVATIVES, WANNIER_CURVATURE)
+    spin_pairs = (SPIN_TIMES_POSITION, SPIN_TIMES_HAMILTONIAN_POSITION, SPIN_VELOCITY)
+    old_plan = (; direction_requirements = requirements, spatial_dimension = old_dimension)
+    for kind in _ALL_MATRIX_ELEMENT_KINDS
+        if kind in spatial_pairs || kind in spin_pairs
+            second_limit = kind in spin_pairs ? 3 : old_dimension
+            for first in 1:old_dimension, second in 1:second_limit
+                _pair_required(old_plan, kind, first, second) || continue
+                result = _require_pair(result, kind, first, second)
+            end
+        else
+            # One-axis masks (and the unused spectrum/energy masks) have no stride.
+            result = _replace_direction_mask(result, kind, _direction_mask(requirements, kind))
+        end
+    end
+    return result
 end
 
 """Report whether a compiled plan requires one Cartesian axis."""
@@ -167,7 +233,7 @@ Construct all spin-family real-space operators through an explicitly prepared
 pair-dependent transform while preserving the established in-memory pipeline.
 """
 function compute_spin_velocity_real_space_with_transform(
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     spn::WannierSPN,
     chk::WannierCHK,
     eig::WannierEIG,
@@ -195,7 +261,7 @@ Construct all spin-family real-space operators through an explicitly prepared
 pair-dependent transform while preserving the established streaming pipeline.
 """
 function compute_spin_velocity_real_space_streaming_with_transform(
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     spn::WannierSPN,
     chk::WannierCHK,
     eig::WannierEIG,
@@ -229,7 +295,7 @@ function materialize_replica_components(
     components::Dict{K, V},
     input_degeneracies::Vector{Int},
     map::RealSpaceReplicaMap,
-    normalization::Union{SerializedWannier90ReplicaValues, PredividedReplicaValues},
+    normalization::Union{RawReplicaValues, PredividedReplicaValues},
 ) where {K, V}
     target_indices = _replica_target_indices(map)
     prepared = Dict{K, Dict{NTuple{2, Int8}, AbstractArray{ComplexF64, 3}}}()
@@ -258,4 +324,40 @@ the normal miss path. This changes storage retention, never interpolation values
 """
 function reuse_completed_mixed_blocks!(workspace::MatrixElementWorkspace)
     return _reuse_completed_mixed_blocks!(workspace)
+end
+
+"""
+Build an export-local pair transform from already computed nearest-image lists.
+
+The caller must supply lists produced for this same CHK, centers, tolerance and
+search size in the current export invocation. Ownership of the lists transfers
+to the returned plan: the caller must not mutate or retain them for another call.
+This port preserves target-support validation and does not cache across exports.
+The independent public constructor continues to compute its own geometry.
+"""
+function wannier_pair_wigner_seitz_plan_from_images(
+    chk::WannierCHK,
+    target_r_vectors::Matrix{Int};
+    wigner_seitz_tolerance::Float64,
+    search_size::Int,
+    precomputed_images::Dict{Tuple{Int, Int, NTuple{3, Int}}, Vector{NTuple{3, Int}}},
+    wannier_centers_fractional::Union{Nothing, Matrix{Float64}} = nothing,
+)
+    return _wannier_pair_wigner_seitz_transform_plan(
+        chk,
+        target_r_vectors;
+        wigner_seitz_tolerance,
+        search_size,
+        precomputed_images,
+        wannier_centers_fractional,
+    )
+end
+
+"""Reject an unprepared or stale worker-local orthogonal derivative state.
+
+This sibling-response port preserves the owner's original preparation/generation
+checks. It does not prepare, copy, or change any derivative matrices.
+"""
+@inline function validate_orthogonal_band_derivatives(workspace::OrthogonalBandDerivativeWorkspace)
+    return _check_orthogonal_band_derivatives(workspace)
 end

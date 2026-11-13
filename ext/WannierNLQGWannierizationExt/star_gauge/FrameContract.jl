@@ -1,9 +1,9 @@
 const STAR_COVARIANT_PAW_GAUGE_SCHEMA = "WannierNLQG.star_covariant_paw_gauge"
 # Public wire numbering retains the full physical-frame replay contract of 1.11.
-const STAR_COVARIANT_PAW_GAUGE_SCHEMA_VERSION = "1.0"
+const STAR_COVARIANT_PAW_GAUGE_SCHEMA_VERSION = "2.0"
 const STAR_COVARIANT_PAW_GAUGE_CURRENT_CONTRACT_VERSION = "1.11"
 const STAR_COVARIANT_PAW_GAUGE_SUPPORTED_SCHEMA_VERSIONS =
-    ("1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "1.10", "1.11")
+    ("1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "1.10", "1.11", "2.0")
 
 # Distinguish the public 1.0 wire format from historical 1.0 using existing frame
 # contract markers. Any modern marker selects the full contract before validation;
@@ -16,8 +16,11 @@ function _star_gauge_contract_version(
 )
     schema_version in STAR_COVARIANT_PAW_GAUGE_SUPPORTED_SCHEMA_VERSIONS ||
         throw(ArgumentError("unsupported wavefunction-gauge HDF5 schema version"))
+    schema_version == "2.0" && return STAR_COVARIANT_PAW_GAUGE_CURRENT_CONTRACT_VERSION
     schema_version == "1.0" || return String(schema_version)
     modern_intent =
+        haskey(root_attributes, "ordinary_calculation_policy_version") ||
+        haskey(source_metadata, "ordinary_calculation_policy_version") ||
         any(key -> startswith(String(key), "band_frame_"), keys(root_attributes)) ||
         any(key -> startswith(String(key), "band_frame_"), keys(source_metadata)) ||
         any(key -> startswith(String(key), "BAND_FRAME_"), keys(input_sha256))
@@ -29,6 +32,8 @@ function _validate_star_wire_contract(schema_version, contract_version)
     schema_version in STAR_COVARIANT_PAW_GAUGE_SUPPORTED_SCHEMA_VERSIONS ||
         throw(ArgumentError("unsupported wavefunction-gauge HDF5 schema version"))
     valid =
+        schema_version == "2.0" ?
+        contract_version == STAR_COVARIANT_PAW_GAUGE_CURRENT_CONTRACT_VERSION :
         schema_version == "1.0" ?
         contract_version in ("1.0", STAR_COVARIANT_PAW_GAUGE_CURRENT_CONTRACT_VERSION) :
         contract_version == schema_version
@@ -110,6 +115,44 @@ function _audit_band_frame_transforms(
     )
 end
 
+"""Check literal target-array preservation without content authentication.
+
+The values are already present in the construction algorithm.  Compare their
+bytes directly, including signed zero, rather than allocating and hashing a
+concatenated byte stream.  A successful check records only that this comparison
+was performed; it does not authenticate a subsequently stored artifact.
+"""
+function _validate_target_anchor_values(energies, vectors, energies_after, vectors_after)
+    size(energies) == size(energies_after) && size(vectors) == size(vectors_after) ||
+        throw(ArgumentError("TARGET_ANCHOR_DIMENSION_MISMATCH"))
+    all(isfinite, energies) && all(isfinite, vectors) ||
+        throw(ArgumentError("TARGET_ANCHOR_NONFINITE"))
+    reinterpret(UInt8, vec(energies)) == reinterpret(UInt8, vec(energies_after)) &&
+    reinterpret(UInt8, vec(vectors)) == reinterpret(UInt8, vec(vectors_after)) ||
+        throw(ArgumentError("TARGET_ANCHOR_DRIFT_HOLD: frozen target arrays changed"))
+    return nothing
+end
+
+# Store only actual completed comparisons, not a digest or an authentication claim.
+function _write_target_anchor_checks(group, checks::Vector{Bool})
+    !isempty(checks) && all(checks) || throw(ArgumentError("TARGET_ANCHOR_CHECK_INCOMPLETE"))
+    group["target_anchor_checked_by_star"] = UInt8.(checks)
+    HDF5.attributes(group)["target_anchor_content_authentication"] = "NOT_PERFORMED"
+    return nothing
+end
+
+# Old digest-only anchor fields do not stand in for the new explicit comparison record.
+function _read_target_anchor_checks(group)
+    haskey(group, "target_anchor_checked_by_star") || return nothing
+    attributes = HDF5.attributes(group)
+    String(read(attributes["target_anchor_content_authentication"])) == "NOT_PERFORMED" ||
+        throw(ArgumentError("TARGET_ANCHOR_EXPLICIT_MIGRATION_REQUIRED"))
+    checks = read(group["target_anchor_checked_by_star"])
+    checks isa AbstractVector && !isempty(checks) && all(==(1), checks) ||
+        throw(ArgumentError("TARGET_ANCHOR_CHECK_INCOMPLETE"))
+    return Bool.(checks)
+end
+
 """Independent native-versus-symmetrized parent-Hamiltonian audit arrays."""
 struct _SymmetrizedDFTHamiltonianAuditPayload
     native_energies_ev::Matrix{Float64}
@@ -124,7 +167,7 @@ struct _SymmetrizedDFTHamiltonianAuditPayload
     native_to_symmetrized_band_assignment::Matrix{Int}
     target_energy_shifts_by_star_ev::Matrix{Float64}
     parent_energy_shifts_by_kpoint_ev::Matrix{Float64}
-    target_anchor_sha256_by_star::Union{Nothing, Vector{String}}
+    target_anchor_checked_by_star::Union{Nothing, Vector{Bool}}
     complement_bases::Union{Nothing, Array{ComplexF64, 3}}
     complement_rotations::Union{Nothing, Array{ComplexF64, 3}}
     target_complement_hamiltonians_ev::Union{Nothing, Array{ComplexF64, 3}}
@@ -195,7 +238,8 @@ function _star_payload_with_sealed_representatives(
         payload.native.spinor,
         points,
         payload.native.input_sha256,
-        payload.native.source_metadata,
+        payload.native.source_metadata;
+        source_definition = payload.native.source_definition,
     )
     return _StarCovariantPAWPayload(
         native,
@@ -304,9 +348,9 @@ function _star_source_replay_metadata(source::VASPWavefunctionSource)
     source.band_range === nothing &&
         throw(ArgumentError("PAW_GAUGE_SOURCE_REPLAY_REQUIRED: VASP replay requires a band range"))
     return Dict(
-        "source_replay_schema" => "1.0",
+        "source_replay_schema" => "2.0",
         "source_replay_kind" => "vasp",
-        "source_replay_path_policy" => "absolute_local_locator_hash_authority",
+        "source_replay_path_policy" => "absolute_local_locator_complete_source_values",
         "source_replay_poscar_file" => abspath(source.poscar_file),
         "source_replay_wavecar_file" => abspath(source.wavecar_file),
         "source_replay_potcar_file" => _star_replay_optional_path(source.potcar_file),
@@ -330,9 +374,9 @@ function _star_source_replay_metadata(source::QuantumEspressoWavefunctionSource)
     source.band_range === nothing &&
         throw(ArgumentError("PAW_GAUGE_SOURCE_REPLAY_REQUIRED: QE replay requires a band range"))
     return Dict(
-        "source_replay_schema" => "1.0",
+        "source_replay_schema" => "2.0",
         "source_replay_kind" => "qe",
-        "source_replay_path_policy" => "absolute_local_locator_hash_authority",
+        "source_replay_path_policy" => "absolute_local_locator_complete_source_values",
         "source_replay_save_directory" => abspath(source.save_directory),
         "source_replay_band_start" => string(first(something(source.band_range))),
         "source_replay_band_stop" => string(last(something(source.band_range))),
@@ -345,13 +389,13 @@ function _star_source_replay_metadata(source::QuantumEspressoWavefunctionSource)
     )
 end
 
-"""Hash the source replay descriptor while excluding its stored digest field."""
-function _star_source_replay_descriptor_sha256(metadata::AbstractDict{String, String})
+"""Describe the complete replay configuration, excluding its stored definition."""
+function _star_source_replay_descriptor_definition(metadata::AbstractDict{String, String})
     descriptor = Dict(
         key => value for (key, value) in metadata if
-        startswith(key, "source_replay_") && key != "source_replay_descriptor_sha256"
+        startswith(key, "source_replay_") && key != "source_replay_descriptor_definition"
     )
-    return _star_block_partition_policy_sha256(descriptor)
+    return _star_block_partition_policy_definition(descriptor)
 end
 
 """Parse a strict replay Boolean or reject tampered metadata."""
@@ -411,13 +455,15 @@ end
 
 """Validate replay metadata and reconstruct its full-cutoff VASP or QE source."""
 function _star_source_from_replay_metadata(metadata::Dict{String, String})
-    get(metadata, "source_replay_schema", "") == "1.0" ||
+    get(metadata, "source_replay_schema", "") == "2.0" ||
         throw(ArgumentError("PAW_GAUGE_SOURCE_REPLAY_REQUIRED: source descriptor is missing"))
-    get(metadata, "source_replay_path_policy", "") == "absolute_local_locator_hash_authority" ||
+    get(metadata, "source_replay_path_policy", "") ==
+    "absolute_local_locator_complete_source_values" ||
         throw(ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: unsupported source replay path policy"))
-    get(metadata, "source_replay_descriptor_sha256", "") ==
-    _star_source_replay_descriptor_sha256(metadata) ||
-        throw(ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: source replay descriptor digest differs"))
+    get(metadata, "source_replay_descriptor_definition", "") ==
+    _star_source_replay_descriptor_definition(metadata) || throw(
+        ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: source replay descriptor definition differs"),
+    )
     first_band = tryparse(Int, get(metadata, "source_replay_band_start", ""))
     last_band = tryparse(Int, get(metadata, "source_replay_band_stop", ""))
     first_band !== nothing && last_band !== nothing && 0 < first_band <= last_band ||
@@ -786,11 +832,19 @@ function _build_band_frame_transform_contract(
     transforms::Array{ComplexF64, 3};
     source_band_gauge::AbstractString,
     target_band_gauge::AbstractString,
-    source_identity_sha256::AbstractString,
     physical_isometry_tolerance::Float64,
     replay_tolerance::Float64,
     replay_evidence = nothing,
 )
+    raw_native.source_definition === nothing &&
+        throw(ArgumentError("BAND_FRAME_SOURCE_DEFINITION_REQUIRED"))
+    completed_native.source_definition === nothing &&
+        throw(ArgumentError("BAND_FRAME_SOURCE_DEFINITION_REQUIRED"))
+    IO.validate_scientific_input_definitions_equal(
+        raw_native.source_definition,
+        completed_native.source_definition;
+        mismatch_error = "BAND_FRAME_SOURCE_MISMATCH: actual source values differ",
+    )
     nkpoints = length(raw_native.kpoints)
     parent_count = size(first(raw_native.kpoints).coefficients, 1)
     target_count = size(first(completed_native.kpoints).coefficients, 1)
@@ -859,15 +913,12 @@ function _build_band_frame_transform_contract(
             "BAND_FRAME_REPLAY_FAILED: residual $(replay_maximum) exceeds $(replay_tolerance)",
         ),
     )
-    transform_sha256 = _star_array_sha256(transforms)
-    metric_sha256 = _star_metric_sha256(raw_metric)
+    transform_definition = band_frame_transform_definition(transforms)
     metric_kind = _band_frame_metric_kind(raw_metric)
-    contract_sha256 = band_frame_contract_sha256(
+    contract_definition = band_frame_contract_definition(
         source_band_gauge,
         target_band_gauge,
-        transform_sha256,
-        source_identity_sha256,
-        metric_sha256,
+        transform_definition,
         metric_kind,
         physical_isometry_maximum,
         physical_isometry_tolerance,
@@ -881,8 +932,8 @@ function _build_band_frame_transform_contract(
         String(source_band_gauge),
         String(target_band_gauge),
         copy(transforms),
-        transform_sha256,
-        contract_sha256,
+        transform_definition,
+        contract_definition,
         nothing,
         metric_kind,
         physical_isometry_maximum,
@@ -908,20 +959,19 @@ function _restore_band_frame_transform_contract(
     completed_native::NativeWavefunctionData,
     completed_metric::_AbstractStrictSewingMetric,
     transforms::Array{ComplexF64, 3},
-    gauge_artifact_sha256::String,
 )
     get(metadata, "band_frame_contract_schema", "") == BAND_FRAME_TRANSFORM_CONTRACT_SCHEMA ||
         throw(ArgumentError("BAND_FRAME_CONTRACT_SCHEMA_MISMATCH"))
     get(metadata, "band_frame_contract_schema_version", "") ==
     BAND_FRAME_TRANSFORM_CONTRACT_SCHEMA_VERSION ||
         throw(ArgumentError("BAND_FRAME_CONTRACT_VERSION_MISMATCH"))
-    get(metadata, "band_frame_contract_status", "") == "PASS" ||
-        throw(ArgumentError("BAND_FRAME_CONTRACT_NOT_QUALIFIED"))
-    transform_sha256 = _star_array_sha256(transforms)
-    transform_sha256 == get(metadata, "band_frame_transform_sha256", "") ||
-        throw(ArgumentError("BAND_FRAME_TRANSFORM_DIGEST_MISMATCH"))
-    get(input_sha256, "BAND_FRAME_TRANSFORM_SHA256", "") == transform_sha256 ||
-        throw(ArgumentError("BAND_FRAME_TRANSFORM_DIGEST_MISMATCH"))
+    get(metadata, "band_frame_content_authentication", "") == "NOT_PERFORMED" ||
+        throw(ArgumentError("BAND_FRAME_EXPLICIT_MIGRATION_REQUIRED"))
+    transform_definition = band_frame_transform_definition(transforms)
+    transform_definition == get(metadata, "band_frame_transform_definition", "") ||
+        throw(ArgumentError("BAND_FRAME_TRANSFORM_VALUES_MISMATCH"))
+    get(input_sha256, "BAND_FRAME_TRANSFORM_DEFINITION", "") == transform_definition ||
+        throw(ArgumentError("BAND_FRAME_TRANSFORM_VALUES_MISMATCH"))
     physical_maximum = _band_frame_float(metadata, "band_frame_physical_isometry_maximum")
     physical_tolerance = _band_frame_float(metadata, "band_frame_physical_isometry_tolerance")
     replay_maximum = _band_frame_float(metadata, "band_frame_replay_maximum")
@@ -929,15 +979,10 @@ function _restore_band_frame_transform_contract(
     euclidean_maximum = _band_frame_float(metadata, "band_frame_euclidean_nonunitarity_maximum")
     minimum_singular_value = _band_frame_float(metadata, "band_frame_minimum_singular_value")
     maximum_condition_number = _band_frame_float(metadata, "band_frame_maximum_condition_number")
-    source_identity_sha256 = get(metadata, "source_replay_resource_manifest_sha256", "")
-    isempty(source_identity_sha256) &&
-        throw(ArgumentError("BAND_FRAME_SOURCE_MISMATCH: source identity is not sealed"))
-    expected_contract_sha256 = band_frame_contract_sha256(
+    expected_contract_definition = band_frame_contract_definition(
         get(metadata, "band_frame_source_gauge", ""),
         get(metadata, "band_frame_target_gauge", ""),
-        transform_sha256,
-        source_identity_sha256,
-        _star_metric_sha256(raw_metric),
+        transform_definition,
         get(metadata, "band_frame_metric_kind", ""),
         physical_maximum,
         physical_tolerance,
@@ -947,11 +992,11 @@ function _restore_band_frame_transform_contract(
         minimum_singular_value,
         maximum_condition_number,
     )
-    recorded_contract_sha256 = get(metadata, "band_frame_contract_sha256", "")
-    expected_contract_sha256 == recorded_contract_sha256 ||
-        throw(ArgumentError("BAND_FRAME_CONTRACT_DIGEST_MISMATCH"))
-    get(input_sha256, "BAND_FRAME_CONTRACT_SHA256", "") == recorded_contract_sha256 ||
-        throw(ArgumentError("BAND_FRAME_CONTRACT_DIGEST_MISMATCH"))
+    recorded_contract_definition = get(metadata, "band_frame_contract_definition", "")
+    expected_contract_definition == recorded_contract_definition ||
+        throw(ArgumentError("BAND_FRAME_CONTRACT_VALUES_MISMATCH"))
+    get(input_sha256, "BAND_FRAME_CONTRACT_DEFINITION", "") == recorded_contract_definition ||
+        throw(ArgumentError("BAND_FRAME_CONTRACT_VALUES_MISMATCH"))
 
     live = _build_band_frame_transform_contract(
         raw_native,
@@ -961,7 +1006,6 @@ function _restore_band_frame_transform_contract(
         transforms;
         source_band_gauge = get(metadata, "band_frame_source_gauge", ""),
         target_band_gauge = get(metadata, "band_frame_target_gauge", ""),
-        source_identity_sha256,
         physical_isometry_tolerance = physical_tolerance,
         replay_tolerance,
     )
@@ -980,9 +1024,9 @@ function _restore_band_frame_transform_contract(
         get(metadata, "band_frame_source_gauge", ""),
         get(metadata, "band_frame_target_gauge", ""),
         copy(transforms),
-        transform_sha256,
-        recorded_contract_sha256,
-        gauge_artifact_sha256,
+        transform_definition,
+        recorded_contract_definition,
+        recorded_contract_definition,
         get(metadata, "band_frame_metric_kind", ""),
         physical_maximum,
         physical_tolerance,
@@ -1134,7 +1178,8 @@ function _star_lowdin_native(
                 "coefficient_normalization" =>
                     get(native.source_metadata, "coefficient_normalization", "raw"),
             ),
-        ),
+        );
+        source_definition = native.source_definition,
     )
     return (
         native = lowdin_native,

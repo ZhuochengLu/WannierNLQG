@@ -15,6 +15,9 @@ function write_second_harmonic(
     response = :both,
     digits = 12,
     slice = false,
+    integration_dimension = 3,
+    region = false,
+    domain_metadata = nothing,
 )
     paths = String[]
     for (quantity, name, unit) in ((1, "chi", "pm/V"), (2, "sigma", "A/V^2"))
@@ -24,12 +27,21 @@ function write_second_harmonic(
             label = join("xyz"[axis] for axis in component)
             path = joinpath(directory, "shg_$(name)_$(label).dat")
             open(path, "w") do stream
-                println(stream, "# SHG ", name, " units=", unit, " component=", label)
+                display_unit =
+                    region && integration_dimension < 3 ?
+                    string("(", unit, ")*m^", 3-integration_dimension) : unit
+                println(stream, "# SHG ", name, " units=", display_unit, " component=", label)
                 println(
                     stream,
+                    region ? "# response integrated over the declared Cartesian region" :
                     slice ? "# k-fractional density; full-BZ arithmetic mean recovers integral" :
                     "# full-BZ normalized susceptibility/conductivity",
                 )
+                if domain_metadata!==nothing
+                    for (key, value) in pairs(domain_metadata)
+                        println(stream, "# ", key, "=", value)
+                    end
+                end
                 labels = slice ? ["kx", "ky", "kz", "energy_eV"] : ["energy_eV"]
                 output != :terms && append!(labels, ["total_re", "total_im"])
                 output != :total &&

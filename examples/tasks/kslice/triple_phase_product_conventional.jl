@@ -34,7 +34,7 @@ function build_config(;
                 quantity = "TPPK",
                 method = "Conventional",
                 physics = GeometryParameters(),
-                numerics = GeometryNumerics(denominator_regularization = 0.001),
+                numerics = Numerics(denominator_regularization = 0.001),
                 observable = KSliceSelection(
                     component = TensorComponent(1, 2, 1),
                     bands = TripleGroups(first = [3], second = [4], third = [1, 2]),

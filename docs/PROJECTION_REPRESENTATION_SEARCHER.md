@@ -56,14 +56,13 @@ a complete search and a solution whose validation status is `PASSED`.
 
 ## Persistence and SAWF handoff
 
-HDF5 schema `WannierNLQG.projection_representation_search` version `1.0` is the
-authoritative readback artifact. Its canonical logical SHA excludes absolute
-paths, timestamps, and HDF5 container layout. Complete historical `2.1` files
-remain readable with their original canonical and mirror digests. The historical
-`1.0` layout and schema `2.0` remain unsupported. Reused wire `1.0` requires the
-complete canonical-payload, typed-mirror, and pinned-compatibility contract; a
-missing field or failed digest cannot fall back to legacy parsing. The internal
-`projection_search_hdf5_mirror/2.1` hash domain remains unchanged.
+HDF5 schema `WannierNLQG.projection_representation_search` version `4.0` is the
+authoritative readback artifact. It retains complete mathematical definitions,
+canonical values and a redundant typed view. The typed-view schema is
+`WannierNLQG.projection_search_hdf5_mirror/3.0`. Ordinary readers require the
+current format and validate mathematical/typed consistency. Content
+authentication is recorded as `NOT_PERFORMED`; stored digests or historical
+format labels do not grant compatibility or scientific qualification.
 The optional canonical JSON is a deterministic human-readable summary.
 
 `materialize_projection_basis` expands candidates in candidate-ID,

@@ -29,10 +29,8 @@ isdefined(Main, :BandPublicSchemaTestSupport) || include("BandPublicSchemaTestSu
             construction_policy = policy,
             return_diagnostics = true,
         )
-        exact_strict = build(native; policy = :strict)
+        @test_throws ArgumentError build(native; policy = :strict)
         exact_diagnostic = build(native)
-        @test exact_strict.representation.sewing_matrices ==
-              exact_diagnostic.representation.sewing_matrices
         @test all(
             row -> row["context"]["gate_result"] == "PASS",
             JSON3.read(exact_diagnostic.representation.conventions["paw_sewing_gate_records_json"]),
@@ -63,7 +61,7 @@ isdefined(Main, :BandPublicSchemaTestSupport) || include("BandPublicSchemaTestSu
             gates,
         )
         @test diagnostic.representation.sewing_matrices ==
-              exact_strict.representation.sewing_matrices
+              exact_diagnostic.representation.sewing_matrices
         output = joinpath(directory, "diagnostic-sewing.h5")
         prepared = BandPublicSchemaTestSupport.prepare_public_band_fixture(
             diagnostic.representation;
@@ -73,7 +71,7 @@ isdefined(Main, :BandPublicSchemaTestSupport) || include("BandPublicSchemaTestSu
             output_hdf5 = output,
         )
         @test count(d -> d.code==:PAW_SEWING_QUALITY_CHECK, prepared.diagnostics) == length(gates)
-        restored = foundation.read_band_representation_hdf5(output)
+        restored = foundation.read_band_representation_hdf5(output; content_authentication = false)
         @test restored.conventions["paw_sewing_gate_records_json"] ==
               diagnostic.representation.conventions["paw_sewing_gate_records_json"]
         @test any(

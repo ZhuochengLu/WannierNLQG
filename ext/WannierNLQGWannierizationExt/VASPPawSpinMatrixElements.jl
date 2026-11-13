@@ -1,13 +1,9 @@
 const VASP_PAW_SPN_SCHEMA = "wanniernlqg.vasp-paw-spn"
-const VASP_PAW_SPN_SCHEMA_VERSION = "1.1"
+const VASP_PAW_SPN_SCHEMA_VERSION = "2.0"
 
-"""Digest a qualification mask locally without widening the PAW component surface."""
-function _operator_qualification_mask_sha256(mask::AbstractMatrix{Bool})
-    buffer = IOBuffer()
-    write(buffer, reinterpret(UInt8, Int64.(collect(size(mask)))))
-    write(buffer, vec(UInt8.(mask)))
-    return bytes2hex(SHA.sha256(take!(buffer)))
-end
+"""Compare complete qualification-mask values using the shared definition contract."""
+_operator_qualification_mask_definition(mask::AbstractMatrix{Bool}) =
+    qualification_mask_definition(mask)
 
 """Compare SPN tensors on the ragged outer-window band block only."""
 function _vasp_paw_spn_scoped_parity(generated, oracle, outer_mask)
@@ -45,66 +41,6 @@ function _vasp_paw_spn_scoped_parity(generated, oracle, outer_mask)
         worst_index,
         finite,
     )
-end
-
-# Append one typed value to the logical HDF5 payload hash. This encoding is
-# independent of HDF5 object addresses and traversal order.
-function _vasp_paw_spn_digest_value!(io::Base.IO, value)
-    if value isa AbstractString
-        bytes = codeunits(String(value))
-        write(io, UInt8('S'), Int64(length(bytes)), bytes)
-    elseif value isa Bool
-        write(io, UInt8('B'), UInt8(value))
-    elseif value isa Integer
-        write(io, UInt8('I'))
-        _vasp_paw_spn_digest_value!(io, string(value))
-    elseif value isa AbstractFloat
-        write(io, UInt8('F'))
-        _vasp_paw_spn_digest_value!(io, bitstring(Float64(value)))
-    elseif value isa Complex
-        write(io, UInt8('C'))
-        _vasp_paw_spn_digest_value!(io, real(value))
-        _vasp_paw_spn_digest_value!(io, imag(value))
-    elseif value isa AbstractArray
-        write(io, UInt8('A'), Int64(ndims(value)))
-        for dimension in size(value)
-            write(io, Int64(dimension))
-        end
-        for entry in value
-            _vasp_paw_spn_digest_value!(io, entry)
-        end
-    else
-        throw(ArgumentError("unsupported VASP PAW-SPN provenance value type $(typeof(value))"))
-    end
-    return nothing
-end
-
-# Hash every persisted logical field except the digest attribute itself.
-function _vasp_paw_spn_digest_object!(io::Base.IO, object, path::String)
-    _vasp_paw_spn_digest_value!(io, path)
-    attributes = HDF5.attributes(object)
-    names = sort!(String.(collect(keys(attributes))))
-    for name in names
-        name == "payload_sha256" && continue
-        _vasp_paw_spn_digest_value!(io, "attribute/$(name)")
-        _vasp_paw_spn_digest_value!(io, read(attributes[name]))
-    end
-    if object isa HDF5.Dataset
-        _vasp_paw_spn_digest_value!(io, "dataset")
-        _vasp_paw_spn_digest_value!(io, read(object))
-    else
-        for name in sort!(String.(collect(keys(object))))
-            _vasp_paw_spn_digest_object!(io, object[name], "$(path)/$(name)")
-        end
-    end
-    return nothing
-end
-
-# Compute the sealed logical provenance digest from one open HDF5 root.
-function _vasp_paw_spn_provenance_payload_sha256(handle)
-    buffer = IOBuffer()
-    _vasp_paw_spn_digest_object!(buffer, handle, "")
-    return bytes2hex(SHA.sha256(take!(buffer)))
 end
 
 # Read the scalar identity-frame contract stored in native SPN provenance.
@@ -195,6 +131,7 @@ function _write_vasp_paw_spn_provenance(
     parent_generalized_norm_worst = (0, 0, 0),
     target_generalized_norm_worst = (0, 0, 0),
     target_contract_sha256::AbstractString = "LEGACY_NOT_RECORDED",
+    require_oracle::Bool = false,
 )
     HDF5.enable_complex_support()
     frame_contract = _generation_band_gauge_contract(
@@ -209,19 +146,16 @@ function _write_vasp_paw_spn_provenance(
             attributes = HDF5.attributes(handle)
             attributes["schema"] = VASP_PAW_SPN_SCHEMA
             attributes["schema_version"] = VASP_PAW_SPN_SCHEMA_VERSION
-            attributes["passed"] = result.passed
-            attributes["status"] = result.passed ? "PASS" : "FAIL"
+            attributes["require_oracle"] = require_oracle
             attributes["source_code"] = "vasp"
             attributes["quantity"] = "dimensionless Cartesian Pauli matrix elements"
             attributes["spin_components"] = "x,y,z"
             attributes["band_gauge"] = NATIVE_DFT_BAND_GAUGE
             attributes["source_band_gauge"] = NATIVE_DFT_BAND_GAUGE
             attributes["target_band_gauge"] = NATIVE_DFT_BAND_GAUGE
-            attributes["gauge_artifact_sha256"] = "NOT_APPLICABLE"
-            attributes["band_frame_transform_sha256"] = frame_contract.transform_sha256
-            attributes["band_frame_contract_sha256"] = frame_contract.contract_sha256
-            attributes["band_gauge_rotation_sha256"] = frame_contract.transform_sha256
-            attributes["band_gauge_rotation_semantics"] = "legacy_alias_of_band_frame_transform_sha256"
+            attributes["gauge_definition"] = "NOT_APPLICABLE"
+            attributes["band_frame_transform_definition"] = frame_contract.transform_definition
+            attributes["band_frame_contract_definition"] = frame_contract.contract_definition
             contract_group = HDF5.create_group(handle, "band_frame_contract")
             write_band_frame_contract_attributes!(contract_group, frame_contract)
             attributes["num_bands"] = result.spn.num_bands
@@ -298,8 +232,10 @@ function _write_vasp_paw_spn_provenance(
             if qualification_scope !== nothing
                 scope_group = HDF5.create_group(handle, "qualification_scope")
                 scope_attributes = HDF5.attributes(scope_group)
-                scope_attributes["outer_mask_sha256"] = qualification_scope.outer_mask_sha256
-                scope_attributes["frozen_mask_sha256"] = qualification_scope.frozen_mask_sha256
+                scope_attributes["outer_mask_definition"] =
+                    qualification_scope.outer_mask_definition
+                scope_attributes["frozen_mask_definition"] =
+                    qualification_scope.frozen_mask_definition
                 scope_attributes["diagnostic_status"] =
                     String(qualification_scope.diagnostic_status)
                 scope_group["outer_mask"] = UInt8.(qualification_scope.outer_mask)
@@ -315,9 +251,45 @@ function _write_vasp_paw_spn_provenance(
                 oracle_attributes["finite"] = parity.finite
                 oracle_group["worst_index"] = parity.worst_index
             end
-            attributes["payload_sha256"] = _vasp_paw_spn_provenance_payload_sha256(handle)
+            _write_spn_complete_references(handle, native, result.artifacts)
         end
     end
+end
+
+"""Read a fixed string with a byte buffer, avoiding a gigantic tuple datatype."""
+function _read_vasp_spn_attribute(attributes, key)
+    attribute = attributes[key]
+    datatype = HDF5.datatype(attribute)
+    try
+        width = HDF5.API.h5t_get_size(datatype.id)
+        if width > 1_000_000
+            size(attribute) == () &&
+            HDF5.API.h5t_get_class(datatype.id) == HDF5.API.H5T_STRING &&
+            !HDF5.API.h5t_is_variable_str(datatype.id) ||
+                throw(ArgumentError("VASP_PAW_SPN_LARGE_ATTRIBUTE_TYPE_INVALID"))
+            width <= 2_147_483_648 ||
+                throw(ArgumentError("VASP_PAW_SPN_ATTRIBUTE_EXCEEDS_RESOURCE_BOUND"))
+            bytes = Vector{UInt8}(undef, Int(width))
+            GC.@preserve bytes HDF5.API.h5a_read(attribute.id, datatype.id, pointer(bytes))
+            while !isempty(bytes) && bytes[end] == 0x00
+                pop!(bytes)
+            end
+            return String(bytes)
+        end
+        return read(attribute)
+    finally
+        close(datatype)
+        close(attribute)
+    end
+end
+
+"""Read HDF5 attributes without specializing a dictionary on every value type."""
+function _read_vasp_spn_attributes(attributes)
+    values = Dict{String, Any}()
+    for key in keys(attributes)
+        values[String(key)] = _read_vasp_spn_attribute(attributes, key)
+    end
+    return values
 end
 
 """Read and verify one sealed VASP PAW-SPN provenance artifact."""
@@ -329,85 +301,59 @@ function read_vasp_paw_spn_provenance(filename::AbstractString; verify_spn::Bool
         String(read(attributes["schema"])) == VASP_PAW_SPN_SCHEMA ||
             throw(ArgumentError("VASP_PAW_SPN_PROVENANCE_SCHEMA_MISMATCH"))
         schema_version = String(read(attributes["schema_version"]))
-        schema_version in ("1.0", "1.1", "1.2") ||
+        schema_version == VASP_PAW_SPN_SCHEMA_VERSION ||
             throw(ArgumentError("VASP_PAW_SPN_PROVENANCE_VERSION_MISMATCH"))
-        # A current frame-contract marker selects the complete contract once;
-        # an incomplete current file must never fall back to legacy qualification.
-        modern_intent =
-            haskey(handle, "band_frame_contract") ||
-            any(startswith(String(key), "band_frame_") for key in keys(attributes))
-        contract_version = modern_intent ? "1.2" : schema_version
-        if contract_version == "1.2"
-            required = (
-                "source_code",
-                "source_band_gauge",
-                "target_band_gauge",
-                "band_frame_transform_sha256",
-                "band_frame_contract_sha256",
-                "band_gauge_rotation_sha256",
-                "gauge_artifact_sha256",
-                "num_bands",
-                "num_kpoints",
-                "physical_metric",
-                "spinor",
-            )
-            all(haskey(attributes, key) for key in required) &&
-            haskey(handle, "band_frame_contract") ||
-                throw(ArgumentError("VASP_PAW_SPN_PROVENANCE_INCOMPLETE"))
-        end
-        stored = String(read(attributes["payload_sha256"]))
-        computed = _vasp_paw_spn_provenance_payload_sha256(handle)
-        stored == computed || throw(
-            ArgumentError(
-                "VASP_PAW_SPN_PROVENANCE_DIGEST_MISMATCH: stored logical payload digest differs",
-            ),
+        any(
+            haskey(attributes, key) for
+            key in ("band_gauge_rotation_sha256", "band_gauge_rotation_semantics")
+        ) && throw(ArgumentError("VASP_PAW_SPN_LEGACY_ROTATION_FIELDS_REQUIRE_MIGRATION"))
+        required = (
+            "source_code",
+            "source_band_gauge",
+            "target_band_gauge",
+            "band_frame_transform_definition",
+            "band_frame_contract_definition",
+            "gauge_definition",
+            "num_bands",
+            "num_kpoints",
+            "physical_metric",
+            "spinor",
         )
-        artifacts = read_string_dictionary(handle["artifacts"])
+        all(haskey(attributes, key) for key in required) && haskey(handle, "band_frame_contract") ||
+            throw(ArgumentError("VASP_PAW_SPN_PROVENANCE_INCOMPLETE"))
+        haskey(attributes, "require_oracle") && haskey(handle, "thresholds") ||
+            throw(ArgumentError("SPN_RESIDUAL_CONTRACT_MIGRATION_REQUIRED"))
+        values = _read_vasp_spn_attributes(attributes)
+        limits_attributes = HDF5.attributes(handle["thresholds"])
+        limits = _read_vasp_spn_attributes(limits_attributes)
+        oracle = if haskey(handle, "oracle_parity")
+            a = HDF5.attributes(handle["oracle_parity"])
+            _read_vasp_spn_attributes(a)
+        else
+            nothing
+        end
+        values["require_oracle"] isa Bool || throw(ArgumentError("SPN_ORACLE_POLICY_INVALID"))
+        _validate_spn_residual_data(values, limits, oracle, values["require_oracle"]; radial = true)
+        references=_read_spn_complete_references(handle)
+        artifacts=read_string_dictionary(handle["artifacts"])
         if verify_spn
-            haskey(artifacts, "spn") && haskey(artifacts, "spn_sha256") ||
-                throw(ArgumentError("VASP_PAW_SPN_PROVENANCE_ARTIFACT_MISSING"))
-            isfile(artifacts["spn"]) ||
-                throw(ArgumentError("VASP_PAW_SPN_OUTPUT_MISSING: $(artifacts["spn"])"))
-            sha256_file(artifacts["spn"]) == artifacts["spn_sha256"] ||
-                throw(ArgumentError("VASP_PAW_SPN_OUTPUT_DIGEST_MISMATCH"))
+            haskey(artifacts, "spn") || throw(ArgumentError("VASP_PAW_SPN_OUTPUT_MISSING"))
+            _validate_spn_reference(references, artifacts["spn"])
         end
         return (
             schema = VASP_PAW_SPN_SCHEMA,
             schema_version,
-            source_code = Symbol(
-                contract_version == "1.0" ? "vasp" : String(read(attributes["source_code"])),
-            ),
-            passed = Bool(read(attributes["passed"])),
-            source_band_gauge = contract_version == "1.0" ? NATIVE_DFT_BAND_GAUGE :
-                                String(read(attributes["source_band_gauge"])),
-            target_band_gauge = contract_version == "1.0" ? NATIVE_DFT_BAND_GAUGE :
-                                String(read(attributes["target_band_gauge"])),
-            transform_sha256 = contract_version == "1.2" ?
-                               String(read(attributes["band_frame_transform_sha256"])) :
-                               contract_version == "1.1" ?
-                               String(read(attributes["band_gauge_rotation_sha256"])) :
-                               "LEGACY_NOT_RECORDED",
-            contract_sha256 = contract_version == "1.2" ?
-                              String(read(attributes["band_frame_contract_sha256"])) :
-                              "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED",
-            frame_contract = contract_version == "1.2" ?
-                             _vasp_paw_spn_frame_contract(handle["band_frame_contract"]) :
-                             Dict{String, Any}(
-                "status" => "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED",
-            ),
-            rotation_sha256 = contract_version == "1.0" ? "LEGACY_NOT_RECORDED" :
-                              String(read(attributes["band_gauge_rotation_sha256"])),
-            gauge_artifact_sha256 = contract_version == "1.0" ? "LEGACY_NOT_RECORDED" :
-                                    String(read(attributes["gauge_artifact_sha256"])),
-            num_bands = contract_version == "1.0" ? read_wannier_spn(artifacts["spn"]).num_bands :
-                        Int(read(attributes["num_bands"])),
-            num_kpts = contract_version == "1.0" ? read_wannier_spn(artifacts["spn"]).num_kpts :
-                       Int(read(attributes["num_kpoints"])),
-            num_kpoints = contract_version == "1.0" ? read_wannier_spn(artifacts["spn"]).num_kpts :
-                          Int(read(attributes["num_kpoints"])),
-            physical_metric = contract_version == "1.0" ?
-                              "VASP PAW q=0 pseudo plus POTCAR augmentation" :
-                              String(read(attributes["physical_metric"])),
+            source_code = Symbol(String(read(attributes["source_code"]))),
+            source_band_gauge = String(read(attributes["source_band_gauge"])),
+            target_band_gauge = String(read(attributes["target_band_gauge"])),
+            transform_definition = String(values["band_frame_transform_definition"]),
+            contract_definition = String(values["band_frame_contract_definition"]),
+            frame_contract = _vasp_paw_spn_frame_contract(handle["band_frame_contract"]),
+            gauge_definition = String(read(attributes["gauge_definition"])),
+            num_bands = Int(read(attributes["num_bands"])),
+            num_kpts = Int(read(attributes["num_kpoints"])),
+            num_kpoints = Int(read(attributes["num_kpoints"])),
+            physical_metric = String(read(attributes["physical_metric"])),
             target_authority = haskey(attributes, "target_authority") ?
                                String(read(attributes["target_authority"])) : "full_parent",
             parent_audit_policy = haskey(attributes, "parent_audit_policy") ?
@@ -443,25 +389,25 @@ function read_vasp_paw_spn_provenance(filename::AbstractString; verify_spn::Bool
             operator_target_contract_sha256 = haskey(
                 attributes,
                 "operator_target_contract_sha256",
-            ) ? String(
-                read(attributes["operator_target_contract_sha256"]),
-            ) : "LEGACY_NOT_RECORDED",
+            ) ? String(values["operator_target_contract_sha256"]) : "LEGACY_NOT_RECORDED",
             qualification_scope = haskey(handle, "qualification_scope") ?
                                   (
                 outer_mask = BitMatrix(Bool.(read(handle["qualification_scope/outer_mask"]))),
                 frozen_mask = BitMatrix(Bool.(read(handle["qualification_scope/frozen_mask"]))),
-                outer_mask_sha256 = String(
-                    read(HDF5.attributes(handle["qualification_scope"])["outer_mask_sha256"]),
+                outer_mask_definition = String(
+                    read(HDF5.attributes(handle["qualification_scope"])["outer_mask_definition"]),
                 ),
-                frozen_mask_sha256 = String(
-                    read(HDF5.attributes(handle["qualification_scope"])["frozen_mask_sha256"]),
+                frozen_mask_definition = String(
+                    read(HDF5.attributes(handle["qualification_scope"])["frozen_mask_definition"]),
                 ),
             ) : nothing,
-            spinor = contract_version == "1.0" ? true : Bool(read(attributes["spinor"])),
+            spinor = Bool(read(attributes["spinor"])),
             kpoints_fractional = haskey(handle, "kpoints_fractional") ?
                                  Float64.(read(handle["kpoints_fractional"])) :
                                  zeros(Float64, 0, 3),
-            payload_sha256 = stored,
+            content_authentication = "NOT_PERFORMED",
+            source_reference = references.source_reference,
+            spn_reference = references.spn_reference,
             input_sha256 = read_string_dictionary(handle["input_sha256"]),
             artifacts = artifacts,
             diagnostics = String.(read(handle["diagnostics"])),
@@ -573,7 +519,9 @@ function _vasp_spn_blocks!(pseudo, augmentation, load, contract; execution = not
             size(pseudo, 4);
             contract,
             label = "vasp-spn",
-            fingerprint_index = string,
+            input_values = execution !== nothing && execution.resume ?
+                           input -> (input[1].coefficients, input[2], input[3]) : nothing,
+            reuse_completed_blocks = execution !== nothing && execution.resume,
         )
     end
     return nothing
@@ -595,6 +543,7 @@ function _generate_vasp_paw_spn_prepared(
     wavecar_header = read_vasp_wavecar_header(source.wavecar_file)
     native = read_vasp_wavefunctions(
         source;
+        content_authentication = false,
         point_provider = native_vasp_point_provider,
         normalize_coefficients = false,
     )
@@ -615,11 +564,11 @@ function _generate_vasp_paw_spn_prepared(
             throw(ArgumentError("VASP_PAW_SPN_PARENT_AUDIT_POLICY_MISMATCH"))
         size(qualification_scope.outer_mask) == (num_bands, length(native.kpoints)) ||
             throw(ArgumentError("VASP_PAW_SPN_SCOPE_DIMENSION_MISMATCH"))
-        _operator_qualification_mask_sha256(qualification_scope.outer_mask) ==
-        qualification_scope.outer_mask_sha256 ||
+        _operator_qualification_mask_definition(qualification_scope.outer_mask) ==
+        qualification_scope.outer_mask_definition ||
             throw(ArgumentError("VASP_PAW_SPN_OUTER_MASK_DIGEST_MISMATCH"))
-        _operator_qualification_mask_sha256(qualification_scope.frozen_mask) ==
-        qualification_scope.frozen_mask_sha256 ||
+        _operator_qualification_mask_definition(qualification_scope.frozen_mask) ==
+        qualification_scope.frozen_mask_definition ||
             throw(ArgumentError("VASP_PAW_SPN_FROZEN_MASK_DIGEST_MISMATCH"))
     end
     target_norm, parent_norm = if qualification_scope === nothing
@@ -632,17 +581,7 @@ function _generate_vasp_paw_spn_prepared(
     parent_generalized_norm_maximum, parent_generalized_norm_worst = parent_norm
     pseudo = zeros(ComplexF64, num_bands, num_bands, 3, length(native.kpoints))
     augmentation = zeros(ComplexF64, size(pseudo))
-    binding = bytes2hex(
-        SHA.sha256(
-            repr((
-                source,
-                sort!(collect(native.input_sha256); by = first),
-                sha256_file(something(source.potcar_file)),
-                sha256_file(@__FILE__),
-                thresholds,
-            )),
-        ),
-    )
+    binding = "vasp-spn-values-v1"
     context = get(task_local_storage(), :wannier_preparation_artifact_cache, nothing)
     selected =
         execution === nothing ? get(task_local_storage(), :wannier_preparation_execution, nothing) :
@@ -721,7 +660,7 @@ function _generate_vasp_paw_spn_prepared(
     ]
     input_sha256 = _vasp_operator_input_sha256(source, native)
     target_contract === nothing ||
-        (input_sha256["OPERATOR_TARGET_CONTRACT"] = target_contract.contract_sha256)
+        (input_sha256["OPERATOR_TARGET_CONTRACT"] = target_contract.definition)
     artifacts = Dict("provenance_hdf5" => abspath(provenance_hdf5))
     # Preserve the legacy diagnostic writer when no target contract exists.
     # A target-scoped request is fail-closed and never publishes an SPN payload.
@@ -733,14 +672,11 @@ function _generate_vasp_paw_spn_prepared(
             comment = "Generated by WannierNLQG VASP PAW-SPN",
         )
         artifacts["spn"] = abspath(output_path)
-        artifacts["spn_sha256"] = sha256_file(output_path)
     else
         isfile(output_spn_file) && rm(output_spn_file; force = true)
     end
-    oracle_spn_file === nothing || (
-        artifacts["oracle_spn"] = abspath(something(oracle_spn_file));
-        artifacts["oracle_spn_sha256"] = sha256_file(something(oracle_spn_file))
-    )
+    oracle_spn_file === nothing ||
+        (artifacts["oracle_spn"] = abspath(something(oracle_spn_file)); nothing)
     result = VASPPAWSPNResult(
         spn,
         oracle_parity,
@@ -762,11 +698,12 @@ function _generate_vasp_paw_spn_prepared(
         source,
         wavecar_header,
         qualification_scope = qualification_scope,
+        require_oracle = require_oracle,
         parent_generalized_norm_max_absolute = parent_generalized_norm_maximum,
         parent_generalized_norm_worst = parent_generalized_norm_worst,
         target_generalized_norm_worst = target_generalized_norm_worst,
         target_contract_sha256 = target_contract === nothing ? "LEGACY_NOT_RECORDED" :
-                                 target_contract.contract_sha256,
+                                 target_contract.definition,
     )
     return result
 end

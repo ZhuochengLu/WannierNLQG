@@ -1,15 +1,69 @@
+"""Collect only already measured analytic-jet domain data, including empty ranks."""
+function _analytic_geometry_execution_summary(workspaces, cfg, root, rank, comm)
+    cfg.derivative_backend == :analytic || return NamedTuple()
+    local_gap = Inf
+    local_preparations = 0
+    for workspace in workspaces
+        derivatives = workspace.analytic_geometry
+        derivatives === nothing && continue
+        local_gap = min(local_gap, derivatives.minimum_gap_observed_ev)
+        local_preparations += derivatives.preparations
+    end
+    # One owner contributes to each rank slot, so the existing deterministic sum
+    # port also transports minima/Inf without adding a new MPI primitive.
+    gaps = zeros(Float64, bundle_mpi_comm_size(comm))
+    gaps[rank + 1] = local_gap
+    global_gaps = bundle_mpi_reduce_sum(gaps, root, comm)
+    preparations = bundle_mpi_reduce_sum([local_preparations], root, comm)
+    rank == root || return NamedTuple()
+    gap = minimum(global_gaps)
+    return (;
+        analytic_geometry_derivative_backend = "analytic",
+        analytic_geometry_jet_preparations = preparations[1],
+        analytic_geometry_minimum_gap_ev = isfinite(gap) ? gap : nothing,
+        analytic_geometry_gap_observation = preparations[1] == 0 ? "not measured" :
+                                            isfinite(gap) ?
+                                            "minimum over all prepared eigenframes and ranks" :
+                                            "no complementary band",
+        analytic_geometry_derivative_route = "central raw-operator jets (static route description; no FD call counter)",
+    )
+end
+
 # Load model sources, execute uniquely owned planar points with shared family workspaces, reduce slice buffers and write outputs.
 function _run_kslice_bundle_fused!(
     cfg::EffectiveTaskConfig,
     ctx::RunContext,
     specs::Vector{NormalizedTaskSpec};
     prepare_only::Bool = false,
+    block_local_order::Bool = false,
     progress_owner::Bool = true,
     shared_sources = nothing,
     mixed_memory_limit_bytes::Int = mixed_fourier_memory_limit(),
 )
+    if any(spec -> spec.quantity in BERRY_MULTIPOLE_QUANTITIES, specs)
+        return prepare_berry_multipole(
+            cfg,
+            ctx,
+            specs;
+            prepare_only,
+            progress_owner,
+            shared_sources,
+            mixed_memory_limit_bytes,
+        )
+    end
     if any(spec->spec.quantity in SPECTRAL_RESPONSE_QUANTITIES, specs)
         return prepare_spectral_response(
+            cfg,
+            ctx,
+            specs;
+            prepare_only,
+            progress_owner,
+            shared_sources,
+            mixed_memory_limit_bytes,
+        )
+    end
+    if any(spec -> spec.quantity in (:jerk_current, :third_harmonic_generation), specs)
+        return prepare_third_order(
             cfg,
             ctx,
             specs;
@@ -36,10 +90,7 @@ function _run_kslice_bundle_fused!(
     function cleanup!()
         cleaned[] && return nothing
         cleaned[] = true
-        for workspace in cleanup_workspaces
-            disable_mixed_fourier!(workspace)
-            disable_fourier_timing!(workspace)
-        end
+        release_mixed_worker_buffers!(cleanup_workspaces; timing = true)
         if shared_sources === nothing && loaded_sources_ref[] !== nothing
             release_runtime_storage!(loaded_sources_ref[])
         end
@@ -51,6 +102,7 @@ function _run_kslice_bundle_fused!(
             ctx,
             specs;
             prepare_only = prepare_only,
+            block_local_order = block_local_order,
             progress_owner = progress_owner,
             shared_sources = shared_sources,
             mixed_memory_limit_bytes = mixed_memory_limit_bytes,
@@ -73,6 +125,7 @@ function _run_kslice_bundle_owned!(
     loaded_sources_ref,
     cleanup!,
     prepare_only::Bool = false,
+    block_local_order::Bool = false,
     progress_owner::Bool = true,
     shared_sources = nothing,
     mixed_memory_limit_bytes::Int = mixed_fourier_memory_limit(),
@@ -170,12 +223,31 @@ function _run_kslice_bundle_owned!(
         spin_velocity = spin_velocity_real_space,
         derivative_overlap = derivative_overlap_real_space,
     )
+    # Metric-aware offsets must be allocated with their own H/S/r payload before execution.
+    shared_offsets = if model isa NonorthogonalLocalizedModel
+        signatures = union((fourier_task_offset_signatures(cfg, spec) for spec in specs)...)
+        KPointOffset[
+            KPointOffset(offset, photon) for (offset, photon) in sort!(collect(signatures))
+        ]
+    else
+        KPointOffset[KPointOffset()]
+    end
     shared_matrix_batches = [
         KPointBatchWorkspace(
             model,
             shared_matrix_plan,
-            KPointOffset[KPointOffset()],
-            matrix_sources,
+            shared_offsets,
+            matrix_sources;
+            spectral_gap_tolerance = cfg.spectral_gap_tolerance,
+            metric_completion_required = cfg.include_external && any(
+                spec -> spec.quantity in (
+                    :quantum_metric,
+                    :quantum_metric_dipole,
+                    :quantum_metric_quadrupole,
+                    :quantum_christoffel_symbol,
+                ),
+                specs,
+            ),
         ) for _ in 1:num_workers
     ]
     shared_matrix_workspaces = [batch.matrix_elements for batch in shared_matrix_batches]
@@ -212,6 +284,14 @@ function _run_kslice_bundle_owned!(
         has_bcq ?
         validate_berry_curvature_quadrupole_band_selection(cfg.band_selection, num_orbitals) :
         Vector{Int}[]
+    if cfg.derivative_backend == :analytic && (has_bcd || has_bcq)
+        all(group -> length(group) == 1, bcd_band_groups) &&
+        all(group -> length(group) == 1, bcq_band_groups) || throw(
+            ArgumentError(
+                "analytic BCD/BCQ requires singleton band targets; finite_difference retains group support",
+            ),
+        )
+    end
     qmq_band_groups =
         has_qmq ?
         validate_quantum_metric_quadrupole_band_selection(cfg.band_selection, num_orbitals) :
@@ -365,36 +445,66 @@ function _run_kslice_bundle_owned!(
         end
     end
 
-    sc_conv_state = _find_state(states, :shift_current, :conventional)
-    sc_proj_state = _find_state(states, :shift_current, :projector)
-    sc_geo_state = _find_state(states, :shift_current, :geometric_loop)
-    pdsc_state = _find_state(states, :photon_drag_shift_current, :geometric_loop)
-    sc_wilson_state = _find_state(states, :shift_current, :wilson_loop)
-    sv_geo_state = _find_state(states, :shift_vector, :geometric_loop)
-    sv_wilson_state = _find_state(states, :shift_vector, :wilson_loop)
-    conv_qhc_state = _find_state(states, :quantum_hermitian_connection, :conventional)
-    hct_state = _find_state(states, :hermitian_curvature_tensor, :conventional)
-    qhc_proj_state = _find_state(states, :quantum_hermitian_connection, :projector)
-    qhc_geo_state = _find_state(states, :quantum_hermitian_connection, :geometric_loop)
-    qhc_wilson_state = _find_state(states, :quantum_hermitian_connection, :wilson_loop)
-    berry_curvature_states = _find_states(states, :berry_curvature, :conventional)
-    quantum_metric_states = _find_states(states, :quantum_metric, :conventional)
-    interband_berry_state = _find_state(states, :interband_berry_curvature, :conventional)
-    interband_metric_state = _find_state(states, :interband_quantum_metric, :conventional)
+    # Extra geometry files have identical layout and independent reduction buffers.
+    for state in copy(states)
+        state.spec.quantity in (
+            :quantum_metric,
+            :quantum_metric_dipole,
+            :quantum_metric_quadrupole,
+            :quantum_christoffel_symbol,
+        ) || continue
+        if !cfg.include_external
+            state.metric_contribution = :internal
+            continue
+        end
+        for contribution in (:internal, :external)
+            component = deepcopy(state)
+            component.metric_contribution = contribution
+            component.outputs = [
+                string(splitext(path)[1], "_", contribution, splitext(path)[2]) for
+                path in state.outputs
+            ]
+            push!(states, component)
+        end
+    end
+    # The physical point provider owns one scalar per original observation.
+    # Output matrices and point ownership remain with the slice consumer.
+    # Physical current prefactors retain their cell convention; neither the
+    # point provider nor slice consumer inserts an integration weight.
+    # Check ordinary point scratch for size overflow. The Mixed limit bounds
+    # Fourier caches, not Direct response scratch; process/RSS guards still apply.
+    WorkspacePlanning.checked_array_bytes(ComplexF64, (2num_workers, length(states)))
+    point_states = [response_point_state(state, num_workers) for state in states]
+    sc_conv_state = _find_state(point_states, :shift_current, :conventional)
+    sc_proj_state = _find_state(point_states, :shift_current, :projector)
+    sc_geo_state = _find_state(point_states, :shift_current, :geometric_loop)
+    pdsc_state = _find_state(point_states, :photon_drag_shift_current, :geometric_loop)
+    sc_wilson_state = _find_state(point_states, :shift_current, :wilson_loop)
+    sv_geo_state = _find_state(point_states, :shift_vector, :geometric_loop)
+    sv_wilson_state = _find_state(point_states, :shift_vector, :wilson_loop)
+    conv_qhc_state = _find_state(point_states, :quantum_hermitian_connection, :conventional)
+    hct_state = _find_state(point_states, :hermitian_curvature_tensor, :conventional)
+    qhc_proj_state = _find_state(point_states, :quantum_hermitian_connection, :projector)
+    qhc_geo_state = _find_state(point_states, :quantum_hermitian_connection, :geometric_loop)
+    qhc_wilson_state = _find_state(point_states, :quantum_hermitian_connection, :wilson_loop)
+    berry_curvature_states = _find_states(point_states, :berry_curvature, :conventional)
+    quantum_metric_states = _find_states(point_states, :quantum_metric, :conventional)
+    interband_berry_state = _find_state(point_states, :interband_berry_curvature, :conventional)
+    interband_metric_state = _find_state(point_states, :interband_quantum_metric, :conventional)
     zeeman_interband_berry_state =
-        _find_state(states, :zeeman_interband_berry_curvature, :conventional)
+        _find_state(point_states, :zeeman_interband_berry_curvature, :conventional)
     zeeman_interband_metric_state =
-        _find_state(states, :zeeman_interband_quantum_metric, :conventional)
-    bcd_states = _find_states(states, :berry_curvature_dipole, :conventional)
-    qmd_states = _find_states(states, :quantum_metric_dipole, :conventional)
-    bcq_states = _find_states(states, :berry_curvature_quadrupole, :conventional)
-    qmq_states = _find_states(states, :quantum_metric_quadrupole, :conventional)
-    qcs_states = _find_states(states, :quantum_christoffel_symbol, :conventional)
-    tpp_state = _find_state(states, :triple_phase_product, :conventional)
-    ic_state = _find_state(states, :injection_current, :conventional)
-    isc_state = _find_state(states, :injection_spin_current, :conventional)
-    ssc_state = _find_state(states, :shift_spin_current, :conventional)
-    pdic_state = _find_state(states, :photon_drag_injection_current, :conventional)
+        _find_state(point_states, :zeeman_interband_quantum_metric, :conventional)
+    bcd_states = _find_states(point_states, :berry_curvature_dipole, :conventional)
+    qmd_states = _find_states(point_states, :quantum_metric_dipole, :conventional)
+    bcq_states = _find_states(point_states, :berry_curvature_quadrupole, :conventional)
+    qmq_states = _find_states(point_states, :quantum_metric_quadrupole, :conventional)
+    qcs_states = _find_states(point_states, :quantum_christoffel_symbol, :conventional)
+    tpp_state = _find_state(point_states, :triple_phase_product, :conventional)
+    ic_state = _find_state(point_states, :injection_current, :conventional)
+    isc_state = _find_state(point_states, :injection_spin_current, :conventional)
+    ssc_state = _find_state(point_states, :shift_spin_current, :conventional)
+    pdic_state = _find_state(point_states, :photon_drag_injection_current, :conventional)
 
     need_conv_sc = sc_conv_state !== nothing
     need_conv_current =
@@ -476,6 +586,12 @@ function _run_kslice_bundle_owned!(
         (Int[], Int[], Int[])
     qhc_band_start, qhc_band_end =
         need_conv_qhc ? band_selection_window(qhc_band_selection) : (1, 0)
+    conventional_current_pair_selections =
+        need_conv_current ?
+        [
+            _make_conventional_kslice_pair_selection(cfg.band_selection, num_orbitals) for
+            _ in 1:num_workers
+        ] : nothing
     conventional_model = model
 
     transition_screen_workspaces =
@@ -504,18 +620,19 @@ function _run_kslice_bundle_owned!(
 
     conv_sc_workspaces =
         need_conv_current ?
-        [
-            make_shift_current_conventional_workspace(
-                num_orbitals,
-                num_r_vectors,
-                spatial_dimension,
-                1,
-                matrix_elements = shared_matrix_workspaces[worker_id],
-                central_data = shared_central_data[worker_id],
-            ) for worker_id in 1:num_workers
-        ] : ShiftCurrentConventionalWorkspace[]
+        _make_conventional_current_worker_workspaces(
+            num_workers,
+            num_orbitals,
+            num_r_vectors,
+            spatial_dimension,
+            1,
+            shared_matrix_workspaces,
+            shared_central_data;
+            shift_current_required = sc_conv_state !== nothing || isc_state === nothing,
+            frequency_contraction_required = false,
+        ) : ShiftCurrentConventionalWorkspace[]
     conv_injection_qg =
-        need_conv_current ?
+        ic_state !== nothing ?
         [
             zeros(
                 ComplexF64,
@@ -526,30 +643,18 @@ function _run_kslice_bundle_owned!(
                 spatial_dimension,
             ) for _ in 1:num_workers
         ] : Array{ComplexF64, 5}[]
-    conv_spin_injection_qg =
-        isc_state !== nothing ?
-        [
-            zeros(
-                ComplexF64,
-                num_orbitals,
-                num_orbitals,
-                spatial_dimension,
-                3,
-                spatial_dimension,
-                spatial_dimension,
-            ) for _ in 1:num_workers
-        ] : Array{ComplexF64, 6}[]
     shift_spin_current_workspaces =
         ssc_state !== nothing ?
-        [
-            make_shift_spin_current_conventional_workspace(
-                num_orbitals,
-                num_r_vectors,
-                spatial_dimension,
-                matrix_elements = shared_matrix_workspaces[worker_id],
-                central_data = shared_central_data[worker_id],
-            ) for worker_id in 1:num_workers
-        ] : ShiftSpinCurrentConventionalWorkspace[]
+        _make_conventional_shift_spin_worker_workspaces(
+            num_workers,
+            num_orbitals,
+            num_r_vectors,
+            spatial_dimension,
+            1,
+            shared_matrix_workspaces,
+            shared_central_data;
+            frequency_contraction_required = false,
+        ) : ShiftSpinCurrentConventionalWorkspace[]
     conv_geometry_workspaces =
         need_conventional_geometry ?
         [
@@ -665,8 +770,12 @@ function _run_kslice_bundle_owned!(
         need_projector_response ? finite_difference_step_matrix(model, cfg.finite_difference_step) :
         zeros(Float64, 3, 3)
     p_d_geometry_derivative =
-        (need_bcd || need_qmd || need_bcq || need_qmq || need_qcs) ?
-        finite_difference_step_matrix(model, cfg.finite_difference_step) : zeros(Float64, 3, 3)
+        (
+            (cfg.derivative_backend != :analytic && (need_bcd || need_bcq)) ||
+            need_qmd ||
+            need_qmq ||
+            need_qcs
+        ) ? finite_difference_step_matrix(model, cfg.finite_difference_step) : zeros(Float64, 3, 3)
     p_c = cfg.finite_difference_step * Matrix{Float64}(I, 3, 3)
     p_d_geo = zeros(Float64, 3, 3)
     for i in 1:3
@@ -744,10 +853,19 @@ function _run_kslice_bundle_owned!(
         rank_memory_limit_bytes = mixed_memory_limit_bytes,
     )
     mixed_grid = fourier_plan.grid
+    # Only the single public Conventional SC slice opts into block-local worker
+    # ownership. Its response callback writes the original unique u/v index;
+    # this scheduling lane is not a numerical reduction lane.
+    use_block_order =
+        block_local_order &&
+        mixed_grid !== nothing &&
+        length(specs) == 1 &&
+        only(specs).quantity == :shift_current &&
+        only(specs).method == :conventional
     per_workspace_memory_limit = fourier_plan.memory_limit_bytes
     local_k_indices =
         mixed_grid === nothing ? _local_k_indices(num_kpoints, rank, size) :
-        mixed_fourier_local_k_indices(mixed_grid, rank, size)
+        mixed_block_access(mixed_grid, rank, size).indices
     bundle_debug_log(
         debug_lock,
         "[fourier] backend=$(fourier_plan.backend) " *
@@ -758,14 +876,13 @@ function _run_kslice_bundle_owned!(
         "local_k_points=$(length(local_k_indices))",
     )
     if mixed_grid !== nothing
-        for worker_id in 1:num_workers
-            enable_mixed_fourier!(
-                shared_matrix_workspaces[worker_id],
-                model,
-                mixed_grid;
-                memory_limit_bytes = per_workspace_memory_limit,
-            )
-        end
+        prepare_mixed_worker_buffers!(
+            shared_matrix_workspaces,
+            model,
+            mixed_grid;
+            memory_limit_bytes = per_workspace_memory_limit,
+            completed_block_reuse = use_block_order,
+        )
     end
     initial_fourier_summary = fourier_execution_summary(cfg, fourier_plan, shared_matrix_workspaces)
     progress_fourier_backend!(
@@ -786,19 +903,14 @@ function _run_kslice_bundle_owned!(
         "[kloop] start local_k_points=$(local_total_k), total_work_items_global=$(num_kpoints), full_grid_k_points=$(num_kpoints), progress_percent_interval=$(progress_percent_interval), slow_k_seconds=$(slow_k_seconds)",
     )
     point_buffers = [zeros(Float64, 3) for _ in 1:num_workers]
-    function execute_point!(worker_id::Int, idx::Int, lane_id::Int)
-        kpoint = point_buffers[worker_id]
-        k_t0 = time()
+    point_values = [zeros(ComplexF64, length(states)) for _ in 1:num_workers]
+    point_active = fill(false, num_workers)
+    function point_value!(worker_id, kpoint)
+        for state in point_states
+            fill!(state.worker_data[worker_id], 0)
+        end
+        u_index = v_index = 1
         active_any = false
-        kpoint_index = local_k_indices[idx]
-        kslice_kpoint!(kpoint, k_grid, kpoint_index)
-        u_index, v_index = kslice_indices(k_grid, kpoint_index)
-        mixed_grid === nothing || begin_mixed_kpoint!(
-            shared_matrix_workspaces[worker_id],
-            kpoint,
-            (u_index - 1, v_index - 1, 0),
-        )
-
         transition_screen =
             need_transition_screen ? transition_screen_workspaces[worker_id] : nothing
         if transition_screen !== nothing
@@ -827,8 +939,7 @@ function _run_kslice_bundle_owned!(
                 worker_id,
                 model,
                 conv_sc_workspaces[worker_id],
-                conv_injection_qg[worker_id],
-                isc_state === nothing ? nothing : conv_spin_injection_qg[worker_id],
+                ic_state === nothing ? nothing : conv_injection_qg[worker_id],
                 ssc_state === nothing ? nothing : shift_spin_current_workspaces[worker_id],
                 sc_conv_state,
                 ic_state,
@@ -836,11 +947,12 @@ function _run_kslice_bundle_owned!(
                 ssc_state,
                 controls.tensor_indices,
                 cfg,
-                num_kpoints,
+                1,
                 cell_volume,
                 num_orbitals,
                 spatial_dimension,
                 counters["conventional_q0_current"],
+                conventional_current_pair_selections[worker_id],
             )
         end
         if need_conventional_geometry
@@ -852,6 +964,14 @@ function _run_kslice_bundle_owned!(
                 denominator_regularization = cfg.denominator_regularization,
                 spatial_dimension = spatial_dimension,
             )
+            if conventional_model isa NonorthogonalLocalizedModel &&
+               cfg.denominator_regularization == 0 &&
+               any(spec -> spec.quantity in ZERO_REGULARIZATION_GEOMETRY_QUANTITIES, specs)
+                MatrixElements.geometry_isolated_spectrum_minimum_gap(
+                    conv_geometry_workspaces[worker_id].data.spectrum.energies,
+                    cfg.spectral_gap_tolerance,
+                )
+            end
             if need_conv_qhc
                 active_any |= _accumulate_kslice_conventional_geometry_qhc_family!(
                     u_index,
@@ -1087,7 +1207,7 @@ function _run_kslice_bundle_owned!(
                     sc_proj_state,
                     controls.tensor_indices,
                     cfg,
-                    num_kpoints,
+                    1,
                     cell_volume,
                     num_orbitals,
                     spatial_dimension,
@@ -1123,7 +1243,7 @@ function _run_kslice_bundle_owned!(
                 sc_geo_state,
                 controls.tensor_indices,
                 cfg,
-                num_kpoints,
+                1,
                 cell_volume,
                 num_orbitals,
                 spatial_dimension,
@@ -1146,7 +1266,7 @@ function _run_kslice_bundle_owned!(
                 pdsc_state,
                 controls.tensor_indices,
                 cfg,
-                num_kpoints,
+                1,
                 cell_volume,
                 num_orbitals,
                 spatial_dimension,
@@ -1234,7 +1354,7 @@ function _run_kslice_bundle_owned!(
                     sc_wilson_state,
                     controls.tensor_indices,
                     cfg,
-                    num_kpoints,
+                    1,
                     cell_volume,
                     num_orbitals,
                     spatial_dimension,
@@ -1281,7 +1401,7 @@ function _run_kslice_bundle_owned!(
                 pdic_state,
                 controls.tensor_indices,
                 cfg,
-                num_kpoints,
+                1,
                 cell_volume,
                 num_orbitals,
                 spatial_dimension,
@@ -1289,6 +1409,51 @@ function _run_kslice_bundle_owned!(
             )
         end
 
+        values = point_values[worker_id]
+        for (channel, state) in enumerate(point_states)
+            values[channel] = state.worker_data[worker_id][1, 1]
+        end
+        point_active[worker_id] = active_any
+        return values
+    end
+    point_evaluators = [
+        ResponsePointEvaluator(
+            point_value!,
+            worker,
+            (
+                shape = (length(states),),
+                prefactor = :local_response_channels,
+                arbitrary_k = mixed_grid === nothing,
+                channels = [
+                    (state.spec.quantity, state.band_label, state.metric_contribution) for
+                    state in states
+                ],
+            ),
+        ) for worker in 1:num_workers
+    ]
+    point_started = zeros(Float64, num_workers)
+    function locate_point!(point, grid, idx)
+        kslice_kpoint!(point, grid, local_k_indices[idx])
+        return nothing
+    end
+    function request_point!(worker_id, point, idx)
+        point_started[worker_id] = time()
+        u_index, v_index = kslice_indices(k_grid, local_k_indices[idx])
+        mixed_grid === nothing || begin_mixed_kpoint!(
+            shared_matrix_workspaces[worker_id],
+            point,
+            (u_index - 1, v_index - 1, 0),
+        )
+        return nothing
+    end
+    function consume_point!(worker_id, idx, lane_id, values)
+        k_t0 = point_started[worker_id]
+        kpoint_index = local_k_indices[idx]
+        u_index, v_index = kslice_indices(k_grid, kpoint_index)
+        for (channel, state) in enumerate(states)
+            state.worker_data[worker_id][u_index, v_index] = values[channel]
+        end
+        active_any = point_active[worker_id]
         if active_any
             Threads.atomic_add!(active_count, 1)
         else
@@ -1317,72 +1482,108 @@ function _run_kslice_bundle_owned!(
         end
         return nothing
     end
+    execute_point! = ResponseGridConsumer(
+        point_evaluators,
+        k_grid,
+        point_buffers,
+        locate_point!,
+        request_point!,
+        consume_point!,
+    )
     units = NTuple{3, Int}[
-        (index, position, position) for (position, index) in enumerate(local_k_indices)
+        (index, position, use_block_order ? cld(position, prod(mixed_grid.nkfft)) : position)
+        for (position, index) in enumerate(local_k_indices)
     ]
+    # local_k_indices is already rank-owned block-major order. Connecting every
+    # block's points prevents the shared scheduler from splitting its FFT among
+    # workers. Global point and local evaluation indices remain unchanged.
+    point_order =
+        use_block_order ?
+        Dict{Int, Int}(index => position for (position, index) in enumerate(local_k_indices)) :
+        nothing
     function finish!()
         try
-            if progress_owner
-                local_progress_counts = Int[finished_count[], active_count[], skipped_count[]]
-                global_progress_counts =
-                    size > 1 ? bundle_mpi_reduce_sum(local_progress_counts, root, comm) :
-                    local_progress_counts
-                if rank == root
-                    global_finished = global_progress_counts[1]
-                    global_active = global_progress_counts[2]
-                    global_skipped = global_progress_counts[3]
-                    if size > 1
+            bundle_mpi_collective_call(; enabled = true, comm) do
+                progress_localized_run_diagnostics!(shared_matrix_workspaces, comm)
+            end
+            bundle_mpi_collective_call(; enabled = true, comm) do
+                if progress_owner
+                    local_progress_counts = Int[finished_count[], active_count[], skipped_count[]]
+                    global_progress_counts =
+                        size > 1 ? bundle_mpi_reduce_sum(local_progress_counts, root, comm) :
+                        local_progress_counts
+                    if rank == root
+                        global_finished = global_progress_counts[1]
+                        global_active = global_progress_counts[2]
+                        global_skipped = global_progress_counts[3]
+                        if size > 1
+                            bundle_debug_log(
+                                debug_lock,
+                                "[kloop] progress finished=$(global_finished)/$(num_kpoints) local_finished=$(finished_count[])/$(local_total_k) total_work_items_global=$(num_kpoints) full_grid_k_points=$(num_kpoints) active=$(global_active) skipped=$(global_skipped) elapsed=$(format_seconds(time() - kloop_t0))s scope=global",
+                            )
+                        end
                         bundle_debug_log(
                             debug_lock,
-                            "[kloop] progress finished=$(global_finished)/$(num_kpoints) local_finished=$(finished_count[])/$(local_total_k) total_work_items_global=$(num_kpoints) full_grid_k_points=$(num_kpoints) active=$(global_active) skipped=$(global_skipped) elapsed=$(format_seconds(time() - kloop_t0))s scope=global",
+                            "[kloop] end finished=$(global_finished)/$(num_kpoints) local_finished=$(finished_count[])/$(local_total_k) total_work_items_global=$(num_kpoints) full_grid_k_points=$(num_kpoints) active=$(global_active) skipped=$(global_skipped) elapsed=$(format_seconds(time() - kloop_t0))s scope=global",
                         )
                     end
-                    bundle_debug_log(
-                        debug_lock,
-                        "[kloop] end finished=$(global_finished)/$(num_kpoints) local_finished=$(finished_count[])/$(local_total_k) total_work_items_global=$(num_kpoints) full_grid_k_points=$(num_kpoints) active=$(global_active) skipped=$(global_skipped) elapsed=$(format_seconds(time() - kloop_t0))s scope=global",
+                end
+                for worker_id in 1:num_workers
+                    write_fourier_timing(
+                        ctx.run_dir,
+                        rank * num_workers + worker_id - 1,
+                        time() - kloop_t0,
+                        shared_matrix_workspaces[worker_id],
+                        fourier_plan,
                     )
                 end
+                if mixed_grid !== nothing
+                    for worker_id in 1:num_workers
+                        stats = mixed_fourier_stats(shared_matrix_workspaces[worker_id])
+                        bundle_debug_log(
+                            debug_lock,
+                            "[fourier] worker=$(worker_id) stats=$(repr(stats))",
+                        )
+                    end
+                end
+                if fourier_timing_enabled()
+                    for workspace in shared_matrix_workspaces
+                        disable_fourier_timing!(workspace)
+                    end
+                end
+
+                bundle_debug_log(debug_lock, "[reduce] start deterministic task reductions")
             end
-            for worker_id in 1:num_workers
-                write_fourier_timing(
-                    ctx.run_dir,
-                    rank * num_workers + worker_id - 1,
-                    time() - kloop_t0,
-                    shared_matrix_workspaces[worker_id],
-                    fourier_plan,
+            reduce_t0 = time()
+            _reduce_kslice_states!(states, root, rank, comm)
+            bundle_mpi_collective_call(; enabled = true, comm) do
+                bundle_debug_log(
+                    debug_lock,
+                    "[reduce] end deterministic task reductions elapsed=$(format_seconds(time() - reduce_t0))s",
                 )
             end
-            if mixed_grid !== nothing
-                for worker_id in 1:num_workers
-                    stats = mixed_fourier_stats(shared_matrix_workspaces[worker_id])
-                    bundle_debug_log(
-                        debug_lock,
-                        "[fourier] worker=$(worker_id) stats=$(repr(stats))",
-                    )
-                end
-            end
-            if fourier_timing_enabled()
-                for workspace in shared_matrix_workspaces
-                    disable_fourier_timing!(workspace)
-                end
-            end
 
-            reduce_t0 = time()
-            bundle_debug_log(debug_lock, "[reduce] start deterministic task reductions")
-            _reduce_kslice_states!(states, root, rank, comm)
-            bundle_debug_log(
-                debug_lock,
-                "[reduce] end deterministic task reductions elapsed=$(format_seconds(time() - reduce_t0))s",
-            )
-
+            write_outputs! = () -> _write_kslice_states!(cfg, ctx, states, debug_lock)
+            root_outputs =
+                size == 1 ? write_outputs!() : bundle_mpi_root_call(write_outputs!; root, comm)
             outputs =
-                rank == root ? _write_kslice_states!(cfg, ctx, states, debug_lock) :
+                rank == root ? root_outputs :
                 reduce(vcat, [state.outputs for state in states]; init = String[])
-            fourier_summary = fourier_execution_summary(cfg, fourier_plan, shared_matrix_workspaces)
+            fourier_summary = bundle_mpi_collective_call(; enabled = true, comm) do
+                fourier_execution_summary(cfg, fourier_plan, shared_matrix_workspaces)
+            end
+            fourier_summary = merge(
+                fourier_summary,
+                _analytic_geometry_execution_summary(
+                    conv_geometry_workspaces,
+                    cfg,
+                    root,
+                    rank,
+                    comm,
+                ),
+            )
             if mixed_grid !== nothing
-                for workspace in shared_matrix_workspaces
-                    disable_mixed_fourier!(workspace)
-                end
+                release_mixed_worker_buffers!(shared_matrix_workspaces)
             end
             bundle_debug_log(
                 debug_lock,
@@ -1401,13 +1602,23 @@ function _run_kslice_bundle_owned!(
                 NamedTuple(),
                 runtime_replica_summary(loaded_sources.replica_summary),
                 qualification,
+                runtime_model_geometry(model),
             )
             return result
         finally
             cleanup!()
         end
     end
-    prepared = PreparedResponseTask(units, execute_point!, finish!, cleanup!)
+    prepared = PreparedResponseTask(
+        units,
+        execute_point!,
+        finish!,
+        cleanup!,
+        point_order,
+        nothing,
+        nothing,
+        point_evaluators,
+    )
     prepare_only && return prepared
     try
         execute_prepared_tasks!([prepared])

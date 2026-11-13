@@ -5,15 +5,27 @@ const RegistryRuntime = WannierNLQG.Runtime
 
 @testset "typed task registry characterization" begin
     expected = Set{Tuple{Symbol, Symbol, Symbol}}()
+    for method in (:conventional, :projector), calculation in (:integral, :kslice)
+        push!(expected, (:intrinsic_ahc, method, calculation))
+    end
+    for quantity in
+        (:berry_curvature_dipole_conductivity, :berry_curvature_quadrupole_conductivity),
+        calculation in (:integral, :kslice)
+
+        push!(expected, (quantity, :conventional, calculation))
+    end
     push!(expected, (:band_structure, :conventional, :kpath))
     push!(expected, (:second_harmonic_generation, :conventional, :integral))
     push!(expected, (:second_harmonic_generation, :conventional, :kslice))
+    for quantity in (:jerk_current, :third_harmonic_generation), calculation in (:integral, :kslice)
+        push!(expected, (quantity, :conventional, calculation))
+    end
     for calculation in (:integral, :kslice)
         for method in (:conventional, :projector, :geometric_loop, :wilson_loop)
             push!(expected, (:shift_current, method, calculation))
         end
     end
-    for method in (:conventional, :projector, :geometric_loop, :wilson_loop)
+    for method in (:conventional, :projector, :wilson_loop)
         push!(expected, (:quantum_hermitian_connection, method, :kslice))
     end
     for quantity in (
@@ -58,10 +70,20 @@ const RegistryRuntime = WannierNLQG.Runtime
             RegistryRuntime.calculation_symbol(definition.calculation),
         ) for definition in RegistryRuntime.TASK_DEFINITIONS
     )
-    @test length(RegistryRuntime.TASK_DEFINITIONS) == 52
+    @test length(RegistryRuntime.TASK_DEFINITIONS) == 63
     @test actual == expected
 
     expected_labels = Dict(
+        (:intrinsic_ahc, :integral)=>"AHC",
+        (:intrinsic_ahc, :kslice)=>"AHCK",
+        (:berry_curvature_dipole_conductivity, :integral)=>"BCDC",
+        (:berry_curvature_dipole_conductivity, :kslice)=>"BCDCK",
+        (:berry_curvature_quadrupole_conductivity, :integral)=>"BCQC",
+        (:berry_curvature_quadrupole_conductivity, :kslice)=>"BCQCK",
+        (:jerk_current, :integral)=>"JC",
+        (:jerk_current, :kslice)=>"JCK",
+        (:third_harmonic_generation, :integral)=>"THG",
+        (:third_harmonic_generation, :kslice)=>"THGK",
         (:linear_transport, :integral) => "LT",
         (:linear_transport, :kslice) => "LTK",
         (:linear_optical_response, :integral) => "LOR",
@@ -105,11 +127,11 @@ const RegistryRuntime = WannierNLQG.Runtime
             RegistryRuntime.calculation_symbol(definition.calculation),
         ) => definition.label for definition in RegistryRuntime.QUANTITY_SHORT_LABELS
     )
-    @test length(RegistryRuntime.QUANTITY_SHORT_LABELS) == 36
+    @test length(RegistryRuntime.QUANTITY_SHORT_LABELS) == 46
     @test actual_labels == expected_labels
-    @test length(unique(values(actual_labels))) == 36
-    @test count(pair -> pair[1][2] == :integral, collect(actual_labels)) == 10
-    @test count(pair -> pair[1][2] == :kslice, collect(actual_labels)) == 25
+    @test length(unique(values(actual_labels))) == 46
+    @test count(pair -> pair[1][2] == :integral, collect(actual_labels)) == 15
+    @test count(pair -> pair[1][2] == :kslice, collect(actual_labels)) == 30
     @test count(pair -> pair[1][2] == :kpath, collect(actual_labels)) == 1
 
     band_definition = RegistryRuntime.task_definition(:band_structure, :conventional, :kpath)
@@ -300,4 +322,43 @@ const RegistryRuntime = WannierNLQG.Runtime
     )
     RegistryRuntime._reduce_integral_states!([deterministic_state], 0, 0, nothing)
     @test only(deterministic_state.global_data) == 10.0 + 0.0im
+end
+
+@testset "Geometric Loop QHC is explicitly unsupported" begin
+    runtime = WannierNLQG.Runtime
+    @test runtime.task_definition(:quantum_hermitian_connection, :geometric_loop, :kslice) ===
+          nothing
+    @test :geometric_loop ∉ runtime.supported_methods(:quantum_hermitian_connection, :kslice)
+    @test WannierNLQG.Core.operator_task_requirement(
+        :quantum_hermitian_connection,
+        :geometric_loop,
+    ) === nothing
+    for calculation in (:integral, :kslice)
+        exception = try
+            runtime.select_task(:quantum_hermitian_connection, :geometric_loop, calculation)
+            nothing
+        catch caught
+            caught
+        end
+        @test exception isa ArgumentError
+        @test occursin("GEOMETRIC_LOOP_QHC_UNSUPPORTED", sprint(showerror, exception))
+    end
+    for method in (:conventional, :projector, :wilson_loop)
+        @test runtime.task_definition(:quantum_hermitian_connection, method, :kslice) !== nothing
+    end
+    for (quantity, calculation) in (
+        (:shift_current, :integral),
+        (:shift_current, :kslice),
+        (:photon_drag_shift_current, :integral),
+        (:photon_drag_shift_current, :kslice),
+        (:shift_vector, :kslice),
+    )
+        @test runtime.task_definition(quantity, :geometric_loop, calculation) !== nothing
+    end
+    sentinel = fill(ComplexF64(1, 2), 2, 2, 3, 3, 3)
+    saved = copy(sentinel)
+    @test_throws ArgumentError WannierNLQG.Responses.compute_geometric_loop_quantum_hermitian_connection_kernel!(
+        sentinel,
+    )
+    @test sentinel == saved
 end

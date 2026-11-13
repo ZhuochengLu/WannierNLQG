@@ -8,79 +8,44 @@ function _with_generation_gauge_reuse(f::F) where {F}
     end
 end
 
-"""Read a gauge once per construction scope; the original reader retains all validation."""
+"""Read actual gauge inputs without digest-only reuse; retain scientific validation."""
 function _read_generation_gauge(
     path::AbstractString;
     construction_policy,
     source,
     reader = _read_star_covariant_paw_gauge_hdf5,
 )
-    context = get(task_local_storage(), :wannier_generation_gauge_reuse, nothing)
-    context === nothing && return reader(path; construction_policy, source)
-    context.owner === current_task() ||
-        throw(ArgumentError("GENERATION_GAUGE_COORDINATOR_REQUIRED"))
-    canonical = realpath(path)
-    key = (canonical, repr(source), construction_policy)
-    information = stat(canonical)
-    identity = (
-        information.device,
-        information.inode,
-        information.size,
-        information.mtime,
-        information.ctime,
-    )
-    saved = context.slot[]
-    if saved !== nothing && saved.key == key
-        refreshed = verified_file_digest_identity(
-            canonical,
-            saved.identity,
-            saved.digest;
-            change_error = "GENERATION_GAUGE_CHANGED_DURING_CONSTRUCTION",
-        )
-        context.slot[] = merge(saved, (; identity = refreshed))
-        return saved.payload
+    # A previous digest-only memo cannot establish equality of current input.
+    # Re-read the actual gauge and retain the reader's scientific validation.
+    observed = IO.with_scientific_source(path; resolve_links = true) do filename
+        reader(filename; construction_policy, source)
     end
-    context.slot[] = nothing
-    payload, digest, verified_identity = with_verified_file_digests([canonical]) do
-        digest = sha256_file(canonical)
-        payload = reader(canonical; construction_policy, source)
-        verified_identity = verified_file_digest_identity(
-            canonical,
-            identity,
-            digest;
-            change_error = "GENERATION_GAUGE_CHANGED_DURING_READ",
-        )
-        (payload, digest, verified_identity)
-    end
-    context.slot[] = (key = key, identity = verified_identity, digest = digest, payload = payload)
-    return payload
+    return observed.value
 end
 
-"""Digest an identity rotation with the same byte contract as a sealed gauge rotation."""
-function _identity_band_rotation_sha256(num_bands::Int, num_kpts::Int)
+"""Encode an identity transform with the same byte contract as a sealed frame map."""
+function _identity_band_transform_definition(num_bands::Int, num_kpts::Int)
     num_bands > 0 && num_kpts > 0 || throw(ArgumentError("band-gauge dimensions must be positive"))
-    rotations = zeros(ComplexF64, num_bands, num_bands, num_kpts)
+    transforms = zeros(ComplexF64, num_bands, num_bands, num_kpts)
     for kpoint in 1:num_kpts
         for band in 1:num_bands
-            rotations[band, band, kpoint] = 1.0
+            transforms[band, band, kpoint] = 1.0
         end
     end
-    return _star_array_sha256(rotations)
+    return band_frame_transform_definition(transforms)
 end
 
-"""Return the exact identity-frame contract used by ordinary native DFT."""
+"""Return the identity-frame contract used by ordinary native DFT."""
 function _identity_band_frame_contract(
     num_bands::Int,
     num_kpts::Int;
     metric_kind::AbstractString = "not_applicable_native_identity",
 )
-    transform_sha256 = _identity_band_rotation_sha256(num_bands, num_kpts)
-    contract_sha256 = band_frame_contract_sha256(
+    transform_definition = _identity_band_transform_definition(num_bands, num_kpts)
+    contract_definition = band_frame_contract_definition(
         NATIVE_DFT_BAND_GAUGE,
         NATIVE_DFT_BAND_GAUGE,
-        transform_sha256,
-        "RUNTIME_IDENTITY",
-        "IDENTITY",
+        transform_definition,
         metric_kind,
         0.0,
         0.0,
@@ -94,8 +59,8 @@ function _identity_band_frame_contract(
         NATIVE_DFT_BAND_GAUGE,
         NATIVE_DFT_BAND_GAUGE,
         nothing,
-        transform_sha256,
-        contract_sha256,
+        transform_definition,
+        contract_definition,
         nothing,
         String(metric_kind),
         0.0,
@@ -112,25 +77,25 @@ function _identity_band_frame_contract(
     )
 end
 
-"""Apply `U_k† O_k U_k` to a one-k-point operator."""
-function _rotate_single_point_operator(operator, left_rotation)
-    size(operator, 1) == size(operator, 2) == size(left_rotation, 1) == size(left_rotation, 2) ||
+"""Apply `T_k† O_k T_k` to a one-k-point operator."""
+function _transform_single_point_operator(operator, left_transform)
+    size(operator, 1) == size(operator, 2) == size(left_transform, 1) == size(left_transform, 2) ||
         throw(ArgumentError("single-point band-gauge dimensions differ"))
-    return left_rotation' * operator * left_rotation
+    return left_transform' * operator * left_transform
 end
 
-"""Apply `U_k† O_{k,k+b} U_{k+b}` to a link operator."""
-function _rotate_link_operator(operator, left_rotation, right_rotation)
-    size(operator, 1) == size(left_rotation, 1) == size(left_rotation, 2) ||
+"""Apply `T_k† O_{k,k+b} T_{k+b}` to a link operator."""
+function _transform_link_operator(operator, left_transform, right_transform)
+    size(operator, 1) == size(left_transform, 1) == size(left_transform, 2) ||
         throw(ArgumentError("link left band-gauge dimensions differ"))
-    size(operator, 2) == size(right_rotation, 1) == size(right_rotation, 2) ||
+    size(operator, 2) == size(right_transform, 1) == size(right_transform, 2) ||
         throw(ArgumentError("link right band-gauge dimensions differ"))
-    return left_rotation' * operator * right_rotation
+    return left_transform' * operator * right_transform
 end
 
-"""Apply the endpoint rotations to a neighbor-neighbor operator."""
-_rotate_double_endpoint_operator(operator, first_rotation, second_rotation) =
-    _rotate_link_operator(operator, first_rotation, second_rotation)
+"""Apply the endpoint frame transforms to a neighbor-neighbor operator."""
+_transform_double_endpoint_operator(operator, first_transform, second_transform) =
+    _transform_link_operator(operator, first_transform, second_transform)
 
 """Resolve an implicit full native band range only for a sealed full-space gauge.
 
@@ -164,28 +129,18 @@ function _generation_band_gauge_contract(
     gauge_hdf5,
     num_bands::Int,
     num_kpts::Int;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
     source = _generation_gauge_source(source, gauge_hdf5)
-    identity =
-        () -> repr((
-            source,
-            authority,
-            gauge_hdf5 === nothing ? nothing : sha256_file(gauge_hdf5),
-            num_bands,
-            num_kpts,
-            construction_policy,
-        ))
-    return cached_preparation_artifact("band-frame", identity) do
-        _build_generation_band_gauge_contract(
-            source,
-            authority,
-            gauge_hdf5,
-            num_bands,
-            num_kpts;
-            construction_policy,
-        )
-    end
+    # A digest-only cached frame cannot certify current physical input.
+    return _build_generation_band_gauge_contract(
+        source,
+        authority,
+        gauge_hdf5,
+        num_bands,
+        num_kpts;
+        construction_policy,
+    )
 end
 
 """Resolve and verify the exact band-gauge transformation requested by a generator."""
@@ -195,10 +150,9 @@ function _build_generation_band_gauge_contract(
     gauge_hdf5,
     num_bands::Int,
     num_kpts::Int;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
-    construction_policy in (:strict, :standard) ||
-        throw(ArgumentError("construction_policy must be :strict or :standard"))
+    validate_ordinary_construction_policy(construction_policy)
     if authority isa NativeDFTHamiltonian && gauge_hdf5 === nothing
         return _identity_band_frame_contract(num_bands, num_kpts)
     elseif authority isa NativeDFTHamiltonian || authority isa SymmetrizedDFTHamiltonian
@@ -228,71 +182,40 @@ function _build_generation_band_gauge_contract(
         else
             SAWF_COMPLETED_NATIVE_DFT_BAND_GAUGE
         end
-        # The formal frame transform is the digest-bound raw-source to completed-frame
+        # The formal frame transform is the value-bound raw-source to completed-frame
         # map stored as `native_to_completed_rotations`.  The similarly shaped array in
         # the symmetrized-Hamiltonian audit is independent Hamiltonian evidence and must
         # not replace the frame transform merely because the requested authority is
         # symmetrized.
-        rotations = copy(restored.payload.rotations)
-        size(rotations) == (num_bands, num_bands, num_kpts) || throw(
+        transforms = copy(restored.payload.rotations)
+        size(transforms) == (num_bands, num_bands, num_kpts) || throw(
             ArgumentError(
-                "BAND_FRAME_DIMENSION_MISMATCH: expected ($(num_bands), $(num_bands), $(num_kpts)), got $(size(rotations))",
+                "BAND_FRAME_DIMENSION_MISMATCH: expected ($(num_bands), $(num_bands), $(num_kpts)), got $(size(transforms))",
             ),
         )
-        all(isfinite, rotations) ||
+        all(isfinite, transforms) ||
             throw(ArgumentError("BAND_FRAME_NONFINITE: transform contains NaN or Inf"))
-        transform_sha256 = _star_array_sha256(rotations)
-        if restored.band_frame_contract === nothing
-            identity_transform = true
-            identity_matrix = Matrix{ComplexF64}(I, num_bands, num_bands)
-            for kpoint in 1:num_kpts
-                identity_transform &= (@view(rotations[:, :, kpoint])) == identity_matrix
-            end
-            identity_transform || throw(
-                ArgumentError(
-                    "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED: schema-$(restored.schema_version) nonidentity transform is standard",
-                ),
-            )
-            identity = _identity_band_frame_contract(num_bands, num_kpts)
-            return BandFrameTransformContract(
-                identity.source_band_gauge,
-                target_band_gauge,
-                nothing,
-                identity.transform_sha256,
-                identity.contract_sha256,
-                sha256_file(path),
-                identity.metric_kind,
-                identity.physical_isometry_maximum,
-                identity.physical_isometry_tolerance,
-                identity.replay_maximum,
-                identity.replay_tolerance,
-                identity.euclidean_nonunitarity_maximum,
-                identity.minimum_singular_value,
-                identity.maximum_condition_number,
-                identity.schema,
-                identity.schema_version,
-                "LEGACY_IDENTITY_ONLY",
-                true,
-            )
-        end
+        transform_definition = band_frame_transform_definition(transforms)
         restored.band_frame_contract === nothing && throw(
-            ArgumentError("BAND_FRAME_CONTRACT_REQUIRED: schema-1.11 artifact has no contract"),
+            ArgumentError(
+                "BAND_FRAME_EXPLICIT_MIGRATION_REQUIRED: actual current frame contract is missing",
+            ),
         )
         sealed = something(restored.band_frame_contract)
-        sealed.transform_sha256 == transform_sha256 ||
-            throw(ArgumentError("BAND_FRAME_TRANSFORM_DIGEST_MISMATCH"))
+        sealed.transform_definition == transform_definition ||
+            throw(ArgumentError("BAND_FRAME_TRANSFORM_VALUES_MISMATCH"))
         sealed.source_band_gauge == NATIVE_DFT_BAND_GAUGE ||
             throw(ArgumentError("BAND_FRAME_SOURCE_MISMATCH: source gauge differs"))
         sealed.target_band_gauge == target_band_gauge ||
             throw(ArgumentError("BAND_FRAME_TARGET_MISMATCH: target gauge differs"))
-        sealed.status == "PASS" || throw(ArgumentError("BAND_FRAME_CONTRACT_NOT_QUALIFIED"))
+        sealed.legacy && throw(ArgumentError("BAND_FRAME_COMPLETE_DATA_REQUIRED"))
         return BandFrameTransformContract(
             sealed.source_band_gauge,
             sealed.target_band_gauge,
-            rotations,
-            sealed.transform_sha256,
-            sealed.contract_sha256,
-            sealed.gauge_artifact_sha256,
+            transforms,
+            sealed.transform_definition,
+            sealed.contract_definition,
+            sealed.gauge_definition,
             sealed.metric_kind,
             sealed.physical_isometry_maximum,
             sealed.physical_isometry_tolerance,
@@ -318,160 +241,109 @@ so the construction residual is identically zero once the frame contract has
 passed.
 """
 function _native_hamiltonian_gauge_covariance_residual(authority, gauge_contract)
-    gauge_contract.status in ("PASS", "LEGACY_IDENTITY_ONLY") ||
-        throw(ArgumentError("BAND_FRAME_CONTRACT_NOT_QUALIFIED"))
+    gauge_contract.legacy &&
+        gauge_contract.transforms !== nothing &&
+        throw(ArgumentError("BAND_FRAME_COMPLETE_DATA_REQUIRED"))
     return 0.0
 end
 
-"""Return the rotation at one k-point, or an allocation-free identity marker."""
-_generation_rotation(contract, kpoint::Int) =
-    contract.rotations === nothing ? nothing : @view(contract.rotations[:, :, kpoint])
+"""Return the frame transform at one k-point, or an allocation-free identity marker."""
+_generation_transform(contract, kpoint::Int) =
+    contract.transforms === nothing ? nothing : @view(contract.transforms[:, :, kpoint])
 
-"""Rotate one generated link into the target gauge, preserving native values exactly."""
-function _rotate_generation_link(operator, contract, left::Int, right::Int)
-    contract.rotations === nothing && return Matrix{ComplexF64}(operator)
-    return _rotate_link_operator(
+"""Transform one generated link into the target frame, preserving native values exactly."""
+function _transform_generation_link(operator, contract, left::Int, right::Int)
+    contract.transforms === nothing && return Matrix{ComplexF64}(operator)
+    return _transform_link_operator(
         operator,
-        _generation_rotation(contract, left),
-        _generation_rotation(contract, right),
+        _generation_transform(contract, left),
+        _generation_transform(contract, right),
     )
 end
 
-"""Rotate one generated single-k operator into the target band gauge."""
-function _rotate_generation_single(operator, contract, kpoint::Int)
-    contract.rotations === nothing && return Matrix{ComplexF64}(operator)
-    return _rotate_single_point_operator(operator, _generation_rotation(contract, kpoint))
+"""Transform one generated single-k operator into the target band frame."""
+function _transform_generation_single(operator, contract, kpoint::Int)
+    contract.transforms === nothing && return Matrix{ComplexF64}(operator)
+    return _transform_single_point_operator(operator, _generation_transform(contract, kpoint))
 end
 
-"""Stable digest over the formal SPN provenance identity shared by JSON and HDF5."""
-function _spn_provenance_contract_sha256(
-    schema,
-    schema_version,
-    source_code,
-    passed,
-    source_band_gauge,
-    target_band_gauge,
-    transform_sha256,
-    frame_contract_sha256,
-    num_bands,
-    num_kpts,
-    physical_metric,
-    spinor,
-    spn_sha256,
-    input_sha256,
-    kpoints_fractional,
-)
-    io = IOBuffer()
-    for value in (
-        schema,
-        schema_version,
-        source_code,
-        passed,
-        source_band_gauge,
-        target_band_gauge,
-        transform_sha256,
-        frame_contract_sha256,
-        num_bands,
-        num_kpts,
-        physical_metric,
-        spinor,
-        spn_sha256,
+"""Persist only references needed by later SPN source and payload consumers."""
+function _write_spn_complete_references(group, native, artifacts)
+    native.source_definition === nothing && throw(ArgumentError("SPN_SOURCE_REFERENCE_REQUIRED"))
+    HDF5.attributes(group)["content_authentication"]="NOT_PERFORMED"
+    write_scientific_input_reference_hdf5(
+        group,
+        "native_source_reference",
+        native.source_definition,
     )
-        write(io, string(value), '\0')
-    end
-    for key in sort!(String.(collect(keys(input_sha256))))
-        write(io, key, '=', String(input_sha256[key]), '\0')
-    end
-    values = Matrix{Float64}(kpoints_fractional)
-    write(io, reinterpret(UInt8, vec(values)))
-    return bytes2hex(SHA.sha256(take!(io)))
-end
-
-# Exact schema-1.1 digest retained for diagnostic readback only.
-function _spn_provenance_contract_sha256(
-    schema,
-    schema_version,
-    source_code,
-    passed,
-    source_band_gauge,
-    target_band_gauge,
-    rotation_sha256,
-    num_bands,
-    num_kpts,
-    physical_metric,
-    spinor,
-    spn_sha256,
-    input_sha256,
-    kpoints_fractional,
-)
-    io = IOBuffer()
-    for value in (
-        schema,
-        schema_version,
-        source_code,
-        passed,
-        source_band_gauge,
-        target_band_gauge,
-        rotation_sha256,
-        num_bands,
-        num_kpts,
-        physical_metric,
-        spinor,
-        spn_sha256,
-    )
-        write(io, string(value), '\0')
-    end
-    for key in sort!(String.(collect(keys(input_sha256))))
-        write(io, key, '=', String(input_sha256[key]), '\0')
-    end
-    values = Matrix{Float64}(kpoints_fractional)
-    write(io, reinterpret(UInt8, vec(values)))
-    return bytes2hex(SHA.sha256(take!(io)))
-end
-
-"""Append one JSON-compatible value to an order-independent logical digest."""
-function _spn_json_digest_value!(io::Base.IO, value)
-    if value isa AbstractDict || value isa JSON3.Object
-        write(io, "dictionary\0")
-        entries = sort!(collect(pairs(value)); by = pair -> String(first(pair)))
-        for (key, entry) in entries
-            write(io, String(key), '\0')
-            _spn_json_digest_value!(io, entry)
-        end
-    elseif value isa AbstractArray || value isa JSON3.Array || value isa Tuple
-        write(io, "array\0", string(length(value)), '\0')
-        for entry in value
-            _spn_json_digest_value!(io, entry)
-        end
-    elseif value === nothing
-        write(io, "nothing\0")
-    elseif value isa Bool
-        write(io, value ? "bool:true\0" : "bool:false\0")
-    elseif value isa Integer
-        write(io, "integer:", string(value), '\0')
-    elseif value isa AbstractFloat
-        write(io, "float:", repr(Float64(value)), '\0')
-    elseif value isa AbstractString || value isa Symbol
-        write(io, "string:", String(value), '\0')
-    else
-        throw(ArgumentError("unsupported SPN JSON provenance value $(typeof(value))"))
+    if haskey(artifacts, "spn")
+        reference=IO.scientific_source_collection_definition(Dict("SPN"=>artifacts["spn"]))
+        write_scientific_input_reference_hdf5(group, "spn_reference", reference)
     end
     return nothing
 end
 
-"""Digest every QE JSON provenance field except the digest field itself."""
-function _qe_spn_payload_sha256(payload)
-    filtered = Dict{String, Any}(
-        String(key) => value for (key, value) in pairs(payload) if String(key) != "payload_sha256"
+"""Read complete reference bytes without claiming digest authentication."""
+function _read_spn_complete_references(group)
+    haskey(HDF5.attributes(group), "content_authentication") &&
+    String(read(HDF5.attributes(group)["content_authentication"]))=="NOT_PERFORMED" ||
+        throw(ArgumentError("SPN_EXPLICIT_MIGRATION_REQUIRED"))
+    haskey(group, "native_source_reference") ||
+        throw(ArgumentError("SPN_SOURCE_REFERENCE_REQUIRED"))
+    return (
+        source_reference = read_scientific_input_reference_hdf5(group, "native_source_reference"),
+        spn_reference = haskey(group, "spn_reference") ?
+                        read_scientific_input_reference_hdf5(group, "spn_reference") : nothing,
     )
-    normalized = JSON3.read(JSON3.write(filtered), Dict{String, Any})
-    io = IOBuffer()
-    entries = sort!(collect(pairs(normalized)); by = pair -> String(first(pair)))
-    for (key, value) in entries
-        write(io, String(key), '\0')
-        _spn_json_digest_value!(io, value)
+end
+
+"""Check a later SPN consumer against complete published bytes."""
+function _validate_spn_reference(record, path)
+    record.spn_reference === nothing && throw(ArgumentError("SPN_COMPLETE_REFERENCE_REQUIRED"))
+    IO.validate_scientific_source_collection(Dict("SPN"=>String(path)), record.spn_reference)
+    return nothing
+end
+
+"""Check concrete SPN residuals; no persisted pass/fail label authorizes data."""
+function _validate_spn_residual_data(values, thresholds, oracle, require_oracle; radial = false)
+    keys =
+        radial ?
+        (
+            "radial_q_max_absolute",
+            "generalized_norm_max_absolute",
+            "hermiticity_max_absolute",
+            "diagonal_imaginary_max_absolute",
+        ) :
+        (
+            "generalized_norm_max_absolute",
+            "hermiticity_max_absolute",
+            "diagonal_imaginary_max_absolute",
+        )
+    for key in keys
+        haskey(values, key) && haskey(thresholds, key) ||
+            throw(ArgumentError("SPN_RESIDUAL_DATA_MISSING: $(key)"))
+        value, limit = Float64(values[key]), Float64(thresholds[key])
+        isfinite(value) && value >= 0 && isfinite(limit) && limit >= 0 ||
+            throw(ArgumentError("SPN_RESIDUAL_DATA_INVALID: $(key)"))
+        value <= limit || throw(ArgumentError("SPN_RESIDUAL_EXCEEDED: $(key)"))
     end
-    return bytes2hex(SHA.sha256(take!(io)))
+    require_oracle && oracle === nothing && throw(ArgumentError("SPN_REQUIRED_ORACLE_DATA_MISSING"))
+    if oracle !== nothing
+        get(oracle, "finite", false) === true || throw(ArgumentError("SPN_ORACLE_NONFINITE"))
+        for (key, threshold) in (
+            ("max_absolute", "oracle_max_absolute"),
+            ("root_mean_square", "oracle_rms"),
+            ("relative_l2", "oracle_relative_l2"),
+        )
+            haskey(oracle, key) && haskey(thresholds, threshold) ||
+                throw(ArgumentError("SPN_ORACLE_DATA_MISSING: $(key)"))
+            value, limit = Float64(oracle[key]), Float64(thresholds[threshold])
+            isfinite(value) && value >= 0 && isfinite(limit) && limit >= 0 ||
+                throw(ArgumentError("SPN_ORACLE_DATA_INVALID: $(key)"))
+            value <= limit || throw(ArgumentError("SPN_ORACLE_RESIDUAL_EXCEEDED: $(key)"))
+        end
+    end
+    return nothing
 end
 
 """Read, seal-check, and normalize a QE PAW-SPN provenance JSON sidecar."""
@@ -482,134 +354,77 @@ function read_qe_paw_spn_provenance(filename::AbstractString; verify_spn::Bool =
     String(get(payload, "schema", "")) == QE_PAW_SPN_SCHEMA ||
         throw(ArgumentError("QE_PAW_SPN_PROVENANCE_SCHEMA_MISMATCH"))
     schema_version = String(get(payload, "schema_version", ""))
-    schema_version in ("1.0", "1.1", "1.2") ||
+    schema_version == QE_PAW_SPN_SCHEMA_VERSION ||
         throw(ArgumentError("QE_PAW_SPN_PROVENANCE_VERSION_MISMATCH"))
-    modern_intent =
-        haskey(payload, "band_frame_contract") &&
-        haskey(payload, "band_frame_transform_sha256") &&
-        haskey(payload, "band_frame_contract_sha256")
-    contract_version = modern_intent ? "1.2" : schema_version
-    required =
-        contract_version == "1.2" ?
-        (
-            "source_code",
-            "passed",
-            "source_band_gauge",
-            "target_band_gauge",
-            "band_frame_transform_sha256",
-            "band_frame_contract_sha256",
-            "band_frame_contract",
-            "band_gauge_rotation_sha256",
-            "num_bands",
-            "num_kpoints",
-            "physical_metric",
-            "spinor",
-            "kpoints_fractional",
-            "artifacts",
-            "input_sha256",
-            "payload_sha256",
-            "contract_sha256",
-        ) :
-        (
-            "source_code",
-            "passed",
-            "source_band_gauge",
-            "target_band_gauge",
-            "band_gauge_rotation_sha256",
-            "num_bands",
-            "num_kpoints",
-            "physical_metric",
-            "spinor",
-            "kpoints_fractional",
-            "artifacts",
-            "input_sha256",
-            "payload_sha256",
-            "contract_sha256",
-        )
+    any(
+        haskey(payload, key) for
+        key in ("band_gauge_rotation_sha256", "band_gauge_rotation_semantics")
+    ) && throw(ArgumentError("QE_PAW_SPN_LEGACY_ROTATION_FIELDS_REQUIRE_MIGRATION"))
+    required = (
+        "source_code",
+        "require_oracle",
+        "thresholds",
+        "source_band_gauge",
+        "target_band_gauge",
+        "band_frame_transform_definition",
+        "band_frame_contract_definition",
+        "band_frame_contract",
+        "num_bands",
+        "num_kpoints",
+        "physical_metric",
+        "spinor",
+        "kpoints_fractional",
+        "artifacts",
+        "input_definitions",
+        "references_hdf5",
+        "content_authentication",
+    )
     all(haskey(payload, key) for key in required) ||
         throw(ArgumentError("QE_PAW_SPN_PROVENANCE_INCOMPLETE"))
+    payload["require_oracle"] isa Bool || throw(ArgumentError("SPN_ORACLE_POLICY_INVALID"))
+    _validate_spn_residual_data(
+        payload,
+        payload["thresholds"],
+        get(payload, "oracle_parity", nothing),
+        payload["require_oracle"],
+    )
     artifacts = Dict{String, String}(
         String(key) => String(value) for (key, value) in pairs(payload["artifacts"])
     )
     input_sha256 = Dict{String, String}(
-        String(key) => String(value) for (key, value) in pairs(payload["input_sha256"])
+        String(key) => String(value) for (key, value) in pairs(payload["input_definitions"])
     )
     kpoints =
         reduce(vcat, transpose(Float64.(collect(row))) for row in payload["kpoints_fractional"])
-    spn_hash = get(artifacts, "spn_sha256", "NOT_PUBLISHED")
-    provenance_contract_sha256 = if contract_version == "1.2"
-        _spn_provenance_contract_sha256(
-            payload["schema"],
-            payload["schema_version"],
-            payload["source_code"],
-            payload["passed"],
-            payload["source_band_gauge"],
-            payload["target_band_gauge"],
-            payload["band_frame_transform_sha256"],
-            payload["band_frame_contract_sha256"],
-            payload["num_bands"],
-            payload["num_kpoints"],
-            payload["physical_metric"],
-            payload["spinor"],
-            spn_hash,
-            input_sha256,
-            kpoints,
-        )
-    else
-        _spn_provenance_contract_sha256(
-            payload["schema"],
-            payload["schema_version"],
-            payload["source_code"],
-            payload["passed"],
-            payload["source_band_gauge"],
-            payload["target_band_gauge"],
-            payload["band_gauge_rotation_sha256"],
-            payload["num_bands"],
-            payload["num_kpoints"],
-            payload["physical_metric"],
-            payload["spinor"],
-            spn_hash,
-            input_sha256,
-            kpoints,
-        )
+    String(payload["content_authentication"])=="NOT_PERFORMED" ||
+        throw(ArgumentError("QE_PAW_SPN_EXPLICIT_MIGRATION_REQUIRED"))
+    references=HDF5.h5open(String(payload["references_hdf5"]), "r") do handle
+        _read_spn_complete_references(handle)
     end
-    String(payload["contract_sha256"]) == provenance_contract_sha256 ||
-        throw(ArgumentError("QE_PAW_SPN_PROVENANCE_CONTRACT_DIGEST_MISMATCH"))
-    payload_sha256 = _qe_spn_payload_sha256(payload)
-    String(payload["payload_sha256"]) == payload_sha256 ||
-        throw(ArgumentError("QE_PAW_SPN_PROVENANCE_DIGEST_MISMATCH"))
     if verify_spn
-        haskey(artifacts, "spn") && haskey(artifacts, "spn_sha256") ||
-            throw(ArgumentError("QE_PAW_SPN_PROVENANCE_ARTIFACT_MISSING"))
-        isfile(artifacts["spn"]) || throw(ArgumentError("QE_PAW_SPN_OUTPUT_MISSING"))
-        sha256_file(artifacts["spn"]) == artifacts["spn_sha256"] ||
-            throw(ArgumentError("QE_PAW_SPN_OUTPUT_DIGEST_MISMATCH"))
+        haskey(artifacts, "spn") || throw(ArgumentError("QE_PAW_SPN_OUTPUT_MISSING"))
+        _validate_spn_reference(references, artifacts["spn"])
     end
     return (
         schema = String(payload["schema"]),
         schema_version = String(payload["schema_version"]),
         source_code = Symbol(String(payload["source_code"])),
-        passed = Bool(payload["passed"]),
         source_band_gauge = String(payload["source_band_gauge"]),
         target_band_gauge = String(payload["target_band_gauge"]),
-        transform_sha256 = contract_version == "1.2" ?
-                           String(payload["band_frame_transform_sha256"]) :
-                           String(payload["band_gauge_rotation_sha256"]),
-        contract_sha256 = contract_version == "1.2" ?
-                          String(payload["band_frame_contract_sha256"]) :
-                          "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED",
-        frame_contract = contract_version == "1.2" ?
-                         Dict{String, Any}(
+        transform_definition = String(payload["band_frame_transform_definition"]),
+        contract_definition = String(payload["band_frame_contract_definition"]),
+        frame_contract = Dict{String, Any}(
             String(key) => value for (key, value) in pairs(payload["band_frame_contract"])
-        ) : Dict{String, Any}("status" => "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED"),
-        rotation_sha256 = String(payload["band_gauge_rotation_sha256"]),
+        ),
         num_bands = Int(payload["num_bands"]),
         num_kpoints = Int(payload["num_kpoints"]),
         num_kpts = Int(payload["num_kpoints"]),
         physical_metric = String(payload["physical_metric"]),
         spinor = Bool(payload["spinor"]),
         kpoints_fractional = kpoints,
-        payload_sha256,
+        content_authentication = "NOT_PERFORMED",
+        source_reference = references.source_reference,
+        spn_reference = references.spn_reference,
         input_sha256,
         artifacts,
         diagnostics = String.(payload["diagnostics"]),
@@ -647,58 +462,22 @@ function _spn_validation_file_identity(path)
     )
 end
 
-"""Reuse a qualified attestation without persisting process-local verification credentials."""
+"""Validate actual SPN inputs afresh when no complete owned cache definition is available."""
 function _read_and_validate_spn_provenance(
     provenance_path::AbstractString,
     spn_path::AbstractString;
     reader = _read_and_validate_spn_provenance_uncached,
     kwargs...,
 )
-    context = get(task_local_storage(), :wannier_spn_provenance_reuse, nothing)
-    context === nothing && return reader(provenance_path, spn_path; kwargs...)
-    context.owner === current_task() || throw(ArgumentError("SPN_VALIDATION_COORDINATOR_REQUIRED"))
-    paths = (realpath(provenance_path), realpath(spn_path))
-    key = (paths, repr((; kwargs...)))
-    identities = map(_spn_validation_file_identity, paths)
-    saved = context.slot[]
-    if saved !== nothing && saved.key == key
-        refreshed = map(paths, saved.identities, saved.digests) do path, identity, digest
-            verified_file_digest_identity(
-                path,
-                identity,
-                digest;
-                change_error = "SPN_VALIDATED_INPUT_CHANGED",
-            )
+    # No reuse based only on stat tuples or historical content digests. The
+    # uncached reader retains its provenance and SPN scientific validations.
+    observed = IO.with_scientific_source(provenance_path; resolve_links = true) do provenance
+        nested = IO.with_scientific_source(spn_path; resolve_links = true) do spin
+            reader(provenance, spin; kwargs...)
         end
-        context.slot[] = merge(saved, (; identities = refreshed))
-        return deepcopy(saved.record)
+        nested.value
     end
-    context.slot[] = nothing
-    record, digests, verified_identities = with_verified_file_digests(collect(paths)) do
-        digests = map(sha256_file, paths)
-        record = reader(provenance_path, spn_path; kwargs...)
-        verified_identities = map(paths, identities, digests) do path, identity, digest
-            verified_file_digest_identity(
-                path,
-                identity,
-                digest;
-                change_error = "SPN_INPUT_CHANGED_DURING_VALIDATION",
-            )
-        end
-        (record, digests, verified_identities)
-    end
-    # Legacy attestations may name a separate byte-identical SPN copy. Keep
-    # their original validation path until all named dependencies can be bound.
-    recorded_path = get(record.artifacts, "spn", "")
-    if isfile(recorded_path) && realpath(recorded_path) == paths[2]
-        context.slot[] = (
-            key = key,
-            identities = verified_identities,
-            digests = digests,
-            record = deepcopy(record),
-        )
-    end
-    return record
+    return observed.value
 end
 
 """
@@ -714,49 +493,44 @@ function _read_and_validate_spn_provenance_uncached(
     expected_num_bands::Int,
     expected_num_kpoints::Int,
     target_authority,
-    gauge_artifact_sha256::Union{Nothing, AbstractString} = nothing,
-    band_gauge_rotation_sha256::Union{Nothing, AbstractString} = nothing,
-    band_frame_transform_sha256::Union{Nothing, AbstractString} = nothing,
-    band_frame_contract_sha256::Union{Nothing, AbstractString} = nothing,
+    gauge_definition::Union{Nothing, AbstractString} = nothing,
+    band_frame_transform_definition::Union{Nothing, AbstractString} = nothing,
+    band_frame_contract_definition::Union{Nothing, AbstractString} = nothing,
 )
     record = _read_spn_provenance(provenance_path; verify_spn = true)
-    record.contract_sha256 != "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED" || throw(
+    record.contract_definition != "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED" || throw(
         ArgumentError(
             "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED: complete SPN frame contract is required",
         ),
     )
-    record.passed || throw(ArgumentError("SPN_PROVENANCE_NOT_QUALIFIED"))
     record.spinor || throw(ArgumentError("SPN_PROVENANCE_SPINOR_REQUIRED"))
     record.num_bands == expected_num_bands && record.num_kpoints == expected_num_kpoints ||
         throw(ArgumentError("SPN_PROVENANCE_DIMENSION_MISMATCH"))
     record.source_band_gauge == NATIVE_DFT_BAND_GAUGE &&
     record.target_band_gauge == NATIVE_DFT_BAND_GAUGE ||
         throw(ArgumentError("SPN_PROVENANCE_NATIVE_GAUGE_REQUIRED"))
-    get(record.artifacts, "spn_sha256", "") == sha256_file(spn_path) ||
-        throw(ArgumentError("SPN_PROVENANCE_OUTPUT_DIGEST_MISMATCH"))
+    _validate_spn_reference(record, spn_path)
     native_identity = _identity_band_frame_contract(expected_num_bands, expected_num_kpoints)
-    record.transform_sha256 == native_identity.transform_sha256 ||
-        throw(ArgumentError("SPN_PROVENANCE_IDENTITY_TRANSFORM_DIGEST_MISMATCH"))
-    record.contract_sha256 == native_identity.contract_sha256 ||
+    record.transform_definition == native_identity.transform_definition ||
+        throw(ArgumentError("SPN_PROVENANCE_IDENTITY_TRANSFORM_VALUES_MISMATCH"))
+    record.contract_definition == native_identity.contract_definition ||
         throw(ArgumentError("SPN_PROVENANCE_IDENTITY_FRAME_CONTRACT_DIGEST_MISMATCH"))
-    String(get(record.frame_contract, "status", "")) == "PASS" ||
-        throw(ArgumentError("SPN_PROVENANCE_FRAME_CONTRACT_NOT_QUALIFIED"))
-    String(get(record.frame_contract, "transform_sha256", "")) == record.transform_sha256 ||
-        throw(ArgumentError("SPN_PROVENANCE_FRAME_TRANSFORM_DIGEST_MISMATCH"))
-    String(get(record.frame_contract, "contract_sha256", "")) == record.contract_sha256 ||
+    String(get(record.frame_contract, "transform_definition", "")) == record.transform_definition ||
+        throw(ArgumentError("SPN_PROVENANCE_FRAME_TRANSFORM_VALUES_MISMATCH"))
+    String(get(record.frame_contract, "contract_definition", "")) == record.contract_definition ||
         throw(ArgumentError("SPN_PROVENANCE_FRAME_CONTRACT_DIGEST_MISMATCH"))
     authority =
         target_authority isa AbstractAuthoritativeHamiltonian ?
         authoritative_hamiltonian_key(target_authority) :
         validate_authoritative_hamiltonian_key(String(target_authority))
-    artifact_digest = if gauge_artifact_sha256 === nothing
+    artifact_digest = if gauge_definition === nothing
         authority == authoritative_hamiltonian_key(NativeDFTHamiltonian()) ||
             throw(ArgumentError("SPN_PROVENANCE_GAUGE_ARTIFACT_REQUIRED"))
         "NOT_APPLICABLE"
     else
-        digest = String(something(gauge_artifact_sha256))
-        occursin(r"^[0-9a-f]{64}$", digest) ||
-            throw(ArgumentError("SPN_PROVENANCE_GAUGE_ARTIFACT_DIGEST_INVALID"))
+        digest = String(something(gauge_definition))
+        startswith(digest, "band-frame-contract-values/2:") ||
+            throw(ArgumentError("SPN_PROVENANCE_GAUGE_DEFINITION_REQUIRED"))
         digest
     end
     qualification_target = if authority == authoritative_hamiltonian_key(NativeDFTHamiltonian())
@@ -765,46 +539,41 @@ function _read_and_validate_spn_provenance_uncached(
     else
         SYMMETRIZED_DFT_BAND_GAUGE
     end
-    requested_transform_sha256 =
-        band_frame_transform_sha256 === nothing ? band_gauge_rotation_sha256 :
-        band_frame_transform_sha256
+    requested_transform_definition = band_frame_transform_definition
     qualification_transform = if artifact_digest == "NOT_APPLICABLE"
-        requested_transform_sha256 === nothing ||
-            String(requested_transform_sha256) == native_identity.transform_sha256 ||
-            throw(ArgumentError("SPN_PROVENANCE_IDENTITY_TRANSFORM_DIGEST_MISMATCH"))
-        native_identity.transform_sha256
+        requested_transform_definition === nothing ||
+            String(requested_transform_definition) == native_identity.transform_definition ||
+            throw(ArgumentError("SPN_PROVENANCE_IDENTITY_TRANSFORM_VALUES_MISMATCH"))
+        native_identity.transform_definition
     else
-        requested_transform_sha256 === nothing &&
+        requested_transform_definition === nothing &&
             throw(ArgumentError("SPN_PROVENANCE_BAND_FRAME_TRANSFORM_REQUIRED"))
-        digest = String(something(requested_transform_sha256))
-        occursin(r"^[0-9a-f]{64}$", digest) ||
-            throw(ArgumentError("SPN_PROVENANCE_BAND_FRAME_TRANSFORM_DIGEST_INVALID"))
+        digest = String(something(requested_transform_definition))
+        startswith(digest, "band-frame-transform-values/2:") ||
+            throw(ArgumentError("SPN_PROVENANCE_BAND_FRAME_VALUES_REQUIRED"))
         digest
     end
     qualification_contract = if artifact_digest == "NOT_APPLICABLE"
-        band_frame_contract_sha256 === nothing ||
-            String(band_frame_contract_sha256) == native_identity.contract_sha256 ||
+        band_frame_contract_definition === nothing ||
+            String(band_frame_contract_definition) == native_identity.contract_definition ||
             throw(ArgumentError("SPN_PROVENANCE_IDENTITY_FRAME_CONTRACT_DIGEST_MISMATCH"))
-        native_identity.contract_sha256
+        native_identity.contract_definition
     else
-        band_frame_contract_sha256 === nothing &&
+        band_frame_contract_definition === nothing &&
             throw(ArgumentError("SPN_PROVENANCE_BAND_FRAME_CONTRACT_REQUIRED"))
-        digest = String(something(band_frame_contract_sha256))
-        occursin(r"^[0-9a-f]{64}$", digest) ||
-            throw(ArgumentError("SPN_PROVENANCE_BAND_FRAME_CONTRACT_DIGEST_INVALID"))
+        digest = String(something(band_frame_contract_definition))
+        startswith(digest, "band-frame-contract-values/2:") ||
+            throw(ArgumentError("SPN_PROVENANCE_BAND_FRAME_VALUES_REQUIRED"))
         digest
     end
     return merge(
         record,
         (
-            status = "PASS",
-            spn_sha256 = record.artifacts["spn_sha256"],
-            provenance_sha256 = sha256_file(provenance_path),
+            content_authentication = "NOT_PERFORMED",
             qualification_target_band_gauge = qualification_target,
-            qualification_transform_sha256 = qualification_transform,
-            qualification_contract_sha256 = qualification_contract,
-            qualification_rotation_sha256 = qualification_transform,
-            gauge_artifact_sha256 = artifact_digest,
+            qualification_transform_definition = qualification_transform,
+            qualification_contract_definition = qualification_contract,
+            gauge_definition = artifact_digest,
         ),
     )
 end
@@ -830,12 +599,11 @@ end
 
 """Validate that one native-gauge SPN belongs to the exact generator source."""
 function _validate_generation_spn_provenance(record, spn_path, state)
-    record.contract_sha256 != "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED" || throw(
+    record.contract_definition != "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED" || throw(
         ArgumentError(
             "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED: complete SPN frame contract is required",
         ),
     )
-    record.passed || throw(ArgumentError("SPN_PROVENANCE_NOT_QUALIFIED"))
     record.source_code == state.native.source_code ||
         throw(ArgumentError("SPN_PROVENANCE_SOURCE_CODE_MISMATCH"))
     record.source_band_gauge == NATIVE_DFT_BAND_GAUGE &&
@@ -844,8 +612,7 @@ function _validate_generation_spn_provenance(record, spn_path, state)
     record.num_bands == state.topology.num_bands && record.num_kpoints == state.topology.num_kpts ||
         throw(ArgumentError("SPN_PROVENANCE_DIMENSION_MISMATCH"))
     record.spinor || throw(ArgumentError("SPN_PROVENANCE_SPINOR_REQUIRED"))
-    get(record.artifacts, "spn_sha256", "") == sha256_file(spn_path) ||
-        throw(ArgumentError("SPN_PROVENANCE_OUTPUT_DIGEST_MISMATCH"))
+    _validate_spn_reference(record, spn_path)
     size(record.kpoints_fractional) == (state.topology.num_kpts, 3) ||
         throw(ArgumentError("SPN_PROVENANCE_KPOINT_DIMENSION_MISMATCH"))
     for kpoint in 1:state.topology.num_kpts
@@ -856,6 +623,13 @@ function _validate_generation_spn_provenance(record, spn_path, state)
         maximum(abs, delta) <= 1.0e-8 ||
             throw(ArgumentError("SPN_PROVENANCE_KPOINT_ORDER_MISMATCH: kpoint=$(kpoint)"))
     end
+    state.native.source_definition === nothing &&
+        throw(ArgumentError("SPN_SOURCE_REFERENCE_REQUIRED"))
+    IO.validate_scientific_input_definitions_equal(
+        state.native.source_definition,
+        record.source_reference;
+        mismatch_error = "SPN_PROVENANCE_SOURCE_VALUES_MISMATCH",
+    )
     _validate_generation_spn_input_sha256(record, state.input_sha256)
     return nothing
 end

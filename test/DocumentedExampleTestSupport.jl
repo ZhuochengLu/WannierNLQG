@@ -10,11 +10,17 @@ end
 
 const DOCUMENTED_EXAMPLE_TEST_SUPPORT_LOADED = true
 
-"""Identify the three explicitly three-dimensional closed-model example families."""
+"""Identify explicitly three-dimensional closed-model response example families."""
 function documented_example_is_spectral(path)
     return any(
-        startswith(basename(path), name) for
-        name in ("linear_transport_", "linear_optical_response_", "orbital_magnetization_")
+        startswith(basename(path), name) for name in (
+            "linear_transport_",
+            "linear_optical_response_",
+            "orbital_magnetization_",
+            "intrinsic_ahc_",
+            "berry_curvature_dipole_conductivity_",
+            "berry_curvature_quadrupole_conductivity_",
+        )
     )
 end
 

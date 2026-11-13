@@ -129,7 +129,7 @@ function _qe_upf_xml_document(filename::AbstractString)
         end
         EzXML.nodename(EzXML.root(document)) == "UPF" || rethrow(parse_error)
         @warn "QE_UPF_TRAILING_DUPLICATE_IGNORED" filename = abspath(filename) trailing_bytes =
-            ncodeunits(trailer) trailing_sha256 = bytes2hex(SHA.sha256(codeunits(trailer)))
+            ncodeunits(trailer)
         return document
     end
 end

@@ -21,6 +21,10 @@ runs:
     - name: Install pinned Python packages
       shell: bash
       run: python -m pip install --requirement scripts/visualization/requirements.txt
+    - name: Bind publication test interpreter
+      shell: bash
+      run: |
+        python -c 'import os, sys; assert os.path.isabs(sys.executable); open(os.environ["GITHUB_ENV"], "a").write("WANNIERNLQG_VISUALIZATION_PYTHON=" + sys.executable + "\n")'
     - name: Render publication environment probe
       shell: bash
       env:

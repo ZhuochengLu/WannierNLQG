@@ -6,6 +6,9 @@ using WannierNLQG
 length(ARGS) == 1 || error("usage: per_task_parallel_runner.jl OUTPUT_ROOT")
 const PARALLEL_OUTPUT = abspath(only(ARGS))
 const PARALLEL_PACKAGE = normpath(joinpath(@__DIR__, "..", ".."))
+include(joinpath(PARALLEL_PACKAGE, "examples", "ExampleSupport.jl"))
+parallel_fixture_run(config) =
+    ExampleSupport.with_synthetic_operator_bundle(() -> WannierNLQG.run(config))
 const PARALLEL_FIXTURE = joinpath(PARALLEL_PACKAGE, "examples", "fixtures", "synthetic_runtime")
 BLAS.set_num_threads(1)
 const PARALLEL_MPI = get(ENV, "WANNIERNLQG_USE_MPI", "0") == "1"
@@ -39,7 +42,7 @@ function parallel_config(backend, family)
             fermi_energy = 0.0,
             temperature = 0.0,
         ),
-        numerics = OpticalNumerics(broadening = 0.06, denominator_regularization = 0.001),
+        numerics = Numerics(broadening = 0.06, denominator_regularization = 0.001),
         observable = family == "integral" ? FullTensor() :
                      KSliceSelection(
             component = TensorComponent(2, 2, 2),
@@ -56,7 +59,7 @@ function parallel_config(backend, family)
                 fermi_energy = 0.2,
                 temperature = 150.0,
             ),
-            numerics = OpticalNumerics(broadening = 0.11, denominator_regularization = 0.003),
+            numerics = Numerics(broadening = 0.11, denominator_regularization = 0.003),
             observable = FullTensor(),
         )
     else
@@ -65,7 +68,7 @@ function parallel_config(backend, family)
             quantity = "QMK",
             method = "Conventional",
             physics = GeometryParameters(),
-            numerics = GeometryNumerics(denominator_regularization = 0.003),
+            numerics = Numerics(denominator_regularization = 0.003),
             observable = KSliceSelection(
                 component = TensorComponent(1, 2),
                 bands = Subspace([1, 2]),
@@ -88,6 +91,7 @@ function parallel_config(backend, family)
     return TaskConfig(
         model = ModelInput(
             model_file = joinpath(PARALLEL_FIXTURE, "synthetic_tb.dat"),
+            real_space_operator_bundle_file = joinpath(PARALLEL_FIXTURE, "synthetic_operators.h5"),
             real_space_replica_policy = "input",
         ),
         sampling = sampling,
@@ -105,7 +109,7 @@ end
 try
     records = Dict{String, Any}()
     for backend in ("direct", "mixed"), family in ("integral", "kslice")
-        result = WannierNLQG.run(parallel_config(backend, family))
+        result = parallel_fixture_run(parallel_config(backend, family))
         if PARALLEL_RANK == 0
             length(result.task_ids) == 2 || error("Parallel probe must execute both task instances")
             stats = result.sharing.worker_statistics
@@ -140,7 +144,7 @@ try
                 temperature = 300.0,
                 output = :both,
             ),
-            numerics = SHGNumerics(),
+            numerics = Numerics(),
             observable = family == "integral" ? FullTensor() :
                          KSliceSelection(component = TensorComponent(1, 2, 2), bands = AllBands()),
         )
@@ -161,7 +165,7 @@ try
                 progress_enabled = false,
             ),
         )
-        result=WannierNLQG.run(cfg)
+        result=parallel_fixture_run(cfg)
         if PARALLEL_RANK == 0
             for path in result.outputs
                 records[join(

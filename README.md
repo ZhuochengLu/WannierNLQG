@@ -4,101 +4,62 @@
   <img src="docs/assets/wanniernlqg-logo-transparent.png" alt="WannierNLQG logo" width="640">
 </p>
 
-WannierNLQG is a Julia package for nonlinear responses and
-quantum-geometric quantities from Wannier tight-binding models.
+WannierNLQG is a Julia package for nonlinear responses and quantum-geometric quantities from Wannier tight-binding models.
 
-## Highlights
+## Capabilities
 
-- **Gauge-covariant shift-current framework**
+- **Wannier tight-binding and analytical k·p models**
 
-  Conventional sum-over-states,
-  projector-trace, generalized Wilson-loop, and geometric-loop formulations,
-  including gauge-covariant treatment of degenerate and closely spaced band
-  subspaces.
+  Use supported orthogonal or nonorthogonal Wannier tight-binding models, user-defined hopping models and analytical Hamiltonians within the documented [basis and operator requirements](docs/NATIVE_MODELS.md) and [nonorthogonal input scope](docs/NONORTHOGONAL_LOCALIZED.md).
 
-- **Systematic quantum geometry**
+- **K-point sampling and adaptive integration**
 
-  Berry curvature, quantum metric, multipoles,
-  higher-order geometric tensors, and mixed momentum-spin quantities in one
-  framework.
+  Select BZ meshes, paths, slices or bounded Cartesian regions, with [adaptive refinement](docs/ADAPTIVE_INTEGRATION.md) for supported integral responses.
 
-- **Finite-photon-momentum responses**
+- **Symmetry tools**
 
-  Brillouin-zone-integrated and k-slice
-  photon-drag shift and injection currents beyond the spatially uniform
-  $q=0$ regime.
+  Use experimental symmetry-adapted Wannier construction, real-space operator symmetrization and response symmetry analysis or reduction [where supported](docs/RESPONSE_KMESH_SYMMETRY.md).
 
-- **Symmetry-aware routes**
+- **DFT-to-Wannier workflows**
 
-  Experimental support for
-  representation-constrained symmetry-adapted Wannier construction, post-hoc
-  symmetrization of real-space Hamiltonians and operators, and irreducible-k-orbit
-  integration with invariant-tensor reconstruction for supported $q=0$ Integral
-  responses.
+  Construct ordinary or symmetry-adapted Wannier models from supported VASP or Quantum ESPRESSO inputs, with [disentanglement, localization, checkpoints and operator export](docs/WANNIERIZATION.md).
 
-- **Response-symmetry reports**
+- **Efficient dense-mesh calculations**
 
-  For supported responses, human-readable
-  `.out` and JSON outputs identify structural and magnetic space/point groups,
-  the active constraint group and its generators, and real/imaginary tensor
-  components that are forbidden, symmetry-related, or independent.
-
-- **Expert DFT-to-Wannier workflows**
-
-  Generate supported Wannier matrix elements
-  from VASP or Quantum ESPRESSO wavefunctions and construct ordinary or
-  symmetry-adapted Wannier functions with disentanglement, localization,
-  versioned checkpoints, and operator export.
-
-- **Independent multi-task workflows**
-
-  Run repeated or heterogeneous tasks with
-  task-local physics, numerics, observables, and outputs while reusing only
-  dependency-compatible interpolation data.
+  Use Mixed-FFT interpolation, compatible multi-task reuse, selective operator reads and thread/MPI parallelism where supported.
 
 - **Publication-oriented visualization**
 
-  Produce band-structure,
-  integrated-response, and k-slice figures as PDF and 600-dpi PNG with shared
-  configurable styling, strict input validation, and provenance-rich plot
-  sidecars.
-
-- **Efficient dense-mesh execution**
-
-  Mixed-FFT interpolation, symmetry
-  reduction, compatible multi-task interpolation reuse, thread/MPI parallelism
-  where supported, and selective memory-mapped operator-bundle reads reduce
-  redundant computation and memory traffic.
+  Produce band-structure, integrated-response and k-slice figures as PDF and 600-dpi PNG with [configurable styling and provenance sidecars](docs/VISUALIZATION.md).
 
 ## Supported calculations
 
 - **Linear optical responses (Integral and K-slice)**
-  - Drude-like Response — Conventional, Projector.
-  - Frequency-dependent Quantum-Metric Contribution — Conventional, Projector.
-  - Frequency-dependent Berry-Curvature Contribution (anomalous-Hall mechanism) — Conventional, Projector.
+  - Drude-like, Quantum-Metric, and Berry-Curvature Contributions — Conventional and Projector.
 
 - **Nonlinear optical responses (Integral and K-slice)**
-  - Shift Current — Conventional, Projector, Wilson Loop, Geometric Loop.
-  - Injection Current.
-  - Injection Spin Current.
-  - Shift Spin Current.
+  - Shift Current — Conventional, Projector, Wilson Loop, and Geometric Loop.
+  - Injection Current — Conventional.
+  - Injection Spin Current — Conventional.
+  - Shift Spin Current — Conventional.
   - Photon Drag Shift Current — Geometric Loop.
-  - Photon Drag Injection Current.
-  - Second-Harmonic Generation.
-  - Additional nonlinear optical response calculations are under active
-    development.
+  - Photon Drag Injection Current — Conventional.
+  - Second-Harmonic Generation — Conventional.
+  - Jerk Current — Conventional.
+  - Third-Harmonic Generation — Conventional.
 
 - **Linear transport (Integral and K-slice)**
-  - Drude — Conventional, Projector.
-  - Quantum-Metric Contribution — Conventional, Projector.
-  - Berry-Curvature Contribution (anomalous Hall effect) — Conventional, Projector.
+  - Drude, Quantum-Metric, and Berry-Curvature Contributions — Conventional and Projector.
+  - Independent Intrinsic Anomalous Hall Conductivity — Conventional and Projector.
+
+- **BCD/BCQ DC Hall conductivity (Integral and K-slice)**
+  - Berry-Curvature-Dipole and Berry-Curvature-Quadrupole DC Hall Conductivity — Conventional.
 
 - **Modern orbital magnetization (Integral and K-slice)**
-  - Orbital Magnetization — Conventional, Projector.
+  - Orbital Magnetization — Conventional and Projector.
 
 - **Quantum-geometric quantities (K-slice)**
-  - Quantum Hermitian Connection — Conventional, Projector, Wilson Loop,
-    Geometric Loop.
+  - Quantum Hermitian Connection — Conventional, Projector, and Wilson Loop.
   - Hermitian Curvature Tensor.
   - Berry Curvature and its dipole and quadrupole.
   - Quantum Metric and its dipole and quadrupole.
@@ -106,124 +67,61 @@ quantum-geometric quantities from Wannier tight-binding models.
   - Zeeman Interband Berry Curvature and Zeeman Interband Quantum Metric.
   - Quantum Christoffel Symbol.
   - Triple Phase Product.
-  - Shift Vector — Wilson Loop, Geometric Loop.
-  - Additional quantum-geometric quantity calculations are under active
-    development.
+  - Shift Vector — Wilson Loop and Geometric Loop.
 
 - **Band structures (KPath)**
   - Band interpolation.
 
-- **Many additional features are under active development.**
-
 ## Requirements
 
-- Julia 1.10 or later.
+- Julia 1.10–1.11 or Julia 1.13.0. The supplied lockfile targets Julia 1.13.0.
 - A local checkout of the source tree.
 - MPI is optional for distributed execution and the MPI test suite.
 
-## Installation
+## Getting started
 
-From the package root:
+Unpack the WannierNLQG 1.2.0 source archive and open a terminal in the directory containing `Project.toml`; use Julia 1.13.0 with the supplied lockfile:
 
-```bash
-julia --project=. -e 'using Pkg; Pkg.instantiate(); using WannierNLQG'
+```sh
+JULIA_PKG_PRECOMPILE_AUTO=0 julia --startup-file=no --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile(; strict=true)'
+julia --startup-file=no --project=. scripts/wanniernlqg.jl check examples/text_input/band-column-nodes.toml
+julia --startup-file=no --project=. scripts/wanniernlqg.jl run examples/text_input/band-column-nodes.toml --records band-records
 ```
 
-For explicit package precompilation, extension preparation, and safe isolated
-cache rebuilding, see [the precompilation guide](docs/PRECOMPILATION.md).
+The synthetic example writes a Band `.dat` table under `examples/text_input/results/column-band/` and run records under `band-records/`.
 
-## Quick start
-
-The repository includes one validated synthetic input for every registered
-task. This example runs conventional Shift Current on an explicit 2 by 2 smoke
-mesh:
-
-```julia
-include("examples/tasks/integral/shift_current_conventional.jl")
-
-config = build_config(
-    k_mesh = (2, 2),
-    output_root = joinpath(mktempdir(), "readme-smoke"),
-    progress_enabled = false,
-)
-
-result = WannierNLQG.run(config)
-println.(result.outputs)
-```
-
-The smoke mesh checks the interface and output path; it is not a convergence
-recommendation. Replace the synthetic model, filling, sampling, and numerical
-parameters before studying a material.
-
-The grouped response interface separates:
-
-- `ModelInput`: model files, operator sources, and basis conventions.
-- `BZMesh`, `KSlice`, or `KPath`: the sampling definition for one run.
-- `TaskSpec`: the quantity, method, physics, numerics, and observable.
-- `ExecutionOptions`: Fourier backend, execution, and response symmetry.
-- `OutputOptions`: output location, naming, precision, and progress reporting.
-
-See the user guide and runnable examples for the complete task registry and
-parameter definitions.
+Initial dependency downloads may require network access; ordinary use relies on Julia's precompiled package cache, and the example is an interface check rather than a material-convergence calculation. See [precompilation and environment setup](docs/PRECOMPILATION.md), [optional system images](docs/PRECOMPILATION.md#optional-local-system-image-build), [MPI execution](USER_GUIDE.md#7-running-outputs-and-environment-variables), [TOML input](docs/TEXT_INPUT.md) and the [Julia API](docs/PUBLIC_API.md) for details.
 
 ## Tutorials
 
-For a practical path from the Quick start example to real-material studies,
-see the [WannierNLQG tutorials](https://github.com/ZhuochengLu/WannierNLQG-tutorials).
-The tutorials provide reproducible examples of material inputs, runnable
-configurations, reference results, and visualization workflows for supported
-calculations.
+For a practical path from the Quick start example to real-material studies, see the [WannierNLQG tutorials](https://github.com/ZhuochengLu/WannierNLQG-tutorials). The tutorials provide reproducible examples of material inputs, runnable configurations, reference results, and visualization workflows for supported calculations.
 
 ## Documentation
 
-- [User guide](USER_GUIDE.md)
-- [Runnable task examples](examples/tasks/)
-- [Documentation index](docs/README.md)
+- [User guide](USER_GUIDE.md) and [documentation index](docs/README.md)
+- [TOML input and CLI](docs/TEXT_INPUT.md)
+- [Installation, precompilation and optional system images](docs/PRECOMPILATION.md)
+- [Julia API overview](docs/PUBLIC_API.md) and [runnable task examples](examples/tasks/)
+- [Development and testing guide](docs/DEVELOPMENT.md)
+- [User-defined tight-binding and analytical k·p models](docs/NATIVE_MODELS.md)
+- [Nonorthogonal localized-basis inputs](docs/NONORTHOGONAL_LOCALIZED.md)
+- [K-point domains and adaptive integration](docs/ADAPTIVE_INTEGRATION.md)
 - [Band structures](docs/BAND_STRUCTURE.md)
-- [Visualization](docs/VISUALIZATION.md)
+- [Linear transport, optics and orbital magnetization](docs/LINEAR_AND_ORBITAL_RESPONSES.md)
+- [Second-harmonic generation](docs/SECOND_HARMONIC_GENERATION.md)
+- [Jerk current and third-harmonic generation](docs/THIRD_ORDER_RESPONSES.md)
+- [Quantum-geometry options and Wannier mesh inputs](docs/GEOMETRY_OPTIONS_MIGRATION.md)
+- [Finite-q optical links](docs/FINITE_Q_OPTICAL_LINKS.md)
 - [Response k-mesh symmetry](docs/RESPONSE_KMESH_SYMMETRY.md)
-- [Magnetic point-group identity convention](docs/MAGNETIC_POINT_GROUP_CONVENTION.md)
-- [Magnetic catalogue generation receipt](catalog-generation-receipt.json)
+- [Magnetic point-group conventions](docs/MAGNETIC_POINT_GROUP_GUIDE.md)
 - [Tight-binding symmetrization](docs/SYMMETRIZATION.md)
-- [Symmetry-adapted Wannierization](docs/WANNIERIZATION.md)
-- [Public API overview](docs/MIGRATION_1.0.0.md)
-- [Release notes](docs/RELEASE_NOTES.md)
-- [Changelog](CHANGELOG.md)
-
-Version 1.1.1 is a locally promoted Mixed-FFT cache maintenance version. Version 1.1.0 adds
-second-harmonic generation. The API documented for
-version 1.0.0 remains the public baseline; changelog entries describe
-differences from the preceding public tag.
-
-## Testing
-
-Run the default Fast suite:
-
-```bash
-julia --project=. -e 'using Pkg; Pkg.test()'
-```
-
-Run one Full-only shard or the MPI-only suite explicitly:
-
-```bash
-WANNIERNLQG_TEST_MODE=full-shard \
-WANNIERNLQG_TEST_SHARD=wannier-core \
-  julia --project=. -e 'using Pkg; Pkg.test()'
-WANNIERNLQG_TEST_MODE=mpi-only \
-  julia --project=. -e 'using Pkg; Pkg.test()'
-```
-
-The complete static shard inventory and all valid mode names are defined in
-`test/CITestPlan.jl`. The GitHub Actions manual dispatch runs every shard.
-
-Package tests use repository-owned synthetic fixtures and establish software
-regression coverage. They do not establish convergence, physical validity, or
-production qualification for a material-specific calculation.
+- [Wannier construction](docs/WANNIERIZATION.md)
+- [Visualization](docs/VISUALIZATION.md)
+- [Release notes](docs/RELEASE_NOTES.md) and [changelog](CHANGELOG.md)
 
 ## Citation and community
 
-If you use WannierNLQG in research, cite the software release and the method
-references relevant to the calculation you performed:
+If you use WannierNLQG in research, cite the software release and the method references relevant to the calculation you performed:
 
 > Zhuocheng Lu, Zhichao Guo, Yuanyuan Xu, Jiacheng Yao, and Hua Wang.
 > “[*WannierNLQG: A Julia package for nonlinear optical responses and quantum
@@ -248,5 +146,4 @@ WannierNLQG has received code contributions from:
 
 ## License
 
-This source release is distributed under the
-[GNU General Public License version 2 only (`GPL-2.0-only`)](LICENSE).
+This source release is distributed under the [GNU General Public License version 2 only (`GPL-2.0-only`)](LICENSE).

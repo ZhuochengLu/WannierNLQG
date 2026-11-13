@@ -1,6 +1,6 @@
 const PROJECTION_REPRESENTATION_SEARCH_SCHEMA = "WannierNLQG.projection_representation_search"
-const PROJECTION_REPRESENTATION_SEARCH_SCHEMA_VERSION = "1.0"
-const _PROJECTION_REPRESENTATION_SEARCH_MIRROR_SCHEMA = "WannierNLQG.projection_search_hdf5_mirror/2.1"
+const PROJECTION_REPRESENTATION_SEARCH_SCHEMA_VERSION = "4.0"
+const _PROJECTION_REPRESENTATION_SEARCH_MIRROR_SCHEMA = "WannierNLQG.projection_search_hdf5_mirror/3.0"
 
 # Encode one dense array without depending on JSON's multidimensional layout.
 _projection_json_array(values) =
@@ -27,14 +27,14 @@ function _projection_candidate_payload(candidate::ProjectionCandidateSpec)
     )
 end
 
-# Encode the pinned upstream behavior profile in canonical field order.
-function _projection_compatibility_payload(info::ProjectionRepresentationCompatibilityInfo)
+# Encode the physical character-reduction algorithm profile in canonical field order.
+function _projection_character_reduction_payload(info::ProjectionRepresentationAlgorithmInfo)
     return (
-        upstream_package = info.upstream_package,
-        upstream_version = info.upstream_version,
-        upstream_commit = info.upstream_commit,
-        upstream_source_sha256 = info.upstream_source_sha256,
-        parity_eligible = info.parity_eligible,
+        algorithm_name = info.algorithm_name,
+        algorithm_version = info.algorithm_version,
+        algorithm_contract_sha256 = info.algorithm_contract_sha256,
+        implementation_sha256 = info.implementation_sha256,
+        canonical_reduction_eligible = info.canonical_reduction_eligible,
         scope = String(info.scope),
         character_tolerance = info.character_tolerance,
         character_round_digits = info.character_round_digits,
@@ -68,7 +68,6 @@ function _projection_solution_payload(solution::ProjectionRepresentationSolution
         embedding_residuals = [
             (name = name, value = solution.embedding_residuals[name]) for name in residual_names
         ],
-        validation_sha256 = solution.validation_sha256,
     )
 end
 
@@ -77,14 +76,13 @@ function _projection_search_payload(result::ProjectionRepresentationSearchResult
     return (
         status = String(Symbol(result.status)),
         complete = result.complete,
-        representation_sha256 = result.representation_sha256,
-        contract_sha256 = result.contract_sha256,
-        compatibility = _projection_compatibility_payload(result.compatibility_info),
-        config_sha256 = result.config_sha256,
+        representation_definition = result.representation_definition,
+        contract_definition = result.contract_definition,
+        algorithm = _projection_character_reduction_payload(result.algorithm_info),
         spinor = result.spinor,
         num_wannier = result.num_wannier,
-        outer_mask_sha256 = result.outer_mask_sha256,
-        frozen_mask_sha256 = result.frozen_mask_sha256,
+        outer_mask_definition = result.outer_mask_definition,
+        frozen_mask_definition = result.frozen_mask_definition,
         candidates = [_projection_candidate_payload(candidate) for candidate in result.candidates],
         radial_transform = (
             method = String(result.radial_transform.method),
@@ -102,22 +100,17 @@ end
 # Serialize the canonical logical payload with deterministic object field order.
 _projection_search_payload_json(result) = String(JSON3.write(_projection_search_payload(result)))
 
-# Hash the canonical logical result independently of paths and HDF5 layout.
-function _projection_search_payload_sha256(result::ProjectionRepresentationSearchResult)
-    return bytes2hex(SHA.sha256(codeunits(_projection_search_payload_json(result))))
-end
-
-# Write the compatibility profile into a canonical typed-mirror digest.
-function _projection_search_write_compatibility(io, info)
+# Write the algorithm profile into a canonical typed mirror definition.
+function _projection_search_write_algorithm(io, info)
     for value in (
-        info.upstream_package,
-        info.upstream_version,
-        info.upstream_commit,
-        info.upstream_source_sha256,
+        info.algorithm_name,
+        info.algorithm_version,
+        info.algorithm_contract_sha256,
+        info.implementation_sha256,
     )
         _projection_search_write_string(io, value)
     end
-    write(io, UInt8(info.parity_eligible))
+    write(io, UInt8(info.canonical_reduction_eligible))
     _projection_search_write_string(io, info.scope)
     write(
         io,
@@ -128,10 +121,9 @@ function _projection_search_write_compatibility(io, info)
     return nothing
 end
 
-# Write one solution's validation fields into a canonical typed-mirror digest.
+# Write one solution's validation fields into a canonical typed mirror definition.
 function _projection_search_write_validation(io, solution)
     _projection_search_write_string(io, Symbol(solution.validation_status))
-    _projection_search_write_string(io, solution.validation_sha256)
     residual_names = sort!(collect(keys(solution.embedding_residuals)))
     write(io, Int64(length(residual_names)))
     for name in residual_names
@@ -141,11 +133,11 @@ function _projection_search_write_validation(io, solution)
     return nothing
 end
 
-# Bind the redundant typed HDF5 views so tampering cannot hide behind the JSON capsule.
-function _projection_search_mirror_sha256(result::ProjectionRepresentationSearchResult)
+# Bind the redundant typed HDF5 views to compare actual values with the JSON capsule.
+function _projection_search_mirror_definition(result::ProjectionRepresentationSearchResult)
     io = IOBuffer()
     _projection_search_write_string(io, _PROJECTION_REPRESENTATION_SEARCH_MIRROR_SCHEMA)
-    _projection_search_write_compatibility(io, result.compatibility_info)
+    _projection_search_write_algorithm(io, result.algorithm_info)
     write(io, Int64(length(result.signatures)))
     for signature in result.signatures
         write(io, Int64(signature.kpoint_index))
@@ -167,18 +159,18 @@ function _projection_search_mirror_sha256(result::ProjectionRepresentationSearch
         )
         _projection_search_write_validation(io, solution)
     end
-    return bytes2hex(SHA.sha256(take!(io)))
+    return take!(io)
 end
 
-# Write the pinned upstream behavior profile as a typed HDF5 view.
-function _write_projection_search_compatibility(handle, info)
-    group = HDF5.create_group(handle, "compatibility")
+# Write the physical character-reduction algorithm profile as a typed HDF5 view.
+function _write_projection_search_algorithm(handle, info)
+    group = HDF5.create_group(handle, "algorithm")
     attributes = HDF5.attributes(group)
-    attributes["upstream_package"] = info.upstream_package
-    attributes["upstream_version"] = info.upstream_version
-    attributes["upstream_commit"] = info.upstream_commit
-    attributes["upstream_source_sha256"] = info.upstream_source_sha256
-    attributes["parity_eligible"] = info.parity_eligible
+    attributes["algorithm_name"] = info.algorithm_name
+    attributes["algorithm_version"] = info.algorithm_version
+    attributes["algorithm_contract_sha256"] = info.algorithm_contract_sha256
+    attributes["implementation_sha256"] = info.implementation_sha256
+    attributes["canonical_reduction_eligible"] = info.canonical_reduction_eligible
     attributes["scope"] = String(info.scope)
     attributes["character_tolerance"] = info.character_tolerance
     attributes["character_round_digits"] = info.character_round_digits
@@ -188,7 +180,7 @@ end
 
 # Write redundant typed HDF5 views for direct scientific inspection.
 function _write_projection_search_mirror(handle, result)
-    _write_projection_search_compatibility(handle, result.compatibility_info)
+    _write_projection_search_algorithm(handle, result.algorithm_info)
     signature_group = HDF5.create_group(handle, "signatures")
     for (index, signature) in enumerate(result.signatures)
         group = HDF5.create_group(signature_group, lpad(string(index), 6, '0'))
@@ -206,7 +198,6 @@ function _write_projection_search_mirror(handle, result)
         group["coefficients"] = solution.coefficients
         attributes = HDF5.attributes(group)
         attributes["validation_status"] = String(Symbol(solution.validation_status))
-        attributes["validation_sha256"] = solution.validation_sha256
         signature_values = HDF5.create_group(group, "signature_multiplicities")
         for (signature_index, values) in enumerate(solution.signature_multiplicities)
             signature_values[lpad(string(signature_index), 6, '0')] = values
@@ -219,15 +210,15 @@ function _write_projection_search_mirror(handle, result)
     return nothing
 end
 
-# Read the compatibility profile from the typed HDF5 view.
-function _projection_search_read_compatibility(handle)
-    attributes = HDF5.attributes(handle["compatibility"])
-    return ProjectionRepresentationCompatibilityInfo(
-        String(read(attributes["upstream_package"])),
-        String(read(attributes["upstream_version"])),
-        String(read(attributes["upstream_commit"])),
-        String(read(attributes["upstream_source_sha256"])),
-        Bool(read(attributes["parity_eligible"])),
+# Read the algorithm profile from the typed HDF5 view.
+function _projection_search_read_algorithm(handle)
+    attributes = HDF5.attributes(handle["algorithm"])
+    return ProjectionRepresentationAlgorithmInfo(
+        String(read(attributes["algorithm_name"])),
+        String(read(attributes["algorithm_version"])),
+        String(read(attributes["algorithm_contract_sha256"])),
+        String(read(attributes["implementation_sha256"])),
+        Bool(read(attributes["canonical_reduction_eligible"])),
         Symbol(String(read(attributes["scope"]))),
         Float64(read(attributes["character_tolerance"])),
         Int(read(attributes["character_round_digits"])),
@@ -235,11 +226,11 @@ function _projection_search_read_compatibility(handle)
     )
 end
 
-# Recompute the redundant-view digest from an open HDF5 artifact.
-function _projection_search_mirror_sha256(handle)
+# Recompute the redundant-view definition from an open HDF5 artifact.
+function _projection_search_mirror_definition(handle)
     io = IOBuffer()
     _projection_search_write_string(io, _PROJECTION_REPRESENTATION_SEARCH_MIRROR_SCHEMA)
-    _projection_search_write_compatibility(io, _projection_search_read_compatibility(handle))
+    _projection_search_write_algorithm(io, _projection_search_read_algorithm(handle))
     signatures = handle["signatures"]
     signature_names = sort!(String.(collect(keys(signatures))))
     write(io, Int64(length(signature_names)))
@@ -271,7 +262,6 @@ function _projection_search_mirror_sha256(handle)
         end
         attributes = HDF5.attributes(group)
         _projection_search_write_string(io, String(read(attributes["validation_status"])))
-        _projection_search_write_string(io, String(read(attributes["validation_sha256"])))
         residual_names =
             String.(collect(JSON3.read(String(read(attributes["embedding_residual_names_json"])))))
         residual_values = Float64.(read(group["embedding_residual_values"]))
@@ -283,36 +273,33 @@ function _projection_search_mirror_sha256(handle)
             write(io, residual_value)
         end
     end
-    return bytes2hex(SHA.sha256(take!(io)))
+    return take!(io)
 end
 
-# Check one lowercase hexadecimal SHA-256 string.
-_projection_search_valid_sha256(value) = occursin(r"^[0-9a-f]{64}$", String(value))
-
-# Verify that persisted compatibility metadata is the pinned behavior profile.
-function _validate_projection_search_compatibility(result)
-    info = result.compatibility_info
+# Verify that persisted algorithm metadata is the declared algorithm profile.
+function _validate_projection_search_algorithm(result)
+    info = result.algorithm_info
     fixed_fields_match =
-        info.upstream_package == PROJECTION_COMPATIBILITY_UPSTREAM_PACKAGE &&
-        info.upstream_version == PROJECTION_COMPATIBILITY_UPSTREAM_VERSION &&
-        info.upstream_commit == PROJECTION_COMPATIBILITY_UPSTREAM_COMMIT &&
-        info.upstream_source_sha256 == PROJECTION_COMPATIBILITY_UPSTREAM_SOURCE_SHA256 &&
-        info.character_tolerance == PROJECTION_COMPATIBILITY_CHARACTER_TOLERANCE &&
-        info.character_round_digits == PROJECTION_COMPATIBILITY_CHARACTER_ROUND_DIGITS &&
-        info.little_group_tolerance == PROJECTION_COMPATIBILITY_LITTLE_GROUP_TOLERANCE
+        info.algorithm_name == PROJECTION_REDUCTION_ALGORITHM_NAME &&
+        info.algorithm_version == PROJECTION_REDUCTION_ALGORITHM_VERSION &&
+        info.algorithm_contract_sha256 == PROJECTION_REDUCTION_CONTRACT_SHA256 &&
+        info.implementation_sha256 == PROJECTION_REDUCTION_IMPLEMENTATION_SHA256 &&
+        info.character_tolerance == PROJECTION_REDUCTION_CHARACTER_TOLERANCE &&
+        info.character_round_digits == PROJECTION_REDUCTION_CHARACTER_ROUND_DIGITS &&
+        info.little_group_tolerance == PROJECTION_REDUCTION_LITTLE_GROUP_TOLERANCE
     fixed_fields_match ||
-        throw(ArgumentError("projection search compatibility profile is not the pinned profile"))
-    info.parity_eligible == (info.scope == :spinless_unitary) ||
-        throw(ArgumentError("projection search compatibility scope is inconsistent"))
+        throw(ArgumentError("projection search algorithm profile is not the pinned profile"))
+    info.canonical_reduction_eligible == (info.scope == :spinless_unitary) ||
+        throw(ArgumentError("projection search algorithm scope is inconsistent"))
     result.spinor &&
-        info.parity_eligible &&
+        info.canonical_reduction_eligible &&
         throw(ArgumentError("a spinor result cannot claim spinless-unitary parity"))
     return nothing
 end
 
 # Verify cross-field invariants that a valid digest alone does not express.
 function _validate_projection_search_result(result)
-    _validate_projection_search_compatibility(result)
+    _validate_projection_search_algorithm(result)
     result.visited_nodes >= 0 || throw(ArgumentError("visited_nodes must be nonnegative"))
     result.total_solution_count >= length(result.solutions) ||
         throw(ArgumentError("total solution count is smaller than retained solutions"))
@@ -361,37 +348,23 @@ function _validate_projection_search_result(result)
         ) || throw(ArgumentError("persisted solution signature multiplicities are invalid"))
         all(value -> isfinite(value) && value >= 0.0, values(solution.embedding_residuals)) ||
             throw(ArgumentError("persisted solution validation residuals are invalid"))
-        expected_validation_sha256 = _projection_solution_validation_sha256(
-            solution.candidate_ids,
-            solution.coefficients,
-            solution.validation_status,
-            solution.embedding_residuals,
-        )
-        _projection_search_valid_sha256(solution.validation_sha256) &&
-        solution.validation_sha256 == expected_validation_sha256 ||
-            throw(ArgumentError("persisted solution validation SHA-256 is inconsistent"))
     end
     return result
 end
 
-"""Atomically persist one complete canonical search result in wire format 1.0."""
+"""Atomically persist one complete canonical search result in wire format 3.0."""
 function write_projection_representation_search_hdf5(
     filename::AbstractString,
     result::ProjectionRepresentationSearchResult,
 )
     _validate_projection_search_result(result)
-    expected_digest = _projection_search_payload_sha256(result)
-    result.payload_sha256 == expected_digest ||
-        throw(ArgumentError("projection search result payload SHA-256 mismatch"))
     canonical_json = _projection_search_payload_json(result)
-    mirror_digest = _projection_search_mirror_sha256(result)
     return atomic_hdf5_write(filename) do temporary
         HDF5.h5open(temporary, "w") do handle
             attributes = HDF5.attributes(handle)
             attributes["schema"] = PROJECTION_REPRESENTATION_SEARCH_SCHEMA
             attributes["schema_version"] = PROJECTION_REPRESENTATION_SEARCH_SCHEMA_VERSION
-            attributes["payload_sha256"] = expected_digest
-            attributes["mirror_sha256"] = mirror_digest
+            attributes["content_authentication"] = "NOT_PERFORMED"
             handle["canonical_payload_json"] = canonical_json
             _write_projection_search_mirror(handle, result)
         end
@@ -433,14 +406,14 @@ function _projection_decode_candidate(record)
     )
 end
 
-# Decode the pinned upstream behavior profile.
-function _projection_decode_compatibility(record)
-    return ProjectionRepresentationCompatibilityInfo(
-        String(record.upstream_package),
-        String(record.upstream_version),
-        String(record.upstream_commit),
-        String(record.upstream_source_sha256),
-        Bool(record.parity_eligible),
+# Decode the physical character-reduction algorithm profile.
+function _projection_decode_algorithm(record)
+    return ProjectionRepresentationAlgorithmInfo(
+        String(record.algorithm_name),
+        String(record.algorithm_version),
+        String(record.algorithm_contract_sha256),
+        String(record.implementation_sha256),
+        Bool(record.canonical_reduction_eligible),
         Symbol(String(record.scope)),
         Float64(record.character_tolerance),
         Int(record.character_round_digits),
@@ -488,7 +461,6 @@ function _projection_decode_solution(record)
         [Int.(collect(values)) for values in record.signature_multiplicities],
         _projection_decode_validation_status(record.validation_status),
         residuals,
-        String(record.validation_sha256),
     )
 end
 
@@ -507,7 +479,7 @@ function _projection_decode_status(value)
 end
 
 # Reconstruct the typed result from one verified canonical JSON capsule.
-function _projection_decode_result(payload, payload_sha256)
+function _projection_decode_result(payload)
     radial = ProjectionRadialTransformConfig(
         method = Symbol(String(payload.radial_transform.method)),
         gauss_laguerre_order = Int(payload.radial_transform.gauss_laguerre_order),
@@ -515,15 +487,13 @@ function _projection_decode_result(payload, payload_sha256)
     return ProjectionRepresentationSearchResult(
         _projection_decode_status(payload.status),
         Bool(payload.complete),
-        String(payload.representation_sha256),
-        String(payload.contract_sha256),
-        _projection_decode_compatibility(payload.compatibility),
-        String(payload.config_sha256),
-        String(payload_sha256),
+        String(payload.representation_definition),
+        String(payload.contract_definition),
+        _projection_decode_algorithm(payload.algorithm),
         Bool(payload.spinor),
         Int(payload.num_wannier),
-        String(payload.outer_mask_sha256),
-        String(payload.frozen_mask_sha256),
+        String(payload.outer_mask_definition),
+        String(payload.frozen_mask_definition),
         [_projection_decode_candidate(value) for value in payload.candidates],
         radial,
         Int(payload.visited_nodes),
@@ -535,7 +505,7 @@ function _projection_decode_result(payload, payload_sha256)
     )
 end
 
-"""Read and fully verify a complete canonical search artifact in wire format 1.0 or 2.1."""
+"""Read and fully verify a complete canonical search artifact in wire format 3.0 (without content authentication)."""
 function read_projection_representation_search_hdf5(filename::AbstractString)
     return HDF5.h5open(filename, "r") do handle
         attributes = HDF5.attributes(handle)
@@ -546,63 +516,25 @@ function read_projection_representation_search_hdf5(filename::AbstractString)
                 "projection search HDF5 schema is $(schema), expected $(PROJECTION_REPRESENTATION_SEARCH_SCHEMA)",
             ),
         )
-        if version == "2.0"
-            throw(
-                ArgumentError(
-                    "projection search schema version $(version) is unsupported; regenerate the artifact with schema version 1.0",
-                ),
-            )
-        end
-        version in ("1.0", "2.1") ||
-            throw(ArgumentError("unsupported projection search schema version $(version)"))
-        # The historical 1.0 layout had no canonical payload/typed mirror contract.
-        # Admit the reused label only when all current contract anchors exist;
-        # subsequent digest or semantic failures never fall back to legacy parsing.
-        if version == "1.0"
-            complete =
-                all(key -> haskey(attributes, key), ("payload_sha256", "mirror_sha256")) && all(
-                    key -> haskey(handle, key),
-                    ("canonical_payload_json", "compatibility", "signatures", "solutions"),
-                )
-            if complete
-                compatibility = HDF5.attributes(handle["compatibility"])
-                complete = all(
-                    key -> haskey(compatibility, key),
-                    (
-                        "upstream_package",
-                        "upstream_version",
-                        "upstream_commit",
-                        "upstream_source_sha256",
-                        "parity_eligible",
-                        "scope",
-                        "character_tolerance",
-                        "character_round_digits",
-                        "little_group_tolerance",
-                    ),
-                )
-            end
-            complete || throw(
-                ArgumentError(
-                    "projection search schema version 1.0 is unsupported legacy or incomplete; regenerate the artifact with the complete current contract",
-                ),
-            )
-        end
-        stored_digest = String(read(attributes["payload_sha256"]))
-        stored_mirror_digest = String(read(attributes["mirror_sha256"]))
+        version == PROJECTION_REPRESENTATION_SEARCH_SCHEMA_VERSION || throw(
+            ArgumentError(
+                "unsupported projection search schema version: $(version); expected $(PROJECTION_REPRESENTATION_SEARCH_SCHEMA_VERSION)",
+            ),
+        )
+        String(read(attributes["content_authentication"])) == "NOT_PERFORMED" ||
+            throw(ArgumentError("unsupported projection search authentication contract"))
         canonical_json = String(read(handle["canonical_payload_json"]))
-        bytes2hex(SHA.sha256(codeunits(canonical_json))) == stored_digest ||
-            throw(ArgumentError("projection search canonical payload SHA-256 mismatch"))
-        _projection_search_mirror_sha256(handle) == stored_mirror_digest ||
-            throw(ArgumentError("projection search HDF5 typed mirror SHA-256 mismatch"))
         payload = JSON3.read(canonical_json)
-        result = _projection_decode_result(payload, stored_digest)
+        result = _projection_decode_result(payload)
         _projection_search_payload_json(result) == canonical_json ||
             throw(ArgumentError("projection search canonical payload is not normalized"))
-        _projection_search_payload_sha256(result) == stored_digest ||
-            throw(ArgumentError("projection search reconstructed payload SHA-256 mismatch"))
-        typed_compatibility = _projection_search_read_compatibility(handle)
-        typed_compatibility == result.compatibility_info ||
-            throw(ArgumentError("projection search typed compatibility view is inconsistent"))
+        # Compare actual redundant values; no checksum authenticates either view.
+        _projection_search_mirror_definition(handle) ==
+        _projection_search_mirror_definition(result) ||
+            throw(ArgumentError("projection search HDF5 typed view differs from canonical values"))
+        typed_algorithm = _projection_search_read_algorithm(handle)
+        typed_algorithm == result.algorithm_info ||
+            throw(ArgumentError("projection search typed algorithm view is inconsistent"))
         return _validate_projection_search_result(result)
     end
 end
@@ -613,12 +545,10 @@ function _write_projection_representation_search_json(
     result::ProjectionRepresentationSearchResult,
 )
     _validate_projection_search_result(result)
-    result.payload_sha256 == _projection_search_payload_sha256(result) ||
-        throw(ArgumentError("projection search result payload SHA-256 mismatch"))
     summary = (
         schema = PROJECTION_REPRESENTATION_SEARCH_SCHEMA,
         schema_version = PROJECTION_REPRESENTATION_SEARCH_SCHEMA_VERSION,
-        payload_sha256 = result.payload_sha256,
+        content_authentication = "NOT_PERFORMED",
         result = _projection_search_payload(result),
     )
     content = String(JSON3.write(summary))

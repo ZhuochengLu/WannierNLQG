@@ -32,6 +32,7 @@ const TEST_REACHABLE_SCRIPT_ENTRIES = (
     "plot_kslice.jl",
     "plot_response_integral.jl",
     "visualization",
+    "test_support",
 )
 
 const TEST_CONTRACT_SUPPORT_SCRIPTS = (
@@ -52,7 +53,6 @@ function test_contract_entries()
         ".github",
         ".JuliaFormatter.toml",
         ".gitignore",
-        "AGENTS.md",
         "API_BREAKING_CHANGES.md",
         "CHANGELOG.md",
         "CITATION.cff",

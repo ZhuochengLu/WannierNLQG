@@ -1,8 +1,71 @@
 # Changelog
 
+Current local software identity: **1.2.0**. This is the public source profile; remote publication is separate.
+
+
+## Input validation and Wannierization reports
+
+- Check every explicit TOML numerical value before resolving legal overrides.
+- Keep detailed validation in JSON and summarize human-readable output with
+  aligned metric labels, units, visible failures and grouped warnings.
+
+## Geometry and Wannier mesh inputs
+
+- Add direct standard-axis 1D/2D native model inputs with fixed one-Angstrom auxiliary reference directions, shared bulk normalization and unchanged physical sampling dimension. Existing complete 3x3 model inputs retain their original semantics.
+
+- Conventional scalar geometry now defaults to an explicit zero-regularization branch;
+  supplied positive widths keep their existing regularized expressions.
+- Ordinary Quantum Metric and its derivatives default to internal contributions;
+  `include_external=true` retains qualified orthogonal completion and is explicitly
+  unsupported for nonorthogonal input. Nonorthogonal internal H/S/r tasks share
+  the same configuration framework.
+- Read and validate VASP/QE mesh declarations against actual ordered wavefunctions
+  or external matrix point lists. Preserve explicit input and reject conflicts.
+- See [migration and numerical compatibility](docs/GEOMETRY_OPTIONS_MIGRATION.md).
+
+## Shared response point kernels, integration and slice densities
+
+- Separate worker-owned physical point evaluation from regular-grid, adaptive
+  integration and slice consumers across existing charge, spin, geometric,
+  spectral, second-order, third-order and Berry-multipole response families.
+- Add intrinsic anomalous Hall and BCD/BCQ conductivity slices, and retain the
+  declared finite-model Conventional nonorthogonal orbital moment in slices.
+- Remove the sample-count integration weight from legacy current slices;
+  preserve response-specific physical coefficients and units. Integral weights
+  remain in the integration consumer.
+- Execute multiple nodes of an adaptive rule concurrently with MPI while retaining
+  the global tree, tensor norm, complete-rule budget and summation order.
+- Validate periodic direct low-dimensional point-orbital symmetry using the
+  existing model, representation, covariance and orbit machinery, with no mixing
+  or translation into auxiliary directions. Strictly one-dimensional BCD/BCQ
+  uses the existing zero Berry two-form rather than adding transverse dynamics.
+
+## Local 1.2.0: unified Numerics and third-order responses
+
+- Breaking API: all tasks use `Numerics`; retired numerical constructors are removed without aliases. Optical, low-frequency, static-gap and Fermi-surface controls remain independent.
+- Add ordered jerk current (`JC/JCK`) and independent optimized THG (`THG/THGK`), complex tensors, terms and observables. Periodic results use reference-cell volume normalization; the retired response-level measure/thickness conversion fields explicitly fail and conversions belong to postprocessing.
+- Keep existing response formulas, default values, filenames, column layouts and summation order.
+- Jerk acceleration-channel and THG applicability and broadening conventions are
+  documented in [third-order responses](docs/THIRD_ORDER_RESPONSES.md); no complete
+  degenerate-block extension or material-convergence qualification is asserted.
+- Local implementation evidence and reference code are archived separately from the release source.
+
 This changelog records user-visible differences between public WannierNLQG
 releases. Version 1.0.0 establishes the public baseline; each later entry will
 describe changes relative to the preceding public tag.
+
+## 1.2.0 — Fixed point-orbital model inputs
+
+- Add native Julia real-space hopping and direct analytic Hamiltonian inputs,
+  using the ordinary response registry with each basis and operator requirement.
+- Require explicit orbital centers and constant local spin matrices; derive
+  position, overlap and weighted operators from the finite point-orbital basis.
+- Add explicit/ForwardDiff/opt-in finite-difference derivatives with actual-use
+  evidence, bounded Cartesian integration and dimension-aware response units.
+- Add model-bound periodic symmetry declarations, Bloch representation validation
+  and hard covariance checks before supported q=0 response reduction.
+- Inherit the latest v1.1.0 three-mechanism linear-response output contract,
+  including its transport schema /2.0; unrelated storage schemas are unchanged.
 
 ## 1.1.1 — Local maintenance
 
@@ -59,7 +122,7 @@ remain historical and do not qualify this new source identity.
   a corrected assembler; raw inputs remain reusable subject to their own checks.
   Remaining OAM differences are open. Legacy receipt absence stays readable as
   `LEGACY_UNVERIFIED`; construction receipts do not establish production qualification. See the
-  [rebuild guidance](docs/WANNIERIZATION_CONFIG_MIGRATION.md#neighbor-order-derived-operator-rebuild).
+  [rebuild guidance](docs/WANNIERIZATION_CONFIG.md#neighbor-order-derived-operator-rebuild).
 
 - Add task-derived Wannierization output through `profile=nothing` and typed
   `operator_tasks`, using the shared Core requirement registry before source
@@ -71,7 +134,7 @@ remain historical and do not qualify this new source identity.
   Packed 1.1 provenance. Fresh readers re-resolve the selection and validate
   authority backend/digest/input hashes and final delivery gauge. Runtime's
   explicit finite-model OAM reconstruction does not confer five-operator export
-  qualification. See [selection and migration details](docs/WANNIERIZATION_CONFIG_MIGRATION.md#task-derived-output-selection-in-110).
+  qualification. See [selection and migration details](docs/WANNIERIZATION_CONFIG.md#task-derived-output-selection-in-110).
 
 - Consolidate Wannierization qualification into one typed `WannierizationEligibility`
   block. The checkpoint summary keys `qualified_z_seal`, `route_selection_eligible`,
@@ -100,7 +163,7 @@ remain historical and do not qualify this new source identity.
   keeps an obviously stalled task running to `disentanglement_max_steps`, the
   `1e-10` thresholds, and input-gate strictness are unchanged.
 - Add SHG susceptibility and conductivity for BZ meshes and reciprocal-space slices.
-- Add `SHGParameters` and `SHGNumerics`, with total/seven-term/both output selection.
+- Add `SHGParameters` and `Numerics`, with total/seven-term/both output selection.
 - Preserve independent resonance, low-frequency and intermediate-state regularizations.
 - Correct the Berry-curvature-dipole tensor contraction. Retain the legacy zero-temperature
   switch: one-band terms are omitted at temperatures at or below 1e-7 K.
@@ -187,3 +250,51 @@ WannierNLQG 1.0.0 is the first public release.
 
 WannierNLQG is distributed under `GPL-2.0-only`. Third-party software and data
 retain their own licenses; see [THIRD_PARTY_NOTICE.md](THIRD_PARTY_NOTICE.md).
+
+## Geometric Loop QHC support removal
+
+- **Unsupported method**: Quantum Hermitian Connection with Geometric Loop is no longer supported. Normal task requests and retained expert entry points return an explicit unsupported-method error; no automatic fallback is selected.
+- **Other GL responses**: Shift current, photon-drag shift current and shift vector retain their numerical implementations.
+
+
+
+## Smooth spin-current matrix elements
+
+- **Positive regularization:** ISC and SSC use the shared smooth connection and complementary Hamiltonian-derivative weight. `denominator_regularization` remains in eV with default 0.001 and must be finite and positive. Near-degenerate and finite-gap values can change.
+- **Retired spin threshold:** Explicit `degeneracy_threshold` in an ISC/SSC task raises a migration error instructing removal from that task. Other responses retain their threshold roles. No parameter conversion is implied.
+- **Theory and cache:** The spin-current theory documents the operator derivation, units and finite-subspace limits. Width changes rebuild the shared connection and raw-spin prerequisites before reusing a vertex. This note alone does not establish release or material qualification.
+
+
+## Regularized orbital magnetization
+
+- **Consistent OM vertices:** Conventional and orthogonal Projector OM use a common positive-width complete-velocity Sylvester tangent. The eV width remains `denominator_regularization`, default 0.001. Finite-width numerical results change; other response vertices retain their roles.
+- **Zero-temperature boundaries:** A chemical potential at a spectral interval boundary uses equal weights of the two complete occupied-subspace responses at that same chemical potential. Positive-temperature convolution is unchanged; no fractional density matrix is used as a projector.
+- **Unsupported OM gap parameter:** Explicit `gap_tolerance`, including shared TOML inheritance, reports that OM does not support it. Other responses retain the parameter. No nonorthogonal Projector or material-completion support is added.
+- **Output provenance:** OM tables retain their columns and bind the effective width, vertex prescription and zero-T convention in task identity headers. This entry alone does not assert promotion or material qualification.
+
+- **Jerk/THG parameter cleanup:** Removed the unused third-order `degeneracy_threshold` input and its near-gap counter/metadata. Explicit old inputs report unsupported. Positive regularization, independent fixed diagnostics, occupations and tensor contractions retain their previous numerical behavior.
+
+- **Jerk occupation alignment:** Jerk now uses the ordinary injection-current Fermi--Dirac helper, removing its former small-positive-temperature step. Zero-temperature equality remains occupied; positive-temperature boundary values, last bits and tails may change. SHG/THG occupations and all response kernels outside this update remain unchanged.
+
+- **Metric optical regularization:** Normal nonorthogonal Conventional linear optics now accepts denominator_regularization and defaults to 0.001 eV, matching orthogonal optics; explicit values must be finite and positive. Existing finite-eta geometry is forwarded unchanged. Other eta=0 routes are unaffected.
+
+- **SHG bounded backend alignment:** SHG metric BCD now shares adjacent-gap isolated-band filtering and bare isolated curvature with orthogonal SHG. Metric outer inverses use the existing 1e-7 eV bare cutoff. Finite metric dipoles/generalized derivatives and all unrelated responses are unchanged.
+
+### Optional metric optical cutoff vertices
+
+Metric SHG now uses optional MatrixElements r0/r_eta/Gcut vertices prepared from
+normalized local H/S/r source derivatives. Its first five terms can change at
+finite geometry regularization. BCD and semiclassical Hessian prescriptions,
+other responses, independent positive widths and defaults remain unchanged.
+The existing metric optical_position_vertices expert API retains r_eta/G_Deta;
+new cutoff_optical_position_vertices requires OPTICAL_CUTOFF_VERTICES in the
+metric plan. No new TOML mode, model operator or dependency is required.
+
+### Intrinsic Hall occupation and bare gaps
+
+- Use zero-temperature real-energy `E <= mu` occupation, complete physical
+  velocity and ambient curvature on both Matrix routes and orthogonal Projector.
+- Use direct velocity/gap ratios for every nonzero floating gap; report nonfinite
+  operations explicitly. Remove AHC occupation grouping and its threshold/API.
+- Preserve nonorthogonal overlap and connection terms; nonorthogonal Projector
+  remains unsupported. Other responses retain their numerical contracts.

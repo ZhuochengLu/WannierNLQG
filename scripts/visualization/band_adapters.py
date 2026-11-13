@@ -100,6 +100,7 @@ class BandDataset:
     qualification_label: str
     inputs: tuple[dict[str, Any], ...]
     source_details: dict[str, Any] = field(default_factory=dict)
+    connected_branches: tuple[tuple[int, int], ...] = ()
 
     def audit_record(self) -> dict[str, Any]:
         return {
@@ -109,12 +110,26 @@ class BandDataset:
             "kpoint_count": int(self.distance.size),
             "band_count": int(self.energies_ev.shape[1]),
             "array_shape": list(self.energies_ev.shape),
+            "connected_branches_zero_based_half_open": [list(branch) for branch in (self.connected_branches or ((0, self.distance.size),))],
             "energy_unit": "eV",
             "energy_reference_ev": float(self.energy_reference_ev),
             "energy_convention": "relative_to_declared_reference" if self.energies_are_relative else "absolute",
             "qualification_label": self.qualification_label,
             **self.source_details,
         }
+
+
+def band_node_ticks(dataset: BandDataset) -> tuple[np.ndarray, tuple[str, ...]]:
+    """Show disconnected labels at the same plot distance once, as U|K."""
+    locations, labels = [], []
+    for location, label in zip(dataset.node_distances, dataset.node_labels):
+        if locations and np.isclose(location, locations[-1], atol=1e-12, rtol=0):
+            if label != labels[-1]:
+                labels[-1] += "|" + label
+        else:
+            locations.append(float(location))
+            labels.append(label)
+    return np.asarray(locations), tuple(labels)
 
 
 def _numeric_table(path: str | Path, minimum_columns: int, header_tokens: tuple[str, ...] = ()) -> np.ndarray:
@@ -161,8 +176,8 @@ def _path_contract(path: str | Path, point_count: int, table_kpoints: np.ndarray
     payload = load_json(source)
     schema = payload.get("schema")
     if schema == "wanniernlqg.kpath":
-        if payload.get("schema_version") != "1.0":
-            raise VisualizationError("unsupported WannierNLQG kpath schema_version")
+        if payload.get("schema_version") != "2.0":
+            raise VisualizationError("unsupported WannierNLQG kpath schema_version; explicitly migrate old sidecars with scripts/migrate_kpath.py")
         if int(payload.get("total_kpoints", -1)) != point_count:
             raise VisualizationError("band path total_kpoints disagrees with the energy data")
         if payload.get("distance_unit") != "A^-1":
@@ -179,8 +194,17 @@ def _path_contract(path: str | Path, point_count: int, table_kpoints: np.ndarray
         if not isinstance(nodes, list) or len(nodes) < 2:
             raise VisualizationError("band path needs at least two nodes")
         segments = payload.get("segments")
-        if not isinstance(segments, list) or len(segments) != len(nodes) - 1:
-            raise VisualizationError("band segment count disagrees with the node chain")
+        branches = payload.get("connected_branches")
+        if not isinstance(branches, list) or not branches:
+            raise VisualizationError("band path requires explicit connected branches")
+        branch_ranges = [(int(branch["start_point_index_one_based"]) - 1,
+                          int(branch["end_point_index_one_based"])) for branch in branches]
+        if branch_ranges[0][0] != 0 or branch_ranges[-1][1] != point_count or any(
+                stop - start < 2 or (index and start != branch_ranges[index - 1][1])
+                for index, (start, stop) in enumerate(branch_ranges)):
+            raise VisualizationError("band branches must partition the table into connected chains")
+        if not isinstance(segments, list) or len(segments) != len(nodes) - len(branches):
+            raise VisualizationError("band segment count disagrees with the connected branches")
         if table_kpoints is None:
             raise VisualizationError("WannierNLQG path sidecar requires table k points and distance")
         node_distances: list[float] = []
@@ -204,21 +228,29 @@ def _path_contract(path: str | Path, point_count: int, table_kpoints: np.ndarray
                 raise VisualizationError("band node coordinates disagree with the band table")
         if node_indices[0] != 0 or node_indices[-1] != point_count - 1 or any(b <= a for a, b in zip(node_indices, node_indices[1:])):
             raise VisualizationError("band nodes must span the table with strictly increasing indices")
+        covered = []
         for segment_number, segment in enumerate(segments, start=1):
-            start = node_indices[segment_number - 1]
-            stop = node_indices[segment_number]
+            first_node = int(segment.get("start_node_index_one_based", -1)) - 1
+            last_node = int(segment.get("end_node_index_one_based", -1)) - 1
+            if not 0 <= first_node < len(nodes) - 1 or last_node != first_node + 1:
+                raise VisualizationError("band segment node indices are invalid")
+            start, stop = node_indices[first_node], node_indices[last_node]
+            if not any(left <= start < stop < right for left, right in branch_ranges):
+                raise VisualizationError("a band segment crosses disconnected branches")
+            covered.append(first_node)
             if int(segment.get("segment_index_one_based", -1)) != segment_number:
                 raise VisualizationError("band segment indices must be contiguous")
-            if int(segment.get("start_node_index_one_based", -1)) != segment_number:
-                raise VisualizationError("band segment start-node index is inconsistent")
-            if int(segment.get("end_node_index_one_based", -1)) != segment_number + 1:
-                raise VisualizationError("band segment end-node index is inconsistent")
-            if int(segment.get("start_point_index_one_based", -1)) != start + 1:
-                raise VisualizationError("band segment start point disagrees with the node chain")
-            if int(segment.get("end_point_index_one_based", -1)) != stop + 1:
-                raise VisualizationError("band segment end point disagrees with the node chain")
+            if int(segment.get("start_point_index_one_based", -1)) != start + 1 or int(segment.get("end_point_index_one_based", -1)) != stop + 1:
+                raise VisualizationError("band segment points disagree with the node chain")
             if int(segment.get("kpoints_including_endpoints", -1)) != stop - start + 1:
                 raise VisualizationError("band segment k-point count is inconsistent")
+        expected = [index for index in range(len(nodes) - 1)
+                    if any(left <= node_indices[index] < node_indices[index + 1] < right for left, right in branch_ranges)]
+        if covered != expected:
+            raise VisualizationError("band segment coverage is incomplete or duplicated")
+        for left, right in branch_ranges:
+            if left not in node_indices or right - 1 not in node_indices:
+                raise VisualizationError("band branch endpoints must be declared nodes")
         return (
             np.asarray(node_distances, dtype=float),
             np.asarray(node_indices, dtype=int),
@@ -292,6 +324,7 @@ def load_wanniernlqg_dataset(spec: dict[str, Any]) -> BandDataset:
         True,
         str(spec.get("qualification_label", "PRESENTATION_ONLY")),
         (audited_file(bands, "band_table"),) + path_inputs,
+        connected_branches=tuple((int(branch["start_point_index_one_based"]) - 1, int(branch["end_point_index_one_based"])) for branch in path_payload["connected_branches"]),
     )
 
 
@@ -307,16 +340,37 @@ def load_standard_table_dataset(spec: dict[str, Any]) -> BandDataset:
     energies = table[:, start:stop]
     path_payload = load_json(spec["path"])
     kpoints = finite_array(path_payload.get("fractional_kpoints"), "path fractional_kpoints")
-    node_distances, _, node_labels, path_reference, path_inputs = _path_contract(
+    path_distances = finite_array(path_payload.get("distances_A_inverse"), "path distances")
+    if kpoints.shape != (table.shape[0], 3) or path_distances.shape != distance.shape:
+        raise VisualizationError("standard table path arrays disagree with the band data")
+    if np.any(np.diff(distance) < 0.0) or np.any(np.diff(path_distances) < 0.0):
+        raise VisualizationError("standard table path distances must be nondecreasing")
+    node_distances, node_indices, node_labels, path_reference, path_inputs = _path_contract(
         spec["path"], table.shape[0], kpoints
     )
+    # KPath coordinates come from its branch contract; generic absolute tables
+    # still need their own explicit energy reference (no band-table header).
+    if path_reference is None:
+        try:
+            path_reference = float(path_payload["energy_reference_ev"])
+        except (KeyError, TypeError, ValueError) as exception:
+            raise VisualizationError("standard table KPath sidecar needs finite energy_reference_ev") from exception
+        if not np.isfinite(path_reference):
+            raise VisualizationError("standard table KPath sidecar needs finite energy_reference_ev")
+    branches = ()
+    if path_payload["schema"] == "wanniernlqg.kpath":
+        branches = tuple((int(branch["start_point_index_one_based"]) - 1,
+                          int(branch["end_point_index_one_based"]))
+                         for branch in path_payload["connected_branches"])
     if not np.allclose(
         distance,
-        finite_array(path_payload["distances_A_inverse"], "path distance"),
+        path_distances,
         atol=1e-12,
         rtol=1e-12,
     ):
         raise VisualizationError("standard table x grid disagrees with the path sidecar")
+    if not np.allclose(node_distances, distance[node_indices], atol=1e-12, rtol=1e-12):
+        raise VisualizationError("standard table node distances disagree with the path sidecar")
     energy_unit = str(spec.get("energy_unit", "")).lower()
     if energy_unit == "ev":
         factor = 1.0
@@ -335,6 +389,7 @@ def load_standard_table_dataset(spec: dict[str, Any]) -> BandDataset:
         convention == "relative_to_reference",
         str(spec.get("qualification_label", "PRESENTATION_ONLY")),
         (audited_file(data, "band_table"),) + path_inputs,
+        connected_branches=branches,
     )
 
 
@@ -505,6 +560,8 @@ def load_vasp_eigenval_kpoints_dataset(spec: dict[str, Any]) -> BandDataset:
             "lattice_rows_angstrom": parsed.lattice_rows_angstrom.tolist(),
             "reciprocal_rows_inverse_angstrom": parsed.reciprocal_rows_inverse_angstrom.tolist(),
         },
+        connected_branches=tuple((index * parsed.points_per_segment, (index + 1) * parsed.points_per_segment)
+                                 for index in range(parsed.segment_count)),
     )
 def _select_bands(dataset: BandDataset, spec: dict[str, Any]) -> BandDataset:
     source_band_count = int(dataset.energies_ev.shape[1])
@@ -576,5 +633,9 @@ def validate_shared_path(reference: BandDataset, model: BandDataset) -> None:
         raise VisualizationError("band comparison ordered k paths differ")
     if reference.node_labels != model.node_labels or not np.allclose(reference.node_distances, model.node_distances, atol=1e-12, rtol=1e-12):
         raise VisualizationError("band comparison high-symmetry paths differ")
+    reference_branches = reference.connected_branches or ((0, reference.distance.size),)
+    model_branches = model.connected_branches or ((0, model.distance.size),)
+    if reference_branches != model_branches:
+        raise VisualizationError("band comparison connected branches differ")
     if not np.isclose(reference.energy_reference_ev, model.energy_reference_ev, atol=1e-12, rtol=1e-12):
         raise VisualizationError("band datasets declare different energy references; silent shifts are forbidden")

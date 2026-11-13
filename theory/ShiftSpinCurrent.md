@@ -333,3 +333,14 @@ so strict equality is asserted only in the stated formal limit. For a multiband 
 
 1. J.-M. Lihm and C.-H. Park, “Comprehensive theory of second-order spin photocurrents,” *Phys. Rev. B* **105**, 045201 (2022). [DOI](https://doi.org/10.1103/PhysRevB.105.045201)
 2. J. Qiao, J. Zhou, Z. Yuan, and W. Zhao, “Calculation of intrinsic spin Hall conductivity by Wannier interpolation,” *Phys. Rev. B* **98**, 214402 (2018). [DOI](https://doi.org/10.1103/PhysRevB.98.214402)
+
+
+## Shared one-photon vertex prescription
+
+SSC uses the same one-photon spin-current matrix producer as ISC. See
+[the shared derivation, complementary regularization, units and approximation limits](InjectionSpinCurrent.md#shared-one-photon-spin-current-vertex-and-regularization).
+Its single width is `numerics.denominator_regularization` in eV (default 0.001),
+finite and strictly positive. Explicit `degeneracy_threshold` is no longer accepted
+for this task. The generalized derivative and two-photon vertex defined above
+retain their existing formulas; the new prescription acts in their shared
+one-photon spin-current input. Optical linewidths remain separate.

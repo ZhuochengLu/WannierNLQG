@@ -18,7 +18,7 @@ end
         photon_energies = [0.1],
         spatial_dimension = 2,
         tensor_indices = (1, 3, 2, 1),
-        seedname = "wannier90",
+        seedname = "wannier",
     )
     spec = only(SSC_RUNTIME.validate_config(cfg))
     @test spec.quantity == :shift_spin_current
@@ -42,7 +42,7 @@ end
             photon_energies = [0.1],
             spatial_dimension = 2,
             tensor_indices = (1, 1, 1, 1),
-            seedname = "wannier90",
+            seedname = "wannier",
         ),
     )
     zero_energy_cfg = WannierNLQG.Runtime.EffectiveTaskConfig(
@@ -52,7 +52,7 @@ end
         denominator_regularization = 1.0e-3,
         spatial_dimension = 2,
         tensor_indices = (1, 1, 1, 1),
-        seedname = "wannier90",
+        seedname = "wannier",
     )
     @test only(SSC_RUNTIME.validate_config(zero_energy_cfg)).task == :shift_spin_current_integral
     @test_throws Exception SSC_RUNTIME.validate_config(
@@ -63,12 +63,12 @@ end
             denominator_regularization = 0.0,
             spatial_dimension = 2,
             tensor_indices = (1, 1, 1, 1),
-            seedname = "wannier90",
+            seedname = "wannier",
         ),
     )
 
     mktempdir() do root
-        seed = joinpath(root, "wannier90")
+        seed = joinpath(root, "wannier")
         write(seed * "_tb.dat", "minimal test header\n1.0 0.0 0.0\n0.0 1.0 0.0\n0.0 0.0 1.0\n1\n")
         for suffix in (".spn", ".chk", ".eig", ".mmn")
             touch(seed * suffix)
@@ -81,7 +81,7 @@ end
             denominator_regularization = 1.0e-3,
             spatial_dimension = 2,
             tensor_indices = (1, 1, 1, 1),
-            seedname = "wannier90",
+            seedname = "wannier",
             case_root = root,
             output_root = joinpath(root, "out"),
         )

@@ -1,5 +1,12 @@
 {
   "bundle_file": "pauli_bundle.h5",
-  "bundle_sha256": "6ebee808461d3dcce6556002fea9c8ec8b7f6afe199c6cf13c1697438de6e365",
-  "scope": "Immutable nonzero Pauli input for two registered Zeeman paths; exact captured original data"
+  "bundle_sha256": "e56391f4560b290cce7fc487c910e3a687f8fa86329abea5bf91a304fa3f59d9",
+  "scope": "Current Packed1.3 diagnostic nonzero Pauli fixture; archived051 complete reader\u2192current writer; all numeric bytes and old scientific qualification exactly preserved, no physics/frame upgrade",
+  "original_bundle_sha256": "6ebee808461d3dcce6556002fea9c8ec8b7f6afe199c6cf13c1697438de6e365",
+  "frame_status": "NOT_RECORDED",
+  "spin_qualification": "FAIL",
+  "numerical_equivalence_evidence_sha256": "6c1f9e2597e50f460d9809be3e4fc8377341612bd068e27bb6c6451001414a7f",
+  "previous_current_schema_bundle_sha256": "3683e5cd57f89ba4ffbef10249f06e89b8b7ddaabaf762cee6b7a4eeeb458d7b",
+  "archived_paired_tb_sha256": "d30372289009cc8236511f3cd414c103ea737cac925bcbc0e39634894c81e34b",
+  "paired_tb_source_bytes": 3967
 }

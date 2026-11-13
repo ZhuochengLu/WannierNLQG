@@ -62,6 +62,11 @@ WannierNLQG.IO.write_wannier_tb(model, spectral_test_model())
                     quantity = q,
                     method = method,
                     physics = physics,
+                    # Compare both OM contractions near the gapped eta->0 limit.
+                    # All original cross-method/backend/convention assertions
+                    # and their numerical tolerances remain unchanged.
+                    numerics = q=="orbital_magnetization" ?
+                               Numerics(denominator_regularization = 1e-7) : nothing,
                     observable = observable,
                 ),
             ],
@@ -69,9 +74,9 @@ WannierNLQG.IO.write_wannier_tb(model, spectral_test_model())
         result=WannierNLQG.run(cfg)
         @test !isempty(result.outputs)
         @test result.qualification.execution_eligible
-        @test result.qualification.qualification_status=="DIAGNOSTIC_ONLY"
+        @test result.qualification.qualification_status=="COMPUTATION_READY"
         @test !result.qualification.production_eligible
-        @test result.qualification.quality_review_recommended
+        @test !result.qualification.quality_review_recommended
         @test "LEGACY_INPUT_QUALIFICATION_NOT_RECORDED" in result.qualification.reasons
         @test occursin("[Qualification]", read(result.metadata_path, String))
         tables=Dict(
@@ -182,9 +187,7 @@ end
                 temperature = 300.0,
                 relaxation = rates,
             );
-            numerics = LinearResponseNumerics(
-                fermi_surface = FermiSurfaceBroadening(kind = :gaussian, eta_fs_ev = 0.02),
-            ),
+            numerics = Numerics(fs_kind = :gaussian, eta_fs_ev = 0.02),
         ),
     )
     @test_throws ArgumentError WannierNLQG.Runtime.compile_task_configs(
@@ -206,4 +209,66 @@ end
             sampling = BZMesh(k_mesh = (2, 2)),
         ),
     )
+end
+
+# Separate default-eta behavior from the small-eta cross-method equivalence.
+# Both methods now share the finite complete-velocity prescription.
+function spectral_om_eta_tables(method, eta)
+    result=WannierNLQG.run(
+        TaskConfig(
+            model = ModelInput(model_file = model, wannier_center_convention = "Convention_II"),
+            sampling = BZMesh(k_mesh = (2, 2, 2)),
+            tasks = [
+                TaskSpec(
+                    id = "om_eta_role",
+                    quantity = "orbital_magnetization",
+                    method = method,
+                    physics = OrbitalMagnetizationParameters(
+                        fermi_energies = [0.13],
+                        temperature = 300.0,
+                        input_semantics = :defined_finite_model,
+                    ),
+                    numerics = eta===nothing ? nothing : Numerics(denominator_regularization = eta),
+                ),
+            ],
+            execution = ExecutionOptions(fourier_backend = "Direct"),
+            output = OutputOptions(output_root = mktempdir(), progress_enabled = false),
+        ),
+    )
+    Dict(basename(p)=>spectral_test_table(p) for p in result.outputs if endswith(p, ".dat"))
+end
+@testset "R6 explicit default and geometric-eta roles" begin
+    conventional_default=spectral_om_eta_tables("Conventional", nothing)
+    conventional_eta=spectral_om_eta_tables("Conventional", 0.001)
+    conventional_small=spectral_om_eta_tables("Conventional", 1e-7)
+    projector_default=spectral_om_eta_tables("Projector", nothing)
+    projector_eta=spectral_om_eta_tables("Projector", 0.001)
+    projector_small=spectral_om_eta_tables("Projector", 1e-7)
+    @test keys(conventional_default)==keys(conventional_eta)==keys(conventional_small)==keys(
+        projector_default,
+    )==keys(projector_eta)==keys(projector_small)
+    for name in keys(conventional_default)
+        @test reinterpret(
+            UInt64,
+            vec(conventional_default[name]),
+        )==reinterpret(UInt64, vec(conventional_eta[name]))
+        @test reinterpret(
+            UInt64,
+            vec(projector_default[name]),
+        )==reinterpret(UInt64, vec(projector_eta[name]))
+        @test isapprox(
+            conventional_default[name],
+            projector_default[name];
+            rtol = 2e-11,
+            atol = 1e-28,
+        )
+        @test isapprox(conventional_small[name], projector_small[name]; rtol = 2e-11, atol = 1e-28)
+    end
+    for (regularized, small) in
+        ((conventional_default, conventional_small), (projector_default, projector_small))
+        @test any(
+            !isapprox(regularized[n], small[n]; rtol = 2e-11, atol = 1e-28) for
+            n in keys(regularized)
+        )
+    end
 end

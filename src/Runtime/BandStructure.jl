@@ -1,8 +1,3 @@
-# Hash one typed numerical array for compact TB-support provenance.
-function _band_array_sha256(values::Array)
-    return bytes2hex(SHA.sha256(reinterpret(UInt8, vec(values))))
-end
-
 """
 Execute the spectrum-only Band plan with deterministic global-index ownership.
 """
@@ -50,9 +45,16 @@ function run_task_bundle_fused!(
         progress_fourier_backend!(fourier_summary)
         maximum_residual = rank == 0 ? maximum(residuals; init = 0.0) : 0.0
         maximum_residual = bundle_mpi_bcast(maximum_residual, 0, comm)
-        manifest_file_sha256 =
+        if rank == 0 && maximum_residual > cfg.band_hermiticity_tolerance
+            @warn "Band input Hermiticity residual exceeds the reporting tolerance; inspect the input and solver representation" maximum_residual tolerance =
+                cfg.band_hermiticity_tolerance
+        end
+        manifest_source_identity =
             manifest === nothing ? nothing :
-            bundle_mpi_root_call(() -> checksum_file(manifest.path); comm)
+            bundle_mpi_root_call(
+                () -> scientific_file_identity(observe_scientific_source(realpath(manifest.path)));
+                comm,
+            )
         outputs = bundle_mpi_root_call(
             () -> begin
                 isfile(data_path) && rm(data_path; force = true)
@@ -76,7 +78,7 @@ function run_task_bundle_fused!(
             comm,
         )
         band_summary = (
-            schema = "wanniernlqg.band-metadata",
+            schema = "wanniernlqg.band-metadata/3",
             total_kpoints = point_count,
             node_count = length(path_plan.nodes),
             segment_count = length(path_plan.kpoints_per_segment),
@@ -84,20 +86,27 @@ function run_task_bundle_fused!(
             energy_unit = "eV",
             distance_unit = "A^-1",
             energy_convention = "ascending_eigenvalues_minus_E_ref",
-            fourier_phase = "exp(2pi*i*R_dot_k)/wannier90_degeneracy",
+            fourier_phase = model isa AnalyticKModel ? "NOT_APPLICABLE_ANALYTIC_EVALUATION" :
+                            model isa NonorthogonalLocalizedModel ?
+                            "exp(2pi*i*R_dot_k); explicit localized blocks, no degeneracy weights" :
+                            "exp(2pi*i*R_dot_k)/real_space_multiplicity",
             reciprocal_lattice = "B=2pi*A^(-T), row-lattice A",
             maximum_hermiticity_residual = maximum_residual,
             hermiticity_tolerance = cfg.band_hermiticity_tolerance,
+            hermiticity_warning = maximum_residual > cfg.band_hermiticity_tolerance,
+            hermiticity_tolerance_semantics = "reporting threshold; finite residual does not prevent spectrum output",
             requested_replica_policy = replica.requested_policy,
             effective_replica_policy = replica.effective_policy,
             replica_source = replica.source,
             mp_grid = replica.mp_grid,
             wigner_seitz_tolerance = replica.wigner_seitz_tolerance,
             wigner_seitz_search_size = replica.wigner_seitz_search_size,
-            replica_mapping_sha256 = replica.mapping_sha256,
-            replica_mapping_digest_scheme = replica.mapping_digest_scheme,
+            replica_mapping_reference = replica.mapping_reference,
+            replica_mapping_reference_schema = replica.mapping_reference_schema,
+            input_support_definition = replica.input_support_definition,
+            replica_summary_schema = "wanniernlqg.runtime-replica-summary/4",
             wsvec_file = replica.wsvec_file,
-            wsvec_sha256 = replica.wsvec_sha256,
+            wsvec_identity = replica.wsvec_identity,
             input_minimum_distance_materialized = replica.input_materialized,
             output_minimum_distance_materialized = replica.output_materialized,
             replica_transformed_this_run = replica.transformed_this_run,
@@ -105,33 +114,40 @@ function run_task_bundle_fused!(
             effective_num_r_vectors = replica.output_num_r_vectors,
             lattice_A = model.lattice,
             reciprocal_lattice_A_inverse = reciprocal_lattice(model.lattice),
-            r_vector_support_minimum = Tuple(vec(minimum(model.r_vectors; dims = 2))),
-            r_vector_support_maximum = Tuple(vec(maximum(model.r_vectors; dims = 2))),
-            r_vector_support_sha256 = _band_array_sha256(model.r_vectors),
-            degeneracy_count = length(model.r_degeneracies),
-            degeneracy_minimum = minimum(model.r_degeneracies),
-            degeneracy_maximum = maximum(model.r_degeneracies),
-            degeneracy_sum = sum(model.r_degeneracies),
-            degeneracy_sha256 = _band_array_sha256(model.r_degeneracies),
-            wannier90_degeneracy_applied = true,
+            r_vector_support_minimum = model isa AnalyticKModel ? nothing :
+                                       Tuple(vec(minimum(model.r_vectors; dims = 2))),
+            r_vector_support_maximum = model isa AnalyticKModel ? nothing :
+                                       Tuple(vec(maximum(model.r_vectors; dims = 2))),
+            r_vector_support_definition = model isa AnalyticKModel ? nothing :
+                                          Tuple(
+                ntuple(axis -> model.r_vectors[axis, index], 3) for
+                index in axes(model.r_vectors, 2)
+            ),
+            degeneracy_count = model isa Union{AnalyticKModel, NonorthogonalLocalizedModel} ?
+                               nothing : length(model.r_degeneracies),
+            degeneracy_minimum = model isa Union{AnalyticKModel, NonorthogonalLocalizedModel} ?
+                                 nothing : minimum(model.r_degeneracies),
+            degeneracy_maximum = model isa Union{AnalyticKModel, NonorthogonalLocalizedModel} ?
+                                 nothing : maximum(model.r_degeneracies),
+            degeneracy_sum = model isa Union{AnalyticKModel, NonorthogonalLocalizedModel} ?
+                             nothing : sum(model.r_degeneracies),
+            scalar_degeneracy_definition = model isa
+                                           Union{AnalyticKModel, NonorthogonalLocalizedModel} ?
+                                           nothing : Tuple(model.r_degeneracies),
+            real_space_multiplicity_applied = model isa TightBindingModel,
             model_num_orbitals = model.num_orbitals,
-            qualification = if manifest === nothing
-                "INPUT_QUALIFICATION_NOT_PROVIDED"
-            elseif manifest.production_eligible
-                "INPUT_PRODUCTION_ELIGIBLE"
-            else
-                "DIAGNOSTIC_ONLY"
-            end,
-            production_eligible = manifest === nothing ? false : manifest.production_eligible,
-            qualification_note = "Numerical Hermiticity does not promote physical or production qualification.",
+            qualification = "COMPUTATION_READY",
+            production_eligible = false,
+            qualification_note = "Ordinary spectrum output; measured residuals and retained historical input records are reported separately.",
             manifest_schema = manifest === nothing ? nothing : manifest.schema_version,
-            manifest_scientific_sha256 = manifest === nothing ? nothing :
-                                         manifest.scientific_content_sha256,
-            manifest_geometry_sha256 = manifest === nothing ? nothing :
-                                       manifest.geometry_content_sha256,
-            manifest_file_sha256 = manifest_file_sha256,
-            manifest_paired_tb_sha256 = manifest === nothing ? nothing : manifest.paired_tb_sha256,
-            manifest_hamiltonian_component_sha256 = if manifest === nothing
+            manifest_publication_identity = manifest === nothing ? nothing :
+                                            manifest.publication_identity,
+            manifest_geometry_definition_hex = manifest === nothing ? nothing :
+                                               manifest.geometry_metadata_definition_hex,
+            manifest_source_identity = manifest_source_identity,
+            manifest_paired_tb_source_bytes = manifest === nothing ? nothing :
+                                              manifest.paired_tb_source_bytes,
+            manifest_hamiltonian_component_reference = if manifest === nothing
                 nothing
             else
                 entry_index = findfirst(
@@ -140,7 +156,8 @@ function run_task_bundle_fused!(
                         entry.component_indices == (Int8(0), Int8(0)),
                     manifest.entries,
                 )
-                entry_index === nothing ? nothing : manifest.entries[entry_index].component_sha256
+                entry_index === nothing ? nothing :
+                manifest.entries[entry_index].component_reference
             end,
             manifest_quality_review_recommended = manifest === nothing ? nothing :
                                                   manifest.quality_review_recommended,
@@ -163,6 +180,7 @@ function run_task_bundle_fused!(
             band_summary,
             runtime_replica_summary(replica),
             qualification,
+            runtime_model_geometry(model),
         )
     finally
         release_runtime_storage!(loaded_sources)

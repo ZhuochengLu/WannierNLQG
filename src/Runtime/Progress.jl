@@ -17,10 +17,10 @@ mutable struct ProgressContext
     current_task_label::String
     run_dir::String
     model_file::String
-    model_sha256::String
+    model_identity::String
     num_orbitals::Int
     system_name::String
-    k_mesh::Union{NTuple{2, Int}, NTuple{3, Int}}
+    k_mesh::Union{NTuple{1, Int}, NTuple{2, Int}, NTuple{3, Int}}
     photon_energies::Vector{Float64}
     mpi_size::Int
     execution_mode::String
@@ -51,16 +51,16 @@ function progress_verbosity_symbol(value::AbstractString)
 end
 
 """
-Return the product of the two- or three-dimensional logical k-mesh counts.
+Return the product of the one-, two-, or three-dimensional logical k-mesh counts.
 """
-function progress_total_k(k_mesh::Union{NTuple{2, Int}, NTuple{3, Int}})
+function progress_total_k(k_mesh::Union{NTuple{1, Int}, NTuple{2, Int}, NTuple{3, Int}})
     return prod(k_mesh)
 end
 
 """
 Render mesh dimensions separated by ` x ` for the runtime report.
 """
-function progress_k_mesh_label(k_mesh::Union{NTuple{2, Int}, NTuple{3, Int}})
+function progress_k_mesh_label(k_mesh::Union{NTuple{1, Int}, NTuple{2, Int}, NTuple{3, Int}})
     return join(k_mesh, " x ")
 end
 
@@ -208,7 +208,9 @@ Serialize supported progress values to JSON text: nonfinite reals and nothing be
 
 Symbols and fallback objects serialize as strings; this helper neither writes files nor mutates inputs.
 """
-function progress_json_value(values::AbstractVector)
+Base.@nospecializeinfer Base.@noinline function progress_json_value(
+    @nospecialize(values::AbstractVector)
+)
     return "[" * join(progress_json_value.(values), ",") * "]"
 end
 """
@@ -216,7 +218,7 @@ Serialize supported progress values to JSON text: nonfinite reals and nothing be
 
 Symbols and fallback objects serialize as strings; this helper neither writes files nor mutates inputs.
 """
-function progress_json_value(values::Tuple)
+Base.@nospecializeinfer Base.@noinline function progress_json_value(@nospecialize(values::Tuple))
     return progress_json_value(collect(values))
 end
 """
@@ -224,7 +226,9 @@ Serialize supported progress values to JSON text: nonfinite reals and nothing be
 
 Symbols and fallback objects serialize as strings; this helper neither writes files nor mutates inputs.
 """
-function progress_json_value(value::NamedTuple)
+Base.@nospecializeinfer Base.@noinline function progress_json_value(
+    @nospecialize(value::NamedTuple)
+)
     json_pairs = [
         "\"" * progress_json_escape(string(k)) * "\":" * progress_json_value(v) for
         (k, v) in zip(keys(value), values(value))
@@ -236,7 +240,9 @@ Serialize supported progress values to JSON text: nonfinite reals and nothing be
 
 Symbols and fallback objects serialize as strings; this helper neither writes files nor mutates inputs.
 """
-function progress_json_value(value::AbstractDict)
+Base.@nospecializeinfer Base.@noinline function progress_json_value(
+    @nospecialize(value::AbstractDict)
+)
     entries = collect(pairs(value))
     sort!(entries; by = entry -> string(entry.first))
     json_pairs = [
@@ -358,7 +364,9 @@ Build report lines for effective band-path or response numerical controls withou
 function progress_numerics_lines(ctx::ProgressContext)
     cfg = ctx.cfg
     if progress_is_band_structure_task(ctx.specs[1])
-        point_count = sum(cfg.kpoints_per_segment) - length(cfg.kpoints_per_segment) + 1
+        point_count =
+            sum(cfg.kpoints_per_segment) - length(cfg.kpoints_per_segment) +
+            length(cfg.kpath_branches)
         return String[
             "NUMERICS",
             "  K path",
@@ -426,7 +434,12 @@ function progress_numerics_lines(ctx::ProgressContext)
         "",
         "  Momentum / finite difference",
         progress_kv_line("photon_momentum", "$(cfg.photon_momentum) Ang^-1"),
-        progress_kv_line("finite_difference_step", "$(cfg.finite_difference_step) Ang^-1"),
+        progress_kv_line(
+            "finite_difference_step",
+            cfg.derivative_backend == :analytic ?
+            "not applicable (analytic derivative backend)" :
+            "$(cfg.finite_difference_step) Ang^-1",
+        ),
     ]
     if ctx.specs[1].calculation == :kslice
         append!(
@@ -654,10 +667,9 @@ function progress_system_lines(ctx::ProgressContext)
     summary = ctx.system_summary
     lattice = summary["lattice_vectors_ang"]
     reciprocal = summary["reciprocal_lattice_vectors_inv_ang"]
-    return String[
+    lines = String[
         "SYSTEM",
         @sprintf("  %-18s : %s", "Model file", progress_display_path(ctx, ctx.model_file)),
-        @sprintf("  %-18s : %s...", "Model sha256", first(string(summary["model_sha256"]), 12)),
         @sprintf("  %-18s : %d", "Wannier orbitals", summary["num_orbitals"]),
         @sprintf("  %-18s : %d", "R points", summary["num_r_vectors"]),
         @sprintf(
@@ -679,6 +691,25 @@ function progress_system_lines(ctx::ProgressContext)
         "  Convention: row-lattice, R_cart = R_frac(row) * lattice; q_frac = lattice * q_cart / 2pi",
         "",
     ]
+    if haskey(summary, "localized_representation")
+        representation = summary["localized_representation"]
+        append!(lines, ["  Localized operators: consistent effective H/S/r; raw input retained"])
+        for (label, values) in
+            (("Raw defects", representation.raw), ("Effective defects", representation.effective))
+            push!(
+                lines,
+                "  $(label): H=$(values.hamiltonian_max_entry_ev) eV; S=$(values.overlap_max_entry); r=$(values.position_translation_max_entry_angstrom) Ang",
+            )
+        end
+        adjustment = representation.adjustment
+        push!(
+            lines,
+            "  Adjustment: H=$(adjustment.hamiltonian_max_entry_ev) eV; S=$(adjustment.overlap_max_entry); r=$(adjustment.position_max_entry_angstrom) Ang",
+        )
+        push!(lines, "  Reporting warning: $(representation.exceeds_reporting_tolerance)")
+        push!(lines, "")
+    end
+    return lines
 end
 
 """Resolve the response progress cadence in percent from explicit configuration or the new environment variable."""
@@ -768,6 +799,22 @@ function progress_write_header!(ctx::ProgressContext)
 end
 
 """
+Capture owned full row-lattice geometry from the loaded model for metadata and progress.
+
+The snapshot uses Angstrom and never authenticates a source file or borrows model storage.
+"""
+function runtime_model_geometry(model)
+    lattice = model.lattice
+    size(lattice) == (3, 3) && all(isfinite, lattice) && det(lattice) != 0 ||
+        throw(ArgumentError("loaded model lattice must be finite nonsingular 3x3"))
+    return (
+        schema = "wanniernlqg.model-geometry/1",
+        lattice_rows_angstrom = [Float64[lattice[i, j] for j in 1:3] for i in 1:3],
+        lattice_convention = "row-lattice: R_cart = R_frac(row) * lattice; q_frac = lattice * q_cart / 2pi",
+    )
+end
+
+"""
 Record model dimensions and lattice geometry under the progress lock and emit the corresponding system event.
 
 Return without side effects when no progress context is active.
@@ -777,20 +824,24 @@ function progress_system_summary!(model)
     ctx === nothing && return nothing
     Base.lock(ctx.lock)
     try
+        geometry = runtime_model_geometry(model)
         lattice = model.lattice
         reciprocal = progress_reciprocal_lattice(lattice)
         cell_volume = abs(det(lattice))
         ctx.system_summary = Dict{String, Any}(
             "model_file" => ctx.model_file,
-            "model_sha256" => ctx.model_sha256,
+            "model_identity" => ctx.model_identity,
             "num_orbitals" => model.num_orbitals,
             "num_r_vectors" => model.num_r_vectors,
             "cell_volume_ang3" => cell_volume,
-            "lattice_vectors_ang" => [Float64[lattice[i, j] for j in 1:3] for i in 1:3],
+            "lattice_vectors_ang" => geometry.lattice_rows_angstrom,
             "reciprocal_lattice_vectors_inv_ang" =>
                 [Float64[reciprocal[i, j] for j in 1:3] for i in 1:3],
-            "lattice_convention" => "row-lattice: R_cart = R_frac(row) * lattice; q_frac = lattice * q_cart / 2pi",
+            "lattice_convention" => geometry.lattice_convention,
         )
+        if model isa NonorthogonalLocalizedModel
+            ctx.system_summary["localized_representation"] = model.representation_diagnostics
+        end
         if !ctx.header_written
             progress_write_header!(ctx)
             progress_write_jsonl_event!(
@@ -891,10 +942,7 @@ function progress_response_symmetry!(summary::NamedTuple)
             "  kmesh_mode=$(summary.kmesh_mode), numerical_tensor_projection_applied=$(summary.numerical_tensor_projection_applied)",
         )
         if summary.symmetry_warning_count > 0
-            progress_emit_text!(
-                ctx,
-                "  warnings=$(summary.symmetry_warning_count) (DIAGNOSTIC_ONLY)",
-            )
+            progress_emit_text!(ctx, "  warnings=$(summary.symmetry_warning_count)")
             for warning in summary.symmetry_warnings
                 progress_emit_text!(ctx, "  WARNING: $(warning)")
             end
@@ -919,16 +967,11 @@ function progress_response_qualification!(qualification::ResponseQualificationRe
     try
         progress_emit_text!(
             ctx,
-            "[$(progress_hms(progress_elapsed(ctx)))] QUALIFY   " *
-            "execution=$(summary.execution_eligible) status=$(summary.qualification_status) " *
-            "production=$(summary.production_eligible)",
+            "[$(progress_hms(progress_elapsed(ctx)))] INPUT     " *
+            "execution=$(summary.execution_eligible) status=$(summary.qualification_status)",
         )
-        for reason in summary.reasons
-            progress_emit_text!(ctx, "  reason=$(reason)")
-        end
-        for contract in summary.unverified_contracts
-            progress_emit_text!(ctx, "  unverified=$(contract)")
-        end
+        # Detailed historical qualification and contract records remain in the
+        # structured event. They do not label an ordinary calculation non-research.
         progress_write_jsonl_event!(
             ctx,
             "response_qualification";
@@ -977,7 +1020,7 @@ function progress_start!(
         "",
         ctx.run_dir,
         ctx.model_file,
-        ctx.model_sha256,
+        ctx.model_identity,
         ctx.num_orbitals,
         ctx.system_name,
         cfg.k_mesh,
@@ -999,8 +1042,9 @@ function progress_start!(
     end
     band_calculation = progress_is_band_structure_task(ctx.specs[1])
     total_k_global =
-        band_calculation ? sum(cfg.kpoints_per_segment) - length(cfg.kpoints_per_segment) + 1 :
-        progress_total_k(cfg.k_mesh)
+        band_calculation ?
+        sum(cfg.kpoints_per_segment) - length(cfg.kpoints_per_segment) +
+        length(cfg.kpath_branches) : progress_total_k(cfg.k_mesh)
     progress_write_jsonl_event!(
         progress_ctx,
         "run_start";
@@ -1818,10 +1862,9 @@ function progress_run_done!(
                 ctx,
                 "  mp_grid=$(replica_summary.mp_grid), tolerance=$(replica_summary.wigner_seitz_tolerance), search_size=$(replica_summary.wigner_seitz_search_size), transformed=$(replica_summary.replica_transformed_this_run)",
             )
-            progress_emit_text!(ctx, "  mapping sha256=$(replica_summary.mapping_sha256)")
             progress_emit_text!(
                 ctx,
-                "  mapping scheme=$(replica_summary.mapping_digest_scheme), wsvec=$(isnothing(replica_summary.wsvec_file) ? "not provided" : progress_display_path(ctx, replica_summary.wsvec_file)), wsvec sha256=$(replica_summary.wsvec_sha256)",
+                "  mapping scheme=$(replica_summary.mapping_reference_schema), wsvec=$(isnothing(replica_summary.wsvec_file) ? "not provided" : progress_display_path(ctx, replica_summary.wsvec_file))",
             )
             progress_emit_text!(
                 ctx,
@@ -1923,9 +1966,7 @@ function progress_run_done!(
                         ctx,
                         progress_kv_line(
                             "$(label) identity",
-                            "class=$(get(group, "magnetic_point_group_number", "?")); " *
-                            "operation digest=$(get(group, "operation_digest", "NOT_RECORDED")); " *
-                            "contract=$(get(group, "operation_digest_contract", "NOT_RECORDED"))",
+                            "class=$(get(group, "magnetic_point_group_number", "?"))",
                         ),
                     )
                     progress_emit_text!(
@@ -2113,26 +2154,16 @@ function progress_run_done!(
             progress_emit_text!(ctx, "")
         end
         if !isempty(keys(qualification_summary))
-            progress_emit_text!(ctx, "QUALIFICATION")
+            progress_emit_text!(ctx, "INPUT AND NUMERICAL STATUS")
             progress_emit_text!(
                 ctx,
                 "  execution_eligible=$(qualification_summary.execution_eligible)",
             )
+            progress_emit_text!(ctx, "  status=$(qualification_summary.qualification_status)")
             progress_emit_text!(
                 ctx,
-                "  qualification_status=$(qualification_summary.qualification_status)",
+                "  measured_quality_warning=$(qualification_summary.quality_review_recommended)",
             )
-            progress_emit_text!(
-                ctx,
-                "  production_eligible=$(qualification_summary.production_eligible)",
-            )
-            progress_emit_text!(
-                ctx,
-                "  quality_review_recommended=$(qualification_summary.quality_review_recommended)",
-            )
-            for reason in qualification_summary.reasons
-                progress_emit_text!(ctx, "  reason=$(reason)")
-            end
             progress_emit_text!(ctx, "")
         end
         progress_emit_text!(ctx, "DONE")
@@ -2194,4 +2225,71 @@ function progress_run_failed!(err)
         Base.unlock(ctx.lock)
     end
     return nothing
+end
+
+"""Merge measured workspace diagnostics over actual evaluations, threads and MPI ranks.
+
+Counts describe eigensystem evaluations (including distinct batch slots), not a
+claimed unique point inventory. This performs no model solve or source-tree audit.
+"""
+function progress_localized_run_diagnostics!(workspaces, comm)
+    local_metrics = Dict{Symbol, Float64}()
+    function merge_metrics!(target, source)
+        for (key, value) in source
+            if key in (:spectrum_evaluations, :numerical_warning_evaluations)
+                target[key] = get(target, key, 0.0)+value
+            elseif key in (:minimum_metric_eigenvalue, :minimum_band_gap_ev)
+                target[key] = min(get(target, key, Inf), value)
+            else
+                target[key] = max(get(target, key, 0.0), value)
+            end
+        end
+    end
+    metric_workspace = false
+    for workspace in workspaces
+        applicable(nonorthogonal_metric_diagnostics, workspace) || continue
+        metric_workspace = true
+        record = nonorthogonal_metric_diagnostics(workspace; scope = :workspace)
+        record.status == :evaluated && merge_metrics!(local_metrics, record.measurements)
+    end
+    metric_workspace || return nothing
+    rank = bundle_mpi_comm_rank(comm)
+    metrics = Dict{Symbol, Float64}()
+    for owner in 0:(bundle_mpi_comm_size(comm) - 1)
+        packet = bundle_mpi_bcast(rank==owner ? local_metrics : nothing, owner, comm)
+        merge_metrics!(metrics, packet)
+    end
+    record = (
+        status = isempty(metrics) ? :not_evaluated : :evaluated,
+        scope = :complete_executed_task,
+        measurements = metrics,
+        count_semantics = "actual eigensystem evaluations; cached visits excluded",
+        residual_semantics = "maxima over executed evaluations; minimum metric eigenvalue is a minimum",
+    )
+    ctx = ACTIVE_PROGRESS[]
+    if rank==0 && ctx!==nothing
+        Base.lock(ctx.lock) do
+            ctx.system_summary["localized_eigensystem_run"] = record
+            progress_write_jsonl_event!(
+                ctx,
+                "localized_eigensystem_run";
+                extra = ["localized_eigensystem_run"=>record],
+            )
+            if !isempty(metrics)
+                progress_emit_text!(
+                    ctx,
+                    "  Generalized eigensystem evaluations: $(Int(metrics[:spectrum_evaluations])); warnings: $(Int(metrics[:numerical_warning_evaluations]))",
+                )
+                progress_emit_text!(
+                    ctx,
+                    "  Effective maxima: eigen residual=$(metrics[:effective_normalized_eigen_residual]); metric normalization=$(metrics[:effective_metric_normalization_residual])",
+                )
+                progress_emit_text!(
+                    ctx,
+                    "  Raw-input maxima: eigen residual=$(metrics[:original_normalized_eigen_residual]); metric normalization=$(metrics[:original_metric_normalization_residual]); metric condition maximum=$(metrics[:condition_number])",
+                )
+            end
+        end
+    end
+    return record
 end

@@ -11,10 +11,14 @@ function write_spectral_task_outputs(
     volume;
     manifest = nothing,
     qualification = not_evaluated_response_qualification(),
+    executed_points = length(grid),
 )
     slice=spec.calculation==:kslice;
     orbital=spec.quantity==:orbital_magnetization;
     optical=spec.quantity==:linear_optical_response
+    intrinsic=spec.quantity==:intrinsic_ahc
+    region = cfg.integration_bounds !== nothing
+    dimension = integration_model_periodic(cfg) ? 3 : integration_dimension(cfg)
     outputs=String[]
     vector_axis = !optical
     vector_integral = vector_axis && !slice
@@ -30,34 +34,33 @@ function write_spectral_task_outputs(
         end
     end
     coordinate_labels=slice ? ["kx", "ky", "kz"] : optical ? ["energy_eV"] : ["mu_eV"]
-    release_sha = vector_axis ? release_tree_sha256() : spectral_response_source_digest()
+    producer_version = string(Base.pkgversion(parentmodule(@__MODULE__)))
     schema =
-        orbital ? "wanniernlqg.orbital-magnetization-vector/1.0" :
-        "wanniernlqg.linear-transport-vector/2.0"
-    input_identity = manifest === nothing ? ctx.model_sha256 : manifest.scientific_content_sha256
-    authority_sha =
+        intrinsic ? "wanniernlqg.intrinsic-ahc-vector/2.0" :
+        orbital ? "wanniernlqg.orbital-magnetization-vector/5.0" :
+        "wanniernlqg.linear-transport-vector/6.0"
+    region && (schema = "wanniernlqg.cartesian-region-spectral/4.0")
+    # References describe the consumed input, not a content certificate.
+    input_identity = manifest === nothing ? ctx.model_identity : manifest.path
+    operator_model_schema =
         manifest === nothing ? "NOT_APPLICABLE_DEFINED_FINITE_MODEL" :
-        manifest.authoritative_hamiltonian_sha256
-    frame_contract_sha =
-        manifest === nothing ? "NOT_APPLICABLE_DEFINED_FINITE_MODEL" :
-        manifest.band_frame_contract_sha256
-    selection_sha =
-        manifest === nothing ? "NOT_APPLICABLE_DEFINED_FINITE_MODEL" :
-        something(manifest.operator_selection_sha256, "NOT_RECORDED")
+        String(manifest.schema_version)
     common_headers = Pair{String, String}[
         "schema" => schema,
         "quantity" => string(spec.quantity),
         "method" => string(spec.method),
         "temperature_K" => string(cfg.temperature),
         "fermi_energies_count" => string(length(cfg.fermi_energies)),
-        "fermi_energies_sha256" => cfg.fermi_energies_sha256,
-        "release_tree_sha256" => release_sha,
-        "model_sha256" => ctx.model_sha256,
-        "input_identity_sha256" => input_identity,
-        "gamma_intra_ev" => (orbital ? "NOT_APPLICABLE" : string(cfg.gamma_intra_ev)),
-        "gamma_inter_ev" => (orbital ? "NOT_APPLICABLE" : string(cfg.gamma_inter_ev)),
-        "fs_kind" => (orbital ? "NOT_APPLICABLE" : string(cfg.fs_kind)),
-        "eta_fs_ev" => (orbital ? "NOT_APPLICABLE" : string(cfg.eta_fs_ev)),
+        "fermi_energies_definition" => cfg.fermi_energies_definition,
+        "producer_package_version" => producer_version,
+        "model_identity" => ctx.model_identity,
+        "input_identity" => input_identity,
+        "gamma_intra_ev" => ((orbital || intrinsic) ? "NOT_APPLICABLE" :
+                             string(cfg.gamma_intra_ev)),
+        "gamma_inter_ev" => ((orbital || intrinsic) ? "NOT_APPLICABLE" :
+                             string(cfg.gamma_inter_ev)),
+        "fs_kind" => ((orbital || intrinsic) ? "NOT_APPLICABLE" : string(cfg.fs_kind)),
+        "eta_fs_ev" => ((orbital || intrinsic) ? "NOT_APPLICABLE" : string(cfg.eta_fs_ev)),
         "mpi_size" => string(bundle_mpi_comm_size(bundle_mpi_comm_world())),
         "julia_threads_per_rank" => string(Threads.nthreads()),
         "qualification_status" => qualification.qualification_status,
@@ -65,32 +68,74 @@ function write_spectral_task_outputs(
                              "effective_position_operator_model",
         "operator_inventory" => manifest === nothing ? "NOT_APPLICABLE_DEFINED_FINITE_MODEL" :
                                 join(real_space_operator_name.(manifest.inventory), ","),
-        "target_contract_sha256" => manifest === nothing ?
-                                    "NOT_APPLICABLE_DEFINED_FINITE_MODEL" :
-                                    something(
-            manifest.operator_target_contract_sha256,
-            "NOT_RECORDED",
-        ),
-        "authoritative_hamiltonian_sha256" => authority_sha,
-        "band_frame_contract_sha256" => frame_contract_sha,
-        "operator_selection_sha256" => selection_sha,
+        "operator_model_schema" => operator_model_schema,
+        "content_authentication" => "NOT_PERFORMED",
     ]
-    task_stream = IOBuffer()
-    for (key, value) in common_headers
-        write(task_stream, key, '=', value, '\0')
+    if orbital
+        append!(
+            common_headers,
+            [
+                "orbital_geometry_prescription"=>"complete-V-regularized-Sylvester/1",
+                "denominator_regularization_ev"=>string(cfg.denominator_regularization),
+                "zero_temperature_boundary"=>"symmetric-complete-subspace-response-average",
+            ],
+        )
     end
-    task_sha = bytes2hex(sha256(take!(task_stream)))
-    push!(common_headers, "task_sha256" => task_sha)
+    if intrinsic
+        append!(
+            common_headers,
+            [
+                "geometry_contract"=>"complete-velocity-and-ambient-curvature",
+                "occupation_contract"=>"T0-real-energy-less-than-or-equal-mu",
+                "transition_denominator_contract"=>"direct-velocity-over-every-nonzero-real-gap",
+                "resolved_intrinsic_method"=>(spec.method==:projector ? "Projector" : "Matrix"),
+                "tensor_axis_order"=>"xx,xy,xz,yx,yy,yz,zx,zy,zz",
+                "conductivity_sign"=>"minus-e-squared-over-hbar-times-occupied-Berry-curvature",
+            ],
+        )
+    end
+    if region
+        append!(
+            common_headers,
+            [
+                string(key)=>string(value) for
+                (key, value) in pairs(integration_domain_metadata(cfg))
+            ],
+        )
+    end
+    task_definition = spectral_task_definition(common_headers)
+    push!(common_headers, "task_definition" => task_definition)
     for (term, name) in enumerate(terms)
         for energy in (slice ? axes(result, 2) : 1:1)
             values=slice ? result[:, energy, :, term] : result[1, :, :, term]
-            suffix=slice && optical ? "_E"*lpad(energy, 5, '0') : ""
+            suffix =
+                slice && optical ? "_E" * lpad(energy, 5, '0') :
+                slice && intrinsic && length(cfg.fermi_energies) > 1 ? "_M" * lpad(energy, 5, '0') :
+                ""
             path=joinpath(ctx.run_dir, string(spec.quantity)*"_"*string(name)*suffix*".dat")
             unit=orbital ? (slice ? "muB k_integrand" : "muB/cell") :
                  (slice ? "S*m^2 k_integrand" : "S/m")
+            if region && !slice
+                unit =
+                    orbital ?
+                    (
+                        integration_model_periodic(cfg) ? "muB/cell (declared BZ fraction)" :
+                        native_direct_low_dimensional(cfg) ?
+                        "muB/reference-cell (declared physical-domain fraction)" :
+                        string("muB/m^", dimension)
+                    ) : integration_unit(cfg, "S/m")
+            end
             headers =
                 vector_integral ? vcat(common_headers, ["term" => string(name)]) :
-                Pair{String, String}[]
+                slice && intrinsic ?
+                vcat(
+                    common_headers,
+                    [
+                        "term" => string(name),
+                        "mu_eV" => string(cfg.fermi_energies[energy]),
+                        "sampling_measure" => "unweighted local density; no slice area or cell divisor",
+                    ],
+                ) : Pair{String, String}[]
             push!(
                 outputs,
                 write_spectral_response_table(
@@ -114,12 +159,12 @@ function write_spectral_task_outputs(
             factor=im/(Responses.RESPONSE_EPSILON0*photon/Responses.RESPONSE_HBAR_EVS)
             for (term, name) in enumerate(terms)
                 values=copy(result[:, energy, :, term]) .* factor
-                if !slice && name==:total
+                if !slice && !region && name==:total
                     for (c, component) in enumerate(components)
                         component[1]==component[2] && (values[1, c]+=1)
                     end
                 end
-                output_name=name==:total && !slice ? "model_dielectric_tensor" :
+                output_name=name==:total && !slice && !region ? "model_dielectric_tensor" :
                             "model_dielectric_increment_"*string(name)*(slice ? "_integrand" : "")
                 path=joinpath(ctx.run_dir, output_name*"_E"*lpad(energy, 5, '0')*".dat")
                 coords=slice ? coordinates : reshape([photon], 1, 1)
@@ -131,7 +176,8 @@ function write_spectral_task_outputs(
                         coordinate_labels,
                         values,
                         labels;
-                        units = slice ? "m^3" : "dimensionless",
+                        units = slice ? "m^3" :
+                                dimension==3 ? "dimensionless" : string("m^", 3-dimension),
                         digits = max(14, cfg.response_output_digits),
                     ),
                 )
@@ -140,78 +186,89 @@ function write_spectral_task_outputs(
     end
     entries=(
         quantity = string(spec.quantity),
-        formula_identity = orbital ? "modern-orbital-W7-W12-thermal-convolution-v1" :
+        formula_identity = intrinsic ? "intrinsic-berry-fermi-sea-complete-block-v1" :
+                           orbital ? "modern-orbital-complete-V-eta-symmetric-boundary-v2" :
                            "length-gauge-separate-relaxation-v1",
-        source_sha256 = spectral_response_source_digest(),
+        source_sha256 = "NOT_REQUESTED_ORDINARY_CALCULATION",
+        producer_package_version = producer_version,
         method = string(spec.method),
-        scope = slice ? "k_integrand" : "BZ_integral",
+        scope = slice ? "k_integrand" : region ? "Cartesian_region_integral" : "BZ_integral",
         terms = string.(terms),
-        contribution_contract = orbital ? "NOT_APPLICABLE" :
+        contribution_contract = intrinsic ? "complete-Wannier-curvature-T0-total/1.0" :
+                                orbital ? "NOT_APPLICABLE" :
                                 "drude-quantum_metric-berry_curvature/2.0",
         schema = vector_axis ? schema : "legacy-spectral-response-table",
         fermi_energies_ev = vector_axis ? cfg.fermi_energies : Float64[],
-        fermi_energies_sha256 = vector_axis ? cfg.fermi_energies_sha256 : "NOT_APPLICABLE",
+        fermi_energies_definition = vector_axis ? cfg.fermi_energies_definition : "NOT_APPLICABLE",
         fermi_energies_count = vector_axis ? string(length(cfg.fermi_energies)) : "0",
-        task_sha256 = vector_axis ? task_sha : "NOT_APPLICABLE",
-        release_tree_sha256 = vector_axis ? release_sha : "NOT_APPLICABLE",
+        task_definition = vector_axis ? task_definition : "NOT_APPLICABLE",
+        producer_identity = "package_version; installation audit is optional and separate",
         temperature_K = string(cfg.temperature),
-        model_sha256 = ctx.model_sha256,
-        input_identity_sha256 = vector_axis ? input_identity : "NOT_APPLICABLE",
+        model_identity = ctx.model_identity,
+        input_identity = vector_axis ? input_identity : "NOT_APPLICABLE",
         fermi_energy_ev = vector_axis ? "NOT_APPLICABLE_VECTOR_AXIS" : cfg.fermi_energy,
-        gamma_intra_ev = vector_axis ? (orbital ? "NOT_APPLICABLE" : string(cfg.gamma_intra_ev)) :
+        gamma_intra_ev = vector_axis ?
+                         ((orbital || intrinsic) ? "NOT_APPLICABLE" : string(cfg.gamma_intra_ev)) :
                          cfg.gamma_intra_ev,
-        gamma_inter_ev = vector_axis ? (orbital ? "NOT_APPLICABLE" : string(cfg.gamma_inter_ev)) :
+        gamma_inter_ev = vector_axis ?
+                         ((orbital || intrinsic) ? "NOT_APPLICABLE" : string(cfg.gamma_inter_ev)) :
                          cfg.gamma_inter_ev,
-        fs_kind = vector_axis ? (orbital ? "NOT_APPLICABLE" : string(cfg.fs_kind)) :
+        fs_kind = vector_axis ? ((orbital || intrinsic) ? "NOT_APPLICABLE" : string(cfg.fs_kind)) :
                   string(cfg.fs_kind),
-        eta_fs_ev = vector_axis ? (orbital ? "NOT_APPLICABLE" : string(cfg.eta_fs_ev)) :
+        eta_fs_ev = vector_axis ?
+                    ((orbital || intrinsic) ? "NOT_APPLICABLE" : string(cfg.eta_fs_ev)) :
                     cfg.eta_fs_ev,
         photon_energies_ev = optical ? cfg.photon_energies : Float64[],
         undefined_zero_frequency = optical ? findall(iszero, cfg.photon_energies) : Int[],
         dielectric_zero_frequency_status = optical && any(iszero, cfg.photon_energies) ?
                                            "UNDEFINED_ZERO_FREQUENCY" : "NOT_APPLICABLE",
-        dielectric_background = optical ? "identity_after_full_BZ_integration_only" :
-                                "NOT_APPLICABLE",
+        dielectric_background = optical ?
+                                (
+            region ? "no_background_for_cutoff_region" : "identity_after_full_BZ_integration_only"
+        ) : "NOT_APPLICABLE",
         thermal_definition = orbital ? "thermal_convolution_of_zero_temperature_projectors" :
                              "exact_fermi_derivative_at_positive_T",
         input_semantics = orbital ? string(cfg.orbital_input_semantics) :
                           "effective_position_operator_model",
         contact_definition = orbital ? "NOT_APPLICABLE" :
                              "minus_e_squared_over_hbar_trace_f_ambient_curvature",
-        spatial_dimension = 3,
+        spatial_dimension = dimension,
         cell_volume_m3 = volume,
         state_multiplicity = "one_per_explicit_model_state",
-        spectral_gap_tolerance_ev = cfg.spectral_gap_tolerance,
-        model_content_sha256 = ctx.model_input_mode==:legacy ?
-                               bytes2hex(sha256(read(ctx.model_file))) : "see_bundle_manifest",
+        spectral_gap_tolerance_ev = orbital ? "NOT_APPLICABLE" : cfg.spectral_gap_tolerance,
+        model_content_identity = manifest === nothing ? ctx.model_identity : "see_bundle_manifest",
         mpi_size = string(bundle_mpi_comm_size(bundle_mpi_comm_world())),
         julia_threads_per_rank = string(Threads.nthreads()),
         chemical_potential_count = vector_axis ? length(cfg.fermi_energies) : 0,
-        mu_independent_geometry_evaluations = vector_axis ? length(grid) : "NOT_APPLICABLE",
+        mu_independent_geometry_evaluations = vector_axis ? executed_points : "NOT_APPLICABLE",
         orbital_completion_evaluations = orbital ?
                                          (
-            cfg.orbital_input_semantics == :defined_finite_model ? 0 : length(grid)
+            cfg.orbital_input_semantics == :defined_finite_model ? 0 : executed_points
         ) : "NOT_APPLICABLE",
         matrix_workspace_count_per_rank = Threads.nthreads(),
         vector_accumulator_shape = vector_axis ? collect(size(result)) : Int[],
         operator_inventory = manifest === nothing ? "NOT_APPLICABLE_DEFINED_FINITE_MODEL" :
                              join(real_space_operator_name.(manifest.inventory), ","),
-        target_contract_sha256 = manifest === nothing ? "NOT_APPLICABLE_DEFINED_FINITE_MODEL" :
-                                 something(
-            manifest.operator_target_contract_sha256,
-            "NOT_RECORDED",
-        ),
-        authoritative_hamiltonian_sha256 = authority_sha,
-        band_frame_contract_sha256 = frame_contract_sha,
-        operator_selection_sha256 = selection_sha,
+        operator_model_schema = operator_model_schema,
+        content_authentication = "NOT_PERFORMED",
     )
+    if region
+        entries = merge(
+            entries,
+            (;
+                integration_bounds = cfg.integration_bounds,
+                integration_measure = "d^dk/(2pi)^d",
+                inverse_quadrature_density_si = volume,
+                cell_volume_m3 = "NOT_APPLICABLE_CARTESIAN_REGION",
+            ),
+        )
+    end
     entries=merge(
         entries,
         (;
             operator_qualification = manifest===nothing ? "NOT_APPLICABLE" :
                                      manifest.operator_qualification,
-            scientific_content_sha256 = manifest===nothing ? "see_model_sha256" :
-                                        manifest.scientific_content_sha256,
+            scientific_input_reference = input_identity,
             finite_band_galerkin_qualification = manifest===nothing ? "NOT_APPLICABLE" :
                                                  manifest.finite_band_galerkin_qualification,
             execution_eligible = qualification.execution_eligible,

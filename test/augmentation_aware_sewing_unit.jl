@@ -94,17 +94,17 @@ strict_sewing_identity() = WannierNLQG.SymmetryFoundation.SymmetryOperation(
             num_wannier = 1,
         ),
     )
-    legacy_restart = STRICT_SEWING_W.SymmetryAdaptedWannierizationConfig(
+    legacy_restart = STRICT_SEWING_W.WannierizationConfig(
         input = input,
-        solver = STRICT_SEWING_W.WannierizationSolverConfig(algorithm_profile = :custom),
+        solver = STRICT_SEWING_W.WannierizationSolverConfig(),
     )
     strict_restart = STRICT_SEWING_W._replace_wannierization_config(
         legacy_restart;
         input = (sewing_backend = STRICT_SEWING_W.AugmentationAwareSewing(),),
     )
-    @test STRICT_SEWING_W._restart_config_sha256(legacy_restart) !=
-          STRICT_SEWING_W._restart_config_sha256(strict_restart)
-    @test STRICT_SEWING_W._restart_config_sha256_pre_v2_11(strict_restart) === nothing
+    @test STRICT_SEWING_W._restart_config_repr(legacy_restart) !=
+          STRICT_SEWING_W._restart_config_repr(strict_restart)
+    @test !isdefined(STRICT_SEWING_W, :_restart_config_sha256_pre_v2_11)
 end
 
 @testset "nonzero Q oracle, NC reduction, and energy-block gauge covariance" begin
@@ -631,9 +631,16 @@ end
                 Float64,
                 split(strict.representation.conventions["raw_cocycle_phase_UU_UA_AU_AA"], ',')[1],
             ) <= 1.0e-14
+            # This fixture has only the identity operation, which is excluded
+            # from nontrivial little-group spectra. The numerical inventory is
+            # retained even though its former digest credential is removed.
+            @test length(strict.representation.operations) == 1
             @test strict.representation.conventions["raw_little_group_spectrum_record_count"] == "0"
-            @test length(strict.representation.conventions["raw_little_group_spectrum_sha256"]) ==
-                  64
+            @test !any(
+                startswith(key, "raw_little_group_spectrum_000") for
+                key in keys(strict.representation.conventions)
+            )
+            @test !haskey(strict.representation.conventions, "raw_little_group_spectrum_sha256")
             @test occursin(
                 "operation = 1",
                 strict.representation.conventions["strict_reconstruction_leakage_amplitude_audit_worst_context"],
@@ -665,6 +672,7 @@ end
             end
             tampered = joinpath(directory, "strict-representation-tampered.h5")
             cp(output, tampered)
+            chmod(tampered, 0o600)
             HDF5.h5open(tampered, "r+") do handle
                 backend = handle["sewing_backend"]
                 values = HDF5.attributes(backend)
@@ -749,35 +757,53 @@ end
     mktempdir() do directory
         potcar = joinpath(directory, "POTCAR")
         write(potcar, strict_sewing_potcar_block("X"))
-        structure = WannierNLQG.SymmetryFoundation.CrystalStructure(
-            Matrix{Float64}(I, 3, 3),
-            ["X"],
-            zeros(3, 1),
-        )
-        point = Base.invokelatest(
-            WannierNLQG.SymmetryFoundation.PlaneWaveKPoint,
-            zeros(3),
-            reshape([0, 0, 0], 1, 3),
-            reshape(ComplexF64[1.0], 1, 1, 1),
-            [0.0];
-            normalize_coefficients = false,
-        )
-        native = Base.invokelatest(
-            WannierNLQG.SymmetryFoundation.NativeWavefunctionData,
-            :vasp,
-            structure,
-            2.0pi .* Matrix{Float64}(I, 3, 3),
-            (1, 1, 1),
-            false,
-            [point],
-            Dict("fixture" => repeat("0", 64)),
-            Dict("coefficient_normalization" => "vasp_raw"),
-        )
+        # Actual one-k/one-band fixed-record WAVECAR bytes encode exactly the
+        # former G=0 coefficient1, energy0 and unit-cell fixture, without a
+        # fabricated source digest or nonexistent POSCAR/WAVECAR path.
+        poscar = joinpath(directory, "POSCAR")
+        wavecar = joinpath(directory, "WAVECAR")
+        write(poscar, "strict sewing fixture\n1.0\n1 0 0\n0 1 0\n0 0 1\nX\n1\nDirect\n0 0 0\n")
+        open(wavecar, "w+") do stream
+            write(stream, zeros(UInt8, 4 * 512))
+            seek(stream, 0)
+            write(stream, Float64[512, 1, 45210])
+            seek(stream, 512)
+            write(stream, Float64[1, 1, 5, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0])
+            seek(stream, 2 * 512)
+            write(stream, Float64[1, 0, 0, 0, 0, 0, 1])
+            seek(stream, 3 * 512)
+            write(stream, ComplexF64[1.0])
+        end
         source = WannierNLQG.SymmetryFoundation.VASPWavefunctionSource(
-            "POSCAR",
-            "WAVECAR";
+            poscar,
+            wavecar;
             potcar_file = potcar,
             include_time_reversal = false,
+        )
+        native = Base.invokelatest(extension._read_augmentation_aware_native_source, source)
+        @test native.source_definition !== nothing
+        @test length(native.kpoints) == 1
+        @test only(native.kpoints).coefficients == reshape(ComplexF64[1.0], 1, 1, 1)
+        @test only(native.kpoints).energies_ev == [0.0]
+        missing_definition = try
+            STRICT_SEWING_F.NativeWavefunctionData(
+                native.source_code,
+                native.structure,
+                native.reciprocal_lattice,
+                native.mp_grid,
+                native.spinor,
+                native.kpoints,
+                native.input_sha256,
+                native.source_metadata,
+            )
+            nothing
+        catch exception
+            exception
+        end
+        @test missing_definition isa ArgumentError
+        @test missing_definition isa ArgumentError && occursin(
+            "NATIVE_SOURCE_COMPLETE_DEFINITION_REQUIRED",
+            sprint(showerror, missing_definition),
         )
         built = Base.invokelatest(
             preparation._build_band_representation,

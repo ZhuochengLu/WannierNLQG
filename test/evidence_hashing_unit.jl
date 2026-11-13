@@ -19,7 +19,7 @@ function evidence_fixture(root)
         "scripts/render_report.py" => "# campaign-only report tool\n",
         "docs/DEVELOPMENT.md" => "development contract\n",
         "examples/example.jl" => "# example\n",
-        "AGENTS.md" => "repository rules\n",
+        "CONTRIBUTING.md" => "repository rules\n",
         "README.md" => "readme\n",
         "USER_GUIDE.md" => "guide\n",
     )

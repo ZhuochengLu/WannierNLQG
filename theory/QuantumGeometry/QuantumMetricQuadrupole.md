@@ -36,7 +36,7 @@ $$
 Q_g^{ab;cd}=Q_g^{ba;cd}=Q_g^{ab;dc}.
 $$
 
-The target subspace excludes intra-subspace transitions and uses an ordinary sum without division by $N_S$. Only the internal metric contribution within the finite window is included.
+The target subspace excludes intra-subspace transitions and uses an ordinary sum without division by $N_S$. The internal contribution is the default; the full-overlap external contribution is added only with explicit `include_external=true`.
 
 ## 5. Key symmetries and relations
 
@@ -57,3 +57,8 @@ The target subspace excludes intra-subspace transitions and uses an ordinary sum
 1. J. P. Provost and G. Vallée, “Riemannian structure on manifolds of quantum states,” *Commun. Math. Phys.* **76**, 289–301 (1980). [DOI](https://doi.org/10.1007/BF02193559)
 2. Y. Fang, J. Cano, and S. A. A. Ghorashi, “Quantum geometry induced nonlinear transport in altermagnets,” *Phys. Rev. Lett.* **133**, 106701 (2024). [DOI](https://doi.org/10.1103/PhysRevLett.133.106701)
 3. X.-Y. Liu, A.-Q. Wang, D. Li, T.-Y. Zhao, X. Liao, and Z.-M. Liao, “Giant Third-Order Nonlinearity Induced by the Quantum Metric Quadrupole in Few-Layer WTe2,” arXiv:2501.12641 (2025), preprint. [arXiv](https://arxiv.org/abs/2501.12641)
+
+
+## Complete-overlap contract
+
+The primary output defaults to internal geometry (`include_external=false`), without component companions. With explicit `include_external=true`, admitted orthogonal input supplies the full derivative-overlap correction, the primary output is total, and `_internal`/`_external` companions retain the same columns and units. Only this opt-in requires qualified full F. Orthogonal internal inputs need H/r; nonorthogonal internal inputs need H/S/r and reject external completion. Numerical regularization and spectral guards are unchanged. Momentum derivatives use the selected contribution at every stencil point, with moving-frame transport retained. See [Quantum Metric](QuantumMetric.md) for input capabilities, subspace versus band-sum semantics, frame transformations, and convergence requirements.

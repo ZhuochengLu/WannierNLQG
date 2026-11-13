@@ -1,5 +1,5 @@
 """Locate and validate the home-cell block that owns the TB Wannier centers."""
-function _home_cell_r_index(model::TightBindingModel)
+function _home_cell_r_index(model::AbstractResponseModel)
     found = 0
     @inbounds for r_index in 1:model.num_r_vectors
         all(iszero, @view(model.r_vectors[:, r_index])) || continue
@@ -13,7 +13,7 @@ end
 """Cache ordered TB centers and their fractional coordinates before hot execution."""
 function _initialize_wannier_center_scratch!(
     scratch::MatrixElementScratch,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     plan::MatrixElementPlan,
 )
     scratch.centers_initialized && return scratch
@@ -54,7 +54,7 @@ end
 """Prepare the diagonal phase D_tau(k) for the active k point."""
 function _prepare_wannier_center_phases!(
     scratch::MatrixElementScratch,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     plan::MatrixElementPlan,
     kpoint::AbstractVector{<:Real},
 )

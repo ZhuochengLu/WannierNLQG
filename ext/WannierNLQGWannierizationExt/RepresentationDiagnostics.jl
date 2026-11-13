@@ -24,6 +24,7 @@ const REPRESENTATION_DIAGNOSTIC_CODES = Set{Symbol}([
     :ORACLE_REFERENCE_UNAVAILABLE,
     :ORACLE_REFERENCE_DIFFERENCE,
     :REQUIRED_BLOCK_UNITARITY_FAILED,
+    :SEWING_BLOCK_RANK_DEFICIENT,
     :EMPIRICAL_PROJECTOR_COVARIANCE_BUDGET,
     :EMPIRICAL_COVARIANCE_BUDGET_VACUOUS,
 ])
@@ -69,4 +70,50 @@ _has_representation_error(diagnostics::Vector{WannierizationDiagnostic}) =
 # Map operation antiunitarity to the stable (UU, UA, AU, AA) residual slot.
 function _group_law_combination_index(left_antiunitary::Bool, right_antiunitary::Bool)
     return left_antiunitary ? (right_antiunitary ? 4 : 3) : (right_antiunitary ? 2 : 1)
+end
+
+const _CONSTRUCTION_COMPATIBILITY_QUALITY_CODES = (
+    :REQUIRED_BLOCK_UNITARITY_FAILED,
+    :ANTIUNITARY_GROUP_LAW_FAILED,
+    :TARGET_REPRESENTATION_GROUP_LAW_FAILED,
+    :THETA_SQUARED_FAILED,
+    :ANTIUNITARY_PROJECTOR_COVARIANCE_FAILED,
+    :EMPIRICAL_COVARIANCE_BUDGET_VACUOUS,
+)
+
+# Closure residuals are quality failures only when the discrete rank contracts
+# hold. Odd Kramers rank and mismatched mask ranks remain construction failures.
+function construction_compatibility_quality_failure(diagnostic::WannierizationDiagnostic)
+    if diagnostic.code in _CONSTRUCTION_COMPATIBILITY_QUALITY_CODES
+        # A shared code may also identify a discrete inventory/rank failure.
+        # Only an explicit finite numerical residual can be a quality warning.
+        residual_key =
+            diagnostic.code == :EMPIRICAL_COVARIANCE_BUDGET_VACUOUS ? "maximum_group_law_residual" :
+            "maximum_error"
+        threshold_key =
+            diagnostic.code == :EMPIRICAL_COVARIANCE_BUDGET_VACUOUS ? "strict_upper_bound" :
+            "tolerance"
+        residual = tryparse(Float64, get(diagnostic.context, residual_key, ""))
+        threshold = tryparse(Float64, get(diagnostic.context, threshold_key, ""))
+        return residual !== nothing &&
+               threshold !== nothing &&
+               isfinite(residual) &&
+               residual >= 0 &&
+               isfinite(threshold) &&
+               threshold > 0
+    end
+    diagnostic.code in (:KRAMERS_BLOCK_NOT_CLOSED, :COREPRESENTATION_BLOCK_NOT_CLOSED) ||
+        return false
+    source_rank = tryparse(Int, get(diagnostic.context, "source_rank", ""))
+    target_rank = tryparse(Int, get(diagnostic.context, "target_rank", ""))
+    residual = tryparse(Float64, get(diagnostic.context, "maximum_error", ""))
+    source_rank !== nothing &&
+    source_rank == target_rank &&
+    residual !== nothing &&
+    isfinite(residual) || return false
+    if diagnostic.code == :KRAMERS_BLOCK_NOT_CLOSED &&
+       get(diagnostic.context, "source_kpoint", "") == get(diagnostic.context, "target_kpoint", "")
+        iseven(source_rank) || return false
+    end
+    return true
 end

@@ -1,26 +1,17 @@
 # Architecture implementation inventory
 
-This machine-checked inventory records every Julia implementation file owned by
-the two shared layers, the two expert facades, and their three extensions. The
-structure gate derives the required set recursively from the source tree and
-rejects any undocumented addition or stale path.
+This inventory records the Julia files owned by the shared layers, expert facades,
+their extensions, and the current precompile layer. The structure gate rejects
+undocumented additions to the shared/expert implementation roots.
 
 ```text
-ext/WannierNLQGSymmetryFoundationExt/BandPublicFirstUseCoverage.jl
-src/FirstUseThreadTypes.jl
-ext/WannierNLQGWannierizationExt/VASPMatrixFirstUseCoverage.jl
-ext/WannierNLQGWannierizationExt/VASPSPNFirstUseCoverage.jl
-ext/WannierNLQGWannierizationExt/UIUFirstUseCoverage.jl
-src/ProjectionConfigurationFirstUseWorkload.jl
-ext/WannierNLQGWannierizationExt/ProjectionSearchFirstUseCoverage.jl
-ext/WannierNLQGWannierizationExt/NativeOperatorFirstUseCoverage.jl
-ext/WannierNLQGWannierizationExt/QESPnFirstUseCoverage.jl
-ext/WannierNLQGWannierizationExt/CheckpointReadFirstUseCoverage.jl
-src/SymmetryFoundation/SymmetryFoundationFirstUsePrecompile.jl
-src/WannierProjection/WannierProjectionFirstUsePrecompile.jl
+ext/WannierNLQGOperatorBundleExt/OperatorBundleExtFirstUsePrecompile.jl
+ext/WannierNLQGOperatorBundleExt/RepresentativeOperatorWorkloads.jl
 ext/WannierNLQGSymmetrizationExt/MagneticMomentReaders.jl
+ext/WannierNLQGSymmetrizationExt/ResponseQualificationKernels.jl
 ext/WannierNLQGSymmetrizationExt/ResponseSymmetryArtifactWriter.jl
 ext/WannierNLQGSymmetrizationExt/ResponseSymmetryQualification.jl
+ext/WannierNLQGSymmetrizationExt/SymmetrizationExtFirstUsePrecompile.jl
 ext/WannierNLQGSymmetrizationExt/WannierCenterGeometry.jl
 ext/WannierNLQGSymmetrizationExt/WannierMeshScreening.jl
 ext/WannierNLQGSymmetrizationExt/WannierNLQGSymmetrizationExt.jl
@@ -39,6 +30,9 @@ ext/WannierNLQGSymmetrizationExt/components/validation/OperatorWorkflowValidatio
 ext/WannierNLQGSymmetrizationExt/components/workflow/GaugeAwareWorkflow.jl
 ext/WannierNLQGSymmetrizationExt/components/workflow/OperatorWorkflow.jl
 ext/WannierNLQGSymmetryFoundationExt/BandRepresentationPersistence.jl
+ext/WannierNLQGSymmetryFoundationExt/RepresentativeAutomaticBandWorkload.jl
+ext/WannierNLQGSymmetryFoundationExt/RepresentativeBandPersistenceWorkload.jl
+ext/WannierNLQGSymmetryFoundationExt/RepresentativeCrystalSymmetryWorkload.jl
 ext/WannierNLQGSymmetryFoundationExt/ResponseSymmetryGroupClassification.jl
 ext/WannierNLQGSymmetryFoundationExt/SymmetryOperationDetection.jl
 ext/WannierNLQGSymmetryFoundationExt/TBSymmetryDetectionCompatibility.jl
@@ -49,15 +43,16 @@ ext/WannierNLQGWannierizationExt/AugmentationAwareBandSewing.jl
 ext/WannierNLQGWannierizationExt/AuthoritativeBandHamiltonian.jl
 ext/WannierNLQGWannierizationExt/BandRepresentationBuilder.jl
 ext/WannierNLQGWannierizationExt/ConstraintOperationScopes.jl
-ext/WannierNLQGWannierizationExt/ExactWannierDerivativeOperators.jl
-ext/WannierNLQGWannierizationExt/ExactWannierOperatorBundle.jl
+ext/WannierNLQGWannierizationExt/FullUIUDerivativeOperatorBundle.jl
+ext/WannierNLQGWannierizationExt/FullUIUWannierDerivativeOperators.jl
 ext/WannierNLQGWannierizationExt/GaugeProvenanceContracts.jl
+ext/WannierNLQGWannierizationExt/NativeOperatorOutputGeneration.jl
 ext/WannierNLQGWannierizationExt/NativeSourceDispatch.jl
 ext/WannierNLQGWannierizationExt/OperatorProfileAssembly.jl
-ext/WannierNLQGWannierizationExt/OrdinarySolverFirstUseCoverage.jl
+ext/WannierNLQGWannierizationExt/OperatorPublicationReuse.jl
 ext/WannierNLQGWannierizationExt/PAWBlockPartitionAudit.jl
 ext/WannierNLQGWannierizationExt/PAWSCDMInitialization.jl
-ext/WannierNLQGWannierizationExt/ProjectionRepresentationCompatibility.jl
+ext/WannierNLQGWannierizationExt/ProjectionCharacterReduction.jl
 ext/WannierNLQGWannierizationExt/ProjectionRepresentationCorepresentations.jl
 ext/WannierNLQGWannierizationExt/ProjectionRepresentationGroupAlgebra.jl
 ext/WannierNLQGWannierizationExt/ProjectionRepresentationIntertwiners.jl
@@ -70,6 +65,9 @@ ext/WannierNLQGWannierizationExt/QEUPFData.jl
 ext/WannierNLQGWannierizationExt/QuantumEspressoWavefunctions.jl
 ext/WannierNLQGWannierizationExt/RepresentationDiagnostics.jl
 ext/WannierNLQGWannierizationExt/RepresentationGroupLaw.jl
+ext/WannierNLQGWannierizationExt/RepresentativeCheckpointTBWorkload.jl
+ext/WannierNLQGWannierizationExt/RepresentativePersistenceReaders.jl
+ext/WannierNLQGWannierizationExt/RepresentativeQEPAWWorkload.jl
 ext/WannierNLQGWannierizationExt/SMVFletcherReevesAudit.jl
 ext/WannierNLQGWannierizationExt/SewingMatrixAlignment.jl
 ext/WannierNLQGWannierizationExt/SymmetryCompletedQEPAWMatrixElements.jl
@@ -81,10 +79,11 @@ ext/WannierNLQGWannierizationExt/VASPPawSpinMatrixElements.jl
 ext/WannierNLQGWannierizationExt/WannierGaugeChainDiagnostics.jl
 ext/WannierNLQGWannierizationExt/WannierGaugeDiagnostics.jl
 ext/WannierNLQGWannierizationExt/WannierHamiltonianOperatorGeneration.jl
+ext/WannierNLQGWannierizationExt/WannierModelReport.jl
 ext/WannierNLQGWannierizationExt/WannierNLQGWannierizationExt.jl
-ext/WannierNLQGWannierizationExt/OperatorPublicationReuse.jl
 ext/WannierNLQGWannierizationExt/WannierUIUGeneration.jl
 ext/WannierNLQGWannierizationExt/WannierizationConfigValidation.jl
+ext/WannierNLQGWannierizationExt/WannierizationExtFirstUsePrecompile.jl
 ext/WannierNLQGWannierizationExt/WannierizationNoSymmetry.jl
 ext/WannierNLQGWannierizationExt/WannierizationOutputs.jl
 ext/WannierNLQGWannierizationExt/WannierizationWorkflow.jl
@@ -100,6 +99,7 @@ ext/WannierNLQGWannierizationExt/hdf5/FixedSubspace.jl
 ext/WannierNLQGWannierizationExt/hdf5/LegacyMigration.jl
 ext/WannierNLQGWannierizationExt/hdf5/Reader.jl
 ext/WannierNLQGWannierizationExt/hdf5/Writer.jl
+ext/WannierNLQGWannierizationExt/solver/CheckpointDefinitionAgreement.jl
 ext/WannierNLQGWannierizationExt/solver/Initialization.jl
 ext/WannierNLQGWannierizationExt/solver/LinearAlgebra.jl
 ext/WannierNLQGWannierizationExt/solver/Localization.jl
@@ -117,13 +117,28 @@ ext/WannierNLQGWannierizationExt/star_gauge/ConstructionWorkflow.jl
 ext/WannierNLQGWannierizationExt/star_gauge/FrameContract.jl
 ext/WannierNLQGWannierizationExt/star_gauge/PartitionReynolds.jl
 ext/WannierNLQGWannierizationExt/star_gauge/Persistence.jl
+ext/WannierNLQGWannierizationExt/star_gauge/PreparationExecution.jl
+ext/WannierNLQGWannierizationExt/star_gauge/StarPreparationKernel.jl
 ext/WannierNLQGWannierizationExt/star_gauge/StarTransport.jl
 ext/WannierNLQGWannierizationExt/support/BackendPorts.jl
 ext/WannierNLQGWannierizationExt/support/GaugeFrameProvenance.jl
 ext/WannierNLQGWannierizationExt/support/HDF5Operations.jl
-ext/WannierNLQGWannierizationExt/support/SupportLinearAlgebra.jl
 ext/WannierNLQGWannierizationExt/support/RepresentationHelpers.jl
 ext/WannierNLQGWannierizationExt/support/ResultHelpers.jl
+ext/WannierNLQGWannierizationExt/support/SupportLinearAlgebra.jl
+ext/WannierNLQGWannierizationPrecompileExt/RepresentativePAWAuditWorkload.jl
+ext/WannierNLQGWannierizationPrecompileExt/RepresentativeSymmetrizationWorkloads.jl
+ext/WannierNLQGWannierizationPrecompileExt/RepresentativeWannierWorkflowWorkload.jl
+ext/WannierNLQGWannierizationPrecompileExt/WannierNLQGWannierizationPrecompileExt.jl
+src/Core/ESKernel/DenseSpectra.jl
+src/Core/ESKernel/ESKernel.jl
+src/Core/ESKernel/FFTBuffers.jl
+src/Core/ESKernel/WorkspacePlanning.jl
+src/FirstUse/RepresentativeOperatorConfigs.jl
+src/FirstUse/RepresentativePublicWorkloads.jl
+src/FirstUse/RepresentativeSymmetryProjectionWorkload.jl
+src/FirstUsePrecompileWorkload.jl
+src/ProjectionConfigurationFirstUseWorkload.jl
 src/Symmetrization/GaugeAwareSymmetrizationModels.jl
 src/Symmetrization/Symmetrization.jl
 src/Symmetrization/SymmetrizationConfigs.jl
@@ -132,6 +147,7 @@ src/Symmetrization/SymmetrizationExtensionLoading.jl
 src/SymmetryFoundation/BandRepresentationContracts.jl
 src/SymmetryFoundation/BandRepresentationModels.jl
 src/SymmetryFoundation/CanonicalBandRepresentationBuilder.jl
+src/SymmetryFoundation/DiagonalMeshScreening.jl
 src/SymmetryFoundation/GeneratedMagneticPointGroupCatalog.jl
 src/SymmetryFoundation/MagneticPointGroupCanonicalization.jl
 src/SymmetryFoundation/NativeWavefunctionModels.jl
@@ -152,35 +168,54 @@ src/WannierProjection/WannierProjection.jl
 src/WannierProjection/WannierProjectionIntegrationContracts.jl
 src/WannierProjection/WannierProjectionRepresentations.jl
 src/WannierProjection/WannierWinData.jl
+src/Wannierization/NativeOperatorOutputPlanning.jl
 src/Wannierization/ProjectionRepresentationSearchModels.jl
 src/Wannierization/Wannierization.jl
 src/Wannierization/WannierizationExpertInterfaces.jl
 src/Wannierization/WannierizationExtensionLoading.jl
+src/Wannierization/WannierizationStageControls.jl
 src/Wannierization/models/ConfigurationsContracts.jl
 src/Wannierization/models/DiagnosticsQualification.jl
 src/Wannierization/models/OptimizerStates.jl
 src/Wannierization/models/ResultsArtifacts.jl
 src/Wannierization/models/WannierizationEligibility.jl
-ext/WannierNLQGSymmetryFoundationExt/FoundationOwnerFirstUseCoverage.jl
-ext/WannierNLQGSymmetryFoundationExt/ResponseGroupFirstUseCoverage.jl
 ```
 
-## First-use compiler coverage inventory
+## Precompile implementation
 
-These owner-local files declare compiler requests only. Their actual Type
-identity and original call provenance are verified independently; they execute
-no scientific solver, user writer or MPI lifecycle.
+Representative workloads perform real, tiny public-API computations in temporary
+directories. A small explicit residual layer remains; full public-path cold and
+scientific qualification is independent of this workload inventory. Serial package
+precompilation does not launch MPI or initialize it.
 
-- `ext/WannierNLQGSymmetrizationExt/ExistingModelColdNativeCoverage.jl`
-- `ext/WannierNLQGSymmetrizationExt/Generated/SymmetrizationResponseWriterSignatures.jl`
-- `ext/WannierNLQGSymmetrizationExt/ResponseQualificationFirstUseCoverage.jl`
-- `ext/WannierNLQGSymmetrizationExt/SymmetrizationTaskInferenceResidualCoverage.jl`
-- `ext/WannierNLQGSymmetryFoundationExt/Generated/NativeCanonicalBuilderInference.jl`
-- `ext/WannierNLQGSymmetryFoundationExt/Generated/SymmetryFoundationResponseWriterSignatures.jl`
-- `ext/WannierNLQGSymmetryFoundationExt/Generated/VASPBandFirstUseSignatures.jl`
-- `ext/WannierNLQGSymmetryFoundationExt/SymmetryFoundationTaskInferenceResidualCoverage.jl`
-- `ext/WannierNLQGWannierizationExt/Generated/VASPPAWSPNResidualSignatures.jl`
-- `ext/WannierNLQGWannierizationExt/PAWSCDMInputFirstUseCoverage.jl`
-- `ext/WannierNLQGWannierizationExt/RemainingExpertColdNativeCoverage.jl`
-- `ext/WannierNLQGWannierizationExt/TBQualificationFirstUseCoverage.jl`
-- `ext/WannierNLQGWannierizationExt/WannierizationTaskInferenceResidualCoverage.jl`
+The former trace-generated 1.2 compiler-capture prototypes were removed after
+workload and cold-ablation studies. Their source bytes and inference evidence are
+retained in external development archives; they are historical evidence, rather
+than files in the current implementation inventory. See [PRECOMPILATION.md](PRECOMPILATION.md)
+for the current workload families and remaining qualification limits.
+
+
+### Automatic structural band path additions
+
+- `src/SymmetryFoundation/HighSymmetryBandPaths.jl`: structure standardization,
+  explicit-plane geometry and external catalogue coordinate conversion.
+- `src/Runtime/BandTaskInput.jl`: band TOML geometry and sampling resolution.
+
+
+### Paired photon momentum additions
+
+```text
+src/IO/PhotonMomentumPathRecords.jl
+src/Runtime/Execution/PairedPhotonMomentumExecution.jl
+src/Runtime/Planning/PhotonMomentumPath.jl
+```
+
+
+### Scientific data ownership and IO publication additions
+
+```text
+src/Core/ScientificDataOwnership.jl
+src/IO/PhotonMomentumTables.jl
+src/IO/ScientificCheckpointPublication.jl
+src/IO/ScientificSourceFiles.jl
+```

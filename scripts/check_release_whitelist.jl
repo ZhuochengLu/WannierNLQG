@@ -1,152 +1,18 @@
 #!/usr/bin/env julia
 
+using JSON3
+
 const ROOT = normpath(joinpath(@__DIR__, ".."))
-const ALLOWED_TOP_LEVEL = Set([
-    ".JuliaFormatter.toml",
-    ".github",
-    ".agents",
-    ".gitignore",
-    "API_BREAKING_CHANGES.md",
-    "AGENTS.md",
-    "CHANGELOG.md",
-    "CITATION.cff",
-    "catalog-generation-receipt.json",
-    "CODE_OF_CONDUCT.md",
-    "CONTRIBUTING.md",
-    "LICENSE",
-    "Manifest.toml",
-    "Project.toml",
-    "README.md",
-    "SECURITY.md",
-    "SHA256SUMS",
-    "SOURCE_MANIFEST.tsv",
-    "THIRD_PARTY_NOTICE.md",
-    "USER_GUIDE.md",
-    "docs",
-    "examples",
-    "ext",
-    "scripts",
-    "src",
-    "test",
-    "theory",
-])
-const ALLOWED_SCRIPT_FILES = Set([
-    "ArchitectureContracts.jl",
-    "EvidenceHashing.jl",
-    "FormatterPaths.jl",
-    "ResponseSymmetryValidationCase.jl",
-    "SourceDocumentationAudit.jl",
-    "ValidationPolicy.jl",
-    "audit_source_documentation.jl",
-    "check_documentation.jl",
-    "check_format.jl",
-    "check_mpi_smoke.jl",
-    "check_mpi_context.jl",
-    "check_progress_output.jl",
-    "check_release_whitelist.jl",
-    "check_response_symmetry_catalog.jl",
-    "check_response_symmetry_mpi.jl",
-    "check_structure_boundaries.jl",
-    "check_symmetrization_documentation.jl",
-    "check_symmetrization_examples.jl",
-    "check_tag_ci_reuse.py",
-    "generate_release_draft.py",
-    "run_tests.py",
-    "development_runner.py",
-    "development_runner_identity.json",
-    "development/common_runner/runner.py",
-    "development/common_runner/mpi_ownership.py",
-    "development/common_runner/mpi_selftest.py",
-    "development/common_runner/full_mpi_catalog.py",
-    "development/common_runner/snapshot_selftest.py",
-    "development/common_runner/identity.py",
-    "development/common_runner/process_resources.py",
-    "development/common_runner/darwin_process_resources.py",
-    "development/common_runner/adapters.py",
-    "development/common_runner/resource_policy.py",
-    "development/common_runner/comparison_contract.py",
-    "development/common_runner/integration.py",
-    "development/common_runner/README.md",
-    "development/common_runner/fixture_task.py",
-    "development/common_runner/smoke.py",
-    "development/common_runner/package_release.py",
-    "check_user_guide_examples.jl",
-    "check_version_consistency.jl",
-    "check_wannierization_documentation.jl",
-    "format.jl",
-    "first_use/registry.jl",
-    "first_use/path_registry.json",
-    "first_use/audit_signatures.jl",
-    "first_use/compiler_append_contract.jl",
-    "first_use/source_equivalence.jl",
-    "first_use/run_case.jl",
-    "first_use/verify_results.py",
-    "first_use/campaign.py",
-    "first_use/expert_campaign.py",
-    "first_use/verify_experts.jl",
-    "first_use/check_no_side_effects.jl",
-    "first_use/collect_traces.py",
-    "first_use/collect_expert_traces.py",
-    "first_use/expert_wannierization.jl",
-    "first_use/expert_paw_audit.jl",
-    "first_use/expert_paths.json",
-    "first_use/trace_rank.sh",
-    "first_use/NativeInferenceEvidence.jl",
-    "first_use/capture_dependency_handles.jl",
-    "first_use/capture_type_printer_failures.jl",
-    "first_use/comparison_contract.py",
-    "first_use/darwin_process_resources.py",
-    "first_use/describe_runtime_bindings.jl",
-    "first_use/expert_cache_entry.jl",
-    "first_use/expert_cache_scene.jl",
-    "first_use/expert_custom_probe.jl",
-    "first_use/expert_entry.jl",
-    "first_use/expert_probe.jl",
-    "first_use/fixture_bundle.py",
-    "first_use/source_supplements.py",
-    "first_use/prepare_replay_string_fixture.jl",
-    "first_use/localization_campaign.py",
-    "first_use/localization_parallel_entry.jl",
-    "first_use/inventory_checkpoint_bits.jl",
-    "first_use/test_localization_contract.py",
-    "first_use/guarded_process.py",
-    "first_use/native_science_contract.py",
-    "first_use/process_resources.py",
-    "first_use/provenance_shards.py",
-    "first_use/qualify_expert_scene.py",
-    "first_use/qualify_registered_scene.py",
-    "first_use/registered_science.py",
-    "first_use/release_inventory.py",
-    "first_use/test_registered_qualification.py",
-    "first_use/reduce_actual_types.jl",
-    "first_use/source_identity.py",
-    "first_use/source_proofs.py",
-    "first_use/test_maintenance_tools.py",
-    "first_use/test_native_science_contract.py",
-    "first_use/test_expert_qualification.py",
-    "first_use/test_source_proofs.jl",
-    "first_use/verify_native_integrity.jl",
-    "generate_response_symmetry_catalog.jl",
-    "generate_vasp_paw_spn.jl",
-    "plot_band_structure.jl",
-    "plot_kslice.jl",
-    "plot_response_integral.jl",
-    "write_release_manifest.jl",
-    "visualization/Launcher.jl",
-    "visualization/__init__.py",
-    "visualization/backend.py",
-    "visualization/band_adapters.py",
-    "visualization/band_comparison.py",
-    "visualization/cli.py",
-    "visualization/common.py",
-    "visualization/check_environment.py",
-    "visualization/kslice_parser.py",
-    "visualization/model_lattice_probe.jl",
-    "visualization/response_parser.py",
-    "visualization/requirements.txt",
-    "visualization/style.py",
-    "visualization/vasp_native.py",
-])
+const SOURCE_DISTRIBUTION =
+    JSON3.read(read(joinpath(ROOT, "scripts", "source_distribution.json"), String))
+const CLASSIFIED_PATHS =
+    Set(String(path) for feature in values(SOURCE_DISTRIBUTION.features) for path in feature.paths)
+const GENERATED_PATHS = Set(String.(SOURCE_DISTRIBUTION.generated))
+const ALLOWED_TOP_LEVEL =
+    Set(first(split(path, '/')) for path in union(CLASSIFIED_PATHS, GENERATED_PATHS))
+const ALLOWED_SCRIPT_FILES =
+    Set(path[9:end] for path in CLASSIFIED_PATHS if startswith(path, "scripts/"))
+
 const FORBIDDEN_RELEASE_PATHS = Set([
     "validation",
     "docs/LOW_NOISE_PERFORMANCE_CAMPAIGN.md",
@@ -158,7 +24,7 @@ const FORBIDDEN_RELEASE_PATHS = Set([
 ])
 const FORBIDDEN_CANDIDATE_PATTERN =
     r"wannierNLQG-(?:release|v[0-9][^/[:space:]]*)-candidate(?:-[0-9_]+)?"
-const LOCAL_HOME_PREFIX = join(("", "Users", "luzhuocheng"), '/')
+const LOCAL_HOME_PREFIX = homedir()
 const DEV_EVIDENCE_TOP_LEVEL =
     Set(["BASELINE_PROVENANCE.md", "change_impact.toml", "provenance", "reports"])
 
@@ -268,6 +134,13 @@ function check_release_whitelist(root::AbstractString = ROOT)
             )
         end
     end
+    actual_files = Set(path for path in paths if isfile(joinpath(root, path)))
+    expected_files = union(CLASSIFIED_PATHS, GENERATED_PATHS)
+    actual_files == expected_files || error(
+        "release payload whitelist differs: " *
+        "missing=$(sort!(collect(setdiff(expected_files, actual_files)))) " *
+        "extra=$(sort!(collect(setdiff(actual_files, expected_files))))",
+    )
     for forbidden in FORBIDDEN_RELEASE_PATHS
         forbidden in paths && error("candidate-only release path remains: $(forbidden)")
     end

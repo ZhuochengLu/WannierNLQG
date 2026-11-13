@@ -6,19 +6,13 @@ end
 
 @testset "release gate accepts Git metadata and keeps rejecting unknown payload" begin
     mktempdir() do directory
-        for name in ReleaseWhitelistFixture.ALLOWED_TOP_LEVEL
-            if name in (".github", "docs", "examples", "ext", "scripts", "src", "test", "theory")
-                mkdir(joinpath(directory, name))
-            else
-                write(joinpath(directory, name), "")
-            end
-        end
-        write(joinpath(directory, "Project.toml"), "version = \"1.0.0\"\n")
-        for name in ReleaseWhitelistFixture.ALLOWED_SCRIPT_FILES
-            path = joinpath(directory, "scripts", name)
+        for name in
+            union(ReleaseWhitelistFixture.CLASSIFIED_PATHS, ReleaseWhitelistFixture.GENERATED_PATHS)
+            path = joinpath(directory, name)
             mkpath(dirname(path))
             write(path, "")
         end
+        write(joinpath(directory, "Project.toml"), "version = \"1.0.0\"\n")
         @test ReleaseWhitelistFixture.check_release_whitelist(directory)
         mkdir(joinpath(directory, ".git"))
         write(joinpath(directory, ".git", "config"), "not public source")
@@ -29,6 +23,12 @@ end
         write(joinpath(directory, "unknown.txt"), "unexpected")
         @test_throws ErrorException ReleaseWhitelistFixture.check_release_whitelist(directory)
         rm(joinpath(directory, "unknown.txt"))
+        for part in ("src", "docs", "ext", "test", "examples")
+            path = joinpath(directory, part, "unclassified.txt")
+            write(path, "unexpected")
+            @test_throws ErrorException ReleaseWhitelistFixture.check_release_whitelist(directory)
+            rm(path)
+        end
         write(joinpath(directory, "src", "unfinished.tmp"), "generated")
         @test_throws ErrorException ReleaseWhitelistFixture.check_release_whitelist(directory)
         rm(joinpath(directory, "src", "unfinished.tmp"))
@@ -75,4 +75,46 @@ end
     removed = ReleaseWhitelistFixture.script_inventory_difference(with_removal)
     @test removed.missing == [removed_name]
     @test isempty(removed.extra)
+end
+
+module ReleasePortablePayloadFixture
+using JSON3, SHA
+include(joinpath(@__DIR__, "fixtures", "first_use_portable", "PortableFixturePayload_v1.jl"))
+end
+
+@testset "release fixture transport has current complete file bindings" begin
+    transport = ReleasePortablePayloadFixture.PortableFixturePayload
+    actual = joinpath(@__DIR__, "fixtures", "first_use_portable")
+    # Exercise the actual shipped manifest: stale size/hash records blocked every
+    # expert first call even when the outer source inventory was correct.
+    @test !isempty(transport.verify_payload(actual).files)
+    mktempdir() do directory
+        file = joinpath(directory, "sample.dat")
+        write(file, "alpha")
+        declaration = Dict(
+            "schema" => "wanniernlqg.first-use-fixture-payload",
+            "schema_version" => "1",
+            "files" => [
+                Dict(
+                    "file" => "sample.dat",
+                    "bytes" => 5,
+                    "sha256" => bytes2hex(ReleasePortablePayloadFixture.SHA.sha256(read(file))),
+                ),
+            ],
+            "arguments" => Any[],
+            "paths" => Dict(),
+            "expert_entries" => Any[],
+        )
+        manifest = joinpath(directory, "manifest.json")
+        write(manifest, ReleasePortablePayloadFixture.JSON3.write(declaration))
+        @test length(transport.verify_payload(directory).files) == 1
+        write(file, "bravo") # unchanged length must still reject the changed bytes
+        @test_throws ErrorException transport.verify_payload(directory)
+        write(file, "alpha")
+        declaration["files"][1]["bytes"] = 4
+        write(manifest, ReleasePortablePayloadFixture.JSON3.write(declaration))
+        @test_throws ErrorException transport.verify_payload(directory)
+        rm(file)
+        @test_throws ErrorException transport.verify_payload(directory)
+    end
 end

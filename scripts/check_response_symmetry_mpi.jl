@@ -10,14 +10,18 @@ import WannierNLQG.Runtime: mpi_process_rank, mpi_process_size
 length(ARGS) == 1 || error("usage: check_response_symmetry_mpi.jl EXPECTED_MPI_SIZE")
 const EXPECTED_SIZE = parse(Int, only(ARGS))
 const ROOT = abspath(normpath(joinpath(@__DIR__, "..")))
+include(joinpath(ROOT, "examples", "ExampleSupport.jl"))
 const FIXTURE_ROOT = joinpath(ROOT, "examples", "fixtures", "synthetic_runtime")
 const MODEL_FILE = joinpath(FIXTURE_ROOT, "synthetic_tb.dat")
 const OPERATOR_BUNDLE_FILE = joinpath(FIXTURE_ROOT, "synthetic_operators.h5")
 const WSVEC_FILE = joinpath(FIXTURE_ROOT, "synthetic_wsvec.dat")
 const TEST_OUTPUT_ROOT = normpath(get(ENV, "WANNIERNLQG_TEST_OUTPUT_ROOT", tempdir()))
 const OUTROOT = joinpath(TEST_OUTPUT_ROOT, "response_symmetry_mpi_$(EXPECTED_SIZE)")
-const ARTIFACT = joinpath(TEST_OUTPUT_ROOT, "response_symmetry_mpi_artifact.json")
-const STRUCTURE_FILE = joinpath(TEST_OUTPUT_ROOT, "response_symmetry_mpi_class19.vasp")
+const GENERATED_FIXTURE_ROOT =
+    normpath(get(ENV, "WANNIERNLQG_RESPONSE_MPI_FIXTURE_ROOT", TEST_OUTPUT_ROOT))
+isabspath(GENERATED_FIXTURE_ROOT) || error("response symmetry fixture root must be absolute")
+const ARTIFACT = joinpath(GENERATED_FIXTURE_ROOT, "response_symmetry_mpi_artifact.json")
+const STRUCTURE_FILE = joinpath(GENERATED_FIXTURE_ROOT, "response_symmetry_mpi_class19.vasp")
 
 MPI.Initialized() || MPI.Init()
 
@@ -70,17 +74,19 @@ if mpi_process_rank() == 0
                 "0.877 0.766 0.345\n",
             )
         end
-        WannierNLQG.Symmetrization.write_response_symmetry_artifact(
-            ARTIFACT;
-            structure_file = STRUCTURE_FILE,
-            structure_format = :poscar,
-            model_file = OPERATOR_BUNDLE_FILE,
-            magnetic_moments_cartesian = [0.0 0.0 0.0 0.0; 0.0 0.0 0.0 0.0; 1.0 1.0 1.0 1.0],
-            include_time_reversal = true,
-            integrand_covariance_status = "FAIL",
-            covariance_max_relative_residual = 1.0e-2,
-            overwrite = true,
-        )
+        ExampleSupport.with_synthetic_operator_bundle() do
+            WannierNLQG.Symmetrization.write_response_symmetry_artifact(
+                ARTIFACT;
+                structure_file = STRUCTURE_FILE,
+                structure_format = :poscar,
+                model_file = OPERATOR_BUNDLE_FILE,
+                magnetic_moments_cartesian = [0.0 0.0 0.0 0.0; 0.0 0.0 0.0 0.0; 1.0 1.0 1.0 1.0],
+                include_time_reversal = true,
+                integrand_covariance_status = "FAIL",
+                covariance_max_relative_residual = 1.0e-2,
+                overwrite = true,
+            )
+        end
     else
         isfile(STRUCTURE_FILE) || error("serial response-symmetry structure oracle is missing")
         isfile(ARTIFACT) || error("serial response-symmetry artifact oracle is missing")
@@ -118,7 +124,30 @@ cfg = WannierNLQG.Runtime.EffectiveTaskConfig(
     progress_verbosity = "quiet",
 )
 
-result = WannierNLQG.run(cfg)
+artifact_before_run = WannierNLQG.IO.scientific_file_state(ARTIFACT)
+result = try
+    ExampleSupport.with_synthetic_operator_bundle() do
+        WannierNLQG.run(cfg)
+    end
+catch exception
+    if mpi_process_rank() == 0
+        println(stderr, "RESPONSE_MPI_CHECKER_PRE_RUN_STATE=", JSON3.write(artifact_before_run))
+        try
+            println(
+                stderr,
+                "RESPONSE_MPI_CHECKER_AFTER_ERROR_STATE=",
+                JSON3.write(WannierNLQG.IO.scientific_file_state(ARTIFACT)),
+            )
+        catch observation_error
+            println(
+                stderr,
+                "RESPONSE_MPI_CHECKER_STATE_ERROR=",
+                sprint(showerror, observation_error),
+            )
+        end
+    end
+    rethrow()
+end
 if mpi_process_rank() == 0
     mpi_process_size() == EXPECTED_SIZE ||
         error("expected MPI size $(EXPECTED_SIZE), got $(mpi_process_size())")

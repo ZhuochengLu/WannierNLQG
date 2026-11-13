@@ -1,5 +1,10 @@
 module RepresentationPreparation
 
+import WannierNLQG.SymmetryFoundation
+import WannierNLQG.IO
+
+import WannierNLQG.Core: validate_ordinary_construction_policy
+
 import EzXML
 import HDF5
 import LinearAlgebra:
@@ -9,6 +14,7 @@ import SHA
 import SHA: sha256
 import WannierNLQG.Core: reciprocal_lattice
 import WannierNLQG.IO:
+    write_native_definition_value,
     preparation_source_vector,
     foreach_preparation_block,
     operator_selection_mode,
@@ -43,14 +49,18 @@ import WannierNLQG.SymmetryFoundation:
     sha256_file,
     spin_action_matrix
 import WannierNLQG.WannierProjection:
-    WannierProjectionBasis, projection_orbital_values, projection_radial_transform_contract
+    WannierProjectionBasis,
+    projection_orbital_values,
+    projection_radial_transform_contract,
+    projection_basis_input_values
 import WannierNLQG.Wannierization:
+    validate_wannierization_geometry_source,
     AMNExactFrozenInitialization,
     AbstractBandSewingBackend,
     AugmentationAwareSewing,
     BandRepresentationPreparationConfig,
     CoefficientMappingSewing,
-    ExternalWannier90Matrices,
+    ExternalOverlapProjectionMatrices,
     FarBandCovarianceCorrection,
     GATE_DEFINITION_INVALID,
     GATE_VALID,
@@ -67,7 +77,7 @@ import WannierNLQG.Wannierization:
     RepresentationProductTable,
     StarCovariantPAWGauge,
     SymmetrizedDFTHamiltonian,
-    SymmetryAdaptedWannierizationConfig,
+    WannierizationConfig,
     SymmetryCompletedQEPAWMatrices,
     SymmetryCovariantWavefunctionPreparationConfig,
     WannierGaugeLinkDiagnostics,
@@ -75,12 +85,13 @@ import WannierNLQG.Wannierization:
     WannierizationDiagnostic,
     WannierizationFixedSubspace
 import ..WannierizationInternalSupport:
+    write_scientific_input_reference_hdf5,
     atomic_hdf5_write,
     band_sewing_backend_key,
     build_augmentation_aware_band_representation,
     empty_group_law_worst_cases,
     is_symmetrized_authority,
-    projection_basis_sha256,
+    projection_basis_definition,
     target_representation,
     validate_smv_fletcher_reeves_two_stage_audit_thresholds,
     write_generation_environment,
@@ -109,6 +120,7 @@ const compare_wannier_projectors = _compare_wannier_projectors
 const configured_num_wannier = _configured_num_wannier
 const constraint_scoped_fixed_subspace = _constraint_scoped_fixed_subspace
 const constraint_scoped_representation = _constraint_scoped_representation
+const select_detected_operations = _select_detected_operations
 const effective_wannierization_algorithms = _effective_wannierization_algorithms
 const effective_wannierization_mode = _effective_wannierization_mode
 const generate_amn = _generate_amn
@@ -131,7 +143,7 @@ const record_wannier_gauge_link_summary! = _record_wannier_gauge_link_summary!
 const representation_diagnostic = _representation_diagnostic
 const representation_diagnostics_for_policy = _representation_diagnostics_for_policy
 const representation_source = _representation_source
-const representation_static_sha256 = _representation_static_sha256
+const representation_static_definition = _representation_static_definition
 const symmetry_constraints_applied = _symmetry_constraints_applied
 const validate_band_group_law = _validate_band_group_law
 const validate_selected_kramers_ranks = _validate_selected_kramers_ranks
@@ -142,6 +154,8 @@ const validate_wannierization_config = _validate_wannierization_config
 const wannier_gauge_link_diagnostics = _wannier_gauge_link_diagnostics
 
 const REPRESENTATION_PREPARATION_INTEGRATION_API = (
+    :native_qe_wannier_metadata,
+    :native_vasp_wannier_metadata,
     :native_vasp_point_provider,
     :QEProjectorAtomPlan,
     :QEProjectorChannel,
@@ -159,6 +173,7 @@ const REPRESENTATION_PREPARATION_INTEGRATION_API = (
     :configured_num_wannier,
     :constraint_scoped_fixed_subspace,
     :constraint_scoped_representation,
+    :select_detected_operations,
     :effective_wannierization_algorithms,
     :effective_wannierization_mode,
     :generate_amn,
@@ -178,10 +193,12 @@ const REPRESENTATION_PREPARATION_INTEGRATION_API = (
     :read_vasp_paw_system,
     :read_wannier_amn,
     :record_wannier_gauge_link_summary!,
+    :construction_compatibility_quality_failure,
     :representation_diagnostic,
     :representation_diagnostics_for_policy,
     :representation_source,
-    :representation_static_sha256,
+    :representation_static_definition,
+    :qualification_mask_definition,
     :symmetry_constraints_applied,
     :validate_band_group_law,
     :validate_selected_kramers_ranks,
@@ -206,7 +223,7 @@ const REPRESENTATION_PREPARATION_TEST_API = (
     :_group_law_combination_index,
     :_match_symmetry_operations,
     :_paired_matrix_residual_metrics,
-    :_representation_static_sha256,
+    :_representation_static_definition,
     :_stable_subspace_alignment,
     :_symmetry_constraints_applied,
     :_validate_band_representation_preparation_config,

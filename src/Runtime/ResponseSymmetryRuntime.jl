@@ -375,8 +375,8 @@ function _response_artifact_warning_messages(artifact::ResponseSymmetryArtifact)
 end
 
 # Extend a two-dimensional mesh with its fixed unit third axis.
-function _response_symmetry_mesh3(k_mesh::Union{NTuple{2, Int}, NTuple{3, Int}})
-    return length(k_mesh) == 2 ? (k_mesh[1], k_mesh[2], 1) : k_mesh
+function _response_symmetry_mesh3(k_mesh::Union{NTuple{1, Int}, NTuple{2, Int}, NTuple{3, Int}})
+    return ntuple(axis -> axis <= length(k_mesh) ? k_mesh[axis] : 1, 3)
 end
 
 # Construct the exact modular reciprocal-grid action of one operation.
@@ -830,6 +830,24 @@ function _response_symmetry_linear_equations(tensor_plan::ResponseTensorSymmetry
 end
 
 # Assemble the complete machine-readable response symmetry summary.
+"""Emit explicit native source observations or the remaining legacy certificate fields."""
+function response_symmetry_binding_metadata(plan)
+    if plan.artifact_schema == NATIVE_RESPONSE_SYMMETRY_SCHEMA
+        binding = plan.group_report["native_binding"]
+        return (;
+            artifact_source_identity = binding["artifact_source_identity"],
+            model_definition_source_identity = binding["model_definition_source_identity"],
+            model_binding = binding["model_binding"],
+        )
+    end
+    return (;
+        artifact_sha256 = plan.artifact_sha256,
+        model_sha256 = plan.model_sha256,
+        structure_sha256 = plan.structure_sha256,
+    )
+end
+
+"""Describe the actual operation, orbit and tensor plan beside its calculated components."""
 function _response_symmetry_summary_payload(
     plan::ResponseSymmetryExecutionPlan;
     calculated_components = Dict{Symbol, Any}(),
@@ -858,7 +876,10 @@ function _response_symmetry_summary_payload(
         )
     end
     return Dict{String, Any}(
-        "schema" => "wanniernlqg.response-symmetry-summary/1.0",
+        "schema" =>
+            plan.artifact_schema == NATIVE_RESPONSE_SYMMETRY_SCHEMA ?
+            "wanniernlqg.response-symmetry-summary/2.0" :
+            "wanniernlqg.response-symmetry-summary/1.0",
         "status" => string(plan.status),
         "policy" => string(plan.policy),
         "kmesh_mode" => string(plan.kmesh_mode),
@@ -867,12 +888,12 @@ function _response_symmetry_summary_payload(
             plan.kmesh_mode == :reduced && !plan.explanation_only,
         "warnings" => plan.warnings,
         "artifact_file" => basename(plan.artifact_file),
-        "artifact_sha256" => plan.artifact_sha256,
+        (
+            String(key) => value for (key, value) in pairs(response_symmetry_binding_metadata(plan))
+        )...,
         "artifact_schema" => plan.artifact_schema,
         "artifact_sealed" => plan.artifact_sealed,
         "production_eligible" => plan.production_eligible,
-        "model_sha256" => plan.model_sha256,
-        "structure_sha256" => plan.structure_sha256,
         "integrand_covariance" => Dict(
             "status" => plan.covariance_status,
             "maximum_relative_residual" => plan.covariance_max_relative_residual,
@@ -921,28 +942,21 @@ function _build_response_symmetry_execution_plan(
     specs::Vector{NormalizedTaskSpec},
     artifact_file::String,
 )
+    cfg.native_model_input === nothing ||
+        return build_native_response_symmetry_plan(cfg, ctx, specs, artifact_file)
     artifact = read_response_symmetry_artifact(artifact_file)
     policy = _response_symmetry_policy(cfg.response_symmetry_policy)
     kmesh_mode = _response_symmetry_kmesh_mode(cfg.response_symmetry_kmesh_mode)
     calculation = only(unique(spec.calculation for spec in specs))
     explanation_only = calculation == :kslice || kmesh_mode == :full
-    artifact.model_sha256 == lowercase(ctx.model_sha256) || error(
-        "response symmetry artifact model SHA-256 $(artifact.model_sha256) does not match runtime model $(ctx.model_sha256).",
+    # Format1's explicit external checksum remains at its adapter boundary until
+    # that format migrates. Ordinary context identity is a local source lifetime.
+    artifact.model_sha256 == checksum_file(ctx.model_file) || error(
+        "response symmetry artifact model SHA-256 does not match its declared runtime source.",
     )
     # `strict` continues to enforce structural parsing, model identity, and explicit
-    # contract consistency. Missing qualification/seal evidence is diagnostic-only.
+    # contract consistency. Recorded publication flags remain structured provenance.
     warning_messages = _response_artifact_warning_messages(artifact)
-    if artifact.cartesian_rotation_policy == "legacy_raw_unspecified"
-        push!(
-            warning_messages,
-            "legacy response-symmetry schema $(artifact.schema) is diagnostic-only",
-        )
-    elseif !artifact.sealed || !artifact.production_eligible
-        push!(
-            warning_messages,
-            "unsealed or non-production complete-contract artifact is diagnostic-only",
-        )
-    end
     append!(warning_messages, _validate_response_artifact_declared_checks(artifact))
     append!(
         warning_messages,
@@ -983,7 +997,7 @@ function _build_response_symmetry_execution_plan(
     if artifact.qualification_status != "PASS"
         message =
             "response symmetry integrand covariance status is " *
-            "$(artifact.qualification_status); continuing as DIAGNOSTIC_ONLY"
+            "$(artifact.qualification_status); retaining the computed result"
         @warn message
         push!(warning_messages, message)
     end
@@ -992,7 +1006,7 @@ function _build_response_symmetry_execution_plan(
         message =
             "response symmetry integrand covariance residual " *
             "$(artifact.covariance_max_relative_residual) exceeds tolerance " *
-            "$(artifact.covariance_tolerance); continuing as DIAGNOSTIC_ONLY"
+            "$(artifact.covariance_tolerance); retaining the computed result"
         @warn message
         push!(warning_messages, message)
     end
@@ -1015,9 +1029,7 @@ function _build_response_symmetry_execution_plan(
         end
     end
     unique!(warning_messages)
-    status =
-        artifact.production_eligible && artifact.sealed && isempty(warning_messages) ? :PASS :
-        :DIAGNOSTIC_ONLY
+    status = :COMPUTATION_READY
     return ResponseSymmetryExecutionPlan(
         artifact.source_path,
         artifact.artifact_sha256,
@@ -1495,10 +1507,7 @@ function response_symmetry_human_summary(
 )
     real_part = _response_part_symmetry_model(tensor_plan, :real)
     imaginary_part = _response_part_symmetry_model(tensor_plan, :imaginary)
-    qualification_note =
-        plan.status == :PASS && plan.production_eligible ?
-        "Tensor constraints are structurally qualified by the sealed artifact." :
-        "Tensor constraints are structural diagnostics; physical production eligibility remains blocked."
+    qualification_note = "Tensor constraints follow the supplied symmetry operations; measured covariance and warnings are reported separately."
     return (
         quantity = tensor_plan.quantity,
         title = uppercase(replace(string(tensor_plan.quantity), "_" => "-")) *
@@ -1587,7 +1596,7 @@ function response_symmetry_metadata(
             calculated_component = get(calculated_components, tensor_plan.quantity, nothing),
         ) for tensor_plan in plan.tensor_plans
     ]
-    return (
+    return (;
         enabled = true,
         status = plan.status,
         policy = plan.policy,
@@ -1595,12 +1604,10 @@ function response_symmetry_metadata(
         explanation_only = plan.explanation_only,
         numerical_tensor_projection_applied = plan.kmesh_mode == :reduced && !plan.explanation_only,
         artifact_file = plan.artifact_file,
-        artifact_sha256 = plan.artifact_sha256,
+        response_symmetry_binding_metadata(plan)...,
         artifact_schema = plan.artifact_schema,
         artifact_sealed = plan.artifact_sealed,
         production_eligible = plan.production_eligible,
-        model_sha256 = plan.model_sha256,
-        structure_sha256 = plan.structure_sha256,
         full_kpoint_count = plan.full_kpoint_count,
         representative_kpoint_count = length(plan.representatives),
         represented_weight = sum(plan.multiplicities),

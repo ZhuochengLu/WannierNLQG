@@ -1,6 +1,6 @@
 {
   "artifact": "artifact_12.h5",
-  "artifact_sha256": "7ce56ab9aa9eebd65e9775e83a7a4ca38a648f6d2b0cbe2cc77d66e4f3e6e177",
+  "artifact_sha256": "1a8abe59673cca4d96a8a5d0f126443a24aaec7867a32e41ac1488f4047bf701",
   "dataset_paths": [
     "/@augmentation_metric",
     "/@band_first",
@@ -428,7 +428,7 @@
       "type": "Float64"
     }
   ],
-  "raw_file_bytes": 21368,
+  "raw_file_bytes": 22120,
   "semantic_fields": {
     "/@augmentation_metric": "POTCAR q0 AE-minus-PS",
     "/@band_frame_contract_sha256": "dd02f100b71dba3d7b97181de4f9c3cbec36a0aeb34916092066bfdabdc81b30",

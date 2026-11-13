@@ -69,7 +69,7 @@ acceleration = W.WannierizationAccelerationConfig(
     u_gradient_norm_tolerance = 1.0e-8,
     u_inner_tolerance = 1.0e-8,
 )
-config = W.SymmetryAdaptedWannierizationConfig(
+config = W.WannierizationConfig(
     input = W.WannierizationInputConfig(
         wannierization_mode = :symmetry_adapted,
         win_file = "synthetic.win",
@@ -87,9 +87,14 @@ config = W.SymmetryAdaptedWannierizationConfig(
         initialization = :random,
         acceleration = acceleration,
         parallel = :threads,
-        max_iterations = 8,
-        convergence_tolerance = 1.0e-8,
-        convergence_window = 1,
+        stage_controls = W.WannierizationStageControls(
+            dis_num_iter = 8,
+            num_iter = 8,
+            dis_conv_tol = 1e-8,
+            dis_conv_window = 1,
+            conv_tol = 1e-8,
+            conv_window = 1,
+        ),
         random_seed = 0x1234,
     ),
     checkpoint = W.WannierizationCheckpointConfig(),
@@ -132,6 +137,7 @@ mode_representation =
 scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
     trues(2, 2),
     BitMatrix([true true; false false]),
+    content_authentication = false,
 )
 internal_target = Base.invokelatest(
     workflow._representation_with_target_subspace_contract,
@@ -169,3 +175,10 @@ for field in (:spread_total, :spread_standard_deviation)
     write(buffer, reinterpret(UInt8, getfield.(public_result.history, field)))
 end
 println("WANNIERIZATION_THREAD_DIGEST=" * bytes2hex(SHA.sha256(take!(buffer))))
+
+# Exercise the existing dense/streamed native AMN cache oracles in this actual
+# four-thread process; requested workers alone do not establish concurrency.
+if Threads.nthreads() == 4
+    include(joinpath(@__DIR__, "preparation_storage_unit.jl"))
+    println("NATIVE_AMN_ACTUAL_THREADS=" * string(Threads.nthreads()))
+end

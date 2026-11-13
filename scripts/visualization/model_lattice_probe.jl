@@ -9,7 +9,7 @@ path = abspath(ARGS[1])
 isfile(path) || error("packed model does not exist: $(path)")
 payload = HDF5.h5open(path, "r") do handle
     root_attributes = HDF5.attributes(handle)
-    for required in ("schema", "schema_version", "scientific_content_sha256")
+    for required in ("schema", "schema_version")
         haskey(root_attributes, required) ||
             error("packed manifest is missing root attribute $(required)")
     end
@@ -17,21 +17,14 @@ payload = HDF5.h5open(path, "r") do handle
     schema == "wanniernlqg.real-space-operators" ||
         error("unsupported packed model schema $(schema)")
     schema_version = String(read(root_attributes["schema_version"]))
-    schema_version == "1.1" || error(
-        "operator-bundle migration required: expected schema 1.1, found $(schema_version)",
-    )
-    scientific_content_sha256 =
-        lowercase(String(read(root_attributes["scientific_content_sha256"])))
-    length(scientific_content_sha256) == 64 &&
-    all(character -> character in '0':'9' || character in 'a':'f', scientific_content_sha256) ||
-        error("packed manifest scientific_content_sha256 is invalid")
+    schema_version == "3.0" ||
+        error("MODEL_SCHEMA_UNSUPPORTED: expected schema 3.0, found $(schema_version)")
     haskey(handle, "model/lattice") || error("packed model is missing /model/lattice")
     lattice = Matrix{Float64}(read(handle["model/lattice"]))
-    return (; schema, schema_version, scientific_content_sha256, lattice)
+    return (; schema, schema_version, lattice)
 end
 schema = payload.schema
 schema_version = payload.schema_version
-scientific_content_sha256 = payload.scientific_content_sha256
 lattice = payload.lattice
 size(lattice) == (3, 3) || error("packed manifest lattice is not 3x3")
 all(isfinite, lattice) || error("packed manifest lattice contains non-finite values")
@@ -40,10 +33,9 @@ JSON3.write(
     stdout,
     Dict(
         "schema" => "wanniernlqg.visualization-model-lattice",
-        "schema_version" => "1.0",
+        "schema_version" => "1.1",
         "bundle_schema" => schema,
         "bundle_schema_version" => schema_version,
-        "scientific_content_sha256" => scientific_content_sha256,
         "lattice_rows_angstrom" => [collect(row) for row in eachrow(lattice)],
     ),
 )

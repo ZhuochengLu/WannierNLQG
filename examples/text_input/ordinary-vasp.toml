@@ -1,0 +1,23 @@
+# Template: supply one consistent native calculation; not a material qualification.
+workflow = "wannierization"
+mode = "ordinary"
+[source]
+kind = "vasp"
+poscar_file = "inputs/POSCAR"
+outcar_file = "inputs/OUTCAR"
+wavecar_file = "inputs/WAVECAR"
+potcar_file = "inputs/POTCAR"
+incar_file = "inputs/INCAR"
+[kmesh]
+dimensions = [1, 1, 1]
+[basis]
+projections = ["X:s"]
+[solver]
+initialization = "amn"
+[output]
+final_tb_symmetry_report_enabled = false
+model_file = "results/ordinary.h5"
+# checkpoint_hdf5 = "results/ordinary.wannierization.h5"  # Optional restart artifact
+profile = "hamiltonian_position"
+num_print_cycles = 1
+num_dump_cycles = 100

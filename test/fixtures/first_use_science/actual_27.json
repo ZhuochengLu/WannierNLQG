@@ -99,7 +99,7 @@
       "structure_magnetic_symmetry": {
         "status": "PASS"
       },
-      "wannier90_gauge": {
+      "wannier_frame": {
         "status": "NOT_RUN"
       }
     },

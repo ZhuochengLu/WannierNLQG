@@ -227,12 +227,58 @@ bundle_mpi_comm_size(comm) = mpi_context_comm_size(BUNDLE_MPI_CONTEXT, comm)
 """Sum values to the selected root for the fused response bundle; serial mode returns the input."""
 bundle_mpi_reduce_sum(local_value, root, comm) =
     mpi_context_reduce_sum(BUNDLE_MPI_CONTEXT, local_value, root, comm)
+"""Take elementwise maxima at the bundle root, including adaptive points on every rank."""
+bundle_mpi_reduce_max(local_value, root, comm) =
+    BUNDLE_MPI_CONTEXT.has_mpi ?
+    Base.invokelatest(_mpi_binding(:Reduce!), local_value, max, root, comm) : local_value
 """Broadcast one serializable small object from a world or leader root."""
 bundle_mpi_bcast(value, root, comm) =
     BUNDLE_MPI_CONTEXT.has_mpi ? Base.invokelatest(_mpi_binding(:bcast), value, root, comm) : value
+"""Gather owned point-value packets only to the controller; retain serial ownership."""
+bundle_mpi_gather(value, root, comm) =
+    BUNDLE_MPI_CONTEXT.has_mpi ? Base.invokelatest(_mpi_binding(:gather), value, comm; root) :
+    [value]
 """Synchronize the bundle communicator; do nothing in serial mode."""
 bundle_mpi_barrier(comm) =
     BUNDLE_MPI_CONTEXT.has_mpi ? Base.invokelatest(_mpi_binding(:Barrier), comm) : nothing
+
+"""Synchronize local completion or output errors after an operation's own collectives.
+
+Every rank executes the operation and retains its own result. Only status strings
+are exchanged before a later collective can start. The caller must ensure that
+an exception cannot skip a collective inside the operation. Disabled and one-rank
+calls retain the original direct call and exception type.
+"""
+function bundle_mpi_collective_call(
+    function_value;
+    enabled::Bool = false,
+    comm = bundle_mpi_comm_world(),
+)
+    !enabled && return function_value()
+    ranks = bundle_mpi_comm_size(comm)
+    ranks == 1 && return function_value()
+    rank = bundle_mpi_comm_rank(comm)
+    outcome = try
+        (ok = true, value = function_value(), error = "")
+    catch exception
+        (ok = false, value = nothing, error = sprint(showerror, exception))
+    end
+    local_status = (ok = outcome.ok, error = outcome.error)
+    statuses = [
+        bundle_mpi_bcast(rank == owner ? local_status : nothing, owner, comm) for
+        owner in 0:(ranks - 1)
+    ]
+    all(status -> status.ok, statuses) || error(
+        "adaptive collective completion failed: " * join(
+            [
+                "rank $(owner - 1): $(status.error)" for
+                (owner, status) in enumerate(statuses) if !status.ok
+            ],
+            "; ",
+        ),
+    )
+    return outcome.value
+end
 
 """Execute a small setup call on one MPI root and broadcast success or failure."""
 function bundle_mpi_root_call(function_value; root::Int = 0, comm = bundle_mpi_comm_world())
@@ -377,3 +423,65 @@ function mpi_benchmark_finalize!()
     end
     return nothing
 end
+
+# Typed response movement, not model/physics/resource policy. All ranks agree
+# before entering each collective; an invalid local layout never strands peers.
+function mpi_context_all_true(context::MPIExecutionContext, valid::Bool, comm)
+    context.has_mpi ? Base.invokelatest(_mpi_binding(:Allreduce), valid, &, comm) : valid
+end
+# Apply the active bundle MPI context to the existing collective Boolean agreement operation.
+bundle_mpi_all_true(valid::Bool, comm) = mpi_context_all_true(BUNDLE_MPI_CONTEXT, valid, comm)
+
+# Validate response-buffer types, nonaliasing ranges and rank-sized counts before an exchange.
+function _bounded_response_exchange_layout(send, sendcounts, receive, recvcounts, ranks::Int)
+    send isa Union{Vector{Float64}, Vector{ComplexF64}} &&
+    typeof(receive) === typeof(send) &&
+    sendcounts isa Vector{Int} &&
+    recvcounts isa Vector{Int} || return false
+    # Empty regions carry no bytes; distinct empty MPI buffers may share a
+    # runtime sentinel address without overlapping any transferred element.
+    !isempty(send) && !isempty(receive) && Base.mightalias(send, receive) && return false
+    length(sendcounts) == length(recvcounts) == ranks || return false
+    all(x -> 0 <= x <= typemax(Cint), sendcounts) || return false
+    all(x -> 0 <= x <= typemax(Cint), recvcounts) || return false
+    ns=sum(Int128, sendcounts);
+    nr=sum(Int128, recvcounts)
+    return ns <= typemax(Cint) && nr <= typemax(Cint) && ns == length(send) && nr == length(receive)
+end
+
+# Collectively validate the bounded response layout before invoking the configured exchange callback.
+function mpi_context_exchange_responses!(
+    context::MPIExecutionContext,
+    send,
+    sendcounts,
+    receive,
+    recvcounts,
+    comm,
+)
+    ranks=mpi_context_comm_size(context, comm)
+    valid=_bounded_response_exchange_layout(send, sendcounts, receive, recvcounts, ranks)
+    mpi_context_all_true(context, valid, comm) ||
+        throw(ArgumentError("BOUNDED_RESPONSE_EXCHANGE_LAYOUT"))
+    if !context.has_mpi
+        sendcounts == recvcounts || throw(ArgumentError("BOUNDED_RESPONSE_EXCHANGE_COUNTS"))
+        copyto!(receive, send)
+        return receive
+    end
+    sc=Cint.(sendcounts);
+    rc=Cint.(recvcounts);
+    incoming=similar(rc)
+    ub=_mpi_binding(:UBuffer)
+    sb=Base.invokelatest(ub, sc, 1);
+    rb=Base.invokelatest(ub, incoming, 1)
+    Base.invokelatest(_mpi_binding(:Alltoall!), sb, rb, comm)
+    mpi_context_all_true(context, incoming==rc, comm) ||
+        throw(ArgumentError("BOUNDED_RESPONSE_EXCHANGE_COUNTS"))
+    vb=_mpi_binding(:VBuffer)
+    values_send=Base.invokelatest(vb, send, sc)
+    values_receive=Base.invokelatest(vb, receive, rc)
+    Base.invokelatest(_mpi_binding(:Alltoallv!), values_send, values_receive, comm)
+    return receive
+end
+# Route response exchange through the current bundle MPI context without changing its buffer layout.
+bundle_mpi_exchange_responses!(send, sendcounts, receive, recvcounts, comm) =
+    mpi_context_exchange_responses!(BUNDLE_MPI_CONTEXT, send, sendcounts, receive, recvcounts, comm)

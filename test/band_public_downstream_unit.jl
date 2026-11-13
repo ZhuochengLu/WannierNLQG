@@ -32,6 +32,7 @@ function band_downstream_contract_copy(
         representation.full_to_operation;
         conventions,
         input_sha256 = representation.input_sha256,
+        input_definitions = representation.input_definitions,
     )
 end
 
@@ -54,16 +55,20 @@ end
     legacy_result = wf._solve_symmetry_adapted_wannierization(
         modified_wannierization_config(
             fixture.config;
-            max_iterations = 2,
-            localize = false,
-            algorithm_profile = :custom,
+            stage_controls = WANNIERIZATION.WannierizationStageControls(
+                dis_num_iter = 2,
+                num_iter = 0,
+                dis_conv_tol = 1e-10,
+                dis_conv_window = 1,
+            ),
         ),
         fixture.representation,
         fixture.eig,
         fixture.mmn,
         fixture.plan,
     )
-    @test legacy_result.input_summary["compatibility_policy_effective"] == "strict"
+    @test legacy_result.input_summary["compatibility_policy_requested"] == "warn"
+    @test legacy_result.input_summary["compatibility_policy_effective"] == "warn"
     mktempdir() do directory
         win_file = joinpath(directory, "public.win")
         write(
@@ -91,7 +96,7 @@ end kpoints
         for mode in (:ordinary, :symmetry_adapted)
             filename = joinpath(directory, "$(mode).h5")
             config = wf.BandRepresentationPreparationConfig(
-                construction_policy = :strict,
+                construction_policy = :standard,
                 wannierization_mode = mode,
                 win_file = win_file,
                 eig_file = eig_file,
@@ -106,7 +111,8 @@ end kpoints
                 compatibility_policy = :off,
             )
             prepared = wf.prepare_band_representation(config)
-            restored = foundation.read_band_representation_hdf5(filename)
+            restored =
+                foundation.read_band_representation_hdf5(filename; content_authentication = false)
             @test prepared.representation.schema_version == "1.0"
             @test restored.schema_version == "1.0"
             @test restored.conventions == prepared.representation.conventions
@@ -132,7 +138,7 @@ end kpoints
             end
             reread = wf.prepare_band_representation(
                 wf.BandRepresentationPreparationConfig(
-                    construction_policy = :strict,
+                    construction_policy = :standard,
                     wannierization_mode = mode,
                     win_file = win_file,
                     eig_file = eig_file,
@@ -164,11 +170,12 @@ end kpoints
                 foundation.write_band_representation_hdf5(
                     source_file,
                     supplied_public;
+                    content_authentication = false,
                     qualification_scope = prepared.qualification_scope,
                     raw_diagnostics = prepared.raw_diagnostics,
                 )
                 supplied_config = wf.BandRepresentationPreparationConfig(
-                    construction_policy = :strict,
+                    construction_policy = :standard,
                     wannierization_mode = mode,
                     win_file = win_file,
                     eig_file = eig_file,
@@ -183,17 +190,21 @@ end kpoints
                     compatibility_policy = :warn,
                 )
                 supplied_prepared = wf.prepare_band_representation(supplied_config)
-                @test supplied_prepared.effective_compatibility_policy ==
-                      (origin === nothing ? :warn : :strict)
+                @test supplied_prepared.requested_compatibility_policy == :warn
+                @test supplied_prepared.effective_compatibility_policy == :warn
                 # Optional provenance absence must survive a completed write/read/prepare cycle.
                 roundtrip_file = joinpath(directory, "$(mode)-prepared-origin-$(origin).h5")
                 foundation.write_band_representation_hdf5(
                     roundtrip_file,
                     supplied_prepared.representation;
+                    content_authentication = false,
                     qualification_scope = supplied_prepared.qualification_scope,
                     raw_diagnostics = supplied_prepared.raw_diagnostics,
                 )
-                roundtrip_representation = foundation.read_band_representation_hdf5(roundtrip_file)
+                roundtrip_representation = foundation.read_band_representation_hdf5(
+                    roundtrip_file;
+                    content_authentication = false,
+                )
                 for value in (supplied_prepared.representation, roundtrip_representation)
                     @test value.schema_version == "1.0"
                     @test isequal(
@@ -203,7 +214,7 @@ end kpoints
                 end
                 repeated_prepared = wf.prepare_band_representation(
                     wf.BandRepresentationPreparationConfig(
-                        construction_policy = :strict,
+                        construction_policy = :standard,
                         wannierization_mode = mode,
                         win_file = win_file,
                         eig_file = eig_file,
@@ -230,25 +241,28 @@ end kpoints
                 @test repeated_prepared.representation.sewing_matrices ==
                       supplied_prepared.representation.sewing_matrices
             end
-            # Binding a raw legacy fixture must not itself erase its uncertain origin.
-            @test prepared.effective_compatibility_policy ==
-                  (mode == :symmetry_adapted ? :strict : :off)
-            @test reread.effective_compatibility_policy ==
-                  (mode == :symmetry_adapted ? :strict : :off)
+            # Legacy origin remains recorded while admission preserves the request.
+            @test prepared.requested_compatibility_policy == :off
+            @test prepared.effective_compatibility_policy == :off
+            @test reread.requested_compatibility_policy == :off
+            @test reread.effective_compatibility_policy == :off
             internal_version = mode == :ordinary ? "1.16" : "1.17"
             internal = band_downstream_contract_copy(prepared.representation, internal_version)
             @test Base.invokelatest(solver._representation_target_subspace_contract, internal) ==
                   Base.invokelatest(solver._representation_target_subspace_contract, restored)
             run_config = modified_wannierization_config(
                 fixture.config;
-                construction_policy = :strict,
+                construction_policy = :standard,
                 wannierization_mode = mode,
                 band_representation = mode == :ordinary ? nothing : restored,
                 band_representation_hdf5 = mode == :ordinary ? filename : nothing,
                 win_file = win_file,
-                max_iterations = 2,
-                localize = false,
-                algorithm_profile = :custom,
+                stage_controls = WANNIERIZATION.WannierizationStageControls(
+                    dis_num_iter = 2,
+                    num_iter = 0,
+                    dis_conv_tol = 1e-10,
+                    dis_conv_window = 1,
+                ),
             )
             internal_config = modified_wannierization_config(
                 run_config;
@@ -336,7 +350,7 @@ end kpoints
                 if mode == :symmetry_adapted
                     @test_throws ArgumentError wf.prepare_band_representation(
                         wf.BandRepresentationPreparationConfig(
-                            construction_policy = :strict,
+                            construction_policy = :standard,
                             wannierization_mode = mode,
                             win_file = win_file,
                             eig_file = eig_file,
@@ -355,7 +369,7 @@ end kpoints
             if mode == :symmetry_adapted
                 for key in (
                     "target_leakage_semantics",
-                    "target_leakage_formula_sha256",
+                    "target_leakage_formula_definition",
                     "target_leakage_threshold",
                 )
                     damaged = Dict(restored.conventions)
@@ -426,15 +440,19 @@ end kpoints
             raw_config = modified_wannierization_config(
                 fixture.config;
                 band_representation = raw,
-                max_iterations = 2,
-                localize = false,
-                algorithm_profile = :custom,
+                stage_controls = WANNIERIZATION.WannierizationStageControls(
+                    dis_num_iter = 2,
+                    num_iter = 0,
+                    dis_conv_tol = 1e-10,
+                    dis_conv_window = 1,
+                ),
             )
             with_mode =
                 Base.invokelatest(workflow._representation_with_mode_contract, raw, raw_config)
             scope = foundation.BandRepresentationQualificationScope(
                 trues(2, 2),
-                BitMatrix([true true; false false]),
+                BitMatrix([true true; false false]);
+                content_authentication = false,
             )
             internal = Base.invokelatest(
                 workflow._representation_with_target_subspace_contract,
@@ -449,7 +467,7 @@ end kpoints
                 tolerance = fixture.config.input.representation_tolerance,
             )
             @test compatibility.passed
-            for representation in (internal, complete), requested in (:off, :warn)
+            for representation in (internal, complete), requested in (:off, :warn, :strict)
                 config = modified_wannierization_config(
                     raw_config;
                     band_representation = representation,
@@ -462,14 +480,15 @@ end kpoints
                     fixture.mmn,
                     plan,
                 )
-                @test outcome.input_summary["compatibility_policy_effective"] == "strict"
+                @test outcome.input_summary["compatibility_policy_requested"] == String(requested)
+                @test outcome.input_summary["compatibility_policy_effective"] == String(requested)
                 @test Base.invokelatest(
                     workflow._effective_compatibility_policy,
                     requested,
                     representation,
                     nothing;
                     public_origin_fallback_validated = false,
-                ) == :strict
+                ) == requested
             end
         end
         diagnostic_file = joinpath(directory, "diagnostic.h5")

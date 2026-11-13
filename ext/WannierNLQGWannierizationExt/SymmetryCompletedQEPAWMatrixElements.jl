@@ -1,5 +1,5 @@
 const SYMMETRY_COMPLETED_QE_PAW_SCHEMA = "WannierNLQG.symmetry_completed_qe_paw_matrices"
-const SYMMETRY_COMPLETED_QE_PAW_SCHEMA_VERSION = "1.0"
+const SYMMETRY_COMPLETED_QE_PAW_SCHEMA_VERSION = "2.0"
 
 # Retain NNKP topology and trial projections while explicitly discarding its
 # excluded-band mask: the completed gauge capsule is the band authority.
@@ -13,7 +13,7 @@ function _qe_topology_only_nnkp(nnkp::WannierNNKP)
         Int[],
         nnkp.projections,
         nnkp.spinor,
-        nnkp.source_sha256,
+        nothing,
     )
 end
 
@@ -148,7 +148,7 @@ function _star_scoped_amn_subspace_metrics(
 end
 
 # Persist the direct-versus-rotation identity test independently from any
-# historical external Wannier90 matrices.
+# historical external Wannier matrices.
 function _write_symmetry_completed_qe_paw_provenance(
     filename::AbstractString,
     result::QEPAWMatrixElementResult,
@@ -158,6 +158,7 @@ function _write_symmetry_completed_qe_paw_provenance(
     qualification_mode::Symbol,
     ;
     target_scope_active::Bool,
+    quality_review_recommended::Bool,
     parent_mmn_parity::Union{Nothing, QEPAWArrayParityMetrics} = nothing,
     parent_amn_parity::Union{Nothing, QEPAWArrayParityMetrics} = nothing,
     parent_generalized_norm_max_absolute::Union{Nothing, Float64} = nothing,
@@ -172,11 +173,11 @@ function _write_symmetry_completed_qe_paw_provenance(
             attributes["passed"] = result.passed
             attributes["qualification_mode"] = String(qualification_mode)
             attributes["production_eligible"] = qualification_mode == :strict && result.passed
-            attributes["quality_review_recommended"] = qualification_mode == :standard
+            attributes["quality_review_recommended"] = quality_review_recommended
             attributes["physical_overlap_available"] = result.physical_overlap_available
             attributes["gauge_hdf5"] = abspath(gauge_hdf5)
-            attributes["gauge_hdf5_sha256"] = sha256_file(gauge_hdf5)
-            attributes["nnkp_sha256"] = nnkp.source_sha256
+            attributes["content_authentication"] = "NOT_PERFORMED"
+            attributes["topology_definition"] = IO.wannier_topology_definition(nnkp)
             attributes["band_authority"] = "star_covariant_paw_gauge_hdf5"
             attributes["nnkp_authority"] = "neighbor topology and ordered trial projections only"
             attributes["amn_transform"] = "A_prime=U_k_dagger*A_parent"
@@ -268,7 +269,8 @@ function _star_completed_parent_native(
         merge(
             parent_native.source_metadata,
             Dict("wavefunction_gauge_preparation" => "completed_symmetrized_parent"),
-        ),
+        );
+        source_definition = parent_native.source_definition,
     )
 end
 
@@ -311,27 +313,15 @@ function _generate_symmetry_completed_qe_paw_matrix_elements_impl(
         throw(ArgumentError("QE_PAW_RAW_COEFFICIENTS_REQUIRED: full cutoff is mandatory"))
     source.band_range === nothing &&
         throw(ArgumentError("PAW_GAUGE_TARGET_BANDS_REQUIRED: source.band_range is mandatory"))
-    restored = _read_star_covariant_paw_gauge_hdf5(
-        gauge_hdf5;
-        construction_policy = qualification_mode == :strict ? :strict : :standard,
-        source,
-    )
-    qualification_mode == :strict &&
-        restored.status != :PASS &&
-        throw(ArgumentError("PAW_SEWING_HOLD: strict matrix propagation requires PASS gauge"))
-    qualification_mode == :standard &&
-        !(restored.status in (:PASS, :STANDARD)) &&
-        throw(
-            ArgumentError(
-                "WAVEFUNCTION_GAUGE_BACKEND_MISMATCH: standard matrices require PASS or STANDARD gauge",
-            ),
-        )
+    restored =
+        _read_star_covariant_paw_gauge_hdf5(gauge_hdf5; construction_policy = :standard, source)
+    # Reader replays source/frame data; no persisted qualification label is required.
     payload = restored.payload
     payload.native.source_code == :qe ||
         throw(ArgumentError("QE_AUGMENTATION_METRIC_REQUIRED: gauge artifact is not QE"))
     _validate_star_gauge_source_identity(source, payload)
     metric = payload.metric::_QEStrictSewingMetric
-    nnkp = read_wannier_nnkp(nnkp_file)
+    nnkp = read_wannier_nnkp(nnkp_file; content_authentication = false)
     topology = _qe_topology_only_nnkp(nnkp)
     _qe_validate_nnkp_contract(payload.native, topology)
 
@@ -490,6 +480,12 @@ function _generate_symmetry_completed_qe_paw_matrix_elements_impl(
             thresholds.amn_relative_l2,
         )
     passed = norm_pass && mmn_pass && amn_pass
+    gauge_quality_failed = any(
+        startswith(key, "construction_") && endswith(key, "_failed") && value > 0.0 for
+        (key, value) in payload.maxima
+    )
+    quality_review_recommended =
+        !passed || !parent_norm_pass || !parent_mmn_pass || !parent_amn_pass || gauge_quality_failed
     diagnostics = String[
         "generalized_norm_worst=$(generalized_norm_worst)",
         "amn_minimum_rank=$(minimum_rank)",
@@ -549,10 +545,7 @@ function _generate_symmetry_completed_qe_paw_matrix_elements_impl(
         throw(ArgumentError("QE_NATIVE_WRITE_READBACK_FAILED: completed AMN differs"))
 
     provenance_hdf5 = joinpath(artifact_dir, file_prefix * ".provenance.h5")
-    input_sha256 = merge(
-        payload.input_sha256,
-        Dict("GAUGE_HDF5" => sha256_file(gauge_hdf5), "NNKP" => nnkp.source_sha256),
-    )
+    input_sha256 = merge(payload.input_sha256, Dict("NNKP" => IO.wannier_topology_definition(nnkp)))
     artifacts = Dict(
         "mmn" => abspath(direct_mmn_file),
         "amn" => abspath(direct_amn_file),
@@ -583,6 +576,7 @@ function _generate_symmetry_completed_qe_paw_matrix_elements_impl(
         qualification_mode,
         ;
         target_scope_active = target_scoped,
+        quality_review_recommended,
         parent_mmn_parity,
         parent_amn_parity,
         parent_generalized_norm_max_absolute = parent_generalized_norm,

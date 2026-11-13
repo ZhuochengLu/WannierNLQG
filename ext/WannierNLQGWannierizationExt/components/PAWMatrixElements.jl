@@ -1,4 +1,7 @@
 module PAWMatrixElements
+import WannierNLQG.IO
+
+import WannierNLQG.Core: validate_ordinary_construction_policy
 
 import FFTW
 import HDF5
@@ -58,6 +61,8 @@ import WannierNLQG.IO:
     read_wannier_mmn,
     read_wannier_mmn_topology,
     read_wannier_nnkp,
+    owned_wannier_topology,
+    read_wannier_eig,
     read_wannier_spn,
     write_wannier_amn,
     write_wannier_eig,
@@ -71,6 +76,7 @@ import WannierNLQG.SymmetryFoundation:
     BOHR_TO_ANGSTROM,
     BandRepresentation,
     BandRepresentationQualificationScope,
+    qualification_mask_definition,
     CrystalStructure,
     HARTREE_TO_EV,
     NativeWavefunctionData,
@@ -134,8 +140,10 @@ import WannierNLQG.Wannierization:
     WannierOperatorTargetContract,
     WannierizationDiagnostic,
     authoritative_hamiltonian_key,
-    wannier_operator_target_contract_sha256
+    wannier_operator_target_definition
 import ..WannierizationInternalSupport:
+    write_scientific_input_reference_hdf5,
+    read_scientific_input_reference_hdf5,
     BAND_FRAME_TRANSFORM_CONTRACT_SCHEMA,
     BAND_FRAME_TRANSFORM_CONTRACT_SCHEMA_VERSION,
     BandFrameTransformContract,
@@ -144,7 +152,8 @@ import ..WannierizationInternalSupport:
     SYMMETRIZED_DFT_BAND_GAUGE,
     atomic_hdf5_write,
     band_frame_contract_metadata,
-    band_frame_contract_sha256,
+    band_frame_contract_definition,
+    band_frame_transform_definition,
     band_frame_contract_summary,
     band_sewing_backend_key,
     build_augmentation_aware_band_representation,
@@ -152,11 +161,12 @@ import ..WannierizationInternalSupport:
     hungarian_maximum_assignment,
     is_symmetrized_authority,
     paw_block_partition_policy_key,
-    projection_basis_sha256,
+    projection_basis_definition,
     read_string_dictionary,
     write_band_frame_contract_attributes!,
     write_string_dictionary
 import ..RepresentationPreparation:
+    construction_compatibility_quality_failure,
     native_vasp_point_provider,
     QEProjectorAtomPlan,
     QEProjectorChannel,
@@ -211,19 +221,16 @@ const generation_band_gauge_contract = _generation_band_gauge_contract
 const generate_vasp_paw_matrix_elements_impl = _generate_vasp_paw_matrix_elements
 const native_hamiltonian_gauge_covariance_residual = _native_hamiltonian_gauge_covariance_residual
 const paw_metric_passes = _paw_metric_passes
-const qe_spn_payload_sha256 = _qe_spn_payload_sha256
 const with_operator_publication_receipt = _with_operator_publication_receipt
 const with_spn_provenance_reuse = _with_spn_provenance_reuse
 const read_and_validate_spn_provenance = _read_and_validate_spn_provenance
 const read_augmentation_aware_native_source = _read_augmentation_aware_native_source
 const read_star_covariant_paw_gauge_hdf5 = _read_star_covariant_paw_gauge_hdf5
-const rotate_generation_link = _rotate_generation_link
-const rotate_generation_single = _rotate_generation_single
-const spn_provenance_contract_sha256 = _spn_provenance_contract_sha256
-const star_array_sha256 = _star_array_sha256
+const transform_generation_link = _transform_generation_link
+const transform_generation_single = _transform_generation_single
 const star_authoritative_hamiltonian_metadata = _star_authoritative_hamiltonian_metadata
-const star_authoritative_hamiltonian_sha256 = _star_authoritative_hamiltonian_sha256
-const star_hamiltonian_correction_sha256 = _star_hamiltonian_correction_sha256
+const star_authoritative_hamiltonian_definition = _star_authoritative_hamiltonian_definition
+const star_hamiltonian_correction_definition = _star_hamiltonian_correction_definition
 const star_rotate_parent_amn = _star_rotate_parent_amn
 const star_rotate_parent_mmn = _star_rotate_parent_mmn
 const star_transform_sewing_gauge = _star_transform_sewing_gauge
@@ -251,6 +258,7 @@ const preparation_implementation_paths = _preparation_implementation_paths
 const with_vasp_operator_artifacts = _with_vasp_operator_artifacts
 
 const PAW_MATRIX_ELEMENTS_INTEGRATION_API = (
+    :with_native_source_lifetime,
     :with_vasp_operator_artifacts,
     :native_preparation_source_files,
     :preparation_implementation_paths,
@@ -260,7 +268,7 @@ const PAW_MATRIX_ELEMENTS_INTEGRATION_API = (
     :QE_PAW_SPN_SCHEMA,
     :QE_PAW_SPN_SCHEMA_VERSION,
     :STAR_COVARIANT_PAW_GAUGE_SCHEMA,
-    :TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256,
+    :TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION,
     :TARGET_LEAKAGE_WEIGHT_SEMANTICS,
     :WANNIER_UIU_GENERATION_SCHEMA,
     :WANNIER_UIU_GENERATION_SCHEMA_VERSION,
@@ -269,19 +277,16 @@ const PAW_MATRIX_ELEMENTS_INTEGRATION_API = (
     :generate_vasp_paw_matrix_elements_impl,
     :native_hamiltonian_gauge_covariance_residual,
     :paw_metric_passes,
-    :qe_spn_payload_sha256,
     :with_operator_publication_receipt,
     :with_spn_provenance_reuse,
     :read_and_validate_spn_provenance,
     :read_augmentation_aware_native_source,
     :read_star_covariant_paw_gauge_hdf5,
-    :rotate_generation_link,
-    :rotate_generation_single,
-    :spn_provenance_contract_sha256,
-    :star_array_sha256,
+    :transform_generation_link,
+    :transform_generation_single,
     :star_authoritative_hamiltonian_metadata,
-    :star_authoritative_hamiltonian_sha256,
-    :star_hamiltonian_correction_sha256,
+    :star_authoritative_hamiltonian_definition,
+    :star_hamiltonian_correction_definition,
     :star_rotate_parent_amn,
     :star_rotate_parent_mmn,
     :star_transform_sewing_gauge,

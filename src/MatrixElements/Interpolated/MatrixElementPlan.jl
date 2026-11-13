@@ -15,9 +15,10 @@
     SPIN_TIMES_POSITION
     SPIN_TIMES_HAMILTONIAN_POSITION
     SPIN_VELOCITY
+    OPTICAL_CUTOFF_VERTICES
 end
 
-const _ALL_MATRIX_ELEMENT_KINDS = ntuple(index -> MatrixElementKind(index - 1), 16)
+const _ALL_MATRIX_ELEMENT_KINDS = ntuple(index -> MatrixElementKind(index - 1), 17)
 
 # Encode a zero-based capability enum value as one bit of a UInt64 mask.
 @inline _capability_bit(kind::MatrixElementKind) = UInt64(1) << Int(kind)
@@ -40,20 +41,20 @@ end
 """
 Per-capability Cartesian direction bitmasks for one spatial dimension.
 
-The dimension constructor starts all sixteen masks empty and rejects dimensions outside `1:3`; spin axes retain three components.
+The dimension constructor starts all capability masks empty and rejects dimensions outside `1:3`; spin axes retain three components.
 """
 struct MatrixElementDirectionRequirements
     spatial_dimension::Int
-    masks::NTuple{16, UInt16}
+    masks::NTuple{17, UInt16}
 end
 
 # Per-capability Cartesian direction bitmasks for one spatial dimension.
 #
-# The dimension constructor starts all sixteen masks empty and rejects dimensions outside `1:3`; spin axes retain three components.
+# The dimension constructor starts all capability masks empty and rejects dimensions outside `1:3`; spin axes retain three components.
 function MatrixElementDirectionRequirements(spatial_dimension::Integer)
     dimension = Int(spatial_dimension)
     dimension in 1:3 || throw(ArgumentError("spatial_dimension must be in 1:3, got $(dimension)."))
-    return MatrixElementDirectionRequirements(dimension, ntuple(_ -> UInt16(0), 16))
+    return MatrixElementDirectionRequirements(dimension, ntuple(_ -> UInt16(0), 17))
 end
 
 # Map a zero-based capability enum to its one-based direction-mask tuple slot.
@@ -62,7 +63,7 @@ end
 @inline _direction_mask(requirements::MatrixElementDirectionRequirements, kind::MatrixElementKind) =
     requirements.masks[_direction_index(kind)]
 
-# Return new requirements with exactly one capability mask replaced, retaining the other fifteen masks.
+# Return new requirements with exactly one capability mask replaced, retaining the other capability masks.
 @inline function _replace_direction_mask(
     requirements::MatrixElementDirectionRequirements,
     kind::MatrixElementKind,
@@ -71,7 +72,7 @@ end
     index = _direction_index(kind)
     return MatrixElementDirectionRequirements(
         requirements.spatial_dimension,
-        ntuple(i -> i == index ? mask : requirements.masks[i], 16),
+        ntuple(i -> i == index ? mask : requirements.masks[i], 17),
     )
 end
 
@@ -318,7 +319,31 @@ struct MatrixElementPlan
     wannier_center_convention::WannierCenterConvention
     direction_requirements::MatrixElementDirectionRequirements
     source_gauge_required::Bool
+    geometry_derivatives::Union{Nothing, OrthogonalGeometryDerivativePlan}
 end
+
+# Preserve the former complete positional constructor. New high-order physical
+# requests enter through compile_matrix_plan, while all old plans remain empty.
+MatrixElementPlan(
+    requested_mask::UInt64,
+    required_mask::UInt64,
+    spatial_dimension::Int,
+    denominator_regularization::Float64,
+    degeneracy_threshold::Float64,
+    convention::WannierCenterConvention,
+    directions::MatrixElementDirectionRequirements,
+    source_gauge_required::Bool,
+) = MatrixElementPlan(
+    requested_mask,
+    required_mask,
+    spatial_dimension,
+    denominator_regularization,
+    degeneracy_threshold,
+    convention,
+    directions,
+    source_gauge_required,
+    nothing,
+)
 
 # Immutable requested/required capability masks, Cartesian channel closure, energy tolerances and Wannier-center convention.
 #
@@ -415,6 +440,10 @@ function _add_dependencies(mask::UInt64, kind::MatrixElementKind)
                _capability_bit(INTERNAL_CONNECTION_DERIVATIVES)
     elseif kind == VELOCITY_VERTICES
         return mask | _capability_bit(ENERGY_DIFFERENCES) | _capability_bit(BERRY_CONNECTION)
+    elseif kind == OPTICAL_CUTOFF_VERTICES
+        return mask | _capability_bit(BERRY_CONNECTION) |
+               _capability_bit(INTERNAL_CONNECTION_DERIVATIVES) |
+               _capability_bit(HAMILTONIAN_SECOND_DERIVATIVES)
     elseif kind == SPIN
         return mask | _capability_bit(SPECTRUM)
     elseif kind == SPIN_TIMES_HAMILTONIAN
@@ -427,10 +456,27 @@ function _add_dependencies(mask::UInt64, kind::MatrixElementKind)
         return mask | _capability_bit(SPECTRUM) | _capability_bit(ENERGY_DIFFERENCES) |
                _capability_bit(HAMILTONIAN_DERIVATIVES) | _capability_bit(SPIN) |
                _capability_bit(SPIN_TIMES_HAMILTONIAN) | _capability_bit(SPIN_TIMES_POSITION) |
-               _capability_bit(SPIN_TIMES_HAMILTONIAN_POSITION)
+               _capability_bit(SPIN_TIMES_HAMILTONIAN_POSITION) | _capability_bit(GAUGE_CORRECTION)
     end
     error("Unhandled MatrixElementKind $(kind).")
 end
+
+# Derive downstream invalidation from the same capability graph used in planning.
+# Raw spectrum/Fourier/derivative buffers remain valid when only a numerical key changes.
+function _matrix_capability_dependents(seed::UInt64)
+    affected = seed
+    while true
+        previous = affected
+        for kind in _ALL_MATRIX_ELEMENT_KINDS
+            iszero(_add_dependencies(UInt64(0), kind) & affected) ||
+                (affected |= _capability_bit(kind))
+        end
+        affected == previous && return affected
+    end
+end
+
+const _POSITION_REGULARIZATION_DEPENDENTS =
+    _matrix_capability_dependents(_capability_bit(GAUGE_CORRECTION))
 
 # Iterate Cartesian prerequisite masks to a fixed point for all required capabilities, retaining spin-axis extents.
 function _propagate_direction_dependencies(
@@ -439,6 +485,16 @@ function _propagate_direction_dependencies(
 )
     result = requirements
     dimension = requirements.spatial_dimension
+    if _has_capability(required_mask, OPTICAL_CUTOFF_VERTICES)
+        # A complete source jet is shared across ordered pairs; no partial raw
+        # derivative can be mistaken for the complete optical prescription.
+        for kind in (BERRY_CONNECTION, INTERNAL_CONNECTION, HAMILTONIAN_DERIVATIVES)
+            result = _require_axes(result, kind, 1:dimension)
+        end
+        for kind in (INTERNAL_CONNECTION_DERIVATIVES, HAMILTONIAN_SECOND_DERIVATIVES)
+            result = _require_pairs(result, kind, Iterators.product(1:dimension, 1:dimension))
+        end
+    end
     changed = true
     while changed
         previous = result.masks
@@ -515,6 +571,7 @@ function _propagate_direction_dependencies(
                     spin_direction,
                 ) || continue
                 result = _require_axis(result, HAMILTONIAN_DERIVATIVES, velocity_direction)
+                result = _require_axis(result, GAUGE_CORRECTION, velocity_direction)
                 result = _require_axis(result, SPIN, spin_direction)
                 result = _require_axis(result, SPIN_TIMES_HAMILTONIAN, spin_direction)
                 result =
@@ -543,6 +600,8 @@ function compile_matrix_plan(
     ;
     source_gauge_required::Bool = true,
     wannier_center_convention::WannierCenterConvention = CONVENTION_II,
+    curvature_curl_only::Bool = false,
+    orthogonal_geometry_components = (),
 )
     direction_requirements.spatial_dimension == request.spatial_dimension ||
         throw(ArgumentError("Direction requirements and request use different spatial dimensions."))
@@ -556,6 +615,48 @@ function compile_matrix_plan(
         end
         changed = required != previous
     end
+    if _has_capability(required, OPTICAL_CUTOFF_VERTICES)
+        request.spatial_dimension==3 || throw(
+            ArgumentError(
+                "OPTICAL_CUTOFF_VERTICES requires spatial_dimension=3; lower-dimensional sampling may still retain three Cartesian axes",
+            ),
+        )
+        isfinite(request.denominator_regularization) && request.denominator_regularization>0 ||
+            throw(
+                ArgumentError(
+                    "OPTICAL_CUTOFF_VERTICES requires finite positive geometry regularization",
+                ),
+            )
+    end
+    if _has_capability(required, SPIN_VELOCITY)
+        isfinite(request.denominator_regularization) && request.denominator_regularization > 0 ||
+            throw(
+                ArgumentError(
+                    "SPIN_CURRENT_REGULARIZATION_POSITIVE_REQUIRED: denominator_regularization must be finite and positive for SPIN_VELOCITY.",
+                ),
+            )
+    end
+    if curvature_curl_only
+        allowed = foldl(
+            (m, k) -> m | _capability_bit(k),
+            (
+                SPECTRUM,
+                ENERGY_DIFFERENCES,
+                HAMILTONIAN_DERIVATIVES,
+                WANNIER_POSITION,
+                INTERNAL_CONNECTION,
+                WANNIER_CURVATURE,
+            );
+            init = UInt64(0),
+        )
+        iszero(request.requested_mask & ~allowed) &&
+        _has_capability(request.requested_mask, WANNIER_CURVATURE) &&
+        !source_gauge_required ||
+            throw(ArgumentError("curl-only plan requires isolated raw curvature geometry"))
+        # Curvature owns compact antisymmetric derivatives; it does not promise
+        # the independently queryable complete INTERNAL_CONNECTION_DERIVATIVES.
+        required &= ~_capability_bit(INTERNAL_CONNECTION_DERIVATIVES)
+    end
     propagated = _propagate_direction_dependencies(direction_requirements, required)
     return MatrixElementPlan(
         request.requested_mask,
@@ -566,21 +667,28 @@ function compile_matrix_plan(
         wannier_center_convention,
         propagated,
         source_gauge_required,
+        isempty(orthogonal_geometry_components) ? nothing :
+        OrthogonalGeometryDerivativePlan(orthogonal_geometry_components),
     )
 end
 
 # Close capability and Cartesian direction dependencies into an immutable execution plan.
 #
 # Always require the spectrum, preserve explicit request bits and energy tolerances, and reject mismatched spatial dimensions. The convenience overload requests all legal directions.
+"""Compile the requested capabilities with all legal Cartesian directions, preserving source-frame and Wannier-center choices."""
 compile_matrix_plan(
     request::MatrixElementRequest;
     source_gauge_required::Bool = true,
     wannier_center_convention::WannierCenterConvention = CONVENTION_II,
+    curvature_curl_only::Bool = false,
+    orthogonal_geometry_components = (),
 ) = compile_matrix_plan(
     request,
     _full_direction_requirements(request.spatial_dimension);
     source_gauge_required,
     wannier_center_convention,
+    curvature_curl_only,
+    orthogonal_geometry_components,
 )
 
 """

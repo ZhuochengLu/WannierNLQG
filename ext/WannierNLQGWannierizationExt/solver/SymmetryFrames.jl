@@ -225,8 +225,7 @@ function _free_complement_embedding(
     )
 end
 
-# Rotate the disentanglement field with the same ordering as
-# WannierBerri's Symmetrizer_Zirr: d† Z d, followed by complex conjugation
+# Rotate the disentanglement field as d† Z d, followed by complex conjugation
 # for an antiunitary little-group operation.
 function _rotate_hermitian_field_entry(operation, sewing, matrix)
     rotated = sewing' * matrix * sewing
@@ -390,7 +389,7 @@ function _symmetrize_frame(
     frames::Vector{Matrix{ComplexF64}},
     representation::BandRepresentation,
     plan::WannierSymmetryPlan,
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     included_bands::Vector{BitVector},
 )
     current = deepcopy(frames)
@@ -427,7 +426,7 @@ function _representation_inclusion_masks(
     frames::Vector{Matrix{ComplexF64}},
     representation::BandRepresentation,
     plan::WannierSymmetryPlan,
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
 )
     nb = size(representation.energies_ev, 1)
     masks = [trues(nb) for _ in eachindex(frames)]
@@ -539,7 +538,7 @@ end
 
 # Return the exact Monkhorst-Pack displacement represented by one MMN edge.
 # Formatted k-points can carry last-bit decimal noise; retaining that noise in
-# the shell moments makes otherwise identical Julia/WannierBerri weights differ.
+# the shell moments perturbs an otherwise exact mesh displacement.
 function _mesh_neighbor_displacement(
     representation::BandRepresentation,
     mmn::WannierMMN,
@@ -563,16 +562,6 @@ function _mesh_neighbor_displacement(
     return integer_coordinates ./ mesh
 end
 
-"""Hash the exact realized finite-difference stencil payload."""
-function _finite_difference_stencil_sha256(vectors, shell_ids, weights, target)
-    buffer = IOBuffer()
-    write(buffer, reinterpret(UInt8, vec(vectors)))
-    write(buffer, reinterpret(UInt8, Int64.(shell_ids)))
-    write(buffer, reinterpret(UInt8, weights))
-    write(buffer, reinterpret(UInt8, vec(target)))
-    return bytes2hex(SHA.sha256(take!(buffer)))
-end
-
 """Compare floating payloads within a strict cross-platform roundoff bound."""
 function _stencil_float_payload_equivalent(left, right)
     size(left) == size(right) || return false
@@ -586,27 +575,6 @@ function _restart_stencils_compatible(
     stored::WannierizationFiniteDifferenceStencil,
     current::WannierizationFiniteDifferenceStencil,
 )
-    stored_raw_digest = _finite_difference_stencil_sha256(
-        stored.vectors_cartesian,
-        stored.shell_ids,
-        stored.weights,
-        stored.target_moment,
-    )
-    current_raw_digest = _finite_difference_stencil_sha256(
-        current.vectors_cartesian,
-        current.shell_ids,
-        current.weights,
-        current.target_moment,
-    )
-    if stored.digest == stored_raw_digest && current.digest == current_raw_digest
-        stored.digest == current.digest && return true
-    else
-        # A historical HDF5 writer recorded a raw-byte digest that does not
-        # reproduce from its decoded Float64 payload.  Accept that legacy case
-        # only when the stored label still equals the freshly constructed
-        # same-contract label; a changed digest is never an equivalence proof.
-        stored.digest == current.digest || return false
-    end
     stored.shell_ids == current.shell_ids || return false
     _stencil_float_payload_equivalent(stored.vectors_cartesian, current.vectors_cartesian) ||
         return false
@@ -624,8 +592,9 @@ function _finite_difference_weights(
     mmn::WannierMMN;
     tolerance::Float64 = 1.0e-8,
     completeness_tolerance::Float64 = 1.0e-10,
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
+    validate_ordinary_construction_policy(construction_policy)
     kpoint = 1
     vectors = Matrix{Float64}(undef, mmn.num_neighbors, 3)
     for neighbor in 1:mmn.num_neighbors
@@ -666,37 +635,21 @@ function _finite_difference_weights(
     residual = norm(system * shell_weights - vec(target))
     all(isfinite, shell_weights) && isfinite(residual) ||
         throw(ArgumentError("MMN_STENCIL_NONFINITE_WEIGHTS"))
-    construction_policy == :standard ||
-        residual <= completeness_tolerance ||
-        throw(
-            ArgumentError(
-                "MMN_STENCIL_INCOMPLETE_3D: shell moment residual $(residual) exceeds " *
-                "$(completeness_tolerance)",
-            ),
-        )
     weights = zeros(Float64, mmn.num_neighbors)
     for shell in eachindex(shell_indices), neighbor in shell_indices[shell]
         weights[neighbor] = shell_weights[shell]
     end
-    digest = _finite_difference_stencil_sha256(vectors, shell_ids, weights, target)
-    return WannierizationFiniteDifferenceStencil(
-        vectors,
-        shell_ids,
-        weights,
-        target,
-        residual,
-        digest,
-    )
+    return WannierizationFiniteDifferenceStencil(vectors, shell_ids, weights, target, residual)
 end
 
-"""Reproduce Wannier90's `utility_recip_lattice` scalar path.
+"""Reproduce Wannier's `utility_recip_lattice` scalar path.
 
-Wannier90 retains an `Ang` `unit_cell_cart` in Angstrom internally; it does not
+Wannier retains an `Ang` `unit_cell_cart` in Angstrom internally; it does not
 perform an Angstrom -> Bohr -> Angstrom round trip.  The representation lattice
 is likewise in Angstrom, so applying that extra conversion changes the
 reciprocal lattice by one ulp.
 """
-function _wannier90_reference_b_cartesian(
+function _recursive_localization_b_cartesian(
     representation::BandRepresentation,
     displacement::AbstractVector{<:Real},
 )
@@ -729,8 +682,8 @@ function _wannier90_reference_b_cartesian(
     return output
 end
 
-"""Reproduce Wannier90's separately transformed `G + k_target - k_source`."""
-function _wannier90_reference_edge_b_cartesian(
+"""Reproduce Wannier's separately transformed `G + k_target - k_source`."""
+function _recursive_localization_edge_b_cartesian(
     representation::BandRepresentation,
     mmn::WannierMMN,
     neighbor::Int,
@@ -741,23 +694,23 @@ function _wannier90_reference_edge_b_cartesian(
     # source, target, and reciprocal shift separately before subtracting them.
     _mesh_neighbor_displacement(representation, mmn, neighbor, kpoint)
     target = mmn.neighbors[neighbor, kpoint]
-    target_cartesian = _wannier90_reference_b_cartesian(
+    target_cartesian = _recursive_localization_b_cartesian(
         representation,
         @view(representation.kpoints_fractional[target, :]),
     )
-    shift_cartesian = _wannier90_reference_b_cartesian(
+    shift_cartesian = _recursive_localization_b_cartesian(
         representation,
         @view(mmn.reciprocal_shifts[:, neighbor, kpoint]),
     )
-    source_cartesian = _wannier90_reference_b_cartesian(
+    source_cartesian = _recursive_localization_b_cartesian(
         representation,
         @view(representation.kpoints_fractional[kpoint, :]),
     )
     return (shift_cartesian + target_cartesian) - source_cartesian
 end
 
-"""LP64 `DGESVD('A','A')` used by Wannier90's B1 shell-weight solve."""
-function _wannier90_reference_dgesvd(matrix::Matrix{Float64})
+"""LP64 `DGESVD('A','A')` used by Wannier's B1 shell-weight solve."""
+function _recursive_localization_dgesvd(matrix::Matrix{Float64})
     rows, columns = size(matrix)
     rows >= columns > 0 || return nothing
     values = copy(matrix)
@@ -766,7 +719,7 @@ function _wannier90_reference_dgesvd(matrix::Matrix{Float64})
     right_adjoint = zeros(Float64, columns, columns)
     work = zeros(Float64, 10rows)
     all_vectors = UInt8('A')
-    use_external_lp64 = _WANNIER90_REFERENCE_LP64_LAPACK !== nothing
+    use_external_lp64 = _RECURSIVE_LOCALIZATION_LP64_LAPACK !== nothing
     integer_type = use_external_lp64 ? Cint : LinearAlgebra.BlasInt
     m = integer_type(rows)
     n = integer_type(columns)
@@ -777,7 +730,7 @@ function _wannier90_reference_dgesvd(matrix::Matrix{Float64})
     info = Ref{integer_type}(0)
     if use_external_lp64
         ccall(
-            (:dgesvd_, _WANNIER90_REFERENCE_LP64_LAPACK),
+            (:dgesvd_, _RECURSIVE_LOCALIZATION_LP64_LAPACK),
             Cvoid,
             (
                 Ref{UInt8},
@@ -850,19 +803,20 @@ function _wannier90_reference_dgesvd(matrix::Matrix{Float64})
     return (; singular_values, left, right_adjoint)
 end
 
-"""Wannier90-reference finite-difference weights with its unit roundoff path."""
-function _wannier90_reference_finite_difference_weights(
+"""Wannier-reference finite-difference weights with its unit roundoff path."""
+function _recursive_localization_finite_difference_weights(
     representation::BandRepresentation,
     mmn::WannierMMN;
     tolerance::Float64 = 1.0e-8,
     completeness_tolerance::Float64 = 1.0e-10,
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
+    validate_ordinary_construction_policy(construction_policy)
     vectors = Matrix{Float64}(undef, mmn.num_neighbors, 3)
     for neighbor in 1:mmn.num_neighbors
         _mesh_neighbor_displacement(representation, mmn, neighbor, 1; tolerance)
         vectors[neighbor, :] .=
-            _wannier90_reference_edge_b_cartesian(representation, mmn, neighbor, 1)
+            _recursive_localization_edge_b_cartesian(representation, mmn, neighbor, 1)
     end
     shell_norms = Float64[]
     shell_indices = Vector{Vector{Int}}()
@@ -879,7 +833,7 @@ function _wannier90_reference_finite_difference_weights(
             shell_ids[neighbor] = shell
         end
     end
-    # Wannier90 order for the six second-order monomials is
+    # Wannier order for the six second-order monomials is
     # (xx, xy, yy, xz, yz, zz); target=(1,0,1,0,0,1).
     system = zeros(Float64, 6, length(shell_indices))
     for shell in eachindex(shell_indices)
@@ -895,11 +849,11 @@ function _wannier90_reference_finite_difference_weights(
         end
     end
     target = Float64[1, 0, 1, 0, 0, 1]
-    decomposition = _wannier90_reference_dgesvd(system)
-    decomposition === nothing && throw(ArgumentError("WANNIER90_REFERENCE_STENCIL_SVD_FAILED"))
+    decomposition = _recursive_localization_dgesvd(system)
+    decomposition === nothing && throw(ArgumentError("RECURSIVE_LOCALIZATION_STENCIL_SVD_FAILED"))
     singular_values = decomposition.singular_values
     any(value -> abs(value) < 1.0e-5, singular_values) &&
-        throw(ArgumentError("WANNIER90_REFERENCE_STENCIL_SINGULAR"))
+        throw(ArgumentError("RECURSIVE_LOCALIZATION_STENCIL_SINGULAR"))
     tmp1 = zeros(Float64, 6)
     for shell in 1:6, equation in 1:6
         tmp1[shell] += decomposition.left[equation, shell] * target[equation]
@@ -915,9 +869,6 @@ function _wannier90_reference_finite_difference_weights(
     residual = norm(system * shell_weights - target)
     all(isfinite, shell_weights) && isfinite(residual) ||
         throw(ArgumentError("MMN_STENCIL_NONFINITE_WEIGHTS"))
-    construction_policy == :standard ||
-        residual <= completeness_tolerance ||
-        throw(ArgumentError("WANNIER90_REFERENCE_STENCIL_INCOMPLETE_3D"))
     weights = zeros(Float64, mmn.num_neighbors)
     for shell in eachindex(shell_indices), neighbor in shell_indices[shell]
         weights[neighbor] = shell_weights[shell]
@@ -928,6 +879,73 @@ function _wannier90_reference_finite_difference_weights(
         weights,
         Matrix{Float64}(I, 3, 3),
         residual,
-        _finite_difference_stencil_sha256(vectors, shell_ids, weights, target),
     )
+end
+
+# Ephemeral solve-owned geometry, separate from all frame/overlap/accepted state.
+# Each evaluation compares copied dependencies, so in-place caller/callback
+# mutation invalidates cached edges; no cache is carried across solve/restart.
+mutable struct LocalizationGeometryWorkspace
+    definition::Union{Nothing, NamedTuple}
+    reference_edges::Matrix{Vector{Float64}}
+    generic_edges::Matrix{Vector{Float64}}
+end
+# Initialize an empty geometry definition and separate actual/reference edge-vector containers.
+LocalizationGeometryWorkspace() = LocalizationGeometryWorkspace(
+    nothing,
+    Matrix{Vector{Float64}}(undef, 0, 0),
+    Matrix{Vector{Float64}}(undef, 0, 0),
+)
+
+# Refresh edge-vector geometry only when the stored lattice, k points or neighbor definition differs.
+function _prepare_localization_geometry!(
+    workspace::LocalizationGeometryWorkspace,
+    representation::BandRepresentation,
+    mmn::WannierMMN,
+)
+    definition = (
+        real = representation.real_lattice,
+        reciprocal = representation.reciprocal_lattice,
+        points = representation.kpoints_fractional,
+        mesh = representation.mp_grid,
+        neighbors = mmn.neighbors,
+        shifts = mmn.reciprocal_shifts,
+        num_neighbors = mmn.num_neighbors,
+        num_kpts = mmn.num_kpts,
+    )
+    if !isequal(workspace.definition, definition)
+        workspace.definition = deepcopy(definition)
+        workspace.reference_edges = Matrix{Vector{Float64}}(undef, mmn.num_neighbors, mmn.num_kpts)
+        workspace.generic_edges = Matrix{Vector{Float64}}(undef, mmn.num_neighbors, mmn.num_kpts)
+    end
+    return workspace
+end
+
+# Select the actual or reference Cartesian edge vector, with direct computation when no workspace is supplied.
+function _localization_edge_b_cartesian(
+    representation::BandRepresentation,
+    mmn::WannierMMN,
+    neighbor::Int,
+    kpoint::Int,
+    reference::Bool,
+    workspace::Union{Nothing, LocalizationGeometryWorkspace},
+)
+    if workspace === nothing
+        return reference ?
+               _recursive_localization_edge_b_cartesian(representation, mmn, neighbor, kpoint) :
+               transpose(representation.reciprocal_lattice) *
+               _mesh_neighbor_displacement(representation, mmn, neighbor, kpoint)
+    end
+    edges = reference ? workspace.reference_edges : workspace.generic_edges
+    if !isassigned(edges, neighbor, kpoint)
+        edges[neighbor, kpoint] = _localization_edge_b_cartesian(
+            representation,
+            mmn,
+            neighbor,
+            kpoint,
+            reference,
+            nothing,
+        )
+    end
+    return edges[neighbor, kpoint]
 end

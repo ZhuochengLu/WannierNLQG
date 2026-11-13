@@ -88,7 +88,7 @@ end
         photon_energies = [0.1],
         spatial_dimension = 2,
         tensor_indices = (1, 3, 2, 1),
-        seedname = "wannier90",
+        seedname = "wannier",
     )
     specs = ISC_RUNTIME.validate_config(cfg)
     @test only(specs).quantity == :injection_spin_current
@@ -112,7 +112,7 @@ end
             photon_energies = [0.1],
             spatial_dimension = 2,
             tensor_indices = (1, 1, 1, 1),
-            seedname = "wannier90",
+            seedname = "wannier",
         ),
     )
     @test_throws Exception ISC_RUNTIME.validate_config(
@@ -123,7 +123,7 @@ end
             photon_energies = [0.1, 0.2],
             spatial_dimension = 2,
             tensor_indices = (1, 1, 1, 1),
-            seedname = "wannier90",
+            seedname = "wannier",
         ),
     )
     @test_throws Exception ISC_RUNTIME.validate_config(
@@ -133,7 +133,7 @@ end
             photon_energies = Float64[],
             spatial_dimension = 2,
             tensor_indices = (1, 1, 1, 1),
-            seedname = "wannier90",
+            seedname = "wannier",
         ),
     )
 
@@ -144,7 +144,7 @@ end
         photon_energies = [0.1],
         spatial_dimension = 2,
         tensor_indices = (3, 1, 1, 1),
-        seedname = "wannier90",
+        seedname = "wannier",
     )
     @test_throws Exception ISC_RUNTIME.validate_config(bad_axis_cfg)
 end
@@ -575,6 +575,10 @@ end
             3,
             2,
             active_pair_mask = active_pair_mask,
+            valence_velocity_vertices = valence_data.source_gauge_velocity_vertices,
+            conduction_velocity_vertices = conduction_data.source_gauge_velocity_vertices,
+            # Explicit arbitrary-frame historical oracle; no physical H/A model is declared here.
+            _historical_center_overlap_reference = true,
         )
         ISC_RESPONSES.compute_photon_drag_injection_current_kernel!(
             compact_kernel,
@@ -596,6 +600,10 @@ end
             2,
             active_pairs_nmajor = pair_capacity,
             active_pair_count = pair_count,
+            valence_velocity_vertices = valence_data.source_gauge_velocity_vertices,
+            conduction_velocity_vertices = conduction_data.source_gauge_velocity_vertices,
+            # Explicit arbitrary-frame historical oracle; no physical H/A model is declared here.
+            _historical_center_overlap_reference = true,
         )
         @test injection_bitwise_equal(compact_kernel, dense_kernel)
         @test injection_bitwise_equal(compact_forward, dense_forward)
@@ -632,6 +640,10 @@ end
             2,
             active_pair_mask = active_pair_mask,
             tensor_indices = Int[2, 1, 2],
+            valence_velocity_vertices = valence_data.source_gauge_velocity_vertices,
+            conduction_velocity_vertices = conduction_data.source_gauge_velocity_vertices,
+            # Explicit arbitrary-frame historical oracle; no physical H/A model is declared here.
+            _historical_center_overlap_reference = true,
         )
         ISC_RESPONSES.compute_photon_drag_injection_current_kernel!(
             tensor_compact_kernel,
@@ -654,6 +666,10 @@ end
             active_pairs_nmajor = pair_capacity,
             active_pair_count = pair_count,
             tensor_indices = Int[2, 1, 2],
+            valence_velocity_vertices = valence_data.source_gauge_velocity_vertices,
+            conduction_velocity_vertices = conduction_data.source_gauge_velocity_vertices,
+            # Explicit arbitrary-frame historical oracle; no physical H/A model is declared here.
+            _historical_center_overlap_reference = true,
         )
         @test injection_bitwise_equal(tensor_compact_kernel, tensor_dense_kernel)
         @test injection_bitwise_equal(tensor_compact_forward, tensor_dense_forward)
@@ -788,7 +804,7 @@ end
 
 @testset "Injection Spin Current seed validation and rank-4 writer" begin
     mktempdir() do root
-        seed = joinpath(root, "wannier90")
+        seed = joinpath(root, "wannier")
         cfg = WannierNLQG.Runtime.EffectiveTaskConfig(
             fourier_backend = "direct",
             tasks = [("ISC", "Conventional", "Integral")],
@@ -796,7 +812,7 @@ end
             photon_energies = [0.1],
             spatial_dimension = 2,
             tensor_indices = (1, 3, 1, 1),
-            seedname = "wannier90",
+            seedname = "wannier",
             case_root = root,
             output_root = joinpath(root, "out"),
         )
@@ -856,5 +872,248 @@ end
         @test length(split(lines[2])) == 3 + 24
         @test length(split(lines[3])) == 2 + 2 * 24
         @test split(lines[2])[4:7] == ["xxxx", "xxxy", "xxyx", "xxyy"]
+    end
+end
+
+@testset "ISC-only workspace demand preserves full default and private scratch" begin
+    for dimension in (2, 3)
+        full = ISC_RESPONSES.make_shift_current_conventional_workspace(4, 0, dimension, 2)
+        lean = ISC_RESPONSES.make_shift_current_conventional_workspace(
+            4,
+            0,
+            dimension,
+            2;
+            shift_current_required = false,
+        )
+        peer = ISC_RESPONSES.make_shift_current_conventional_workspace(
+            4,
+            0,
+            dimension,
+            2;
+            shift_current_required = false,
+        )
+        @test length(typeof(full).parameters) == 2
+        for field in (
+            :generalized_position_derivative,
+            :generalized_derivative_scratch,
+            :response_kernel,
+            :local_response,
+        )
+            @test getfield(full, field) !== nothing
+            @test getfield(lean, field) === nothing
+        end
+        @test lean.scratch !== peer.scratch
+        @test lean.data !== peer.data
+        @test !Base.mightalias(lean.frequency_weights, peer.frequency_weights)
+        @test lean.frequency_contraction_scratch !== peer.frequency_contraction_scratch
+        @test lean.spin_frequency_contraction_scratch !== peer.spin_frequency_contraction_scratch
+        legacy = ISC_RESPONSES.ShiftCurrentConventionalWorkspace(
+            full.scratch,
+            full.data,
+            full.generalized_position_derivative,
+            full.response_kernel,
+            full.local_response,
+            full.frequency_weights,
+        )
+        @test legacy.response_kernel === full.response_kernel
+        @test legacy.generalized_position_derivative === full.generalized_position_derivative
+        @test legacy.generalized_derivative_scratch !== nothing
+    end
+end
+
+function direct_isc_component_allocation(data, occupations, delta, indices)
+    return @allocated ISC_RESPONSES.injection_spin_current_component(
+        data,
+        occupations,
+        delta,
+        0.61,
+        indices,
+        1,
+        size(occupations, 1),
+    )
+end
+
+@testset "K-slice injection-spin direct component preserves Array6 reference" begin
+    rng = MersenneTwister(264)
+    for dimension in (2, 3)
+        plan = ISC_MATRIX_ELEMENTS.compile_matrix_plan(
+            ISC_MATRIX_ELEMENTS.MatrixElementRequest(
+                ISC_MATRIX_ELEMENTS.BERRY_CONNECTION,
+                ISC_MATRIX_ELEMENTS.SPIN_VELOCITY;
+                spatial_dimension = dimension,
+            ),
+        )
+        data = ISC_MATRIX_ELEMENTS.KPointMatrixData(4, 0, plan)
+        data.berry_connection .= randn(rng, ComplexF64, size(data.berry_connection))
+        data.spin_velocity.hamiltonian_gauge .=
+            randn(rng, ComplexF64, size(data.spin_velocity.hamiltonian_gauge))
+        original_connection = copy(data.berry_connection)
+        original_spin = copy(data.spin_velocity.hamiltonian_gauge)
+        occupations = randn(rng, 4, 4);
+        delta = randn(rng, 4, 4)
+        occupations[1, 1] = -0.0;
+        delta[2, 2] = 0.0
+        all_pairs = [(n, m) for n in 1:4 for m in 1:4]
+        sparse_pairs = [(1, 3), (2, 4), (4, 1)]
+        reference = zeros(ComplexF64, 4, 4, dimension, 3, dimension, dimension)
+        for (mask, pairs) in (
+            (nothing, nothing),
+            (falses(4, 4), nothing),
+            (BitMatrix([isodd(n+m) for n in 1:4, m in 1:4]), nothing),
+            (nothing, all_pairs),
+            (nothing, sparse_pairs),
+            (nothing, NTuple{2, Int}[]),
+        )
+            for a in 1:dimension, spin in 1:3, b in 1:dimension, c in 1:dimension
+                indices = Int[a, spin, b, c];
+                fill!(reference, ComplexF64(NaN, NaN))
+                ISC_RESPONSES.compute_injection_spin_current_kernel!(
+                    reference,
+                    data,
+                    1,
+                    4,
+                    dimension;
+                    active_pair_mask = mask,
+                    active_pairs_nmajor = pairs,
+                    tensor_indices = indices,
+                )
+                expected = ISC_RESPONSES.injection_spin_current_component(
+                    reference,
+                    occupations,
+                    delta,
+                    0.61,
+                    indices,
+                    1,
+                    4;
+                    active_pairs_nmajor = pairs,
+                )
+                actual = ISC_RESPONSES.injection_spin_current_component(
+                    data,
+                    occupations,
+                    delta,
+                    0.61,
+                    indices,
+                    1,
+                    4;
+                    active_pair_mask = mask,
+                    active_pairs_nmajor = pairs,
+                )
+                @test reinterpret(UInt64, [actual]) == reinterpret(UInt64, [expected])
+            end
+        end
+        indices = Int[dimension, 3, 1, dimension]
+        for pairs in ([(4, 2), (1, 3), (4, 2)], all_pairs), count in (0, 1, length(pairs))
+            ISC_RESPONSES.compute_injection_spin_current_kernel!(
+                reference,
+                data,
+                2,
+                3,
+                dimension;
+                active_pairs_nmajor = pairs,
+                active_pair_count = count,
+                tensor_indices = indices,
+            )
+            expected = ISC_RESPONSES.injection_spin_current_component(
+                reference,
+                occupations,
+                delta,
+                0.61,
+                indices,
+                2,
+                3;
+                active_pairs_nmajor = pairs,
+                active_pair_count = count,
+            )
+            actual = ISC_RESPONSES.injection_spin_current_component(
+                data,
+                occupations,
+                delta,
+                0.61,
+                indices,
+                2,
+                3;
+                active_pairs_nmajor = pairs,
+                active_pair_count = count,
+            )
+            @test reinterpret(UInt64, [actual]) == reinterpret(UInt64, [expected])
+        end
+        for prefactor in (0.0, -0.0, Inf, NaN)
+            mask = falses(4, 4)
+            ISC_RESPONSES.compute_injection_spin_current_kernel!(
+                reference,
+                data,
+                2,
+                3,
+                dimension;
+                active_pair_mask = mask,
+                tensor_indices = indices,
+            )
+            expected = ISC_RESPONSES.injection_spin_current_component(
+                reference,
+                occupations,
+                delta,
+                prefactor,
+                indices,
+                2,
+                3,
+            )
+            actual = ISC_RESPONSES.injection_spin_current_component(
+                data,
+                occupations,
+                delta,
+                prefactor,
+                indices,
+                2,
+                3;
+                active_pair_mask = mask,
+            )
+            @test reinterpret(UInt64, [actual]) == reinterpret(UInt64, [expected])
+        end
+        for special in (ComplexF64(Inf, 0.0), ComplexF64(NaN, -0.0), ComplexF64(-0.0, 1e-310))
+            data.berry_connection[1, 3, dimension] = special
+            ISC_RESPONSES.compute_injection_spin_current_kernel!(
+                reference,
+                data,
+                1,
+                4,
+                dimension;
+                tensor_indices = indices,
+            )
+            expected = ISC_RESPONSES.injection_spin_current_component(
+                reference,
+                occupations,
+                delta,
+                0.61,
+                indices,
+                1,
+                4,
+            )
+            actual = ISC_RESPONSES.injection_spin_current_component(
+                data,
+                occupations,
+                delta,
+                0.61,
+                indices,
+                1,
+                4,
+            )
+            @test reinterpret(UInt64, [actual]) == reinterpret(UInt64, [expected])
+        end
+        data.berry_connection .= original_connection
+        direct_isc_component_allocation(data, occupations, delta, indices)
+        @test direct_isc_component_allocation(data, occupations, delta, indices) == 0
+        @test data.berry_connection == original_connection
+        @test data.spin_velocity.hamiltonian_gauge == original_spin
+        @test_throws ArgumentError ISC_RESPONSES.injection_spin_current_component(
+            data,
+            occupations,
+            delta,
+            0.61,
+            indices,
+            1,
+            4;
+            active_pairs_nmajor = sparse_pairs,
+            active_pair_count = length(sparse_pairs) + 1,
+        )
     end
 end

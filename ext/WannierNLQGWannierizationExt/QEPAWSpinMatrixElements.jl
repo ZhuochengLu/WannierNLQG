@@ -1,6 +1,6 @@
 const QE_PAW_SPN_SCHEMA = "wanniernlqg.qe-paw-spn"
-const QE_PAW_SPN_SCHEMA_VERSION = "1.1"
-const QE_PAW_SPN_ALGORITHM_VERSION = "pw2wannier90-compute-spin-paw-q0-v3-frame-contract-bound"
+const QE_PAW_SPN_SCHEMA_VERSION = "2.0"
+const QE_PAW_SPN_ALGORITHM_VERSION = "projector-augmented-spin-q0/3"
 
 """Measure Hermiticity and diagonal-imaginary residuals of a QE SPN tensor."""
 function _qe_paw_spn_diagnostics(data)
@@ -15,10 +15,11 @@ function _qe_paw_spn_diagnostics(data)
 end
 
 """
-Generate a QE PAW/USPP-aware Wannier90 SPN file from the same full-cutoff
+Generate a QE PAW/USPP-aware Wannier SPN file from the same full-cutoff
 spinor coefficients and q=0 augmentation metric used by the native MMN/uIu
-backend.  The contraction follows QE `pw2wannier90::compute_spin`; an optional
-upstream SPN is validation-only and never supplies matrix elements.
+backend. The contraction combines the dimensionless Pauli matrix elements with
+the q=0 augmentation metric. An optional independent SPN is validation-only
+and never supplies matrix elements.
 """
 function generate_qe_paw_spn(
     source::QuantumEspressoWavefunctionSource,
@@ -130,19 +131,8 @@ function _generate_qe_paw_spn_impl(
     total = zeros(ComplexF64, num_bands, num_bands, 3, num_kpts)
     pseudo_maximum = 0.0
     augmentation_maximum = 0.0
-    block_contract = bytes2hex(
-        SHA.sha256(
-            join(
-                [
-                    QE_PAW_SPN_ALGORITHM_VERSION,
-                    sha256_file(@__FILE__),
-                    sha256_file(joinpath(@__DIR__, "WannierUIUGeneration.jl")),
-                    repr(sort!(collect(state.input_sha256); by = first)),
-                ],
-                "\n",
-            ),
-        ),
-    )
+    # Public preparation owns a fresh directory; no digest-only block is adopted.
+    block_contract = "qe-spn-fresh-values/1:" * QE_PAW_SPN_ALGORITHM_VERSION
     consume = function (kpoint, result)
         block, pseudo, augmentation = result
         state.accept_norm(kpoint, result[4])
@@ -163,6 +153,7 @@ function _generate_qe_paw_spn_impl(
             contract = block_contract,
             label = "qe-spn",
             fingerprint_index = string,
+            reuse_completed_blocks = false,
         )
     end
     state = _qe_state_with_completed_norm(state)
@@ -207,7 +198,7 @@ function _generate_qe_paw_spn_impl(
             "parent_generalized_norm_max_absolute=$(state.parent_generalized_norm)",
             "parent_audit_status=$(parent_audit_status)",
             "oracle_status=$(oracle_status)",
-            "upstream_oracle=QE pw2wannier90 compute_spin",
+            "spin_contraction=dimensionless-pauli-full-cutoff-plus-q0-augmentation",
         ],
     )
     artifacts = Dict{String, String}("provenance_json" => provenance)
@@ -223,17 +214,15 @@ function _generate_qe_paw_spn_impl(
             written = verify_operator_publication_candidate(written, output)
         end
         artifacts["spn"] = written
-        artifacts["spn_sha256"] = sha256_file(written)
     elseif isfile(output) && overwrite
         rm(output; force = true)
     end
     oracle_spn_file === nothing || begin
         artifacts["oracle_spn"] = abspath(something(oracle_spn_file))
-        artifacts["oracle_spn_sha256"] = sha256_file(something(oracle_spn_file))
     end
     input_sha256 = copy(state.input_sha256)
     target_contract === nothing ||
-        (input_sha256["OPERATOR_TARGET_CONTRACT"] = target_contract.contract_sha256)
+        (input_sha256["OPERATOR_TARGET_CONTRACT"] = target_contract.definition)
     kpoints_fractional = reduce(
         vcat,
         transpose(_uiu_kpoint_fractional(state.native, kpoint)) for kpoint in 1:num_kpts
@@ -250,20 +239,17 @@ function _generate_qe_paw_spn_impl(
         "schema_version" => QE_PAW_SPN_SCHEMA_VERSION,
         "algorithm_version" => QE_PAW_SPN_ALGORITHM_VERSION,
         "source_code" => "qe",
-        "status" => passed ? "PASS" : "FAIL",
-        "passed" => passed,
+        "require_oracle" => require_oracle,
         "physical_metric" => "QE PAW/USPP q=0 pseudo plus augmentation",
         "spinor" => state.native.spinor,
         "num_bands" => num_bands,
         "num_kpoints" => num_kpts,
         "source_band_gauge" => NATIVE_DFT_BAND_GAUGE,
         "target_band_gauge" => NATIVE_DFT_BAND_GAUGE,
-        "gauge_artifact_sha256" => "NOT_APPLICABLE",
-        "band_frame_transform_sha256" => frame_contract.transform_sha256,
-        "band_frame_contract_sha256" => frame_contract.contract_sha256,
+        "gauge_definition" => "NOT_APPLICABLE",
+        "band_frame_transform_definition" => frame_contract.transform_definition,
+        "band_frame_contract_definition" => frame_contract.contract_definition,
         "band_frame_contract" => band_frame_contract_summary(frame_contract),
-        "band_gauge_rotation_sha256" => frame_contract.transform_sha256,
-        "band_gauge_rotation_semantics" => "legacy_alias_of_band_frame_transform_sha256",
         "kpoints_fractional" =>
             [collect(@view(kpoints_fractional[kpoint, :])) for kpoint in 1:num_kpts],
         "spin_components" => ["x", "y", "z"],
@@ -276,10 +262,10 @@ function _generate_qe_paw_spn_impl(
         "parent_audit_status" =>
             state.parent_generalized_norm <= thresholds.generalized_norm_max_absolute ? "PASS" :
             "AUDIT_EXCEEDED",
-        "outer_mask_sha256" => state.outer_mask_sha256,
-        "frozen_mask_sha256" => state.frozen_mask_sha256,
+        "outer_mask_definition" => state.outer_mask_definition,
+        "frozen_mask_definition" => state.frozen_mask_definition,
         "operator_target_contract_sha256" =>
-            target_contract === nothing ? "LEGACY_NOT_RECORDED" : target_contract.contract_sha256,
+            target_contract === nothing ? "LEGACY_NOT_RECORDED" : target_contract.definition,
         "hermiticity_max_absolute" => hermiticity,
         "diagonal_imaginary_max_absolute" => diagonal_imaginary,
         "pseudo_max_absolute" => pseudo_maximum,
@@ -302,27 +288,26 @@ function _generate_qe_paw_spn_impl(
                 "finite" => something(oracle_parity).finite,
             ),
         "artifacts" => artifacts,
-        "input_sha256" => input_sha256,
+        "input_definitions" => input_sha256,
+        "content_authentication"=>"NOT_PERFORMED",
         "diagnostics" => diagnostics,
     )
-    payload["contract_sha256"] = _spn_provenance_contract_sha256(
-        payload["schema"],
-        payload["schema_version"],
-        payload["source_code"],
-        payload["passed"],
-        payload["source_band_gauge"],
-        payload["target_band_gauge"],
-        payload["band_frame_transform_sha256"],
-        payload["band_frame_contract_sha256"],
-        payload["num_bands"],
-        payload["num_kpoints"],
-        payload["physical_metric"],
-        payload["spinor"],
-        get(artifacts, "spn_sha256", "NOT_PUBLISHED"),
-        input_sha256,
-        kpoints_fractional,
-    )
-    payload["payload_sha256"] = _qe_spn_payload_sha256(payload)
+    references_path=provenance * ".references.h5"
+    if isfile(references_path)
+        previous=HDF5.h5open(_read_spn_complete_references, references_path, "r")
+        IO.validate_scientific_input_definitions_equal(
+            state.native.source_definition,
+            previous.source_reference,
+        )
+        haskey(artifacts, "spn") && _validate_spn_reference(previous, artifacts["spn"])
+    else
+        atomic_hdf5_write(references_path) do temporary
+            HDF5.h5open(temporary, "w") do handle
+                _write_spn_complete_references(handle, state.native, artifacts)
+            end
+        end
+    end
+    payload["references_hdf5"]=references_path
     _uiu_atomic_json(provenance, payload)
     return QEPAWSPNResult(
         passed ? spn : nothing,

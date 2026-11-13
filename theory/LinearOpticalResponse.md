@@ -22,16 +22,18 @@ mechanism, not a pointwise static curvature field.
 Write photon energy as $x=\hbar\omega$ in eV and
 $z=x+i\Gamma_{\rm inter}$. For each ordered pair $E_n<E_m$, use
 $f_{nm}$, $\Delta_{nm}$, and $Q^{ab}_{nm}=r^a_{nm}r^b_{mn}$ from the dc note.
-For clarity, the ambient curvature is defined from the retained Wannier
-(orbital) frame $|u_i^{\rm W}\rangle$ and its position connection
-$A^{\rm W}_{a,ij}=i\langle u_i^{\rm W}|\partial_{k_a}u_j^{\rm W}\rangle$.
-If $U^\dagger H^{\rm W}U=\operatorname{diag}(E_n)$, then
+For clarity, the ambient curvature is defined in the supplied orbital
+frame $|u_i^{\rm orb}\rangle$ and its position connection. For file-based
+inputs this is the retained Wannier frame; for native point-orbital inputs
+the specified centers define the connection in the fixed orbital basis:
+$A^{\rm orb}_{a,ij}=i\langle u_i^{\rm orb}|\partial_{k_a}u_j^{\rm orb}\rangle$.
+If $U^\dagger H^{\rm orb}U=\operatorname{diag}(E_n)$, then
 
 $$
-\mathcal F_{ab}^{\rm W}
-=\partial_{k_a}A_b^{\rm W}-\partial_{k_b}A_a^{\rm W}
--i[A_a^{\rm W},A_b^{\rm W}],\qquad
-\mathcal F_{ab}^{\rm H}=U^\dagger\mathcal F_{ab}^{\rm W}U,\qquad
+\mathcal F_{ab}^{\rm orb}
+=\partial_{k_a}A_b^{\rm orb}-\partial_{k_b}A_a^{\rm orb}
+-i[A_a^{\rm orb},A_b^{\rm orb}],\qquad
+\mathcal F_{ab}^{\rm H}=U^\dagger\mathcal F_{ab}^{\rm orb}U,\qquad
 B_n^{ab}=\operatorname{Re}(\mathcal F_{ab}^{\rm H})_{nn}.
 $$
 
@@ -79,7 +81,8 @@ implemented formula. Only this combined channel is exported as
 `berry_curvature`. At $x=0$ it is the broadened dc response; only when
 $x\to0$ and $\Gamma_{\rm inter}\to0^+$ for resolved gaps does
 $\widetilde\Omega_n^{ab}\to\Omega_n^{ab}$ and the integrated conductivity
-take the [usual intrinsic-AHE form](LinearTransport.md). At finite frequency
+take the [usual intrinsic-AHE form](LinearTransport.md) for a periodic
+full-BZ model. At finite frequency
 or width, $\widetilde\Omega_n$ is a possibly complex **AHE response kernel**,
 not the static geometric Berry curvature. No resonance-only transition
 window is imposed; a different
@@ -129,6 +132,8 @@ dielectric files are omitted and metadata records `UNDEFINED_ZERO_FREQUENCY`.
 Conductivity is in S/m after full-BZ integration and S m² as a K-slice
 integrand. $a,b$ are current and applied-field Cartesian directions;
 the photon argument $x=\hbar\omega$ and the two widths are in eV.
+Bounded Cartesian-region integration uses its own dimension-aware units
+and does not produce a bulk dielectric tensor.
 The optical table reports complex conductivity in a fixed column order
 and has no additional spin factor for a spinor model.
 
@@ -153,7 +158,7 @@ and has no additional spin factor for a spinor model.
 | --- | --- | --- |
 | Length-gauge optical response with intraband/interband structures | Aversa–Sipe (1995) for length-gauge context; LinearOpticalResponseKernels.jl, linear_optical_response for the exact complex expressions | **IMPLEMENTATION_FORMULA**: the present two-width, finite-model decomposition is release-specific, not quoted verbatim from the paper. |
 | Velocity and exact cross-block geometry | SpectralResponseGeometry.jl, spectral_response_geometry, conventional_spectral_pair | Energy denominators are not artificially regularized in the geometric vertex. |
-| Ambient $\mathcal F^{\rm W}$, its Hamiltonian-frame transform, and $B_n$ | PositionMatrixElements.jl, compute_position_capabilities!; SpectralResponseGeometry.jl, spectral_response_geometry | The contact input is the covariant curvature of the supplied position connection, not the full static band $\Omega_n$. |
+| Ambient $\mathcal F^{\rm orb}$, its Hamiltonian-frame transform, and $B_n$ | PositionMatrixElements.jl, compute_position_capabilities!; SpectralResponseGeometry.jl, spectral_response_geometry | The contact input is the covariant curvature of the supplied position connection, not the full static band $\Omega_n$. |
 | Exact-block Projector optical generalization | SpectralResponseGeometry.jl, projector_spectral_pair, projector_block_velocity, projector_block_curvature | **Project-specific generalization**; it does not assert near-degenerate averaging. |
 | Berry-curvature/AHE interpretation | Xiao–Chang–Niu (2010) and Wang *et al.* (2006) for the intrinsic AHE connection; linear_optical_response for contact-plus-interband optical implementation | These references do not derive this precise broadened optical output label or assert static-map equality. |
 | Dielectric increments and unit background | LinearOpticalResponseKernels.jl, model_dielectric_response | The unit background is included once, in integrated total; it is a release output contract. |
@@ -165,3 +170,35 @@ and has no additional spin factor for a spinor model.
 3. X. Wang, J. R. Yates, I. Souza, and D. Vanderbilt, “Ab initio calculation of the anomalous Hall conductivity by Wannier interpolation,” *Phys. Rev. B* **74**, 195118 (2006). [DOI](https://doi.org/10.1103/PhysRevB.74.195118)
 
 See the [input and output contract](../docs/LINEAR_AND_ORBITAL_RESPONSES.md).
+
+
+The contact term follows from the field-dependent projected-position velocity; see the self-contained derivation in [Linear transport](LinearTransport.md). Its frequency independence within the effective model does not restore omitted optical transition poles.
+
+## Nonorthogonal Conventional optical admission
+
+The normal nonorthogonal Conventional linear-optical task now uses
+`numerics.denominator_regularization = 0.001` eV by default, matching the
+orthogonal task. An explicitly supplied value must be finite and positive;
+zero, negative and nonfinite values return
+`NONORTHOGONAL_LINEAR_OPTICAL_REGULARIZATION_REQUIRED`.
+The resolved value is forwarded to the existing matrix-element prescription
+and recorded in the effective task numerics. Previously this task did not
+accept the parameter and fixed the geometric width to zero.
+
+This is a finite-eta scalar connection approximation, not an exact degenerate
+single-band derivative. With Delta=E_n-E_m, N=K-(E_n+E_m)G/2 and
+Aeff=B-iG/2, its off-diagonal connection is
+`r_eta=Aeff-i*N*Delta/(Delta^2+eta^2)`.
+Consequently `i*Delta*r_eta-V=-N*eta^2/(Delta^2+eta^2)`.
+The complete physical velocity, ambient curvature, real energies, occupations
+and physical intra/interband optical rates are not regularized by this eta.
+The block Drude trace retains all intrablock velocity entries; interblock
+optical products use r_eta and generally depend on eta. Near-gap results need
+not agree with the old unregularized result, even when the old task succeeded.
+No general exact-degenerate single-band or moving-frame invariance is claimed.
+
+Only this normal optical task gains the positive-width requirement. Metric
+spectra, physical velocity operators, expert isolated eta=0 matrix-element
+calculations and other tasks keep their independent support and guards.
+In particular, normal metric linear transport retains its previous eta=0
+contract, and metric Projector optical response remains unsupported.

@@ -1,0 +1,29 @@
+workflow = "wannierization"
+mode = "symmetry_adapted"
+
+[source]
+kind = "qe"
+save_directory = "inputs/seed.save"
+
+[kmesh]
+# Must describe the complete ordered native point inventory; no completion.
+dimensions = [1, 1, 1]
+
+[basis]
+# Replace X by the actual native chemical label; closure is checked, not expanded.
+projections = ["X:s"]
+
+[symmetry]
+include_time_reversal = true
+symmetry_tolerance = 1e-5
+
+[solver]
+initialization = "amn"
+
+[output]
+final_tb_symmetry_report_enabled = false
+model_file = "results/seed.h5"
+# checkpoint_hdf5 = "results/seed.wannierization.h5"  # Optional restart artifact
+profile = "hamiltonian_position"
+num_print_cycles = 1
+num_dump_cycles = 100

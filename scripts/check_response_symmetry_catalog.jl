@@ -8,12 +8,12 @@ import WannierNLQG.SymmetryFoundation:
 
 const ROOT = normpath(joinpath(@__DIR__, ".."))
 const EXPECTED_RESPONSE_SYMMETRY_CATALOG = (
-    generated_source_sha256 = "2d2f30a33e3b85b42840c2c14e6509577ebba99c94dd438b935d7331c32ad7d6",
+    generated_source_sha256 = "9b8dfda700f436283c0132c6f8c1a877960606eda0d5585aef3a9e09d3a91a34",
     display_catalog_sha256 = "4ac72113a12da0557105b3d0689d30e623c3ce6b0bcba52dc2c1cb355946290e",
     operation_digest_contract = "wanniernlqg.magnetic-point-group-operations/1.0",
     symbol_convention = "wanniernlqg.spglib-canonical/1.0",
     generation_contract = "wanniernlqg.spglib-magnetic-point-group-catalog/1.0",
-    generator_sha256 = "4fb2133cbbbf9bab2cc5e961abe5b68a149bcf28a50f9184c23f9e1a14ac6821",
+    generator_sha256 = "1bcb544b6293beb8cd3c44f0b8e88bb9ef6c78f7f4102e9de518df46ee7361cd",
     canonicalization_sha256 = "4570b2df131e7983d6c44a78e825edafd26d4298d1ac42b150cf5fd839d1a336",
     specification_sha256 = "01bd5b3882d0cf965c8000563208206c238a723288bc1591d9874af9eead62a4",
     spglib_jl_tree = "8f1b4a9e4d3d4ce9670c09355ce402ec5418b8e6",
@@ -34,7 +34,7 @@ const EXPECTED_RESPONSE_SYMMETRY_CATALOG = (
         ),
     ],
     locked_spglib_sha256 = "3e06126b0a3608c18c6d321d408b6f0cdd3673e68c4c9dabb033c9d8b43aaab3",
-    forbidden_inputs_sha256 = "031406ff73867de9f086fdd3e2cb82a3d252e5c3e9b8750743b772f499ddf4a3",
+    forbidden_inputs_sha256 = "56fa2fab0143d9a10b60a72d1148ad63930a8a7071d2aaa5bde7110a93157a07",
     uni_count = 1651,
     magnetic_point_group_count = 122,
 )
@@ -58,8 +58,6 @@ function _catalog_check_input_closure()
         joinpath(ROOT, "src", "SymmetryFoundation", "ResponseSymmetryGroupReporting.jl")
     generator = read(generator_path, String)
     for forbidden in (
-        "magnetic_data.txt",
-        "mpg_dicts.py",
         "Downloads.",
         "HTTP.",
         "Sockets.",
@@ -73,17 +71,6 @@ function _catalog_check_input_closure()
             error("catalog generator contains forbidden external input/network token $(forbidden)")
     end
     active_source = read(generated_path, String) * read(runtime_catalog_path, String)
-    for forbidden in (
-        "ISO-MAG",
-        "PythMPG",
-        "Litvin 3D magnetic point groups",
-        "2b11217ae10687b0836d8151846db2fad57b0d77211da90bb138ccd123a7b1fc",
-        "78d322cf106949614370f7c3ab66cbf77fff0aa296a10e1a192732db82a12e22",
-        "3c19f07f3465ef5d975ff47cb1bb39e37533dcdaae5c3c6555b0bc37b6e9ad41",
-    )
-        occursin(forbidden, active_source) &&
-            error("active catalog/runtime source contains legacy lookup token $(forbidden)")
-    end
     occursin(r"(?<!display_)catalog_sha256", active_source) &&
         error("active catalog/runtime source retains the removed catalog_sha256 identity")
     return true

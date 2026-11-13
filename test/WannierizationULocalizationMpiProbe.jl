@@ -53,7 +53,11 @@ plan = WannierNLQG.SymmetryFoundation.WannierSymmetryPlan(
     reshape(Matrix{ComplexF64}(I, 2, 2), 2, 2, 1),
     zeros(Int, 3, 2, 1),
 )
-neighbors = [2 1; 2 1; 1 2; 1 2; 1 2; 1 2]
+isempty(ARGS) || ARGS == ["empty-owner-1d"] || error("unsupported U-localization probe fixture")
+const EMPTY_OWNER_FIXTURE = !isempty(ARGS)
+# The original twelve-edge fixture is retained. This additional one-dimensional
+# two-edge fixture enters the same real solver with fewer edges than air3 ranks.
+neighbors = EMPTY_OWNER_FIXTURE ? [2 1] : [2 1; 2 1; 1 2; 1 2; 1 2; 1 2]
 reciprocal_shifts = zeros(Int, 3, 6, 2)
 reciprocal_shifts[1, 2, 1] = -1
 reciprocal_shifts[1, 1, 2] = 1
@@ -61,34 +65,53 @@ reciprocal_shifts[2, 3, :] .= 1
 reciprocal_shifts[2, 4, :] .= -1
 reciprocal_shifts[3, 5, :] .= 1
 reciprocal_shifts[3, 6, :] .= -1
-data = zeros(ComplexF64, 2, 2, 6, 2)
-for kpoint in 1:2, neighbor in 1:6
+EMPTY_OWNER_FIXTURE && (reciprocal_shifts = reciprocal_shifts[:, 1:1, :])
+neighbor_count = size(neighbors, 1)
+data = zeros(ComplexF64, 2, 2, neighbor_count, 2)
+for kpoint in 1:2, neighbor in 1:neighbor_count
     phase = 0.025 * (neighbor + 2kpoint)
     data[:, :, neighbor, kpoint] .= ComplexF64[
         0.97cis(phase) 0.03cis(-2phase)
         -0.02cis(phase) 0.96cis(-phase)
     ]
 end
-mmn = IOW.WannierMMN(2, 2, 6, data, neighbors, reciprocal_shifts)
+mmn = IOW.WannierMMN(2, 2, neighbor_count, data, neighbors, reciprocal_shifts)
 angle_value = 0.17
 frames = [
     Matrix{ComplexF64}(I, 2, 2),
     ComplexF64[cos(angle_value) sin(angle_value); -sin(angle_value) cos(angle_value)],
 ]
-weights = fill(1.0 / 6.0, 6)
+weights = fill(1.0 / neighbor_count, neighbor_count)
 tangent_plans = Union{Nothing, WSC.TargetSymmetryTangentPlan}[nothing, nothing]
 phase_reference = zeros(Float64, 2, 3)
+
+if EMPTY_OWNER_FIXTURE && MPI.Comm_size(MPI.COMM_WORLD) > 2
+    # An empty owner must not read matrix operands. Poison only that rank's
+    # operands in an additional real edge-kernel call; the ordinary solver below
+    # still receives the unchanged finite fixture on every rank.
+    rank = MPI.Comm_rank(MPI.COMM_WORLD)
+    sentinel_frames = deepcopy(frames)
+    if rank >= 2
+        foreach(matrix -> fill!(matrix, ComplexF64(NaN, NaN)), sentinel_frames)
+    end
+    actual = WSC._mpi_localization_edge_overlaps(sentinel_frames, mmn, :mpi)
+    for kpoint in 1:2
+        target = neighbors[1, kpoint]
+        expected = frames[kpoint]' * data[:, :, 1, kpoint] * frames[target]
+        actual[:, :, 1, kpoint] == expected || error("empty owner read poisoned matrix operands")
+    end
+    rank == 0 && println("WANNIERIZATION_U_EMPTY_OWNER_PROBE_PASS")
+end
 
 function make_config(parallel)
     acceleration = W.WannierizationAccelerationConfig(
         schedule = :two_stage,
-        localization_algorithm = :smv_fletcher_reeves_two_stage,
         localization_max_steps = 1,
         u_inner_sweeps = 1,
         u_line_search_max_trials = 8,
         u_gradient_norm_tolerance = 1.0e-14,
     )
-    return W.SymmetryAdaptedWannierizationConfig(
+    return W.WannierizationConfig(
         input = W.WannierizationInputConfig(
             wannierization_mode = :ordinary,
             win_file = "synthetic.win",
@@ -103,11 +126,10 @@ function make_config(parallel)
             frozen_max_ev = -1.0,
         ),
         solver = W.WannierizationSolverConfig(
-            algorithm_profile = :custom,
             initialization = :random,
             acceleration = acceleration,
             parallel = parallel,
-            localize = true,
+            stage_controls = W.WannierizationStageControls(dis_num_iter = 0, num_iter = 1),
             symmetrize_z = false,
             random_seed = 0x1234,
         ),
@@ -151,7 +173,7 @@ maximum_field_difference(serial_value.raw_gradients, mpi_value.raw_gradients) ==
     error("MPI U raw gradient differs from serial")
 maximum_field_difference(serial_value.full_gradients, mpi_value.full_gradients) == 0.0 ||
     error("MPI U projected gradient differs from serial")
-serial_value.active_orbit_digests == mpi_value.active_orbit_digests ||
+serial_value.active_orbit_definitions == mpi_value.active_orbit_definitions ||
     error("MPI U branch orbit inventory differs from serial")
 
 included = [trues(2), trues(2)]

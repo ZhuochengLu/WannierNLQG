@@ -8,7 +8,7 @@ end
         append!(files, joinpath.(root, filter(name -> endswith(name, ".jl"), names)))
     end
     sort!(files)
-    @test length(files) == 52
+    @test length(files) == 63
     for (index, path) in enumerate(files)
         example_module = load_documented_example(path, index)
         build_config = Base.invokelatest(getfield, example_module, :build_config)
@@ -30,6 +30,10 @@ end
         @test config.output.system_name == "synthetic_demo"
         @test isfile(config.model.model_file)
         @test startswith(config.output.output_root, tempdir())
+        if startswith(basename(path), "intrinsic_ahc_")
+            @test all(task -> task.physics isa IntrinsicHallParameters, config.tasks)
+            @test all(task -> iszero(task.physics.temperature), config.tasks)
+        end
         if documented_example_is_spectral(path)
             @test config.sampling.spatial_dimension == 3
             @test isnothing(config.model.real_space_operator_bundle_file)
@@ -56,4 +60,12 @@ end
     @test getproperty.(effective, :broadening) == [0.04, 0.08]
     @test all(task -> task.physics.temperature == 0.0, config.tasks)
     @test all(item -> item.k_mesh == (2, 2), effective)
+end
+
+@testset "documented guide and registry have one-to-one executable examples" begin
+    guide_module = Module(:DocumentedGuideRegistryAudit)
+    Core.eval(guide_module, :(include(path::AbstractString) = Base.include(@__MODULE__, path)))
+    Base.include(guide_module, joinpath(ROOT, "scripts", "check_user_guide_examples.jl"))
+    audit_main = Base.invokelatest(getfield, guide_module, :main)
+    @test Base.invokelatest(audit_main) === nothing
 end

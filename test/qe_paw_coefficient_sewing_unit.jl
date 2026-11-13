@@ -5,6 +5,7 @@ end
 using HDF5
 using LinearAlgebra
 using Test
+using SHA
 
 include(joinpath(@__DIR__, "QECoefficientSewingTestSupport.jl"))
 using .QECoefficientSewingTestSupport
@@ -115,9 +116,14 @@ end
             WannierNLQG.SymmetryFoundation.write_band_representation_hdf5(
                 output,
                 prepared.representation,
-                prepared.compatibility_report,
+                prepared.compatibility_report;
+                content_authentication = false,
+                qualification_scope = prepared.qualification_scope,
             )
-            restored = WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(output)
+            restored = WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(
+                output;
+                content_authentication = false,
+            )
             @test restored.conventions["qe_metric_kind"] == string(metric_kind)
             @test restored.conventions["physical_overlap_available"] == string(!nonidentity)
             @test restored.sewing_matrices == built.representation.sewing_matrices
@@ -132,6 +138,15 @@ end
                 )
                 fresh_output = read(command, String)
                 @test occursin(r"QE_PAW_FRESH_READ_DIGEST=[0-9a-f]{64}", fresh_output)
+                expected = IOBuffer()
+                write(expected, reinterpret(UInt8, vec(prepared.representation.sewing_matrices)))
+                for key in sort!(collect(keys(prepared.representation.conventions)))
+                    write(expected, key, '\0', prepared.representation.conventions[key], '\n')
+                end
+                @test occursin(
+                    "QE_PAW_FRESH_READ_DIGEST=" * bytes2hex(SHA.sha256(take!(expected))),
+                    fresh_output,
+                )
             end
 
             if nonidentity

@@ -1,3 +1,26 @@
+@testset "Retired model cannot reuse a populated Fourier cache" begin
+    elements = WannierNLQG.MatrixElements
+    model = WannierNLQG.IO.read_wannier_tb(
+        joinpath(@__DIR__, "..", "examples", "fixtures", "synthetic_runtime", "synthetic_tb.dat"),
+    )
+    plan = elements.compile_matrix_plan(
+        elements.MatrixElementRequest(elements.SPECTRUM; spatial_dimension = 2),
+    )
+    workspace = elements.prepare_real_space!(elements.MatrixElementWorkspace(model, plan), model)
+    cache = elements.SharedInterpolationCache()
+    elements.begin_shared_interpolation!(cache)
+    elements.with_shared_interpolation(cache) do
+        elements.compute_kpoint!(workspace, model, [0.125, 0.25, 0.0])
+        @test elements.shared_interpolation_stats(cache).diagonalizations == 1
+        WannierNLQG.Core.invalidate_scientific_data!(model)
+        @test_throws ArgumentError elements.compute_kpoint!(workspace, model, [0.125, 0.25, 0.0])
+        @test_throws ArgumentError elements.compute_spectrum!(workspace, model, [0.25, 0.25, 0.0])
+        @test_throws ArgumentError elements.compute_remaining!(workspace, model)
+    end
+    @test_throws ArgumentError elements.compute_spectrum!(workspace, model, [0.125, 0.25, 0.0])
+    @test_throws ArgumentError elements.prepare_real_space!(workspace, model)
+end
+
 # Compare cached and uncached capability buffers recursively, including private source gauge.
 function shared_interpolation_arrays_equal(left, right)
     typeof(left) === typeof(right) || return false
@@ -176,6 +199,85 @@ end
         ),
         model,
     )
+    # Vary the smooth spin width at the same point; task-local derived data
+    # and raw-spin restoration must not leak across eta changes.
+    point_for_width = [0.125, 0.25, 0.0]
+    seed_workspace = make_workspace(matrix_elements.SPIN_VELOCITY)
+    matrix_elements.compute_kpoint!(seed_workspace, model, point_for_width)
+    differences = seed_workspace.data.hamiltonian.energy_differences
+    gap = maximum(abs, differences)
+    @test gap > 0
+    widths = (gap / 2, gap, nextfloat(gap), gap / 2)
+    isolated = [make_workspace(matrix_elements.SPIN_VELOCITY) for _ in widths]
+    shared = [make_workspace(matrix_elements.SPIN_VELOCITY) for _ in widths]
+    for (workspace, width) in zip(isolated, widths)
+        matrix_elements.compute_kpoint!(
+            workspace,
+            model,
+            point_for_width;
+            denominator_regularization = width,
+        )
+    end
+    width_cache = matrix_elements.SharedInterpolationCache()
+    matrix_elements.begin_shared_interpolation!(width_cache)
+    matrix_elements.with_shared_interpolation(width_cache) do
+        for (workspace, width) in zip(shared, widths)
+            matrix_elements.compute_kpoint!(
+                workspace,
+                model,
+                point_for_width;
+                denominator_regularization = width,
+            )
+        end
+        # Revisit a populated workspace after changing just its numerical control.
+        matrix_elements.compute_kpoint!(
+            shared[1],
+            model,
+            point_for_width;
+            denominator_regularization = widths[3],
+        )
+        @test shared_interpolation_arrays_equal(
+            shared[1].data.spin_velocity,
+            isolated[3].data.spin_velocity,
+        )
+        matrix_elements.compute_kpoint!(
+            shared[1],
+            model,
+            point_for_width;
+            denominator_regularization = widths[1],
+        )
+    end
+    for (reference, workspace, width) in zip(isolated, shared, widths)
+        @test workspace.plan.denominator_regularization == width
+        for field in (:spectrum, :hamiltonian, :position, :spin, :spin_velocity)
+            @test shared_interpolation_arrays_equal(
+                getfield(reference.data, field),
+                getfield(workspace.data, field),
+            )
+        end
+    end
+    @test any(!iszero, isolated[2].data.spin_velocity.inverse_energy_differences)
+    @test all(isfinite, isolated[3].data.spin_velocity.inverse_energy_differences)
+    @test isolated[1].data.spin_velocity.inverse_energy_differences ==
+          isolated[4].data.spin_velocity.inverse_energy_differences
+    @test matrix_elements.shared_interpolation_stats(width_cache).diagonalizations == 1
+    # The same invariant holds without sharing: the public spin buffers are
+    # Hermitized after spin velocity, so a parameter change must reload raw spin.
+    revisited = make_workspace(matrix_elements.SPIN_VELOCITY)
+    for (width, reference) in zip(widths, isolated)
+        matrix_elements.compute_kpoint!(
+            revisited,
+            model,
+            point_for_width;
+            denominator_regularization = width,
+        )
+        for field in fieldnames(typeof(reference.data.spin_velocity))
+            @test getfield(revisited.data.spin_velocity, field) ==
+                  getfield(reference.data.spin_velocity, field)
+        end
+        @test shared_interpolation_arrays_equal(revisited.data.spin, reference.data.spin)
+    end
+
     kinds = (matrix_elements.SPIN, matrix_elements.SPIN_VELOCITY)
     point = [0.125, 0.25, 0.0]
     for mixed in (false, true)

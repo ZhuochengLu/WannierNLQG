@@ -24,60 +24,6 @@ function _projection_search_write_array(io::Base.IO, values::AbstractArray{T}) w
     return nothing
 end
 
-# Hash every material projection declaration while excluding filesystem paths.
-function _projection_candidate_sha256(candidate::ProjectionCandidateSpec)
-    io = IOBuffer()
-    _projection_search_write_string(io, "WannierNLQG.projection_candidate/2.0")
-    _projection_search_write_string(io, candidate.id)
-    write(
-        io,
-        Int64(candidate.min_multiplicity),
-        Int64(candidate.max_multiplicity),
-        Int64(something(candidate.fixed_multiplicity, -1)),
-    )
-    write(io, Int64(length(candidate.specs)))
-    for spec in candidate.specs
-        _projection_search_write_string(io, spec.selector)
-        write(io, Int64(length(spec.orbital_sets)))
-        foreach(label -> _projection_search_write_string(io, label), spec.orbital_sets)
-        _projection_search_write_array(io, something(spec.positions_fractional))
-        _projection_search_write_array(io, spec.local_bases)
-    end
-    return bytes2hex(SHA.sha256(take!(io)))
-end
-
-# Hash the path-independent, ordered cold-path configuration contract.
-function _projection_search_config_sha256(
-    config::ProjectionRepresentationSearchConfig,
-    representation_sha256::AbstractString,
-)
-    io = IOBuffer()
-    _projection_search_write_string(io, "WannierNLQG.projection_representation_search_config/2.1")
-    _projection_search_write_string(io, representation_sha256)
-    _projection_search_write_string(io, config.target_subspace_contract.contract_sha256)
-    write(
-        io,
-        UInt8(config.validate_retained_solutions),
-        Int64(config.max_results),
-        Int64(config.max_search_nodes),
-    )
-    for value in (
-        config.thresholds.position,
-        config.thresholds.representation,
-        config.thresholds.group_law,
-        config.thresholds.integer,
-    )
-        write(io, Float64(value))
-    end
-    _projection_search_write_string(io, config.radial_transform.method)
-    write(io, Int64(config.radial_transform.gauss_laguerre_order))
-    write(io, Int64(length(config.candidates)))
-    for candidate in config.candidates
-        _projection_search_write_string(io, _projection_candidate_sha256(candidate))
-    end
-    return bytes2hex(SHA.sha256(take!(io)))
-end
-
 # Validate the flattened integer problem before entering branch-and-bound.
 function _validate_projection_representation_problem(
     problem::ProjectionRepresentationProblem,
@@ -157,7 +103,10 @@ function _search_projection_integer_combinations(
             1,
             0,
             Vector{Vector{Int}}(),
-            [problem.diagnostics...; "candidate lower bounds exceed the target-dimension cap"],
+            [
+                problem.diagnostics...;
+                "candidate lower bounds exceed the target-dimension cap"
+            ],
         )
     end
 
@@ -305,28 +254,28 @@ function _projection_native_kpoint_decompositions(
     candidate_plans,
     irreps,
 )
-    outer = _projection_compatibility_decompose_band_subspace(
+    outer = _projection_character_reduction_decompose_band_subspace(
         representation,
         algebra,
         @view(scope.outer_mask[:, kpoint]),
         irreps,
     )
     frozen = if any(@view scope.frozen_mask[:, kpoint])
-        _projection_compatibility_decompose_band_subspace(
+        _projection_character_reduction_decompose_band_subspace(
             representation,
             algebra,
             @view(scope.frozen_mask[:, kpoint]),
             irreps,
         )
     else
-        _projection_compatibility_empty_decomposition(irreps)
+        _projection_character_reduction_empty_decomposition(irreps)
     end
     candidates = ProjectionRepresentationActionDecomposition[]
     for plan in candidate_plans
         actions = _projection_target_actions(plan, representation, algebra)
         push!(
             candidates,
-            _projection_compatibility_decompose_actions(
+            _projection_character_reduction_decompose_actions(
                 algebra,
                 actions,
                 irreps;
@@ -415,10 +364,10 @@ function _build_projection_representation_problem(
         push!(candidate_plans, plan)
     end
 
-    compatibility_info = _projection_representation_compatibility_info(representation)
-    spinless_unitary_scope = compatibility_info.scope == :spinless_unitary
+    algorithm_info = _projection_representation_algorithm_info(representation)
+    spinless_unitary_scope = algorithm_info.scope == :spinless_unitary
     algebra_tolerance =
-        spinless_unitary_scope ? compatibility_info.little_group_tolerance : thresholds.group_law
+        spinless_unitary_scope ? algorithm_info.little_group_tolerance : thresholds.group_law
     signatures = ProjectionRepresentationSignature[]
     lower_bounds = Int[]
     upper_bounds = Int[]
@@ -657,29 +606,6 @@ end
 # Normalize unavailable numerical residuals into a persistent finite sentinel.
 _projection_finite_residual(value) = isfinite(value) ? Float64(value) : floatmax(Float64)
 
-# Bind one solution's independent validation layer into a canonical digest.
-function _projection_solution_validation_sha256(
-    candidate_ids,
-    coefficients,
-    validation_status,
-    residuals,
-)
-    io = IOBuffer()
-    _projection_search_write_string(io, "WannierNLQG.projection_solution_validation/2.0")
-    write(io, Int64(length(candidate_ids)))
-    for (candidate_id, coefficient) in zip(candidate_ids, coefficients)
-        _projection_search_write_string(io, candidate_id)
-        write(io, Int64(coefficient))
-    end
-    _projection_search_write_string(io, string(validation_status))
-    write(io, Int64(length(residuals)))
-    for key in sort!(collect(keys(residuals)))
-        _projection_search_write_string(io, key)
-        write(io, Float64(residuals[key]))
-    end
-    return bytes2hex(SHA.sha256(take!(io)))
-end
-
 # Map one optional embedding result onto the four-state public qualification.
 function _projection_validation_state(validate::Bool, embedding)
     if !validate
@@ -712,12 +638,6 @@ function _projection_public_solution(problem, coefficients, validation_status, r
     end
     candidate_ids = copy(problem.candidate_ids)
     coefficient_values = Int.(coefficients)
-    digest = _projection_solution_validation_sha256(
-        candidate_ids,
-        coefficient_values,
-        validation_status,
-        residuals,
-    )
     return ProjectionRepresentationSolution(
         candidate_ids,
         coefficient_values,
@@ -727,7 +647,6 @@ function _projection_public_solution(problem, coefficients, validation_status, r
         signature_multiplicities,
         validation_status,
         residuals,
-        digest,
     )
 end
 
@@ -736,43 +655,20 @@ function _projection_search_representation(config)
     representation = if config.band_representation !== nothing
         something(config.band_representation)
     else
-        read_band_representation_hdf5(something(config.band_representation_hdf5))
+        read_band_representation_hdf5(
+            something(config.band_representation_hdf5);
+            content_authentication = false,
+        )
     end
-    return representation, representation_static_sha256(representation)
+    return representation, representation_static_definition(representation)
 end
 
-# Rebuild one result with its canonical logical payload digest populated.
-function _projection_seal_search_result(result::ProjectionRepresentationSearchResult)
-    digest = _projection_search_payload_sha256(result)
-    return ProjectionRepresentationSearchResult(
-        result.status,
-        result.complete,
-        result.representation_sha256,
-        result.contract_sha256,
-        result.compatibility_info,
-        result.config_sha256,
-        digest,
-        result.spinor,
-        result.num_wannier,
-        result.outer_mask_sha256,
-        result.frozen_mask_sha256,
-        result.candidates,
-        result.radial_transform,
-        result.visited_nodes,
-        result.total_solution_count,
-        result.truncated,
-        result.signatures,
-        result.solutions,
-        result.diagnostics,
-    )
-end
-
-# Construct and seal one fail-closed result without duplicating status branches.
+# Construct one structurally checked result without duplicating status branches.
 function _projection_search_result(
     config,
     representation,
-    representation_sha256,
-    compatibility_info,
+    representation_definition,
+    algorithm_info,
     status,
     complete;
     visited_nodes = 0,
@@ -785,15 +681,13 @@ function _projection_search_result(
     provisional = ProjectionRepresentationSearchResult(
         status,
         Bool(complete),
-        String(representation_sha256),
-        config.target_subspace_contract.contract_sha256,
-        compatibility_info,
-        _projection_search_config_sha256(config, representation_sha256),
-        "",
+        String(representation_definition),
+        config.target_subspace_contract.contract_definition,
+        algorithm_info,
         representation.spinor,
         config.target_subspace_contract.num_wannier,
-        scope.outer_mask_sha256,
-        scope.frozen_mask_sha256,
+        qualification_mask_definition(scope.outer_mask),
+        qualification_mask_definition(scope.frozen_mask),
         copy(config.candidates),
         config.radial_transform,
         Int(visited_nodes),
@@ -803,7 +697,7 @@ function _projection_search_result(
         copy(solutions),
         unique(String.(diagnostics)),
     )
-    return _projection_seal_search_result(provisional)
+    return provisional
 end
 
 # Atomically publish any configured result artifacts after search termination.
@@ -824,15 +718,15 @@ Validation never changes combination membership, total count, or search
 completeness.
 """
 function search_projection_representations(config::ProjectionRepresentationSearchConfig)
-    representation, representation_sha256 = _projection_search_representation(config)
-    compatibility_info = _projection_representation_compatibility_info(representation)
+    representation, representation_definition = _projection_search_representation(config)
+    algorithm_info = _projection_representation_algorithm_info(representation)
     scope = config.target_subspace_contract.qualification_scope
     if size(scope.outer_mask) != size(representation.energies_ev)
         result = _projection_search_result(
             config,
             representation,
-            representation_sha256,
-            compatibility_info,
+            representation_definition,
+            algorithm_info,
             PROJECTION_SEARCH_INVALID_INPUT,
             false;
             diagnostics = ["target-subspace masks disagree with the band representation"],
@@ -854,8 +748,8 @@ function search_projection_representations(config::ProjectionRepresentationSearc
         result = _projection_search_result(
             config,
             representation,
-            representation_sha256,
-            compatibility_info,
+            representation_definition,
+            algorithm_info,
             status,
             false;
             diagnostics = ["representation decomposition failed: $(sprint(showerror, error))"],
@@ -866,8 +760,8 @@ function search_projection_representations(config::ProjectionRepresentationSearc
         result = _projection_search_result(
             config,
             representation,
-            representation_sha256,
-            compatibility_info,
+            representation_definition,
+            algorithm_info,
             PROJECTION_SEARCH_NUMERICAL_UNCERTAIN,
             false;
             signatures = problem.signatures,
@@ -920,8 +814,8 @@ function search_projection_representations(config::ProjectionRepresentationSearc
     result = _projection_search_result(
         config,
         representation,
-        representation_sha256,
-        compatibility_info,
+        representation_definition,
+        algorithm_info,
         status,
         outcome.complete;
         visited_nodes = outcome.visited_nodes,

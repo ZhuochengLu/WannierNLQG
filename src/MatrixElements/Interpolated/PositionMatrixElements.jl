@@ -7,11 +7,14 @@ Prepare position real space in place.
 """
 function prepare_position_real_space!(
     scratch::PositionMatrixScratch,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     plan::MatrixElementPlan,
     ;
     scratch_workspace::MatrixElementScratch,
 )
+    if _uses_position_curl(plan)
+        return prepare_position_curl_real_space!(scratch, model, plan; scratch_workspace)
+    end
     gradient = scratch.gradient_real_space
     gradient === nothing && return scratch
     spatial_dimension = plan.spatial_dimension
@@ -80,7 +83,123 @@ function prepare_position_real_space!(
     return scratch
 end
 
+# Share only the exact-zero eligibility contract; dense, indexed and selected
+# output traversals retain their own validity and scalar reduction semantics.
+function _source_gauge_zero_skipping_eligible(num_rows, left, right)
+    return num_rows >= 64 && 2 * Base.count(iszero, right) >= length(right) && all(isfinite, left)
+end
+
 # Rotate an input matrix with native source-gauge eigenvectors into the caller's output, reusing multiplication scratch.
+# Keep each output's intermediate-index order while holding four rows in registers.
+# The caller supplies disjoint multiplication scratch, as in the original traversal.
+# Zero right factors are inactive only when every left factor is finite.
+# Dense/nonfinite cases keep the original products; no summation index is reordered.
+function _source_gauge_product!(
+    output::AbstractMatrix{ComplexF64},
+    left::AbstractMatrix{ComplexF64},
+    right::AbstractMatrix{ComplexF64},
+)
+    # Exact finite zero products have the same positive-zero scalar reductions.
+    # Preserve the original loop for either nonfinite factor and all nonzero work.
+    finite_zero_product =
+        (all(iszero, left) && all(isfinite, right)) || (all(iszero, right) && all(isfinite, left))
+    if finite_zero_product
+        fill!(output, COMPLEX_ZERO)
+        return output
+    end
+    skip_zero = _source_gauge_zero_skipping_eligible(size(output, 1), left, right)
+    return skip_zero ? _source_gauge_product!(output, left, right, Val(true)) :
+           _source_gauge_product!(output, left, right, Val(false))
+end
+
+"""Overwrite the source-gauge product in the established scalar intermediate-band order; SkipZero controls exact-zero right-factor skipping."""
+function _source_gauge_product!(
+    output::AbstractMatrix{ComplexF64},
+    left::AbstractMatrix{ComplexF64},
+    right::AbstractMatrix{ComplexF64},
+    ::Val{SkipZero},
+) where {SkipZero}
+    count = size(output, 1)
+    blocked = count - rem(count, 4)
+    @inbounds for column in 1:count
+        for row in 1:4:blocked
+            first = COMPLEX_ZERO
+            second = COMPLEX_ZERO
+            third = COMPLEX_ZERO
+            fourth = COMPLEX_ZERO
+            for intermediate in 1:count
+                value = right[intermediate, column]
+                SkipZero && iszero(value) && continue
+                first += left[row, intermediate] * value
+                second += left[row + 1, intermediate] * value
+                third += left[row + 2, intermediate] * value
+                fourth += left[row + 3, intermediate] * value
+            end
+            output[row, column] = first
+            output[row + 1, column] = second
+            output[row + 2, column] = third
+            output[row + 3, column] = fourth
+        end
+        for row in (blocked + 1):count
+            value = COMPLEX_ZERO
+            for intermediate in 1:count
+                right_value = right[intermediate, column]
+                SkipZero && iszero(right_value) && continue
+                value += left[row, intermediate] * right_value
+            end
+            output[row, column] = value
+        end
+    end
+    return output
+end
+
+# Index scratch is worker-owned capacity only. Each column rebuilds its exact
+# nonzero list before consumption; no validity survives a column, call, point or q.
+# This retains the reference zero predicate, four-row accumulators and ascending
+# intermediate order. Nonfinite left factors and dense inputs use the old loop.
+function source_gauge_first_product!(output, left, right, nonzero_indices::Vector{Int})
+    n = size(output, 1)
+    skip_zero = _source_gauge_zero_skipping_eligible(n, left, right)
+    skip_zero || return _source_gauge_product!(output, left, right, Val(false))
+    blocked = n - rem(n, 4)
+    @inbounds for column in 1:n
+        nonzero_count = 0
+        for intermediate in 1:n
+            iszero(right[intermediate, column]) && continue
+            nonzero_count += 1
+            nonzero_indices[nonzero_count] = intermediate
+        end
+        for row in 1:4:blocked
+            first = COMPLEX_ZERO
+            second = COMPLEX_ZERO
+            third = COMPLEX_ZERO
+            fourth = COMPLEX_ZERO
+            for index in 1:nonzero_count
+                intermediate = nonzero_indices[index]
+                value = right[intermediate, column]
+                first += left[row, intermediate] * value
+                second += left[row + 1, intermediate] * value
+                third += left[row + 2, intermediate] * value
+                fourth += left[row + 3, intermediate] * value
+            end
+            output[row, column] = first
+            output[row + 1, column] = second
+            output[row + 2, column] = third
+            output[row + 3, column] = fourth
+        end
+        for row in (blocked + 1):n
+            value = COMPLEX_ZERO
+            for index in 1:nonzero_count
+                intermediate = nonzero_indices[index]
+                value += left[row, intermediate] * right[intermediate, column]
+            end
+            output[row, column] = value
+        end
+    end
+    return output
+end
+
+# Rotate with the original scalar products and per-element summation order.
 function _transform_source_gauge!(
     output::AbstractMatrix{ComplexF64},
     eigenvectors_adjoint::AbstractMatrix{ComplexF64},
@@ -88,25 +207,8 @@ function _transform_source_gauge!(
     eigenvectors::AbstractMatrix{ComplexF64},
     temporary::AbstractMatrix{ComplexF64},
 )
-    count = size(output, 1)
-    fill!(temporary, COMPLEX_ZERO)
-    @inbounds for column in 1:count
-        for intermediate in 1:count
-            input_value = input[intermediate, column]
-            for row in 1:count
-                temporary[row, column] += eigenvectors_adjoint[row, intermediate] * input_value
-            end
-        end
-    end
-    fill!(output, COMPLEX_ZERO)
-    @inbounds for column in 1:count
-        for intermediate in 1:count
-            eigenvector_value = eigenvectors[intermediate, column]
-            for row in 1:count
-                output[row, column] += temporary[row, intermediate] * eigenvector_value
-            end
-        end
-    end
+    _source_gauge_product!(temporary, eigenvectors_adjoint, input)
+    _source_gauge_product!(output, temporary, eigenvectors)
     return output
 end
 
@@ -136,7 +238,7 @@ end
 # Populate only requested Wannier position/derivative Fourier channels, using Mixed-FFT where available and direct sums otherwise.
 function _fourier_position_capabilities!(
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
 )
     plan = workspace.plan
     data = workspace.data
@@ -311,7 +413,10 @@ Fill missing position, connection, curvature and velocity capabilities after the
 
 Apply the plan's regularized denominators and native Wannier-center convention, update capability masks/counters, and return workspace data without response normalization.
 """
-function compute_position_capabilities!(workspace::MatrixElementWorkspace, model::TightBindingModel)
+function compute_position_capabilities!(
+    workspace::MatrixElementWorkspace,
+    model::AbstractResponseModel,
+)
     plan = workspace.plan
     data = workspace.data
     position_data = data.position
@@ -339,8 +444,21 @@ function compute_position_capabilities!(workspace::MatrixElementWorkspace, model
     if has_capability(plan, GAUGE_CORRECTION) &&
        !_has_capability(data.computed_mask, GAUGE_CORRECTION)
         energy_differences = data.hamiltonian.energy_differences
-        @. position_data.inverse_energy_differences =
-            energy_differences / (energy_differences^2 + plan.denominator_regularization^2)
+        if iszero(plan.denominator_regularization)
+            # Exact scalar geometry needs an isolated eigenframe, including for expert callers.
+            geometry_isolated_spectrum_minimum_gap(
+                data.spectrum.energies,
+                data.spectral_gap_tolerance,
+            )
+            for index in CartesianIndices(energy_differences)
+                difference = energy_differences[index]
+                position_data.inverse_energy_differences[index] =
+                    iszero(difference) ? 0.0 : inv(difference)
+            end
+        else
+            @. position_data.inverse_energy_differences =
+                regularized_energy_inverse(energy_differences, plan.denominator_regularization)
+        end
         for direction in 1:spatial_dimension
             _axis_required(plan, GAUGE_CORRECTION, direction) || continue
             @views position_data.gauge_correction[:, :, direction] .=
@@ -370,13 +488,29 @@ function compute_position_capabilities!(workspace::MatrixElementWorkspace, model
         wannier_position = position_data.wannier_gauge
         wannier_gradient = position_scratch.gradient_wannier
         wannier_curvature = position_data.wannier_curvature
+        curl_pairs = position_scratch.curl_pairs
+        _uses_position_curl(plan) && _fourier_position_curl!(workspace, model)
         @inbounds for first_direction in 1:spatial_dimension
             for second_direction in 1:spatial_dimension
                 _pair_required(plan, WANNIER_CURVATURE, first_direction, second_direction) ||
                     continue
+                curl_channel = if _uses_position_curl(plan) && first_direction != second_direction
+                    index = findfirst(==(minmax(first_direction, second_direction)), curl_pairs)
+                    index === nothing && error("missing required curvature curl pair")
+                    index
+                else
+                    0
+                end
+                curl_sign = first_direction < second_direction ? 1 : -1
                 for column in 1:num_orbitals
                     for row in 1:num_orbitals
-                        value =
+                        value = if _uses_position_curl(plan)
+                            if first_direction == second_direction
+                                COMPLEX_ZERO
+                            else
+                                curl_sign * position_scratch.curl_wannier[row, column, curl_channel]
+                            end
+                        else
                             wannier_gradient[
                                 row,
                                 column,
@@ -396,6 +530,7 @@ function compute_position_capabilities!(workspace::MatrixElementWorkspace, model
                                     second_direction,
                                 ),
                             ]
+                        end
                         for intermediate in 1:num_orbitals
                             value -=
                                 1.0im * (

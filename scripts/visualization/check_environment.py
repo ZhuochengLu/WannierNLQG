@@ -21,6 +21,8 @@ def check_publication_environment(output: Path) -> dict:
 
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from visualization.style import apply_style, resolve_style
+    from visualization.common import save_figure_atomic
+    from visualization.pdf_validation import validate_minus_probe
 
     versions = {}
     requirements = Path(__file__).with_name("requirements.txt")
@@ -32,26 +34,27 @@ def check_publication_environment(output: Path) -> dict:
         if actual != required:
             raise RuntimeError(f"{package} version {actual} differs from required {required}")
         versions[package] = actual
-    style = resolve_style()
+    style = resolve_style({"dpi": 180})
     apply_style(style)
     output.mkdir(parents=True, exist_ok=True)
-    figure, axis = plt.subplots(figsize=(3.2, 2.4))
-    axis.plot(np.array([0.0, 1.0]), np.array([0.0, 1.0]))
-    axis.set_xlabel(r"$\hbar\omega\;[\mathrm{eV}]$")
-    axis.set_ylabel(r"$\sigma^{xxx}$")
-    figure.tight_layout()
-    artifacts = []
+    figure = plt.figure(figsize=(3.2, 2.4))
+    axis = figure.add_axes([0.22, 0.22, 0.65, 0.55])
+    axis.plot(np.array([-1.0, 1.0]), np.array([-1.0, 1.0]))
+    figure.text(0.84, 0.9, r"$-$", fontsize=18, ha="center", va="center")
+    axis.set_xlabel(r"$k\;[\mathrm{\AA^{-1}}]$")
+    axis.set_ylabel(r"$10^{-3}\;E-E_{\mathrm{VBM}}$")
     try:
-        for suffix in ("pdf", "png"):
-            path = output / f"publication-environment.{suffix}"
-            figure.savefig(path, dpi=style["dpi"])
-            if not path.is_file() or path.stat().st_size == 0:
-                raise RuntimeError(f"empty publication probe: {path}")
-            artifacts.append(str(path.resolve()))
+        paths = save_figure_atomic(figure, output / "publication-environment", 180, ["pdf", "png"])
+        artifacts = [str(path.resolve()) for path in paths]
+        minus_probe = validate_minus_probe(output / "publication-environment.pdf",
+                                          output / "publication-environment.png",
+                                          output / "minus-qa", (0.84, 0.9), 180)
     finally:
         plt.close(figure)
     record = {
         "status": "PASS",
+        "native_vector_minus_probe": minus_probe,
+        "artifact_class": "native_vector",
         "python": sys.executable,
         "python_version": sys.version,
         "packages": versions,

@@ -30,7 +30,10 @@ function reciprocal_lattice(lattice::AbstractMatrix{<:Real})
 end
 
 """Build Cartesian-axis finite-difference steps in fractional k coordinates."""
-function finite_difference_step_matrix(model::TightBindingModel, finite_difference_step::Float64)
+function finite_difference_step_matrix(
+    model::AbstractResponseModel,
+    finite_difference_step::Float64,
+)
     cartesian_steps = finite_difference_step * Matrix{Float64}(I, 3, 3)
     fractional_steps = zeros(Float64, 3, 3)
     for direction in 1:3

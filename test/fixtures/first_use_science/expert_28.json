@@ -629,13 +629,13 @@
             },
             {
               "finite": true,
-              "path": "result.solver.acceleration.u_w90_restart_interval",
+              "path": "result.solver.acceleration.u_recursive_localization_restart_interval",
               "payload": "0500000000000000",
               "type": "Int64"
             },
             {
               "finite": true,
-              "path": "result.solver.acceleration.u_w90_trial_step",
+              "path": "result.solver.acceleration.u_recursive_localization_trial_step",
               "payload": "0000000000000040",
               "type": "Float64"
             },
@@ -791,7 +791,7 @@
             },
             {
               "finite": true,
-              "path": "result.output.write_wannier90_tb",
+              "path": "result.output.write_model_tb",
               "payload": "00",
               "type": "Bool"
             },

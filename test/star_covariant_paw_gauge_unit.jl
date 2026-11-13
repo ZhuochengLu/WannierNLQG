@@ -1,3 +1,6 @@
+if !isdefined(@__MODULE__, :CurrentScientificValues)
+    include(joinpath(@__DIR__, "support/CurrentScientificValues.jl"))
+end
 using HDF5
 using JSON3
 using LinearAlgebra
@@ -16,6 +19,8 @@ const STAR_GAUGE_SUPPORT =
 const STAR_GAUGE_OPERATOR_EXPORT =
     first(STAR_GAUGE_W._load_wannierization_extension!()).OperatorExport
 
+include(joinpath(@__DIR__, "StarPolicyPersistenceContracts.jl"))
+
 star_gauge_test_file_sha256(path::AbstractString) =
     open(path, "r") do io
         bytes2hex(SHA.sha256(io))
@@ -30,7 +35,8 @@ function star_gauge_target_contract(
     band_count = length(something(source.band_range))
     scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
         trues(band_count, nkpoints),
-        trues(band_count, nkpoints),
+        trues(band_count, nkpoints);
+        content_authentication = false,
     )
     return STAR_GAUGE_W.TargetSubspaceQualificationContract(
         scope;
@@ -69,18 +75,18 @@ end
         Diagonal(inv.(sqrt.(other_decomposition.values))) *
         other_decomposition.vectors'
     @test Base.invokelatest(
-        STAR_GAUGE_EXTENSION._rotate_single_point_operator,
+        STAR_GAUGE_EXTENSION._transform_single_point_operator,
         operator,
         transform,
     ) ≈ transform' * operator * transform
     @test Base.invokelatest(
-        STAR_GAUGE_EXTENSION._rotate_link_operator,
+        STAR_GAUGE_EXTENSION._transform_link_operator,
         operator,
         transform,
         other_transform,
     ) ≈ transform' * operator * other_transform
     @test Base.invokelatest(
-        STAR_GAUGE_EXTENSION._rotate_double_endpoint_operator,
+        STAR_GAUGE_EXTENSION._transform_double_endpoint_operator,
         operator,
         transform,
         other_transform,
@@ -118,8 +124,9 @@ end
 
     identity = Base.invokelatest(STAR_GAUGE_EXTENSION._identity_band_frame_contract, 2, 1)
     summary = Base.invokelatest(STAR_GAUGE_SUPPORT.band_frame_contract_summary, identity)
-    @test identity.rotations === nothing
-    @test identity.rotation_sha256 == identity.transform_sha256
+    @test identity.transforms === nothing
+    @test !hasproperty(identity, :rotations)
+    @test !hasproperty(identity, :rotation_sha256)
     @test summary.schema == "WannierNLQG.band_frame_transform_contract"
     @test summary.status == "PASS"
 end
@@ -260,7 +267,7 @@ end
     )
 
     preparation = STAR_GAUGE_W.BandRepresentationPreparationConfig(
-        construction_policy = :strict,
+        construction_policy = :standard,
         source = WannierNLQG.SymmetryFoundation.QuantumEspressoWavefunctionSource(
             "fixture.save";
             band_range = 1:1,
@@ -272,7 +279,7 @@ end
     @test preparation.wavefunction_gauge_hdf5 === nothing
     @test preparation.authoritative_hamiltonian isa STAR_GAUGE_W.NativeDFTHamiltonian
     mismatched = STAR_GAUGE_W.BandRepresentationPreparationConfig(
-        construction_policy = :strict,
+        construction_policy = :standard,
         source = preparation.source,
         sewing_backend = STAR_GAUGE_W.CoefficientMappingSewing(),
         wavefunction_gauge_backend = STAR_GAUGE_W.StarCovariantPAWGauge(),
@@ -284,7 +291,7 @@ end
         mismatched,
     )
     symmetrized = STAR_GAUGE_W.BandRepresentationPreparationConfig(
-        construction_policy = :strict,
+        construction_policy = :standard,
         source = preparation.source,
         sewing_backend = STAR_GAUGE_W.AugmentationAwareSewing(),
         wavefunction_gauge_backend = controlled,
@@ -295,7 +302,7 @@ end
     )
     @test STAR_GAUGE_W._validate_band_representation_preparation_config(symmetrized) === nothing
     invalid_authority = STAR_GAUGE_W.BandRepresentationPreparationConfig(
-        construction_policy = :strict,
+        construction_policy = :standard,
         source = preparation.source,
         sewing_backend = STAR_GAUGE_W.AugmentationAwareSewing(),
         wavefunction_gauge_backend = STAR_GAUGE_W.StarCovariantPAWGauge(
@@ -310,7 +317,7 @@ end
         invalid_authority,
     )
     selected_config = STAR_GAUGE_W.SymmetryCovariantWavefunctionPreparationConfig(
-        construction_policy = :strict,
+        construction_policy = :standard,
         source = preparation.source,
         output_hdf5 = "selected.h5",
         target_band_count = 1,
@@ -321,7 +328,7 @@ end
     ) === nothing
     @test_throws ArgumentError STAR_GAUGE_W._validate_symmetry_covariant_wavefunction_preparation_config(
         STAR_GAUGE_W.SymmetryCovariantWavefunctionPreparationConfig(
-            construction_policy = :strict,
+            construction_policy = :standard,
             source = preparation.source,
             output_hdf5 = "ambiguous-selected.h5",
             target_band_count = 1,
@@ -331,7 +338,7 @@ end
     )
     @test_throws ArgumentError STAR_GAUGE_W._validate_symmetry_covariant_wavefunction_preparation_config(
         STAR_GAUGE_W.SymmetryCovariantWavefunctionPreparationConfig(
-            construction_policy = :strict,
+            construction_policy = :standard,
             source = preparation.source,
             output_hdf5 = "unsorted-selected.h5",
             target_band_count = 1,
@@ -347,7 +354,7 @@ end
     scoped_contract =
         star_gauge_target_contract(preparation.source; scoped_paw_thresholds = scoped_thresholds)
     scoped_config = STAR_GAUGE_W.SymmetryCovariantWavefunctionPreparationConfig(
-        construction_policy = :strict,
+        construction_policy = :standard,
         source = preparation.source,
         wavefunction_gauge_backend = scoped_gauge,
         authoritative_hamiltonian = STAR_GAUGE_W.SymmetrizedDFTHamiltonian(),
@@ -360,7 +367,7 @@ end
     ) === nothing
     @test_throws ArgumentError STAR_GAUGE_W._validate_symmetry_covariant_wavefunction_preparation_config(
         STAR_GAUGE_W.SymmetryCovariantWavefunctionPreparationConfig(
-            construction_policy = :strict,
+            construction_policy = :standard,
             source = preparation.source,
             wavefunction_gauge_backend = controlled,
             authoritative_hamiltonian = STAR_GAUGE_W.SymmetrizedDFTHamiltonian(),
@@ -374,7 +381,7 @@ end
         star_gauge_target_contract(preparation.source; scoped_paw_thresholds = leakage_thresholds)
     @test_throws ArgumentError STAR_GAUGE_W._validate_symmetry_covariant_wavefunction_preparation_config(
         STAR_GAUGE_W.SymmetryCovariantWavefunctionPreparationConfig(
-            construction_policy = :strict,
+            construction_policy = :standard,
             source = preparation.source,
             wavefunction_gauge_backend = STAR_GAUGE_W.StarCovariantPAWGauge(
                 thresholds = leakage_thresholds,
@@ -405,7 +412,11 @@ end
         false false
     ])
     contract = STAR_GAUGE_W.TargetSubspaceQualificationContract(
-        WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(outer, frozen);
+        WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
+            outer,
+            frozen;
+            content_authentication = false,
+        );
         outer_min_ev = -18.0,
         outer_max_ev = 3.5,
         frozen_min_ev = -18.0,
@@ -420,7 +431,8 @@ end
     mismatched_contract = STAR_GAUGE_W.TargetSubspaceQualificationContract(
         WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
             mismatched_outer,
-            frozen,
+            frozen;
+            content_authentication = false,
         );
         outer_min_ev = -18.0,
         outer_max_ev = 3.5,
@@ -588,7 +600,7 @@ end
     @test gamma_analytic.theta_squared <= 1.0e-10
     @test gamma_analytic.kramers <= 1.0e-10
     @test gamma_analytic.required_block_unitarity <= 1.0e-10
-    @test occursin(r"^[0-9a-f]{64}$", gamma_analytic.representation_sha256)
+    @test all(isfinite, gamma_analytic.group_law_channels)
 
     dense = reshape(
         ComplexF64.(sin.(collect(1:(gamma_dimension ^ 2)))),
@@ -703,46 +715,55 @@ end
 
     grossly_inconsistent = Dict(key => copy(value) for (key, value) in gamma_raw_actions)
     grossly_inconsistent[(1, 2)] *= cis(1.0e-3)
-    raw_group_error = try
-        Base.invokelatest(
-            extension._star_project_formal_target_actions,
-            grossly_inconsistent,
-            gamma_native,
-            [1],
-            gamma_operations,
-            gamma_kpoint_map;
-            raw_group_tolerance = 2.0e-5,
-            formal_tolerance = 1.0e-12,
-            correction_tolerance = 5.0e-6,
-        )
-        nothing
-    catch error
-        error
-    end
-    @test raw_group_error isa ArgumentError
-    @test occursin("FORMAL_TARGET_RAW_GROUP_LAW_HOLD", sprint(showerror, raw_group_error))
-    correction_error = try
-        Base.invokelatest(
-            extension._star_project_formal_target_actions,
-            gamma_raw_actions,
-            gamma_native,
-            [1],
-            gamma_operations,
-            gamma_kpoint_map;
-            raw_group_tolerance = 2.0e-5,
-            formal_tolerance = 1.0e-12,
-            correction_tolerance = 1.0e-14,
-        )
-        nothing
-    catch error
-        error
-    end
-    @test correction_error isa ArgumentError
-    @test occursin("FORMAL_TARGET_ACTION_CORRECTION_HOLD", sprint(showerror, correction_error))
-    @test Base.invokelatest(extension._star_root_cause, raw_group_error) ==
-          :FORMAL_TARGET_RAW_GROUP_LAW_HOLD
-    @test Base.invokelatest(extension._star_root_cause, correction_error) ==
-          :FORMAL_TARGET_ACTION_CORRECTION_HOLD
+    raw_group_formal = Base.invokelatest(
+        extension._star_project_formal_target_actions,
+        grossly_inconsistent,
+        gamma_native,
+        [1],
+        gamma_operations,
+        gamma_kpoint_map;
+        raw_group_tolerance = 2.0e-5,
+        formal_tolerance = 1.0e-12,
+        correction_tolerance = 5.0e-6,
+    )
+    @test raw_group_formal.initial.maximum > 2.0e-5
+    @test raw_group_formal.correction > 5.0e-6
+    @test all(matrix -> all(isfinite, matrix), values(raw_group_formal.actions))
+    correction_formal = Base.invokelatest(
+        extension._star_project_formal_target_actions,
+        gamma_raw_actions,
+        gamma_native,
+        [1],
+        gamma_operations,
+        gamma_kpoint_map;
+        raw_group_tolerance = 2.0e-5,
+        formal_tolerance = 1.0e-12,
+        correction_tolerance = 1.0e-14,
+    )
+    @test correction_formal.correction > 1.0e-14
+    @test isfinite(correction_formal.residual.maximum)
+    # Historical error translation remains readable without vetoing a new finite result.
+    @test Base.invokelatest(
+        extension._star_root_cause,
+        ArgumentError("FORMAL_TARGET_RAW_GROUP_LAW_HOLD"),
+    ) == :FORMAL_TARGET_RAW_GROUP_LAW_HOLD
+    @test Base.invokelatest(
+        extension._star_root_cause,
+        ArgumentError("FORMAL_TARGET_ACTION_CORRECTION_HOLD"),
+    ) == :FORMAL_TARGET_ACTION_CORRECTION_HOLD
+    nonfinite_actions = deepcopy(grossly_inconsistent)
+    nonfinite_actions[(1, 2)][1, 1] = NaN
+    @test_throws ArgumentError Base.invokelatest(
+        extension._star_project_formal_target_actions,
+        nonfinite_actions,
+        gamma_native,
+        [1],
+        gamma_operations,
+        gamma_kpoint_map;
+        raw_group_tolerance = 2.0e-5,
+        formal_tolerance = 1.0e-12,
+        correction_tolerance = 5.0e-6,
+    )
 end
 
 @testset "Hamiltonian covariance source-target argument order" begin
@@ -815,13 +836,16 @@ end
     coupled = copy(hamiltonian)
     coupled[1, 3] = coupled[3, 1] = 5.1e-6
     coupled_context = merge(context, (hamiltonian_average = coupled,))
-    @test_throws ArgumentError Base.invokelatest(
+    coupled_completion = Base.invokelatest(
         extension._star_frozen_target_complement_eigenpair,
         target_values,
         target_vectors,
         coupled_context,
         authority,
     )
+    @test coupled_completion.vectors[:, 1:2] == target_vectors
+    @test coupled_completion.values[1:2] == target_values
+    @test coupled_completion.maxima["target_complement_maximum_element_ev"] ≈ 5.1e-6
 end
 
 @testset "symmetrized target eigenpair ignores parent partitions" begin
@@ -1356,7 +1380,7 @@ end
         @test result.violation_count == 0
         @test isfile(hdf5) && isfile(csv) && isfile(json)
         HDF5.h5open(hdf5, "r") do handle
-            @test String(read(HDF5.attributes(handle)["schema_version"])) == "1.0"
+            @test String(read(HDF5.attributes(handle)["schema_version"])) == "2.0"
             @test read(HDF5.attributes(handle)["production_eligible"]) == false
             @test length(read(handle["evidence/paw"])) == 0
             @test length(read(handle["fixed_gap_scan/cap_ev"])) == 6
@@ -1478,97 +1502,9 @@ end
     @test anti_metrics.residual ≈ target_h * sewing - sewing * conj(source_h)
 end
 
-@testset "input-symmetry audit is identity-bound and fail-closed" begin
-    extension =
-        first(STAR_GAUGE_W._load_wannierization_extension!()).PAWMatrixElements.PAWMatrixElements
-    mktempdir() do directory
-        component_payloads = Dict(
-            "smooth_density" => Dict(
-                "schema" => "fixture.smooth-density-audit",
-                "schema_version" => "1.0",
-                "status" => "PASS",
-                "operation_count" => 32,
-                "maximum_relative_residual" => 2.0e-14,
-            ),
-            "paw_onsite" => Dict(
-                "schema" => "fixture.paw-onsite-audit",
-                "schema_version" => "1.0",
-                "status" => "PASS",
-                "operation_count" => 32,
-                "maximum_component_relative_residual" => 3.0e-14,
-            ),
-        )
-        residual_fields = Dict(
-            "smooth_density" => "maximum_relative_residual",
-            "paw_onsite" => "maximum_component_relative_residual",
-        )
-        records = Dict{String, Any}[]
-        for kind in ("smooth_density", "paw_onsite")
-            path = joinpath(directory, "$(kind).json")
-            write(path, JSON3.write(component_payloads[kind]))
-            push!(
-                records,
-                Dict(
-                    "kind" => kind,
-                    "path" => basename(path),
-                    "sha256" => star_gauge_test_file_sha256(path),
-                    "schema" => component_payloads[kind]["schema"],
-                    "residual_field" => residual_fields[kind],
-                    "maximum_residual" => component_payloads[kind][residual_fields[kind]],
-                ),
-            )
-        end
-        source_hashes =
-            Dict("data-file-schema.xml" => repeat("1", 64), "wfc1.hdf5" => repeat("2", 64))
-        manifest = Dict(
-            "schema" => "wanniernlqg.input-symmetry-audit-manifest",
-            "schema_version" => "1.0",
-            "status" => "PASS",
-            "operation_count" => 32,
-            "maximum_residual" => 3.0e-14,
-            "qualification_threshold" => 5.0e-6,
-            "source_input_sha256" =>
-                Base.invokelatest(extension._star_input_identity_sha256, source_hashes),
-            "component_audits" => records,
-        )
-        manifest_path = joinpath(directory, "input-audit-manifest.json")
-        write(manifest_path, JSON3.write(manifest))
-        config = STAR_GAUGE_W.SymmetryCovariantWavefunctionPreparationConfig(
-            construction_policy = :strict,
-            source = WannierNLQG.SymmetryFoundation.QuantumEspressoWavefunctionSource(
-                "fixture.save";
-                band_range = 1:1,
-            ),
-            output_hdf5 = joinpath(directory, "gauge.h5"),
-            input_symmetry_audit_json = manifest_path,
-        )
-        hashes = Base.invokelatest(extension._star_input_audit_hash, config, source_hashes, 32)
-        @test hashes["INPUT_SYMMETRY_AUDIT_JSON"] == star_gauge_test_file_sha256(manifest_path)
-        @test Set(keys(hashes)) == Set((
-            "INPUT_SYMMETRY_AUDIT_JSON",
-            "INPUT_SYMMETRY_SOURCE_SHA256",
-            "INPUT_SYMMETRY_COMPONENT:smooth_density",
-            "INPUT_SYMMETRY_COMPONENT:paw_onsite",
-        ))
+include("wannierization_source_audit_definition_unit.jl")
 
-        wrong_source = copy(source_hashes)
-        wrong_source["wfc1.hdf5"] = repeat("3", 64)
-        @test_throws ArgumentError Base.invokelatest(
-            extension._star_input_audit_hash,
-            config,
-            wrong_source,
-            32,
-        )
-        @test_throws ArgumentError Base.invokelatest(
-            extension._star_input_audit_hash,
-            config,
-            source_hashes,
-            31,
-        )
-    end
-end
-
-@testset "artificial VASP shared gauge capsule readback" begin
+@testset "artificial VASP capsule rejection and numerical metric readback" begin
     extension =
         first(STAR_GAUGE_W._load_wannierization_extension!()).PAWMatrixElements.PAWMatrixElements
     structure = WannierNLQG.SymmetryFoundation.CrystalStructure(
@@ -1635,8 +1571,10 @@ end
         native.source_metadata,
     )
     mktempdir() do directory
+        # This intentionally artificial object has neither original VASP input
+        # nor a physical replay frame. It must not become a current capsule.
         filename = joinpath(directory, "vasp-star-gauge.h5")
-        Base.invokelatest(
+        @test_throws ArgumentError Base.invokelatest(
             extension._write_star_covariant_paw_gauge_hdf5,
             filename,
             payload;
@@ -1644,14 +1582,35 @@ end
             root_cause = :GAUGE_COVARIANCE_PRIMARY_CAUSE_SUPPORTED,
             schema_version = "1.10",
         )
-        restored = Base.invokelatest(extension._read_star_covariant_paw_gauge_hdf5, filename)
-        @test restored.payload.native.source_code == :vasp
-        @test restored.payload.metric isa extension._VASPStrictSewingMetric
-        @test Base.invokelatest(
-            extension._star_payload_sha256,
-            restored.payload;
-            schema_version = "1.10",
-        ) == Base.invokelatest(extension._star_payload_sha256, payload; schema_version = "1.10")
+        @test !isfile(filename)
+        @test_throws ArgumentError Base.invokelatest(
+            extension._write_star_covariant_paw_gauge_hdf5,
+            filename,
+            payload;
+            status = :PASS,
+            root_cause = :GAUGE_COVARIANCE_PRIMARY_CAUSE_SUPPORTED,
+        )
+        @test !isfile(filename)
+        # Positive, independent numerical coverage of the self-contained VASP
+        # q=0 metric remains valid without pretending to replay a VASP source.
+        metric_file=joinpath(directory, "vasp-metric.h5")
+        HDF5.h5open(metric_file, "w") do handle
+            Base.invokelatest(extension._star_write_metric, handle, metric)
+        end
+        restored_metric=HDF5.h5open(metric_file, "r") do handle
+            Base.invokelatest(extension._star_read_vasp_metric, handle, native)
+        end
+        @test restored_metric isa extension._VASPStrictSewingMetric
+        @test restored_metric.paw.q0_augmentation == zeros(1, 1)
+        @test restored_metric.projector_bases == [zeros(ComplexF64, 1, 1)]
+        @test restored_metric.projectors == [zeros(ComplexF64, 1, 1, 1)]
+        HDF5.h5open(metric_file, "r+") do handle
+            HDF5.delete_object(handle, "q0_augmentation")
+            handle["q0_augmentation"]=zeros(2, 2)
+        end
+        @test_throws ArgumentError HDF5.h5open(metric_file, "r") do handle
+            Base.invokelatest(extension._star_read_vasp_metric, handle, native)
+        end
     end
 end
 
@@ -1674,21 +1633,17 @@ end
 
     open_raw = copy(raw)
     open_raw[4, 3] = 2.0e-3
-    error_value = try
-        Base.invokelatest(
-            extension._star_select_buffer,
-            [open_raw],
-            [-0.02, 0.0, 0.01, 0.03],
-            2:3,
-            STAR_GAUGE_W.ClosureDrivenBandBuffer(max_extra_bands = 1),
-            5.0e-6,
-        )
-        nothing
-    catch error
-        error
-    end
-    @test error_value isa ArgumentError
-    @test occursin("FINITE_BUFFER_HOLD", sprint(showerror, error_value))
+    retained_buffer, retained_leakage = Base.invokelatest(
+        extension._star_select_buffer,
+        [open_raw],
+        [-0.02, 0.0, 0.01, 0.03],
+        2:3,
+        STAR_GAUGE_W.ClosureDrivenBandBuffer(max_extra_bands = 1),
+        5.0e-6,
+    )
+    @test retained_buffer == 2:4
+    @test retained_leakage ≈ 1.0e-3
+    @test retained_leakage > 5.0e-6
 
     distant = Matrix{ComplexF64}(I, 2, 2)
     distant[1, 2] = 1.0e-3
@@ -1917,7 +1872,7 @@ end
         gauge_hdf5 = joinpath(directory, "star_gauge.h5")
         result = STAR_GAUGE_W.prepare_symmetry_covariant_wavefunctions(
             STAR_GAUGE_W.SymmetryCovariantWavefunctionPreparationConfig(
-                construction_policy = :strict,
+                construction_policy = :standard,
                 source = source,
                 wavefunction_gauge_backend = STAR_GAUGE_W.StarCovariantPAWGauge(
                     buffer_policy = STAR_GAUGE_W.ClosureDrivenBandBuffer(max_extra_bands = 0),
@@ -1926,15 +1881,27 @@ end
                 target_band_count = 1,
             ),
         )
-        @test result.status == :PASS
+        @test result.status == :STANDARD
+        gauge_hdf5 = something(result.output_hdf5)
         @test result.root_cause == :GAUGE_COVARIANCE_PRIMARY_CAUSE_SUPPORTED
         @test isfile(gauge_hdf5)
         @test isfile(splitext(gauge_hdf5)[1] * ".eig")
-        restored = Base.invokelatest(extension._read_star_covariant_paw_gauge_hdf5, gauge_hdf5)
+        restored = Base.invokelatest(
+            extension._read_star_covariant_paw_gauge_hdf5,
+            gauge_hdf5;
+            require_pass = false,
+        )
         HDF5.h5open(gauge_hdf5, "r") do handle
-            @test String(read(HDF5.attributes(handle)["schema_version"])) == "1.0"
+            @test String(read(HDF5.attributes(handle)["schema_version"])) == "2.0"
             @test String(read(HDF5.attributes(handle)["block_partition_policy"])) == "fixed_gap"
-            @test String(read(HDF5.attributes(handle)["band_frame_contract_status"])) == "PASS"
+            @test !haskey(HDF5.attributes(handle), "band_frame_contract_status")
+            @test parse(
+                Float64,
+                String(read(HDF5.attributes(handle)["band_frame_physical_isometry_maximum"])),
+            ) <= parse(
+                Float64,
+                String(read(HDF5.attributes(handle)["band_frame_physical_isometry_tolerance"])),
+            )
         end
         @test restored.band_frame_contract !== nothing
         @test something(restored.band_frame_contract).status == "PASS"
@@ -1949,6 +1916,7 @@ end
 
         tampered_frame_evidence = joinpath(directory, "tampered-band-frame-evidence.h5")
         cp(gauge_hdf5, tampered_frame_evidence)
+        chmod(tampered_frame_evidence, 0o600)
         HDF5.h5open(tampered_frame_evidence, "r+") do handle
             attributes = HDF5.attributes(handle)
             HDF5.delete_attribute(handle, "band_frame_replay_maximum")
@@ -1956,14 +1924,15 @@ end
         end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
-            tampered_frame_evidence,
+            tampered_frame_evidence;
+            require_pass = false,
         )
 
         weighted_hdf5 = joinpath(directory, "weighted_star_gauge.h5")
         weighted_progress = joinpath(directory, "weighted_star_progress.jsonl")
         weighted_result = STAR_GAUGE_W.prepare_symmetry_covariant_wavefunctions(
             STAR_GAUGE_W.SymmetryCovariantWavefunctionPreparationConfig(
-                construction_policy = :strict,
+                construction_policy = :standard,
                 source = source,
                 wavefunction_gauge_backend = STAR_GAUGE_W.StarCovariantPAWGauge(
                     buffer_policy = STAR_GAUGE_W.ClosureDrivenBandBuffer(max_extra_bands = 0),
@@ -1974,9 +1943,13 @@ end
                 preflight_diagnostics_jsonl = weighted_progress,
             ),
         )
-        @test weighted_result.status == :PASS
-        weighted_restored =
-            Base.invokelatest(extension._read_star_covariant_paw_gauge_hdf5, weighted_hdf5)
+        @test weighted_result.status == :STANDARD
+        weighted_hdf5 = something(weighted_result.output_hdf5)
+        weighted_restored = Base.invokelatest(
+            extension._read_star_covariant_paw_gauge_hdf5,
+            weighted_hdf5;
+            require_pass = false,
+        )
         @test weighted_restored.payload.source_metadata["block_partition_policy"] ==
               "hamiltonian_weighted_far_band"
         progress_records = [
@@ -1985,26 +1958,27 @@ end
         ]
         @test length(progress_records) == 2
         star_record =
-            only(filter(record -> record["stage"] == "POST_GAUGE_STAR_PASS", progress_records))
+            only(filter(record -> record["stage"] == "POST_GAUGE_STAR_COMPLETED", progress_records))
         full_record = only(
             filter(
                 record -> record["stage"] == "FULL_STRICT_REPRESENTATION_PASS",
                 progress_records,
             ),
         )
-        @test star_record["status"] == "PASS"
+        @test star_record["status"] == "STANDARD"
         @test star_record["pre_gauge_far_cumulative_status"] == "PASS"
         @test haskey(star_record, "post_gauge_maxima")
         @test haskey(star_record["post_gauge_maxima"], "star1_strict_raw_group_law")
         @test haskey(star_record["post_gauge_maxima"], "star1_strict_raw_cocycle")
-        @test full_record["status"] == "PASS"
+        @test full_record["status"] == "STANDARD"
         HDF5.h5open(weighted_hdf5, "r") do handle
-            @test String(read(HDF5.attributes(handle)["schema_version"])) == "1.0"
+            @test String(read(HDF5.attributes(handle)["schema_version"])) == "2.0"
             @test String(read(HDF5.attributes(handle)["block_partition_policy"])) ==
                   "hamiltonian_weighted_far_band"
         end
         tampered_block_policy = joinpath(directory, "tampered-block-policy.h5")
         cp(weighted_hdf5, tampered_block_policy)
+        chmod(tampered_block_policy, 0o600)
         HDF5.h5open(tampered_block_policy, "r+") do handle
             attributes = HDF5.attributes(handle)
             HDF5.delete_attribute(handle, "block_partition_policy")
@@ -2012,7 +1986,8 @@ end
         end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
-            tampered_block_policy,
+            tampered_block_policy;
+            require_pass = false,
         )
 
         symmetrized_hdf5 = joinpath(directory, "symmetrized_dft_hamiltonian.h5")
@@ -2025,7 +2000,7 @@ end
         )
         symmetrized_result = STAR_GAUGE_W.prepare_symmetry_covariant_wavefunctions(
             STAR_GAUGE_W.SymmetryCovariantWavefunctionPreparationConfig(
-                construction_policy = :strict,
+                construction_policy = :standard,
                 source = source,
                 wavefunction_gauge_backend = symmetrized_gauge_backend,
                 authoritative_hamiltonian = STAR_GAUGE_W.SymmetrizedDFTHamiltonian(),
@@ -2034,33 +2009,42 @@ end
                 target_band_count = 1,
             ),
         )
-        @test symmetrized_result.status == :PASS
+        @test symmetrized_result.status == :STANDARD
+        symmetrized_hdf5 = something(symmetrized_result.output_hdf5)
         @test symmetrized_result.root_cause == :SYMMETRIZED_DFT_HAMILTONIAN_PASS
         @test symmetrized_result.authoritative_hamiltonian == "symmetrized_dft_hamiltonian"
-        @test symmetrized_result.scoped_production_eligible
+        @test !symmetrized_result.scoped_production_eligible
         @test !symmetrized_result.global_production_eligible
-        @test symmetrized_result.symmetrized_hamiltonian_status == :SYMMETRIZED_DFT_HAMILTONIAN_PASS
+        @test symmetrized_result.symmetrized_hamiltonian_status ==
+              :SYMMETRIZED_DFT_HAMILTONIAN_COMPUTATION_READY
         @test symmetrized_result.symmetrized_target_subspace_status ==
-              :SYMMETRIZED_DFT_HAMILTONIAN_PASS
+              :SYMMETRIZED_DFT_HAMILTONIAN_COMPUTATION_READY
         @test haskey(symmetrized_result.maxima, "pre_symmetrization_raw_group_law")
         @test haskey(symmetrized_result.maxima, "pre_symmetrization_raw_cocycle")
         @test haskey(symmetrized_result.maxima, "pre_symmetrization_pseudo_component_maximum")
-        symmetrized_auto_restored =
-            Base.invokelatest(extension._read_star_covariant_paw_gauge_hdf5, symmetrized_hdf5)
+        symmetrized_auto_restored = Base.invokelatest(
+            extension._read_star_covariant_paw_gauge_hdf5,
+            symmetrized_hdf5;
+            require_pass = false,
+        )
         symmetrized_restored = Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             symmetrized_hdf5;
+            require_pass = false,
             source,
         )
         @test Base.invokelatest(
-            extension._star_payload_sha256,
+            CurrentScientificValues.payload_values,
             symmetrized_auto_restored.payload,
-        ) == Base.invokelatest(extension._star_payload_sha256, symmetrized_restored.payload)
+        ) == Base.invokelatest(
+            CurrentScientificValues.payload_values,
+            symmetrized_restored.payload,
+        )
         @test symmetrized_restored.payload.symmetrized_hamiltonian_audit !== nothing
         @test symmetrized_restored.payload.sealed_completed_frame_corrections === nothing
         HDF5.h5open(symmetrized_hdf5, "r") do handle
             attributes = HDF5.attributes(handle)
-            @test String(read(attributes["schema_version"])) == "1.0"
+            @test String(read(attributes["schema_version"])) == "2.0"
             @test String(read(attributes["authoritative_hamiltonian"])) ==
                   "symmetrized_dft_hamiltonian"
             @test String(read(attributes["energy_shift_qualification"])) == "audit_only"
@@ -2074,8 +2058,8 @@ end
             ) == 5.0e-6
             @test parse(Float64, String(read(attributes["rms_energy_shift_audit_reference_ev"]))) ==
                   1.0e-6
-            @test Bool(read(attributes["scoped_production_eligible"]))
-            @test !Bool(read(attributes["global_production_eligible"]))
+            @test !haskey(attributes, "scoped_production_eligible")
+            @test !haskey(attributes, "global_production_eligible")
             @test haskey(handle, "symmetrized_hamiltonian_audit")
             audit = handle["symmetrized_hamiltonian_audit"]
             @test haskey(audit, "target_energy_shifts_by_star_ev")
@@ -2115,7 +2099,7 @@ end
         )
         native_target_result = STAR_GAUGE_W.prepare_symmetry_covariant_wavefunctions(
             STAR_GAUGE_W.SymmetryCovariantWavefunctionPreparationConfig(
-                construction_policy = :strict,
+                construction_policy = :standard,
                 source = source,
                 wavefunction_gauge_backend = native_target_backend,
                 authoritative_hamiltonian = STAR_GAUGE_W.NativeDFTHamiltonian(),
@@ -2124,15 +2108,16 @@ end
                 target_band_count = 1,
             ),
         )
-        @test native_target_result.status == :PASS
+        @test native_target_result.status == :STANDARD
+        native_target_hdf5 = something(native_target_result.output_hdf5)
         @test native_target_result.authoritative_hamiltonian == "native_dft"
-        @test native_target_result.target_scope_production_eligible
-        @test native_target_result.scoped_production_eligible
+        @test !native_target_result.target_scope_production_eligible
+        @test !native_target_result.scoped_production_eligible
         @test !native_target_result.global_production_eligible
         native_target_representation_hdf5 = joinpath(directory, "native-target-representation.h5")
         native_target_prepared = STAR_GAUGE_W.prepare_band_representation(
             STAR_GAUGE_W.BandRepresentationPreparationConfig(
-                construction_policy = :strict,
+                construction_policy = :standard,
                 wannierization_mode = :symmetry_adapted,
                 source = source,
                 sewing_backend = STAR_GAUGE_W.AugmentationAwareSewing(),
@@ -2152,23 +2137,51 @@ end
             ),
         )
         native_target_representation = native_target_prepared.representation
+        @test haskey(native_target_representation.input_definitions, "wavefunction_gauge")
+        @test WannierNLQG.IO.validate_scientific_source_collection(
+            Dict("GAUGE"=>abspath(native_target_hdf5)),
+            native_target_representation.input_definitions["wavefunction_gauge"],
+        ) === nothing
+        native_target_readback=WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(
+            native_target_representation_hdf5;
+            content_authentication = false,
+        )
+        @test haskey(native_target_readback.input_definitions, "wavefunction_gauge")
+        @test WannierNLQG.IO.validate_scientific_source_collection(
+            Dict("GAUGE"=>abspath(native_target_hdf5)),
+            native_target_readback.input_definitions["wavefunction_gauge"],
+        ) === nothing
         @test native_target_representation.schema_version == "1.0"
         @test native_target_representation.conventions["authoritative_hamiltonian"] == "native_dft"
         @test native_target_representation.conventions["qualification_scope"] == "target_subspace"
         @test native_target_representation.conventions["target_authority"] == "outer_window"
         @test native_target_representation.conventions["parent_audit_policy"] == "audit_only"
         @test occursin(
-            r"^[0-9a-f]{64}$",
-            native_target_representation.conventions["target_subspace_contract_sha256"],
+            r"^[0-9a-f]+$",
+            native_target_representation.conventions["target_subspace_contract_definition"],
         )
         @test Base.invokelatest(
             STAR_GAUGE_W._representation_target_subspace_contract,
             native_target_representation,
         ).active
+        # The matrix-parity fixture's original NNKP has only a zero-b link;
+        # it is not a solver stencil. Generate the solver-only six Cartesian
+        # links from the same physical source instead of inventing MMN values.
+        solver_nnkp=joinpath(directory, "native-target-solver.nnkp")
+        shifts=((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
+        nk=size(native_target_representation.kpoints_fractional, 1)
+        rows=join(["$k $k $(g[1]) $(g[2]) $(g[3])" for k in 1:nk for g in shifts], "\n")
+        original_nnkp=read(fixture.nnkp_file, String)
+        solver_nnkp_text=replace(
+            original_nnkp,
+            r"(?s)begin nnkpts.*?end nnkpts"=>"begin nnkpts\n6\n"*rows*"\nend nnkpts",
+        )
+        @test solver_nnkp_text != original_nnkp
+        write(solver_nnkp, solver_nnkp_text)
         native_target_matrices = STAR_GAUGE_W.generate_symmetry_completed_qe_paw_matrix_elements(
             source,
             native_target_hdf5,
-            fixture.nnkp_file;
+            solver_nnkp;
             artifact_dir = joinpath(directory, "native-target-matrices"),
         )
         @test native_target_matrices.passed
@@ -2185,10 +2198,10 @@ end
             @test haskey(handle["direct_vs_rotation"], "parent_mmn")
             @test haskey(handle["direct_vs_rotation"], "parent_amn")
         end
-        native_target_solver_result = STAR_GAUGE_W.construct_symmetry_adapted_wannier_functions(
-            STAR_GAUGE_W.SymmetryAdaptedWannierizationConfig(
+        native_target_solver_result = STAR_GAUGE_W.construct_wannier_functions(
+            STAR_GAUGE_W.WannierizationConfig(
                 input = STAR_GAUGE_W.WannierizationInputConfig(
-                    construction_policy = :strict,
+                    construction_policy = :standard,
                     wannierization_mode = :symmetry_adapted,
                     source = source,
                     sewing_backend = STAR_GAUGE_W.AugmentationAwareSewing(),
@@ -2199,7 +2212,7 @@ end
                     eig_file = splitext(native_target_hdf5)[1] * ".eig",
                     mmn_file = native_target_matrices.artifacts["mmn"],
                     amn_file = native_target_matrices.artifacts["amn"],
-                    matrix_elements = STAR_GAUGE_W.ExternalWannier90Matrices(
+                    matrix_elements = STAR_GAUGE_W.ExternalOverlapProjectionMatrices(
                         native_target_matrices.artifacts["mmn"],
                         native_target_matrices.artifacts["amn"],
                     ),
@@ -2217,32 +2230,41 @@ end
                         disentanglement_max_steps = 1,
                         localization_max_steps = 1,
                     ),
-                    max_iterations = 2,
-                    localize = false,
+                    stage_controls = STAR_GAUGE_W.WannierizationStageControls(
+                        dis_num_iter = 1,
+                        num_iter = 0,
+                    ),
                 ),
                 checkpoint = STAR_GAUGE_W.WannierizationCheckpointConfig(),
                 runtime = STAR_GAUGE_W.WannierizationRuntimeConfig(),
                 output = STAR_GAUGE_W.WannierizationOutputConfig(tb_output_formats = ()),
             ),
         )
+        println("NATIVE_TARGET_SOLVER_STATUS ", native_target_solver_result.status)
+        for diagnostic in native_target_solver_result.diagnostics
+            println("NATIVE_TARGET_SOLVER_DIAGNOSTIC ", repr(diagnostic))
+        end
+        flush(stdout)
+        @test native_target_solver_result.status != STAR_GAUGE_W.INVALID_INPUT
+        @test native_target_solver_result.status != STAR_GAUGE_W.IO_FAILURE
         native_target_summary = native_target_solver_result.input_summary
         @test native_target_summary["authoritative_hamiltonian"] == "native_dft"
         @test native_target_summary["qualification_scope"] == "target_subspace"
         @test native_target_summary["target_authority"] == "outer_window"
         @test native_target_summary["parent_audit_policy"] == "audit_only"
-        @test native_target_summary["target_subspace_contract_sha256"] ==
-              native_target_representation.conventions["target_subspace_contract_sha256"]
-        @test native_target_summary["disentanglement_outer_mask_sha256"] ==
-              native_target_prepared.qualification_scope.outer_mask_sha256
-        @test native_target_summary["disentanglement_frozen_mask_sha256"] ==
-              native_target_prepared.qualification_scope.frozen_mask_sha256
+        @test native_target_summary["target_subspace_contract_definition"] ==
+              native_target_representation.conventions["target_subspace_contract_definition"]
+        @test native_target_summary["disentanglement_outer_mask_definition"] ==
+              native_target_prepared.qualification_scope.outer_mask_definition
+        @test native_target_summary["disentanglement_frozen_mask_definition"] ==
+              native_target_prepared.qualification_scope.frozen_mask_definition
         @test native_target_summary["auxiliary_parent_qualification"] == "audit_only"
         @test native_target_summary["global_production_eligible"] == "false"
 
         symmetrized_representation_hdf5 = joinpath(directory, "symmetrized-representation.h5")
         symmetrized_prepared = STAR_GAUGE_W.prepare_band_representation(
             STAR_GAUGE_W.BandRepresentationPreparationConfig(
-                construction_policy = :strict,
+                construction_policy = :standard,
                 wannierization_mode = :symmetry_adapted,
                 source = source,
                 sewing_backend = STAR_GAUGE_W.AugmentationAwareSewing(),
@@ -2285,13 +2307,13 @@ end
         )
         @test occursin(r"SYMMETRIZED_DFT_HAMILTONIAN_FRESH_READ_DIGEST=[0-9a-f]{64}", fresh_output)
         symmetrized_payload_sha256 =
-            Base.invokelatest(extension._star_payload_sha256, symmetrized_restored.payload)
+            Base.invokelatest(CurrentScientificValues.payload_values, symmetrized_restored.payload)
         @test occursin(
-            "SYMMETRIZED_DFT_HAMILTONIAN_FRESH_READ_PAYLOAD_SHA256=$(symmetrized_payload_sha256)",
+            "SYMMETRIZED_DFT_HAMILTONIAN_FRESH_READ_PAYLOAD_VALUES=$(symmetrized_payload_sha256)",
             fresh_output,
         )
         @test occursin(
-            "SYMMETRIZED_DFT_HAMILTONIAN_FRESH_READ_PAYLOAD_SHA256=$(symmetrized_payload_sha256)",
+            "SYMMETRIZED_DFT_HAMILTONIAN_FRESH_READ_PAYLOAD_VALUES=$(symmetrized_payload_sha256)",
             fresh_auto_output,
         )
 
@@ -2299,7 +2321,7 @@ end
         target_authority = STAR_GAUGE_W.SymmetrizedDFTHamiltonian()
         target_result = STAR_GAUGE_W.prepare_symmetry_covariant_wavefunctions(
             STAR_GAUGE_W.SymmetryCovariantWavefunctionPreparationConfig(
-                construction_policy = :strict,
+                construction_policy = :standard,
                 source = source,
                 wavefunction_gauge_backend = symmetrized_gauge_backend,
                 authoritative_hamiltonian = target_authority,
@@ -2308,20 +2330,31 @@ end
                 target_band_count = 1,
             ),
         )
-        @test target_result.status == :PASS
+        @test target_result.status == :STANDARD
+        target_hdf5 = something(target_result.output_hdf5)
         @test target_result.root_cause == :SYMMETRIZED_DFT_HAMILTONIAN_PASS
-        @test target_result.symmetrized_target_subspace_status == :SYMMETRIZED_DFT_HAMILTONIAN_PASS
-        @test target_result.target_scope_production_eligible
+        @test target_result.symmetrized_target_subspace_status ==
+              :SYMMETRIZED_DFT_HAMILTONIAN_COMPUTATION_READY
+        @test !target_result.target_scope_production_eligible
         @test !target_result.global_production_eligible
         @test target_result.maxima["target_anchor_wfc_maximum_drift"] == 0.0
         @test target_result.maxima["target_anchor_energy_maximum_drift_ev"] == 0.0
         @test target_result.maxima["target_complement_maximum_element_ev"] == 0.0
-        target_auto_restored =
-            Base.invokelatest(extension._read_star_covariant_paw_gauge_hdf5, target_hdf5)
-        target_restored =
-            Base.invokelatest(extension._read_star_covariant_paw_gauge_hdf5, target_hdf5; source)
-        @test Base.invokelatest(extension._star_payload_sha256, target_auto_restored.payload) ==
-              Base.invokelatest(extension._star_payload_sha256, target_restored.payload)
+        target_auto_restored = Base.invokelatest(
+            extension._read_star_covariant_paw_gauge_hdf5,
+            target_hdf5;
+            require_pass = false,
+        )
+        target_restored = Base.invokelatest(
+            extension._read_star_covariant_paw_gauge_hdf5,
+            target_hdf5;
+            source,
+            require_pass = false,
+        )
+        @test Base.invokelatest(
+            CurrentScientificValues.payload_values,
+            target_auto_restored.payload,
+        ) == Base.invokelatest(CurrentScientificValues.payload_values, target_restored.payload)
         generation_contract = Base.invokelatest(
             extension._generation_band_gauge_contract,
             source,
@@ -2330,11 +2363,13 @@ end
             size(target_restored.payload.rotations, 1),
             size(target_restored.payload.rotations, 3),
         )
-        @test generation_contract.rotations == target_restored.payload.rotations
-        @test generation_contract.transform_sha256 ==
-              Base.invokelatest(extension._star_array_sha256, target_restored.payload.rotations)
-        @test generation_contract.transform_sha256 ==
-              something(target_restored.band_frame_contract).transform_sha256
+        @test generation_contract.transforms == target_restored.payload.rotations
+        @test generation_contract.transform_definition == Base.invokelatest(
+            extension.band_frame_transform_definition,
+            target_restored.payload.rotations,
+        )
+        @test generation_contract.transform_definition ==
+              something(target_restored.band_frame_contract).transform_definition
         authority_contract = Base.invokelatest(
             extension._generation_band_gauge_contract,
             source,
@@ -2345,7 +2380,7 @@ end
         )
         authority_inputs = Dict{String, String}(
             "NATIVE_TO_SYMMETRIZED_ROTATIONS" => Base.invokelatest(
-                STAR_GAUGE_OPERATOR_EXPORT._authoritative_array_sha256,
+                CurrentScientificValues.value_definition,
                 something(symmetrized_restored.payload.symmetrized_hamiltonian_audit).native_to_symmetrized_rotations,
             ),
         )
@@ -2354,14 +2389,14 @@ end
             authority_inputs,
             symmetrized_restored,
         )
-        @test bound_contract.contract_sha256 == authority_contract.contract_sha256
-        @test authority_inputs["BAND_FRAME_TRANSFORM"] == authority_contract.transform_sha256
-        @test authority_inputs["BAND_FRAME_CONTRACT"] == authority_contract.contract_sha256
+        @test bound_contract.contract_definition == authority_contract.contract_definition
+        @test authority_inputs["BAND_FRAME_TRANSFORM"] == authority_contract.transform_definition
+        @test authority_inputs["BAND_FRAME_CONTRACT"] == authority_contract.contract_definition
         @test authority_inputs["NATIVE_TO_SYMMETRIZED_ROTATIONS"] !=
-              authority_contract.transform_sha256
+              authority_contract.transform_definition
         authority_matrices = reshape(ComplexF64[0.0], 1, 1, 1)
         authority_digest = Base.invokelatest(
-            STAR_GAUGE_OPERATOR_EXPORT._authoritative_band_hamiltonian_digest,
+            STAR_GAUGE_OPERATOR_EXPORT._authoritative_band_hamiltonian_definition,
             authority_matrices,
             "symmetrized_dft_hamiltonian",
             authority_inputs,
@@ -2373,7 +2408,7 @@ end
             authority_digest,
             authority_inputs,
             STAR_GAUGE_OPERATOR_EXPORT.AUTHORITATIVE_BAND_HAMILTONIAN_ALGORITHM_VERSION,
-            authority_contract.gauge_artifact_sha256,
+            authority_contract.gauge_definition,
             true,
         )
         @test isnothing(
@@ -2384,8 +2419,8 @@ end
             ),
         )
 
-        # The sealed representative is a byte-exact serialization authority, while the
-        # physical payload remains the tolerance-qualified local-source replay.
+        # Persisted representatives constrain the mathematical replay at the
+        # declared tolerance; they are not byte-exact content certificates.
         replay_payload = target_restored.payload
         representative = only(replay_payload.star_representatives)
         replay_point = replay_payload.native.kpoints[representative]
@@ -2428,17 +2463,20 @@ end
             extension._write_star_covariant_paw_gauge_hdf5,
             ulp_sealed_hdf5,
             sealed_payload;
-            status = :PASS,
+            status = :STANDARD,
+            ordinary_calculation = true,
             root_cause = :SYMMETRIZED_DFT_HAMILTONIAN_PASS,
             diagnostics = ["one-ULP sealed representative regression"],
         )
-        sealed_payload_sha256 = Base.invokelatest(extension._star_payload_sha256, sealed_payload)
+        sealed_payload_sha256 =
+            Base.invokelatest(CurrentScientificValues.payload_values, sealed_payload)
         HDF5.h5open(ulp_sealed_hdf5, "r") do handle
-            @test String(read(HDF5.attributes(handle)["payload_sha256"])) == sealed_payload_sha256
+            @test !haskey(HDF5.attributes(handle), "payload_sha256")
         end
         ulp_sealed_restored = Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             ulp_sealed_hdf5;
+            require_pass = false,
             source,
         )
         @test ulp_sealed_restored.payload.native.kpoints[representative].coefficients ==
@@ -2448,6 +2486,7 @@ end
 
         ulp_tampered_hdf5 = joinpath(directory, "target-representative-one-ulp-tampered.h5")
         cp(ulp_sealed_hdf5, ulp_tampered_hdf5)
+        chmod(ulp_tampered_hdf5, 0o600)
         representative_name = "kpoint_$(lpad(string(representative), 6, '0'))"
         HDF5.h5open(ulp_tampered_hdf5, "r+") do handle
             dataset = handle["representative_frames/$(representative_name)/coefficients"]
@@ -2455,35 +2494,81 @@ end
             value = values[coefficient_index]
             values[coefficient_index] = ComplexF64(nextfloat(real(value)), imag(value))
             write(dataset, values)
-            @test String(read(HDF5.attributes(handle)["payload_sha256"])) == sealed_payload_sha256
+            @test !haskey(HDF5.attributes(handle), "payload_sha256")
+        end
+        frame_tolerance =
+            target_restored.band_frame_contract === nothing ? reconstruction_threshold :
+            something(target_restored.band_frame_contract).replay_tolerance
+        persisted_difference = HDF5.h5open(ulp_tampered_hdf5, "r") do handle
+            maximum(
+                abs,
+                read(handle["representative_frames/$(representative_name)/coefficients"]) -
+                replay_point.coefficients,
+            )
+        end
+        @test 0 < persisted_difference <= frame_tolerance
+        ulp_observed = Base.invokelatest(
+            extension._read_star_covariant_paw_gauge_hdf5,
+            ulp_tampered_hdf5;
+            source,
+            require_pass = false,
+        )
+        @test ulp_observed.payload.native.kpoints[representative].coefficients ==
+              replay_point.coefficients
+        # The independent negative exceeds the same production replay threshold;
+        # it does not ask the removed payload digest to reject a tolerated ULP.
+        invalid_replay_hdf5 = joinpath(directory, "target-representative-replay-invalid.h5")
+        cp(ulp_sealed_hdf5, invalid_replay_hdf5)
+        HDF5.h5open(invalid_replay_hdf5, "r+") do handle
+            dataset = handle["representative_frames/$(representative_name)/coefficients"]
+            coefficients = read(dataset)
+            coefficients[coefficient_index] += 10 * frame_tolerance
+            write(dataset, coefficients)
+        end
+        HDF5.h5open(invalid_replay_hdf5, "r") do handle
+            difference = maximum(
+                abs,
+                read(handle["representative_frames/$(representative_name)/coefficients"]) -
+                replay_point.coefficients,
+            )
+            @test difference > frame_tolerance
         end
         tamper_error = try
-            Base.invokelatest(extension._read_star_covariant_paw_gauge_hdf5, ulp_tampered_hdf5; source)
+            Base.invokelatest(
+                extension._read_star_covariant_paw_gauge_hdf5,
+                invalid_replay_hdf5;
+                source,
+                require_pass = false,
+            )
             nothing
         catch error
             error
         end
         @test tamper_error isa ArgumentError
-        @test occursin(
-            "PAW_GAUGE_ARTIFACT_TAMPERED: logical payload digest differs",
-            sprint(showerror, tamper_error),
-        )
+        if tamper_error isa ArgumentError
+            @test occursin(
+                "local-source representative replay differs",
+                sprint(showerror, tamper_error),
+            )
+        end
 
         @test target_restored.payload.symmetrized_hamiltonian_audit !== nothing
         @test target_restored.payload.sealed_completed_frame_corrections === nothing
-        @test something(target_restored.payload.symmetrized_hamiltonian_audit).target_anchor_sha256_by_star !==
+        @test something(target_restored.payload.symmetrized_hamiltonian_audit).target_anchor_checked_by_star !==
               nothing
         HDF5.h5open(target_hdf5, "r") do handle
             attributes = HDF5.attributes(handle)
-            @test String(read(attributes["schema_version"])) == "1.0"
+            @test String(read(attributes["schema_version"])) == "2.0"
             @test String(read(attributes["authoritative_hamiltonian"])) ==
                   "symmetrized_dft_hamiltonian"
             @test String(read(attributes["qualification_scope"])) == "target_subspace"
             @test String(read(attributes["target_anchor"])) == "completed_symmetrized_target"
             @test String(read(attributes["auxiliary_parent_qualification"])) == "audit_only"
-            @test String(read(attributes["symmetrized_target_subspace_status"])) ==
-                  "SYMMETRIZED_DFT_HAMILTONIAN_PASS"
-            @test Bool(read(attributes["target_scope_production_eligible"]))
+            @test !haskey(attributes, "symmetrized_target_subspace_status")
+            @test haskey(handle["qualification_scope"], "outer_mask")
+            @test Bool.(read(handle["qualification_scope/outer_mask"])) ==
+                  something(target_restored.payload.qualification_scope).outer_mask
+            @test !haskey(attributes, "target_scope_production_eligible")
             @test String(read(attributes["nonrepresentative_frame_storage"])) ==
                   "local_native_source_plus_completed_rotation"
             @test !haskey(handle, "sealed_completed_frame_corrections")
@@ -2495,16 +2580,19 @@ end
         end
         missing_root_scope = joinpath(directory, "missing-root-qualification-scope.h5")
         cp(target_hdf5, missing_root_scope)
+        chmod(missing_root_scope, 0o600)
         HDF5.h5open(missing_root_scope, "r+") do handle
             HDF5.delete_attribute(handle, "qualification_scope")
         end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             missing_root_scope;
+            require_pass = false,
             source,
         )
         tampered_root_scope = joinpath(directory, "tampered-root-qualification-scope.h5")
         cp(target_hdf5, tampered_root_scope)
+        chmod(tampered_root_scope, 0o600)
         HDF5.h5open(tampered_root_scope, "r+") do handle
             HDF5.delete_attribute(handle, "qualification_scope")
             HDF5.attributes(handle)["qualification_scope"] = "parent_full_audit"
@@ -2512,10 +2600,12 @@ end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             tampered_root_scope;
+            require_pass = false,
             source,
         )
         tampered_root_authority = joinpath(directory, "tampered-root-authority.h5")
         cp(target_hdf5, tampered_root_authority)
+        chmod(tampered_root_authority, 0o600)
         HDF5.h5open(tampered_root_authority, "r+") do handle
             HDF5.delete_attribute(handle, "authoritative_hamiltonian")
             HDF5.attributes(handle)["authoritative_hamiltonian"] = "native_dft"
@@ -2523,10 +2613,33 @@ end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             tampered_root_authority;
+            require_pass = false,
             source,
         )
+        downgraded_ordinary = joinpath(directory, "ordinary-policy-schema-downgrade.h5")
+        cp(target_hdf5, downgraded_ordinary)
+        chmod(downgraded_ordinary, 0o600)
+        HDF5.h5open(downgraded_ordinary, "r+") do handle
+            HDF5.delete_attribute(handle, "schema_version")
+            HDF5.attributes(handle)["schema_version"] = "1.9"
+        end
+        @test_throws ArgumentError Base.invokelatest(
+            extension._read_star_covariant_paw_gauge_hdf5,
+            downgraded_ordinary;
+            source,
+            require_pass = false,
+        )
+        legacy_weight_payload = deepcopy(target_restored.payload)
+        delete!(legacy_weight_payload.source_metadata, "ordinary_calculation_policy_version")
         legacy_weight_schema = joinpath(directory, "legacy-target-leakage-schema.h5")
-        cp(target_hdf5, legacy_weight_schema)
+        Base.invokelatest(
+            extension._write_star_covariant_paw_gauge_hdf5,
+            legacy_weight_schema,
+            legacy_weight_payload;
+            status = :PASS,
+            root_cause = target_restored.root_cause,
+            diagnostics = String[],
+        )
         HDF5.h5open(legacy_weight_schema, "r+") do handle
             HDF5.delete_attribute(handle, "schema_version")
             HDF5.attributes(handle)["schema_version"] = "1.9"
@@ -2535,27 +2648,28 @@ end
             Base.invokelatest(
                 extension._read_star_covariant_paw_gauge_hdf5,
                 legacy_weight_schema;
+                require_pass = false,
                 source,
             )
             nothing
         catch exception
             sprint(showerror, exception)
         end
-        @test occursin(
-            "UNSUPPORTED_LEGACY_TARGET_LEAKAGE_SEMANTICS",
-            something(legacy_weight_error, ""),
-        )
+        @test occursin("STAR_GAUGE_EXPLICIT_MIGRATION_REQUIRED", something(legacy_weight_error, ""))
         missing_descriptor = joinpath(directory, "missing-source-replay-descriptor.h5")
         cp(target_hdf5, missing_descriptor)
+        chmod(missing_descriptor, 0o600)
         HDF5.h5open(missing_descriptor, "r+") do handle
             HDF5.delete_attribute(handle["source_metadata"], "source_replay_schema")
         end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
-            missing_descriptor,
+            missing_descriptor;
+            require_pass = false,
         )
         tampered_descriptor = joinpath(directory, "tampered-source-replay-descriptor.h5")
         cp(target_hdf5, tampered_descriptor)
+        chmod(tampered_descriptor, 0o600)
         HDF5.h5open(tampered_descriptor, "r+") do handle
             metadata = HDF5.attributes(handle["source_metadata"])
             HDF5.delete_attribute(handle["source_metadata"], "source_replay_kind")
@@ -2563,21 +2677,25 @@ end
         end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
-            tampered_descriptor,
+            tampered_descriptor;
+            require_pass = false,
         )
         missing_source_path = joinpath(directory, "missing-source-replay-path.h5")
         cp(target_hdf5, missing_source_path)
+        chmod(missing_source_path, 0o600)
         HDF5.h5open(missing_source_path, "r+") do handle
             HDF5.delete_attribute(handle["source_metadata"], "source_replay_save_directory")
         end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
-            missing_source_path,
+            missing_source_path;
+            require_pass = false,
         )
         alternate_save_directory = joinpath(directory, "alternate-source.save")
         cp(fixture.save_directory, alternate_save_directory)
         tampered_source_path = joinpath(directory, "tampered-source-replay-path.h5")
         cp(target_hdf5, tampered_source_path)
+        chmod(tampered_source_path, 0o600)
         HDF5.h5open(tampered_source_path, "r+") do handle
             metadata = HDF5.attributes(handle["source_metadata"])
             HDF5.delete_attribute(handle["source_metadata"], "source_replay_save_directory")
@@ -2585,19 +2703,24 @@ end
         end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
-            tampered_source_path,
+            tampered_source_path;
+            require_pass = false,
         )
-        missing_source_hash = joinpath(directory, "missing-source-replay-hash.h5")
+        missing_source_hash = joinpath(directory, "missing-source-complete-definition.h5")
         cp(target_hdf5, missing_source_hash)
+        chmod(missing_source_hash, 0o600)
         HDF5.h5open(missing_source_hash, "r+") do handle
-            HDF5.delete_attribute(handle["input_sha256"], "data-file-schema.xml")
+            @test haskey(handle, "native_source_definition")
+            HDF5.delete_object(handle, "native_source_definition")
         end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
-            missing_source_hash,
+            missing_source_hash;
+            require_pass = false,
         )
         tampered_rotation = joinpath(directory, "tampered-completed-rotation.h5")
         cp(target_hdf5, tampered_rotation)
+        chmod(tampered_rotation, 0o600)
         HDF5.h5open(tampered_rotation, "r+") do handle
             dataset = handle["native_to_completed_rotations"]
             values = read(dataset)
@@ -2607,10 +2730,12 @@ end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             tampered_rotation;
+            require_pass = false,
             source,
         )
         nonfinite_rotation = joinpath(directory, "nonfinite-completed-rotation.h5")
         cp(target_hdf5, nonfinite_rotation)
+        chmod(nonfinite_rotation, 0o600)
         HDF5.h5open(nonfinite_rotation, "r+") do handle
             dataset = handle["native_to_completed_rotations"]
             values = read(dataset)
@@ -2620,10 +2745,12 @@ end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             nonfinite_rotation;
+            require_pass = false,
             source,
         )
         wrong_rotation_shape = joinpath(directory, "wrong-shape-completed-rotation.h5")
         cp(target_hdf5, wrong_rotation_shape)
+        chmod(wrong_rotation_shape, 0o600)
         HDF5.h5open(wrong_rotation_shape, "r+") do handle
             values = read(handle["native_to_completed_rotations"])
             HDF5.delete_object(handle, "native_to_completed_rotations")
@@ -2633,18 +2760,22 @@ end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             wrong_rotation_shape;
+            require_pass = false,
             source,
         )
-        tampered_hash = joinpath(directory, "tampered-source-hash.h5")
+        tampered_hash = joinpath(directory, "tampered-source-definition-byte.h5")
         cp(target_hdf5, tampered_hash)
+        chmod(tampered_hash, 0o600)
         HDF5.h5open(tampered_hash, "r+") do handle
-            hashes = HDF5.attributes(handle["input_sha256"])
-            HDF5.delete_attribute(handle["input_sha256"], "data-file-schema.xml")
-            hashes["data-file-schema.xml"] = repeat("0", 64)
+            dataset=handle["native_source_definition"]
+            before=dataset[1]
+            dataset[1]=xor(before, UInt8(1))
+            @test dataset[1] != before
         end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             tampered_hash;
+            require_pass = false,
             source,
         )
         wrong_band_source = WannierNLQG.SymmetryFoundation.QuantumEspressoWavefunctionSource(
@@ -2655,10 +2786,12 @@ end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             target_hdf5;
+            require_pass = false,
             source = wrong_band_source,
         )
         tampered_save_directory = joinpath(directory, "tampered-source.save")
         cp(fixture.save_directory, tampered_save_directory)
+        chmod(joinpath(tampered_save_directory, "data-file-schema.xml"), 0o600)
         open(joinpath(tampered_save_directory, "data-file-schema.xml"), "a") do io
             write(io, "\n<!-- provenance tamper -->\n")
         end
@@ -2670,6 +2803,7 @@ end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             target_hdf5;
+            require_pass = false,
             source = tampered_source,
         )
         target_matrix_result = STAR_GAUGE_W.generate_symmetry_completed_qe_paw_matrix_elements(
@@ -2693,7 +2827,7 @@ end
         target_representation_hdf5 = joinpath(directory, "target-representation.h5")
         target_prepared = STAR_GAUGE_W.prepare_band_representation(
             STAR_GAUGE_W.BandRepresentationPreparationConfig(
-                construction_policy = :strict,
+                construction_policy = :standard,
                 wannierization_mode = :symmetry_adapted,
                 source = source,
                 sewing_backend = STAR_GAUGE_W.AugmentationAwareSewing(),
@@ -2717,9 +2851,9 @@ end
         HDF5.h5open(target_representation_hdf5, "r") do handle
             @test String(read(HDF5.attributes(handle)["schema_version"])) == "1.0"
         end
-        target_provided_solver_config = STAR_GAUGE_W.SymmetryAdaptedWannierizationConfig(
+        target_provided_solver_config = STAR_GAUGE_W.WannierizationConfig(
             input = STAR_GAUGE_W.WannierizationInputConfig(
-                construction_policy = :strict,
+                construction_policy = :standard,
                 wannierization_mode = :symmetry_adapted,
                 sewing_backend = STAR_GAUGE_W.AugmentationAwareSewing(),
                 wavefunction_gauge_backend = symmetrized_gauge_backend,
@@ -2729,7 +2863,7 @@ end
                 eig_file = splitext(target_hdf5)[1] * ".eig",
                 mmn_file = target_matrix_result.artifacts["mmn"],
                 amn_file = target_matrix_result.artifacts["amn"],
-                matrix_elements = STAR_GAUGE_W.ExternalWannier90Matrices(
+                matrix_elements = STAR_GAUGE_W.ExternalOverlapProjectionMatrices(
                     target_matrix_result.artifacts["mmn"],
                     target_matrix_result.artifacts["amn"],
                 ),
@@ -2742,7 +2876,9 @@ end
                 num_wannier = 1,
                 compatibility_policy = :off,
             ),
-            solver = STAR_GAUGE_W.WannierizationSolverConfig(localize = false),
+            solver = STAR_GAUGE_W.WannierizationSolverConfig(
+                stage_controls = STAR_GAUGE_W.WannierizationStageControls(num_iter = 0),
+            ),
             checkpoint = STAR_GAUGE_W.WannierizationCheckpointConfig(),
             runtime = STAR_GAUGE_W.WannierizationRuntimeConfig(),
             output = STAR_GAUGE_W.WannierizationOutputConfig(),
@@ -2750,7 +2886,7 @@ end
         @test isnothing(STAR_GAUGE_W._validate_wannierization_config(target_provided_solver_config))
         target_provided_preparation = STAR_GAUGE_W.prepare_band_representation(
             STAR_GAUGE_W.BandRepresentationPreparationConfig(
-                construction_policy = :strict,
+                construction_policy = :standard,
                 wannierization_mode = :symmetry_adapted,
                 sewing_backend = STAR_GAUGE_W.AugmentationAwareSewing(),
                 wavefunction_gauge_backend = symmetrized_gauge_backend,
@@ -2782,13 +2918,13 @@ end
             target_fresh_output,
         )
         target_payload_sha256 =
-            Base.invokelatest(extension._star_payload_sha256, target_restored.payload)
+            Base.invokelatest(CurrentScientificValues.payload_values, target_restored.payload)
         @test occursin(
-            "SYMMETRIZED_DFT_HAMILTONIAN_FRESH_READ_PAYLOAD_SHA256=$(target_payload_sha256)",
+            "SYMMETRIZED_DFT_HAMILTONIAN_FRESH_READ_PAYLOAD_VALUES=$(target_payload_sha256)",
             target_fresh_output,
         )
         @test occursin(
-            "SYMMETRIZED_DFT_HAMILTONIAN_FRESH_READ_PAYLOAD_SHA256=$(target_payload_sha256)",
+            "SYMMETRIZED_DFT_HAMILTONIAN_FRESH_READ_PAYLOAD_VALUES=$(target_payload_sha256)",
             target_fresh_auto_output,
         )
         mismatched_authority = STAR_GAUGE_W.SymmetrizedDFTHamiltonian(
@@ -2797,7 +2933,7 @@ end
         )
         @test_throws ArgumentError STAR_GAUGE_W.prepare_band_representation(
             STAR_GAUGE_W.BandRepresentationPreparationConfig(
-                construction_policy = :strict,
+                construction_policy = :standard,
                 wannierization_mode = :symmetry_adapted,
                 source = source,
                 sewing_backend = STAR_GAUGE_W.AugmentationAwareSewing(),
@@ -2819,6 +2955,7 @@ end
 
         tampered_audit = joinpath(directory, "tampered-audit-reference.h5")
         cp(symmetrized_hdf5, tampered_audit)
+        chmod(tampered_audit, 0o600)
         HDF5.h5open(tampered_audit, "r+") do handle
             attributes = HDF5.attributes(handle)
             HDF5.delete_attribute(handle, "maximum_energy_shift_audit_reference_ev")
@@ -2827,10 +2964,12 @@ end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             tampered_audit;
+            require_pass = false,
             source,
         )
         tampered_gate_phase = joinpath(directory, "tampered-gate-phase.h5")
         cp(symmetrized_hdf5, tampered_gate_phase)
+        chmod(tampered_gate_phase, 0o600)
         HDF5.h5open(tampered_gate_phase, "r+") do handle
             attributes = HDF5.attributes(handle)
             HDF5.delete_attribute(handle, "residual_gate_phase")
@@ -2839,10 +2978,12 @@ end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             tampered_gate_phase;
+            require_pass = false,
             source,
         )
         tampered_native_difference = joinpath(directory, "tampered-native-difference.h5")
         cp(symmetrized_hdf5, tampered_native_difference)
+        chmod(tampered_native_difference, 0o600)
         HDF5.h5open(tampered_native_difference, "r+") do handle
             attributes = HDF5.attributes(handle)
             HDF5.delete_attribute(handle, "native_difference_qualification")
@@ -2851,6 +2992,7 @@ end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             tampered_native_difference;
+            require_pass = false,
             source,
         )
 
@@ -2870,25 +3012,41 @@ end
             standard_gauge,
             restored.payload;
             status = :STANDARD,
+            ordinary_calculation = true,
             root_cause = :CONTROLLED_SYMMETRIZATION_HOLD,
             diagnostics = ["synthetic standard qualification test"],
         )
-        @test_throws ArgumentError Base.invokelatest(
-            extension._read_star_covariant_paw_gauge_hdf5,
-            standard_gauge,
-        )
+        # Historical status/root-cause labels cannot authorize or reject the
+        # unchanged mathematical payload. The full replay remains required.
+        labelled_restored =
+            Base.invokelatest(extension._read_star_covariant_paw_gauge_hdf5, standard_gauge)
+        @test labelled_restored.status == :NOT_EVALUATED
+        @test Base.invokelatest(
+            CurrentScientificValues.payload_values,
+            labelled_restored.payload,
+        ) == Base.invokelatest(CurrentScientificValues.payload_values, restored.payload)
         standard_restored = Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             standard_gauge;
             require_pass = false,
         )
-        @test standard_restored.status == :STANDARD
+        @test standard_restored.status == :NOT_EVALUATED
+        labelled_matrix_result = STAR_GAUGE_W.generate_symmetry_completed_qe_paw_matrix_elements(
+            source,
+            standard_gauge,
+            fixture.nnkp_file;
+            artifact_dir = joinpath(directory, "labelled-matrices-mathematical-checks"),
+            qualification_mode = :strict,
+        )
+        @test labelled_matrix_result.passed
+        @test labelled_matrix_result.mmn_parity.max_absolute <= 1.0e-12
+        @test labelled_matrix_result.amn_parity.max_absolute <= 1.0e-12
         @test_throws ArgumentError STAR_GAUGE_W.generate_symmetry_completed_qe_paw_matrix_elements(
             source,
             standard_gauge,
             fixture.nnkp_file;
-            artifact_dir = joinpath(directory, "standard-matrices-strict-rejected"),
-            qualification_mode = :strict,
+            artifact_dir = joinpath(directory, "invalid-mode"),
+            qualification_mode = :invalid,
         )
         standard_matrix_result = STAR_GAUGE_W.generate_symmetry_completed_qe_paw_matrix_elements(
             source,
@@ -2900,12 +3058,13 @@ end
         @test occursin("STANDARD", basename(standard_matrix_result.artifacts["mmn"]))
         HDF5.h5open(standard_matrix_result.artifacts["provenance_hdf5"], "r") do handle
             attributes = HDF5.attributes(handle)
-            @test Bool(read(attributes["quality_review_recommended"]))
+            @test !Bool(read(attributes["quality_review_recommended"]))
             @test !Bool(read(attributes["production_eligible"]))
         end
 
         tampered = joinpath(directory, "tampered.h5")
         cp(gauge_hdf5, tampered)
+        chmod(tampered, 0o600)
         HDF5.h5open(tampered, "r+") do handle
             dataset = handle["representative_frames/kpoint_000001/coefficients"]
             values = read(dataset)
@@ -2914,7 +3073,8 @@ end
         end
         @test_throws ArgumentError Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
-            tampered,
+            tampered;
+            require_pass = false,
         )
     end
 end

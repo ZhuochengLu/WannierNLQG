@@ -1,12 +1,13 @@
-# WannierNLQG v1.1.1 User Guide
+# WannierNLQG v1.2.0 User Guide
+
+Current local software identity: **1.2.0**. This is the public source profile; remote publication is separate.
+
+Version 1.2.0 adds fixed orthogonal point-orbital inputs through `RealSpaceTBInput` and `AnalyticKInput`, finite Cartesian `KRegion` integration, and model-validated periodic response symmetry. See [native model conventions, operators and tutorials](docs/NATIVE_MODELS.md). General k-dependent bases are outside this release; file-based Wannier inputs retain their existing contracts.
+
 
 [Task examples](examples/tasks/) | [Bundle examples](examples/bundles/) | [Architecture](docs/ARCHITECTURE.md) | [Documentation index](docs/README.md)
 
-The response API separates shared model/sampling configuration from independently
-parameterized tasks. `TaskConfig` owns `model`, `sampling`, `tasks`, `execution`,
-and `output`. Every `TaskSpec` owns a unique `id`, a registered `quantity` and
-`method`, and its own `physics`, `numerics`, and `observable`. The 52 registered
-quantity/method/calculation combinations are listed in section 6.
+The response API separates shared model/sampling configuration from independently parameterized tasks. `TaskConfig` owns `model`, `sampling`, `tasks`, `execution`, and `output`. Every `TaskSpec` owns a unique `id`, a registered `quantity` and `method`, and its own `physics`, `numerics`, and `observable`. The 63 registered quantity/method/calculation combinations are listed in section 6.
 
 > **Scope of numerical examples.** All maintained examples use repository-owned
 > synthetic inputs. The ordinary presets use 100 by 100 Integral meshes, 200 by
@@ -17,10 +18,7 @@ quantity/method/calculation combinations are listed in section 6.
 
 ## 1. Configuration ownership and parameter reference
 
-There is no fixed input filename. Import `WannierNLQG`, build a grouped
-`TaskConfig`, and call `WannierNLQG.run(config)`. Flat keywords such as
-`TaskConfig(fermi_energy=...)` and tuple entries in `tasks` are not part of the
-public API. See the [public API overview](docs/MIGRATION_1.0.0.md).
+There is no fixed input filename. Import `WannierNLQG`, build a grouped `TaskConfig`, and call `WannierNLQG.run(config)`. Flat keywords such as `TaskConfig(fermi_energy=...)` and tuple entries in `tasks` are not part of the public API. See the [public API overview](docs/PUBLIC_API.md).
 
 ### 1.1 Shared groups
 
@@ -39,45 +37,17 @@ public API. See the [public API overview](docs/MIGRATION_1.0.0.md).
 | `OutputOptions` | `output_root`, `system_name`, `response_output_digits` | Defaults: empty output root, inferred system name, `7` response digits. Keep generated output outside the source package. |
 | `OutputOptions` | `progress_enabled`, `progress_percent_interval`, `progress_verbosity` | Defaults: `true`, `nothing`, `"normal"`; verbosity also accepts `"quiet"` and `"diagnostic"`. `nothing` reads `WANNIERNLQG_PROGRESS_PERCENT_INTERVAL` and otherwise uses 5%; explicit values must be integers from 1 through 100. |
 
-Direct Fourier forbids `NKdiv` and `NKFFT`. Mixed requires at least one factor;
-the other is inferred by exact division. If both are supplied, their
-componentwise product must equal `k_mesh`. Auto uses Direct without factors and
-tries the requested factorization with factors, subject to capability and memory
-checks; it never searches for new factors. Band permits only Direct.
+Direct Fourier forbids `NKdiv` and `NKFFT`. Mixed requires at least one factor; the other is inferred by exact division. If both are supplied, their componentwise product must equal `k_mesh`. Auto uses Direct without factors and tries the requested factorization with factors, subject to capability and memory checks; it never searches for new factors. Band permits only Direct.
 
-`WannierNLQG.out` shows one Fourier summary per Integral or K-slice execution
-plan: task, backend, grid, local kpoints, and reduction lanes. Actual fallback
-reasons remain visible; Direct does not report an unused FFT workspace as zero.
-Use the existing `OutputOptions(progress_verbosity="diagnostic")` setting for
-expanded progress details. The existing `progress.jsonl` retains the complete
-Fourier fields, with additive display context and no schema-version change.
-Stage timings distinguish individual tasks from the complete task bundle;
-throughput is reported in `points/s`.
+`WannierNLQG.out` shows one Fourier summary per Integral or K-slice execution plan: task, backend, grid, local kpoints, and reduction lanes. Actual fallback reasons remain visible; Direct does not report an unused FFT workspace as zero. Use the existing `OutputOptions(progress_verbosity="diagnostic")` setting for expanded progress details. The existing `progress.jsonl` retains the complete Fourier fields, with additive display context and no schema-version change. Stage timings distinguish individual tasks from the complete task bundle; throughput is reported in `points/s`.
 
-For multiple public tasks, the per-rank Mixed provider budget is divided across
-the task instances. Auto first applies the existing single-task backend-selection
-rule. If that selected Mixed plan cannot fit its additional multi-task provider
-share, the run fails preflight; adding a task does not silently change another
-task's selected backend to Direct. This budget covers the existing FFT provider
-buffers only. The raw interpolation snapshot cache is separately bounded by the
-current central k point, task count and requested offsets; it is not included in
-that provider budget. Neither budget is a total process-RSS limit.
+For multiple public tasks, the per-rank Mixed provider budget is divided across the task instances. Auto first applies the existing single-task backend-selection rule. If that selected Mixed plan cannot fit its additional multi-task provider share, the run fails preflight; adding a task does not silently change another task's selected backend to Direct. This budget covers the existing FFT provider buffers only. The raw interpolation snapshot cache is separately bounded by the current central k point, task count and requested offsets; it is not included in that provider budget. Neither budget is a total process-RSS limit.
 
-Replica preparation occurs after model/operator input and before Fourier
-planning. One canonical mapping is applied to all required operators. Requested
-and effective policies, source hashes, support counts and mapping digest are
-retained in metadata. No adjacent model or wsvec filename is guessed.
+Replica preparation occurs after model/operator input and before Fourier planning. One canonical mapping is applied to all required operators. Requested and effective policies, source hashes, support counts and mapping digest are retained in metadata. No adjacent model or wsvec filename is guessed.
 
 ### 1.2 Task identity and physical inputs
 
-`TaskSpec(id="sc_narrow", quantity="SC", method="Conventional", ...)` defines
-one task instance. Its calculation family is inferred from the shared sampling:
-`BZMesh` selects Integral, `KSlice` selects K-slice, and `KPath` selects the K-path calculation domain. Sampling does not select the observable: the registry currently exposes `Band_Structure` as the only KPath task, while unregistered KPath response/geometry combinations fail closed. The
-method may be omitted only when the quantity/calculation pair has one registered
-method. IDs distinguish repeated instances of the same response and must be
-unique ignoring case; an ID starts with an ASCII letter or digit and then uses
-only ASCII letters, digits, underscores or hyphens. Canonical quantity names and calculation-specific short labels remain
-supported; use `SC` for Integral and `SCK` for K-slice, for example.
+`TaskSpec(id="sc_narrow", quantity="SC", method="Conventional", ...)` defines one task instance. Its calculation family is inferred from the shared sampling: `BZMesh` selects Integral, `KSlice` selects K-slice, and `KPath` selects the K-path calculation domain. Sampling does not select the observable: the registry currently exposes `Band_Structure` as the only KPath task, while unregistered KPath response/geometry combinations fail closed. The method may be omitted only when the quantity/calculation pair has one registered method. IDs distinguish repeated instances of the same response and must be unique ignoring case; an ID starts with an ASCII letter or digit and then uses only ASCII letters, digits, underscores or hyphens. Canonical quantity names and calculation-specific short labels remain supported; use `SC` for Integral and `SCK` for K-slice, for example.
 
 | `physics` type | Explicit physical inputs | Meaning |
 | --- | --- | --- |
@@ -86,57 +56,34 @@ supported; use `SC` for Integral and `SCK` for K-slice, for example.
 | `GeometryParameters` | No optical input; conditional `fermi_energy`, `temperature`, `photon_momentum` | Explicit subspace geometry needs no dummy frequency or broadening. Occupied-band selection requires chemical potential and temperature. Momentum is only accepted for a registered method that consumes it. |
 | `BandParameters` | `fermi_energy` | Explicit reference energy in eV; exported energies are `E_n - E_ref`. |
 
-Physical inputs do not inherit hidden material defaults from another task or
-from environment variables. A q=0 task does not become a photon-drag calculation
-by adding a momentum: select the registered photon-drag quantity and its physics
-type. Irrelevant physical inputs fail rather than being silently ignored.
+Physical inputs do not inherit hidden material defaults from another task or from environment variables. A q=0 task does not become a photon-drag calculation by adding a momentum: select the registered photon-drag quantity and its physics type. Irrelevant physical inputs fail rather than being silently ignored.
 
 ### 1.3 Numerical controls
 
 | `numerics` type | Field | Default | Meaning |
 | --- | --- | --- | --- |
-| `OpticalNumerics` | `broadening`, `broadening_type` | `0.04`, `"Gaussian"` | Positive spectral width in eV and `"Gaussian"` or `"Lorentzian"` lineshape. |
-| `OpticalNumerics` | `transition_window_factor` | `5.0` | Finite screening half-window factor in units of broadening; nonpositive values preserve the existing disabled-screening route. |
-| `OpticalNumerics`, `GeometryNumerics` | `denominator_regularization` | `0.001` | Finite nonnegative interband denominator regularization in eV; SSC requires a positive value. |
-| `OpticalNumerics`, `GeometryNumerics` | `degeneracy_threshold` | `0.002` | Nonnegative energy tolerance in eV; explicit values apply to non-Conventional, spin or photon-drag tasks. Other Conventional tasks reject this control. |
-| `OpticalNumerics`, `GeometryNumerics` | `finite_difference_step` | `nothing` | Positive inverse-angstrom step for an applicable derivative/loop method; resolved default is `1e-4` when needed. Supplying it to an inapplicable method fails. |
-| `OpticalNumerics` | `band_window_size` | `-1` | Calculation band window, with `-1` denoting all bands. This does not select output bands. |
-| `GeometryNumerics` | `band_window_size` | `nothing` | Not an active geometry control: explicit values are rejected; choose output bands/subspaces through the observable. |
-| `BandNumerics` | `hermiticity_tolerance` | `1e-10` | Nonnegative eV tolerance for `maximum(abs, H(k)-H(k)')` before diagonalization. |
+| `Numerics` | `broadening`, `broadening_type` | `0.04`, `"Gaussian"` | Positive spectral width in eV and `"Gaussian"` or `"Lorentzian"` lineshape. |
+| `Numerics` | `transition_window_factor` | `5.0` | Finite screening half-window factor in units of broadening; nonpositive values preserve the existing disabled-screening route. |
+| `Numerics` | `denominator_regularization` | `0.001` | Finite nonnegative interband denominator regularization in eV; SSC requires a positive value. |
+| `Numerics` | `degeneracy_threshold` | `0.002` | Nonnegative energy tolerance in eV; explicit values apply to non-Conventional, spin or photon-drag tasks. Other Conventional tasks reject this control. |
+| `Numerics` | `finite_difference_step` | `nothing` | Positive inverse-angstrom step for an applicable derivative/loop method; resolved default is `1e-4` when needed. Supplying it to an inapplicable method fails. |
+| `Numerics` | `band_window_size` | `-1` | Calculation band window, with `-1` denoting all bands. This does not select output bands. |
+| `Numerics` | `band_window_size` | `nothing` | Not an active geometry control: explicit values are rejected; choose output bands/subspaces through the observable. |
+| `Numerics` | `hermiticity_tolerance` | `1e-10` | Nonnegative eV tolerance for `maximum(abs, H(k)-H(k)')` before diagonalization. |
 
-An omitted `numerics` group selects the corresponding numerical defaults, which
-are expanded in the effective configuration. They are numerical starting points,
-not convergence recommendations. Methods using finite differences include
-Projector/Geometric/Wilson methods and conventional BC/QM dipoles, quadrupoles,
-and Quantum Christoffel Symbol; conventional HCT does not use that step.
+An omitted `numerics` group selects the corresponding numerical defaults, which are expanded in the effective configuration. They are numerical starting points, not convergence recommendations. Methods using finite differences include Projector/Geometric/Wilson methods and conventional BC/QM dipoles, quadrupoles, and Quantum Christoffel Symbol; conventional HCT does not use that step.
 
 ## 2. Independent tasks and shared execution
 
-Use `OpticalParameters` with q=0 charge/spin-current tasks,
-`FiniteQOpticalParameters` with PDSC/PDIC, `GeometryParameters` with pure geometry,
-and `BandParameters` with the Band_Structure task. The registry validates method, calculation,
-physics type and observable together before execution.
+Use `OpticalParameters` with q=0 charge/spin-current tasks, `FiniteQOpticalParameters` with PDSC/PDIC, `GeometryParameters` with pure geometry, and `BandParameters` with the Band_Structure task. The registry validates method, calculation, physics type and observable together before execution.
 
-Each task is compiled into a complete effective configuration. Single-task runs
-perform the original interpolation calculations without snapshot reuse.
-Multi-task runs may share
-execution only when their required inputs and numerical dependencies are
-compatible. Different frequency arrays, broadening or occupations retain their
-own weights and screening; a task must never prune transitions required by
-another. Incompatible configurations execute separately. Execution grouping is
-an internal optimization, not a change in a task's physical meaning.
+Each task is compiled into a complete effective configuration. Single-task runs perform the original interpolation calculations without snapshot reuse. Multi-task runs may share execution only when their required inputs and numerical dependencies are compatible. Different frequency arrays, broadening or occupations retain their own weights and screening; a task must never prune transitions required by another. Incompatible configurations execute separately. Execution grouping is an internal optimization, not a change in a task's physical meaning.
 
-A run shares one sampling object. It does not mix Integral, K-slice and Band
-sampling. Within that constraint, two copies of the same response may have
-different parameters, and K-slice tasks may specify their own components and
-band/subspace selections. The maintained independent-broadening example is
-[`shift_current_broadenings.jl`](examples/bundles/shift_current_broadenings.jl).
+A run shares one sampling object. It does not mix Integral, K-slice and Band sampling. Within that constraint, two copies of the same response may have different parameters, and K-slice tasks may specify their own components and band/subspace selections. The maintained independent-broadening example is [`shift_current_broadenings.jl`](examples/bundles/shift_current_broadenings.jl).
 
 ## 3. Explicit band and subspace selectors
 
-All band indices are Julia **1-based**. Put the selector in
-`TaskSpec.observable = KSliceSelection(component=..., bands=...)`; raw legacy
-`band_selection` tuples are not public task input.
+All band indices are Julia **1-based**. Put the selector in `TaskSpec.observable = KSliceSelection(component=..., bands=...)`; raw legacy `band_selection` tuples are not public task input.
 
 | Selector | Meaning and compatible quantities |
 | --- | --- |
@@ -149,22 +96,14 @@ All band indices are Julia **1-based**. Put the selector in
 | `InterbandGroups(first=[3,4], second=[1,2])` | Two nonoverlapping groups for IBC, IQM, ZIBC, ZIQM and HCT. |
 | `TripleGroups(first=[3], second=[4], third=[1,2])` | Three pairwise-disjoint groups for TPP. |
 
-`BandTargets([1,2])` and `Subspace([1,2])` have different physical meanings.
-To retain the old singleton-plus-sum output, use
-`BandTargets([1,2]; include_occupied_sum=true)` or
-`AllBands(include_occupied_sum=true)` and explicitly supply chemical potential
-and temperature. The default `false` requests singleton outputs only.
-Groups must be nonempty, duplicate-free and in bounds, with disjointness where
-the selected policy requires it. Validation preserves the existing band/subspace
-formula and file semantics. Integral uses `FullTensor()` and does not accept a
-K-slice output selector. The calculation band window remains independent of the
-observable's selected bands.
+For conventional SCK, ICK, ISCK and SSCK, `Transition` selects only the declared valence-to-conduction external transitions within the existing numerical band window. Virtual intermediate-band sums retain the full active model. These selected-channel slices differ from an all-band sum; integral `FullTensor()` calculations remain all-band observations. The ordered reverse channel is not implicitly added to the named conduction/valence transition.
+
+
+`BandTargets([1,2])` and `Subspace([1,2])` have different physical meanings. To retain the old singleton-plus-sum output, use `BandTargets([1,2]; include_occupied_sum=true)` or `AllBands(include_occupied_sum=true)` and explicitly supply chemical potential and temperature. The default `false` requests singleton outputs only. Groups must be nonempty, duplicate-free and in bounds, with disjointness where the selected policy requires it. Validation preserves the existing band/subspace formula and file semantics. Integral uses `FullTensor()` and does not accept a K-slice output selector. The calculation band window remains independent of the observable's selected bands.
 
 ## 4. Tensor component conventions
 
-Use `TensorComponent(2,2,2)` inside `KSliceSelection`. Cartesian axes are
-`1:x`, `2:y`, `3:z` and restricted to the sampling's `spatial_dimension`;
-a spin axis is always in `1:3`.
+Use `TensorComponent(2,2,2)` inside `KSliceSelection`. Cartesian axes are `1:x`, `2:y`, `3:z` and restricted to the sampling's `spatial_dimension`; a spin axis is always in `1:3`.
 
 | Quantity family | Component order | Meaning |
 | --- | --- | --- |
@@ -178,16 +117,11 @@ a spin axis is always in `1:3`.
 | HCT | `(b,a,d,c)` | Implementation's Hermitian-curvature order |
 | TPP | `(a,b,c)` | Three ordered vertex/direction indices |
 
-Integral current tasks return the complete tensor. K-slice tasks independently
-select a supported component; the execution planner separates incompatible
-requirements instead of forcing all tasks to use one selector.
+Integral current tasks return the complete tensor. K-slice tasks independently select a supported component; the execution planner separates incompatible requirements instead of forcing all tasks to use one selector.
 
 ## 5. Self-contained synthetic examples
 
-The 52 task files expose `build_config()` without executing on import. Their
-physical inputs are written in each example, not hidden in `ExampleSupport`.
-The helper resolves repository fixtures and output locations. Direct execution
-uses the ordinary preset and is guarded by `PROGRAM_FILE`:
+The 60 task files expose `build_config()` without executing on import. Their physical inputs are written in each example, not hidden in `ExampleSupport`. The helper resolves repository fixtures and output locations. Direct execution uses the ordinary preset and is guarded by `PROGRAM_FILE`:
 
 ```bash
 julia --project=. examples/tasks/integral/shift_current_conventional.jl
@@ -201,22 +135,11 @@ config = build_config(k_mesh=(2,2), output_root=mktempdir(), progress_enabled=fa
 result = WannierNLQG.run(config)
 ```
 
-Band smoke tests use `kpoints_per_segment=[3,3,3,3]`. Passing these checks
-verifies runnable interfaces, not convergence of a material response. Copy a
-configuration to your working directory, supply explicit scientific inputs and
-choose convergence parameters before production. The package supplies neither
-a fixed root `Input.jl` nor a cluster-specific `run.jo`; write a submission script
-for your site's launcher and resource policy.
+Band smoke tests use `kpoints_per_segment=[3,3,3,3]`. Passing these checks verifies runnable interfaces, not convergence of a material response. Copy a configuration to your working directory, supply explicit scientific inputs and choose convergence parameters before production. The package supplies neither a fixed root `Input.jl` nor a cluster-specific `run.jo`; write a submission script for your site's launcher and resource policy.
 
-The shipped examples resolve `ExampleSupport.jl` relative to their original
-package location. When adapting one into a separate case script, replace that
-helper import with `using WannierNLQG` and replace the fixture/output helper calls
-with your explicit case paths. Keep the package project active, for example
-`julia --project=/path/to/package /path/to/case/calculate.jl`. Moving an unchanged
-example file alone does not make its relative helper include portable.
+The shipped examples resolve `ExampleSupport.jl` relative to their original package location. When adapting one into a separate case script, replace that helper import with `using WannierNLQG` and replace the fixture/output helper calls with your explicit case paths. Keep the package project active, for example `julia --project=/path/to/package /path/to/case/calculate.jl`. Moving an unchanged example file alone does not make its relative helper include portable.
 
-Choose a fresh `output_root` for each run. An existing root or task metadata file
-causes the public run to stop rather than overwrite a previous result.
+Choose a fresh `output_root` for each run. An existing root or task metadata file causes the public run to stop rather than overwrite a previous result.
 
 ### Explicit Mixed-FFT variants
 
@@ -227,9 +150,7 @@ sampling = BZMesh(k_mesh=(100,100), spatial_dimension=2)
 execution = ExecutionOptions(fourier_backend="mixed", NKdiv=(5,5), NKFFT=(20,20))
 ```
 
-For a 200 by 200 K-slice, an illustrative factorization is `NKdiv=(10,10)` and
-`NKFFT=(20,20)`. Acceptance depends on task capability and memory preflight.
-Compare Direct/Mixed output and measure resource use before adoption.
+For a 200 by 200 K-slice, an illustrative factorization is `NKdiv=(10,10)` and `NKFFT=(20,20)`. Acceptance depends on task capability and memory preflight. Compare Direct/Mixed output and measure resource use before adoption.
 
 ## 6. Complete task catalog and input files
 
@@ -247,36 +168,43 @@ Compare Direct/Mixed output and measure resource use before adoption.
 | 8 | Shift Current | Wilson Loop | K-slice | Momentum-resolved Wilson-loop shift current | `_tb.dat` | One energy, slice, loop step/degeneracy controls | Pair/subspaces; `(a,b,c)` | q=0 example; no spin; Wilson Fourier capability applies | `synthetic_demo_sck_{r,i}_wilson.dat` | [input](examples/tasks/kslice/shift_current_wilson_loop.jl) |
 | 9 | Quantum Hermitian Connection | Conventional | K-slice | Conventional QHC geometric tensor | `_tb.dat` | Slice plane and denominator/numerical controls | Pair/subspaces; `(a,b,c)` | q=0 example; no spin; explicit Mixed preflight | `synthetic_demo_qhck_{r,i}_conv.dat` | [input](examples/tasks/kslice/quantum_hermitian_connection_conventional.jl) |
 | 10 | Quantum Hermitian Connection | Projector | K-slice | Projector QHC | `_tb.dat` | Slice, step, convention, degeneracy threshold | Pair/subspaces; `(a,b,c)` | q=0; no spin; Projector capability applies | `synthetic_demo_qhck_{r,i}_proj.dat` | [input](examples/tasks/kslice/quantum_hermitian_connection_projector.jl) |
-| 11 | Quantum Hermitian Connection | Geometric Loop | K-slice | Geometric-loop QHC | `_tb.dat` | Slice, loop step, convention, degeneracy threshold | Pair/subspaces; `(a,b,c)` | Registered q=0 path; no spin; explicit Mixed preflight | `synthetic_demo_qhck_{r,i}_geo.dat` | [input](examples/tasks/kslice/quantum_hermitian_connection_geometric_loop.jl) |
-| 12 | Quantum Hermitian Connection | Wilson Loop | K-slice | Wilson-loop QHC | `_tb.dat` | Slice, loop step, degeneracy threshold | Pair/subspaces; `(a,b,c)` | **Finite q forbidden**; no spin; Wilson capability applies | `synthetic_demo_qhck_{r,i}_wilson.dat` | [input](examples/tasks/kslice/quantum_hermitian_connection_wilson_loop.jl) |
-| 13 | Hermitian Curvature Tensor | Conventional | K-slice | Inter-subspace Hermitian-curvature tensor | `_tb.dat` | Slice and high-order derivative/regularization controls | Two disjoint groups; `(b,a,d,c)` | q=0; no spin; High-order Fourier capability applies | `synthetic_demo_hctk_{r,i}_conv.dat` | [input](examples/tasks/kslice/hermitian_curvature_tensor_conventional.jl) |
-| 14 | Berry Curvature | Conventional | K-slice | Band/subspace-resolved Berry curvature | `_tb.dat` | Slice, selected bands/subspaces | `-1`, `0`, or targets; `(a,b)` | q=0; no spin; Conventional geometry Fourier capability | `synthetic_demo_bck_<band/group>_conv.dat` plus optional sum | [input](examples/tasks/kslice/berry_curvature_conventional.jl) |
-| 15 | Berry Curvature Dipole | Conventional | K-slice | First k derivative of target-group Berry curvature | `_tb.dat` | Slice, target groups, finite-difference step | One/more target groups; `(a,b,c)` | q=0; no spin; High-order capability applies | `synthetic_demo_bcdk_<group>_conv.dat` | [input](examples/tasks/kslice/berry_curvature_dipole_conventional.jl) |
-| 16 | Berry Curvature Quadrupole | Conventional | K-slice | Second k derivative of target-group Berry curvature | `_tb.dat` | Slice, target groups, finite-difference step | One/more target groups; `(a,b,c,d)` | q=0; no spin; High-order capability applies | `synthetic_demo_bcqk_<group>_conv.dat` | [input](examples/tasks/kslice/berry_curvature_quadrupole_conventional.jl) |
-| 17 | Quantum Metric | Conventional | K-slice | Band/subspace-resolved quantum metric | `_tb.dat` | Slice and selected bands/subspaces | `-1`, `0`, or targets; `(a,b)` | q=0; no spin; Conventional geometry capability | `synthetic_demo_qmk_<band/group>_conv.dat` plus optional sum | [input](examples/tasks/kslice/quantum_metric_conventional.jl) |
-| 18 | Interband Berry Curvature | Conventional | K-slice | Berry-curvature channel between two subspaces | `_tb.dat` | Slice and interband groups | Two disjoint groups; `(a,b)` | q=0; no spin; Conventional geometry capability | `synthetic_demo_ibck_conv.dat` | [input](examples/tasks/kslice/interband_berry_curvature_conventional.jl) |
-| 19 | Interband Quantum Metric | Conventional | K-slice | Quantum-metric channel between two subspaces | `_tb.dat` | Slice and interband groups | Two disjoint groups; `(a,b)` | q=0; no spin; Conventional geometry capability | `synthetic_demo_iqmk_conv.dat` | [input](examples/tasks/kslice/interband_quantum_metric_conventional.jl) |
-| 20 | Zeeman Interband Berry Curvature | Conventional | K-slice | Spin-inserted interband Berry-like geometry | Legacy TB/SPN/CHK, readable historical spin-profile bundle, or task-derived Zeeman bundle | Slice, interband groups, spin capability | Two disjoint groups; `(a,s)` | q=0; Spin Fourier capability | `synthetic_demo_zibck_conv.dat` | [input](examples/tasks/kslice/zeeman_interband_berry_curvature_conventional.jl) |
-| 21 | Zeeman Interband Quantum Metric | Conventional | K-slice | Spin-inserted interband metric-like geometry | Legacy TB/SPN/CHK, readable historical spin-profile bundle, or task-derived Zeeman bundle | Slice, interband groups, spin capability | Two disjoint groups; `(a,s)` | q=0; Spin Fourier capability | `synthetic_demo_ziqmk_conv.dat` | [input](examples/tasks/kslice/zeeman_interband_quantum_metric_conventional.jl) |
-| 22 | Quantum Metric Dipole | Conventional | K-slice | First k derivative of target-group quantum metric | `_tb.dat` | Slice, target groups, finite-difference step | One/more target groups; `(a,b,c)` | q=0; no spin; High-order capability applies | `synthetic_demo_qmdk_<group>_conv.dat` | [input](examples/tasks/kslice/quantum_metric_dipole_conventional.jl) |
-| 23 | Quantum Metric Quadrupole | Conventional | K-slice | Second k derivative of target-group quantum metric | `_tb.dat` | Slice, target groups, finite-difference step | One/more target groups; `(a,b,c,d)` | q=0; no spin; High-order capability applies | `synthetic_demo_qmqk_<group>_conv.dat` | [input](examples/tasks/kslice/quantum_metric_quadrupole_conventional.jl) |
-| 24 | Quantum Christoffel Symbol | Conventional | K-slice | Metric-derived Christoffel-like geometry | `_tb.dat` | Slice, target groups, finite-difference step | One/more target groups; `(r,l,j)` | q=0; no spin; High-order capability applies | `synthetic_demo_qcsk_<group>_conv.dat` | [input](examples/tasks/kslice/quantum_christoffel_symbol_conventional.jl) |
-| 25 | Triple Phase Product | Conventional | K-slice | Ordered three-subspace phase product | `_tb.dat` | Slice and three interband groups | Three pairwise-disjoint groups; `(a,b,c)` | q=0; no spin; Conventional geometry capability | `synthetic_demo_tppk_{r,i}_conv.dat` | [input](examples/tasks/kslice/triple_phase_product_conventional.jl) |
-| 26 | Photon Drag Shift Current | Geometric Loop | Integral | Finite-q geometric-loop shift current | `_tb.dat` | Optical controls, physical q, loop step/basis/degeneracy | Full rank-3 tensor; no output-band selector | **Explicit physical q required**; no spin; finite-q Fourier capability | `synthetic_demo_pdsc_geo.dat` | [input](examples/tasks/integral/photon_drag_shift_current_geometric_loop.jl) |
-| 27 | Photon Drag Shift Current | Geometric Loop | K-slice | Momentum-resolved finite-q shift current | `_tb.dat` | One energy, slice, physical q, loop controls | Pair/subspaces; `(a,b,c)` | **Explicit physical q required**; no spin; finite-q capability | `synthetic_demo_pdsck_{r,i}_geo.dat` | [input](examples/tasks/kslice/photon_drag_shift_current_geometric_loop.jl) |
-| 28 | Shift Vector | Geometric Loop | K-slice | Geometric-loop shift vector | `_tb.dat` | Slice, loop step/basis/degeneracy | Pair/subspaces; `(a,b,c)` | Example q=0; no spin; Geometric Fourier capability | `synthetic_demo_svk_{r,i}_geo.dat` | [input](examples/tasks/kslice/shift_vector_geometric_loop.jl) |
-| 29 | Shift Vector | Wilson Loop | K-slice | Wilson-loop shift vector | `_tb.dat` | Slice, loop step/degeneracy | Pair/subspaces; `(a,b,c)` | **Finite q forbidden**; no spin; Wilson capability | `synthetic_demo_svk_{r,i}_wilson.dat` | [input](examples/tasks/kslice/shift_vector_wilson_loop.jl) |
-| 30 | Injection Current | Conventional | Integral | q=0 injection charge current | `_tb.dat` | Optical/occupation/smearing controls and band window | Full rank-3 tensor; no output-band selector | q=0; nonzero q rejected; no spin | `synthetic_demo_ic_conv.dat` | [input](examples/tasks/integral/injection_current_conventional.jl) |
-| 31 | Injection Current | Conventional | K-slice | Momentum-resolved injection charge current | `_tb.dat` | One energy, occupations/smearing, slice | Pair/subspaces; `(a,b,c)` | q=0; nonzero q rejected; no spin; q0 Fourier capability | `synthetic_demo_ick_{r,i}_conv.dat` | [input](examples/tasks/kslice/injection_current_conventional.jl) |
-| 32 | Injection Spin Current | Conventional | Integral | q=0 injection current with spin-current vertex | Legacy seed or profile `full` | Optical controls and full spin-velocity capability | Full rank-4 tensor; no output-band selector | q=0; nonzero q rejected; Spin Fourier capability | `synthetic_demo_isc_conv.dat` | [input](examples/tasks/integral/injection_spin_current_conventional.jl) |
-| 33 | Injection Spin Current | Conventional | K-slice | Momentum-resolved injection spin current | Legacy seed or profile `full` | One energy, slice, demanded spin components | Pair/subspaces; `(a,s,b,c)` | q=0; nonzero q rejected; Spin Fourier capability | `synthetic_demo_isck_{r,i}_conv.dat` | [input](examples/tasks/kslice/injection_spin_current_conventional.jl) |
-| 34 | Shift Spin Current | Conventional | Integral | q=0 shift spin current with regularized denominator | Legacy seed or profile `full` | Optical controls, full spin vertices, positive regularization | Full rank-4 tensor; no output-band selector | q=0; nonzero q rejected; Spin Fourier capability | `synthetic_demo_ssc_conv.dat` | [input](examples/tasks/integral/shift_spin_current_conventional.jl) |
-| 35 | Shift Spin Current | Conventional | K-slice | Momentum-resolved shift spin current | Legacy seed or profile `full` | One energy, slice, demanded spin components, regularization `>0` | Pair/subspaces; `(a,s,b,c)` | q=0; nonzero q rejected; Spin Fourier capability | `synthetic_demo_ssck_{r,i}_conv.dat` | [input](examples/tasks/kslice/shift_spin_current_conventional.jl) |
-| 36 | Photon Drag Injection Current | Conventional | Integral | Finite-q injection current | `_tb.dat` | Optical controls, physical q, convention and transition window | Full rank-3 tensor; no output-band selector | **Explicit physical q required**; no spin; finite-q capability | `synthetic_demo_pdic_conv.dat` | [input](examples/tasks/integral/photon_drag_injection_current_conventional.jl) |
-| 37 | Photon Drag Injection Current | Conventional | K-slice | Momentum-resolved finite-q injection current | `_tb.dat` | One energy, slice, physical q, basis/transition controls | Pair/subspaces; `(a,b,c)` | **Explicit physical q required**; no spin; finite-q capability | `synthetic_demo_pdick_{r,i}_conv.dat` | [input](examples/tasks/kslice/photon_drag_injection_current_conventional.jl) |
-| 38 | Band Structure | Conventional | K-path | Spectrum along an explicit connected high-symmetry path | `_tb.dat` or Packed HDF5 operator bundle | Path nodes, points per segment, `E_ref`, replica policy, Hermiticity tolerance | All bands in ascending order; no tensor selector | Direct Fourier only; task semantics selected by registry executor; no response qualification promotion | `<system>_bands.dat`, `<system>_kpath.json` | [input](examples/tasks/band/band_structure.jl) |
-| 39 | Second-Harmonic Generation | Conventional | Integral | Complex susceptibility and conductivity | `_tb.dat` or Packed HDF5 operator bundle | `SHGParameters`, `SHGNumerics` | 18 independent tensor components | All model bands; seven algebraic terms; explicit zero-temperature policy | `shg_chi_abc.dat`, `shg_sigma_abc.dat` | [input](examples/tasks/integral/second_harmonic_generation_conventional.jl) |
-| 40 | Second-Harmonic Generation | Conventional | K-slice | BZ-integrand density at one photon energy | `_tb.dat` or Packed HDF5 operator bundle | `SHGParameters`, `SHGNumerics` | Explicit rank-three component and `AllBands()` | No k weight; same kernel as Integral | `shg_chi_abc.dat`, `shg_sigma_abc.dat` | [input](examples/tasks/kslice/second_harmonic_generation_conventional.jl) |
+| 11 | Quantum Hermitian Connection | Wilson Loop | K-slice | Wilson-loop QHC | `_tb.dat` | Slice, loop step, degeneracy threshold | Pair/subspaces; `(a,b,c)` | **Finite q forbidden**; no spin; Wilson capability applies | `synthetic_demo_qhck_{r,i}_wilson.dat` | [input](examples/tasks/kslice/quantum_hermitian_connection_wilson_loop.jl) |
+| 12 | Hermitian Curvature Tensor | Conventional | K-slice | Inter-subspace Hermitian-curvature tensor | `_tb.dat` | Slice and high-order derivative/regularization controls | Two disjoint groups; `(b,a,d,c)` | q=0; no spin; High-order Fourier capability applies | `synthetic_demo_hctk_{r,i}_conv.dat` | [input](examples/tasks/kslice/hermitian_curvature_tensor_conventional.jl) |
+| 13 | Berry Curvature | Conventional | K-slice | Band/subspace-resolved Berry curvature | `_tb.dat` | Slice, selected bands/subspaces | `-1`, `0`, or targets; `(a,b)` | q=0; no spin; Conventional geometry Fourier capability | `synthetic_demo_bck_<band/group>_conv.dat` plus optional sum | [input](examples/tasks/kslice/berry_curvature_conventional.jl) |
+| 14 | Berry Curvature Dipole | Conventional | K-slice | First k derivative of target-group Berry curvature | `_tb.dat` | Slice, target groups, finite-difference step | One/more target groups; `(a,b,c)` | q=0; no spin; High-order capability applies | `synthetic_demo_bcdk_<group>_conv.dat` | [input](examples/tasks/kslice/berry_curvature_dipole_conventional.jl) |
+| 15 | Berry Curvature Quadrupole | Conventional | K-slice | Second k derivative of target-group Berry curvature | `_tb.dat` | Slice, target groups, finite-difference step | One/more target groups; `(a,b,c,d)` | q=0; no spin; High-order capability applies | `synthetic_demo_bcqk_<group>_conv.dat` | [input](examples/tasks/kslice/berry_curvature_quadrupole_conventional.jl) |
+| 16 | Quantum Metric | Conventional | K-slice | Band/subspace-resolved quantum metric | Orthogonal H/r or nonorthogonal H/S/r; full F only for orthogonal `include_external=true` | Slice and selected bands/subspaces | `-1`, `0`, or targets; `(a,b)` | q=0; no spin; Conventional geometry capability | `synthetic_demo_qmk_<band/group>_conv.dat` plus optional sum | [input](examples/tasks/kslice/quantum_metric_conventional.jl) |
+| 17 | Interband Berry Curvature | Conventional | K-slice | Berry-curvature channel between two subspaces | `_tb.dat` | Slice and interband groups | Two disjoint groups; `(a,b)` | q=0; no spin; Conventional geometry capability | `synthetic_demo_ibck_conv.dat` | [input](examples/tasks/kslice/interband_berry_curvature_conventional.jl) |
+| 18 | Interband Quantum Metric | Conventional | K-slice | Quantum-metric channel between two subspaces | Orthogonal H/r or nonorthogonal H/S/r; no external completion | Slice and interband groups | Two disjoint groups; `(a,b)` | q=0; no spin; Conventional geometry capability | `synthetic_demo_iqmk_conv.dat` | [input](examples/tasks/kslice/interband_quantum_metric_conventional.jl) |
+| 19 | Zeeman Interband Berry Curvature | Conventional | K-slice | Spin-inserted interband Berry-like geometry | Legacy TB/SPN/CHK, readable historical spin-profile bundle, or task-derived Zeeman bundle | Slice, interband groups, spin capability | Two disjoint groups; `(a,s)` | q=0; Spin Fourier capability | `synthetic_demo_zibck_conv.dat` | [input](examples/tasks/kslice/zeeman_interband_berry_curvature_conventional.jl) |
+| 20 | Zeeman Interband Quantum Metric | Conventional | K-slice | Spin-inserted interband metric-like geometry | Legacy TB/SPN/CHK, readable historical spin-profile bundle, or task-derived Zeeman bundle | Slice, interband groups, spin capability | Two disjoint groups; `(a,s)` | q=0; Spin Fourier capability | `synthetic_demo_ziqmk_conv.dat` | [input](examples/tasks/kslice/zeeman_interband_quantum_metric_conventional.jl) |
+| 21 | Quantum Metric Dipole | Conventional | K-slice | First k derivative of target-group quantum metric | Orthogonal H/r or nonorthogonal H/S/r; full F only for orthogonal `include_external=true` | Slice, target groups, finite-difference step | One/more target groups; `(a,b,c)` | q=0; no spin; High-order capability applies | `synthetic_demo_qmdk_<group>_conv.dat` | [input](examples/tasks/kslice/quantum_metric_dipole_conventional.jl) |
+| 22 | Quantum Metric Quadrupole | Conventional | K-slice | Second k derivative of target-group quantum metric | Orthogonal H/r or nonorthogonal H/S/r; full F only for orthogonal `include_external=true` | Slice, target groups, finite-difference step | One/more target groups; `(a,b,c,d)` | q=0; no spin; High-order capability applies | `synthetic_demo_qmqk_<group>_conv.dat` | [input](examples/tasks/kslice/quantum_metric_quadrupole_conventional.jl) |
+| 23 | Quantum Christoffel Symbol | Conventional | K-slice | Metric-derived Christoffel-like geometry | Orthogonal H/r or nonorthogonal H/S/r; full F only for orthogonal `include_external=true` | Slice, target groups, finite-difference step | One/more target groups; `(r,l,j)` | q=0; no spin; High-order capability applies | `synthetic_demo_qcsk_<group>_conv.dat` | [input](examples/tasks/kslice/quantum_christoffel_symbol_conventional.jl) |
+| 24 | Triple Phase Product | Conventional | K-slice | Ordered three-subspace phase product | `_tb.dat` | Slice and three interband groups | Three pairwise-disjoint groups; `(a,b,c)` | q=0; no spin; Conventional geometry capability | `synthetic_demo_tppk_{r,i}_conv.dat` | [input](examples/tasks/kslice/triple_phase_product_conventional.jl) |
+| 25 | Photon Drag Shift Current | Geometric Loop | Integral | Finite-q geometric-loop shift current | `_tb.dat` | Optical controls, physical q, loop step/basis/degeneracy | Full rank-3 tensor; no output-band selector | **Explicit physical q required**; no spin; finite-q Fourier capability | `synthetic_demo_pdsc_geo.dat` | [input](examples/tasks/integral/photon_drag_shift_current_geometric_loop.jl) |
+| 26 | Photon Drag Shift Current | Geometric Loop | K-slice | Momentum-resolved finite-q shift current | `_tb.dat` | One energy, slice, physical q, loop controls | Pair/subspaces; `(a,b,c)` | **Explicit physical q required**; no spin; finite-q capability | `synthetic_demo_pdsck_{r,i}_geo.dat` | [input](examples/tasks/kslice/photon_drag_shift_current_geometric_loop.jl) |
+| 27 | Shift Vector | Geometric Loop | K-slice | Geometric-loop shift vector | `_tb.dat` | Slice, loop step/basis/degeneracy | Pair/subspaces; `(a,b,c)` | Example q=0; no spin; Geometric Fourier capability | `synthetic_demo_svk_{r,i}_geo.dat` | [input](examples/tasks/kslice/shift_vector_geometric_loop.jl) |
+| 28 | Shift Vector | Wilson Loop | K-slice | Wilson-loop shift vector | `_tb.dat` | Slice, loop step/degeneracy | Pair/subspaces; `(a,b,c)` | **Finite q forbidden**; no spin; Wilson capability | `synthetic_demo_svk_{r,i}_wilson.dat` | [input](examples/tasks/kslice/shift_vector_wilson_loop.jl) |
+| 29 | Injection Current | Conventional | Integral | q=0 injection charge current | `_tb.dat` | Optical/occupation/smearing controls and band window | Full rank-3 tensor; no output-band selector | q=0; nonzero q rejected; no spin | `synthetic_demo_ic_conv.dat` | [input](examples/tasks/integral/injection_current_conventional.jl) |
+| 30 | Injection Current | Conventional | K-slice | Momentum-resolved injection charge current | `_tb.dat` | One energy, occupations/smearing, slice | Pair/subspaces; `(a,b,c)` | q=0; nonzero q rejected; no spin; q0 Fourier capability | `synthetic_demo_ick_{r,i}_conv.dat` | [input](examples/tasks/kslice/injection_current_conventional.jl) |
+| 31 | Injection Spin Current | Conventional | Integral | q=0 injection current with spin-current vertex | Legacy seed or profile `full` | Optical controls and full spin-velocity capability | Full rank-4 tensor; no output-band selector | q=0; nonzero q rejected; Spin Fourier capability | `synthetic_demo_isc_conv.dat` | [input](examples/tasks/integral/injection_spin_current_conventional.jl) |
+| 32 | Injection Spin Current | Conventional | K-slice | Momentum-resolved injection spin current | Legacy seed or profile `full` | One energy, slice, demanded spin components | Pair/subspaces; `(a,s,b,c)` | q=0; nonzero q rejected; Spin Fourier capability | `synthetic_demo_isck_{r,i}_conv.dat` | [input](examples/tasks/kslice/injection_spin_current_conventional.jl) |
+| 33 | Shift Spin Current | Conventional | Integral | q=0 shift spin current with regularized denominator | Legacy seed or profile `full` | Optical controls, full spin vertices, positive regularization | Full rank-4 tensor; no output-band selector | q=0; nonzero q rejected; Spin Fourier capability | `synthetic_demo_ssc_conv.dat` | [input](examples/tasks/integral/shift_spin_current_conventional.jl) |
+| 34 | Shift Spin Current | Conventional | K-slice | Momentum-resolved shift spin current | Legacy seed or profile `full` | One energy, slice, demanded spin components, regularization `>0` | Pair/subspaces; `(a,s,b,c)` | q=0; nonzero q rejected; Spin Fourier capability | `synthetic_demo_ssck_{r,i}_conv.dat` | [input](examples/tasks/kslice/shift_spin_current_conventional.jl) |
+| 35 | Photon Drag Injection Current | Conventional | Integral | Finite-q injection current | `_tb.dat` | Optical controls, physical q, convention and transition window | Full rank-3 tensor; no output-band selector | **Explicit physical q required**; no spin; finite-q capability | `synthetic_demo_pdic_conv.dat` | [input](examples/tasks/integral/photon_drag_injection_current_conventional.jl) |
+| 36 | Photon Drag Injection Current | Conventional | K-slice | Momentum-resolved finite-q injection current | `_tb.dat` | One energy, slice, physical q, basis/transition controls | Pair/subspaces; `(a,b,c)` | **Explicit physical q required**; no spin; finite-q capability | `synthetic_demo_pdick_{r,i}_conv.dat` | [input](examples/tasks/kslice/photon_drag_injection_current_conventional.jl) |
+| 37 | Band Structure | Conventional | K-path | Spectrum along an explicit connected high-symmetry path | `_tb.dat` or Packed HDF5 operator bundle | Path nodes, points per segment, `E_ref`, replica policy, Hermiticity tolerance | All bands in ascending order; no tensor selector | Direct Fourier only; task semantics selected by registry executor; no response qualification promotion | `<system>_bands.dat`, `<system>_kpath.json` | [input](examples/tasks/band/band_structure.jl) |
+| 38 | Second-Harmonic Generation | Conventional | Integral | Complex susceptibility and conductivity | `_tb.dat` or Packed HDF5 operator bundle | `SHGParameters`, `Numerics` | 18 independent tensor components | All model bands; seven algebraic terms; explicit zero-temperature policy | `shg_chi_abc.dat`, `shg_sigma_abc.dat` | [input](examples/tasks/integral/second_harmonic_generation_conventional.jl) |
+| 39 | Second-Harmonic Generation | Conventional | K-slice | BZ-integrand density at one photon energy | `_tb.dat` or Packed HDF5 operator bundle | `SHGParameters`, `Numerics` | Explicit rank-three component and `AllBands()` | No k weight; same kernel as Integral | `shg_chi_abc.dat`, `shg_sigma_abc.dat` | [input](examples/tasks/kslice/second_harmonic_generation_conventional.jl) |
+
+## Local slice normalization
+
+KSlice samples a local observable or response density. Sample counts select positions and do not multiply the values by an integration weight. SC, IC, ISC, SSC, PDSC and PDIC slice values therefore omit the former `1/(N_u*N_v)` factor: at the same k point and physical settings, they are `N_u*N_v` times those produced by the earlier implementation. Their filenames, matrix layouts, band/transition selectors, physical charge/spin constants and original cell-volume convention remain unchanged. A two-dimensional sampling plane does not introduce a sheet conversion.
+
+SHG, JC and THG retain their fractional-BZ response densities. Periodic JC/THG outputs use the original bulk volume convention; the three former measure-conversion input fields are explicitly rejected, and sheet/effective-thickness conversions belong to postprocessing. LT, LOR and AHC conductivity slices retain local SI integrands in `S*m^2`; a complete periodic BZ weighted mean divided by the cell volume in `m^3` gives bulk `S/m`. OM slices retain local `muB` moments; a complete periodic mean gives `muB/cell`. Geometry slices retain their own local band/group quantity and units, without a conductivity multiplier. See [BCD/BCQ density units](docs/BCD_BCQ.md) for the separate conductivity slices.
+
+A single arbitrary plane is not a three-dimensional BZ integral. Reconstruction requires the complete matching domain, component/term and band/transition selection, occupations, regularization and integration measure. Finite-region formulas related by integration by parts retain their existing boundary assumptions.
 
 ## 7. Running, outputs, and environment variables
 
@@ -292,29 +220,11 @@ For MPI, launch the same Julia command with the site launcher and enable the pub
 WANNIERNLQG_USE_MPI=1 mpiexec -n 4 julia --project=. examples/tasks/integral/shift_current_conventional.jl
 ```
 
-`run(config)` returns `RunResult` with normalized specs, the root run directory,
-numerical outputs, metadata/progress paths, and a typed
-`ResponseQualificationResult` in `qualification`. Successful calculation and
-production eligibility are separate: complete formula inputs may produce a
-`DIAGNOSTIC_ONLY` result with `production_eligible=false`, while structural,
-schema, digest, frame/hash-conflict, and mathematical failures remain hard
-errors. See [response qualification](docs/RESPONSE_QUALIFICATION.md).
+`run(config)` returns `RunResult` with normalized specs, the root run directory, numerical outputs, metadata/progress paths, and a typed `ResponseQualificationResult` in `qualification`. Successful calculation and production eligibility are separate: complete formula inputs may produce a `DIAGNOSTIC_ONLY` result with `production_eligible=false`, while structural, schema, digest, frame/hash-conflict, and mathematical failures remain hard errors. See [response qualification](docs/RESPONSE_QUALIFICATION.md).
 
-Every public task writes its original numerical filenames under
-`output_root/<id>/`, with per-task metadata. One run has a shared progress report located under the
-first task directory; root and per-task `RunResult` progress paths all refer to
-those actual shared files. Root
-`metadata.txt` indexes all task IDs, child metadata and outputs, and records
-sharing statistics. `RunResult.outputs` aggregates files; `task_ids`,
-`task_results`, and `sharing` expose task identities, individual results and
-reuse statistics. This layout also applies to single-task runs.
+Every public task writes its original numerical filenames under `output_root/<id>/`, with per-task metadata. One run has a shared progress report located under the first task directory; root and per-task `RunResult` progress paths all refer to those actual shared files. Root `metadata.txt` indexes all task IDs, child metadata and outputs, and records sharing statistics. `RunResult.outputs` aggregates files; `task_ids`, `task_results`, and `sharing` expose task identities, individual results and reuse statistics. This layout also applies to single-task runs.
 
-Each task's `[EffectiveTaskConfiguration]` metadata section is the authoritative
-public configuration: it expands numerical defaults and contains only applicable
-physics, numerics and observables. Existing numerical/model diagnostic sections
-are retained. Sharing counters are rank-local and identify the rank and model
-load count. A raw Fourier counter measures operator-group evaluations, not FFT
-calls; FFT execution counts remain in each task's Fourier summary.
+Each task's `[EffectiveTaskConfiguration]` metadata section is the authoritative public configuration: it expands numerical defaults and contains only applicable physics, numerics and observables. Existing numerical/model diagnostic sections are retained. Sharing counters are rank-local and identify the rank and model load count. A raw Fourier counter measures operator-group evaluations, not FFT calls; FFT execution counts remain in each task's Fourier summary.
 
 ### User-facing environment variables
 
@@ -339,12 +249,7 @@ Variables containing `BENCHMARK`, test-level/test-MPI selectors, deliberate slow
 5. Keep `metadata.txt` and model checksum with outputs; do not merge output directories from distinct configs.
 6. Run the documentation audit after edits: `julia --project=. scripts/check_user_guide_examples.jl`.
 
-The example audit checks the grouped public API documentation, all 52 registry
-tasks and example links, config compilation, explicit physical inputs, absence
-of optical placeholders in geometry, ordinary mesh and frequency presets, Band
-path controls, finite-q requirements, and unique output roots. The separate
-`check_documentation.jl` gate verifies English text, local links and Markdown
-syntax; package tests execute explicit smoke overrides.
+The example audit checks the grouped public API documentation, all 60 registry tasks and example links, config compilation, explicit physical inputs, absence of optical placeholders in geometry, ordinary mesh and frequency presets, Band path controls, finite-q requirements, and unique output roots. The separate `check_documentation.jl` gate verifies English text, local links and Markdown syntax; package tests execute explicit smoke overrides.
 
 ## Second-harmonic generation
 
@@ -354,13 +259,7 @@ Version 1.1.0 adds integral and K-slice SHG susceptibility and conductivity, wit
 
 See [linear transport, optics, and modern orbital magnetization](docs/LINEAR_AND_ORBITAL_RESPONSES.md) for the independent modules, dual methods, contribution outputs, and input qualification requirements.
 
-The new tasks use `LinearTransportParameters`, `LinearOpticalResponseParameters`,
-and `OrbitalMagnetizationParameters`. Relaxation uses `SeparateRelaxation`;
-zero-temperature Fermi-surface sampling uses `FermiSurfaceBroadening` inside
-`LinearResponseNumerics`. `OrbitalNumerics` controls the spectral gap check.
-These examples use a closed three-dimensional model, explicit 300 K occupation,
-and modest demonstration meshes. Use `(2, 2, 2)` for Integral smoke runs and
-`(2, 2)` for K-slice smoke runs. No material convergence is implied.
+The new tasks use `LinearTransportParameters`, `LinearOpticalResponseParameters`, and `OrbitalMagnetizationParameters`. Relaxation uses `SeparateRelaxation`; zero-temperature Fermi-surface sampling uses `fs_kind` and `eta_fs_ev` inside `Numerics`. `Numerics` controls the spectral gap check. These examples use a closed three-dimensional model, explicit 300 K occupation, and modest demonstration meshes. Use `(2, 2, 2)` for Integral smoke runs and `(2, 2)` for K-slice smoke runs. No material convergence is implied.
 
 | Quantity | Method | Integral example | K-slice example |
 |---|---|---|---|
@@ -371,28 +270,68 @@ and modest demonstration meshes. Use `(2, 2, 2)` for Integral smoke runs and
 | `orbital_magnetization` | Conventional | [input](examples/tasks/integral/orbital_magnetization_conventional.jl) | [input](examples/tasks/kslice/orbital_magnetization_conventional.jl) |
 | `orbital_magnetization` | Projector | [input](examples/tasks/integral/orbital_magnetization_projector.jl) | [input](examples/tasks/kslice/orbital_magnetization_projector.jl) |
 
-Linear transport and optical conductivity each write `drude`,
-`quantum_metric`, `berry_curvature`, and `total` native terms. The
-`berry_curvature` conductivity channel combines ambient-curvature contact and
-interband Hall and represents the anomalous-Hall-effect mechanism; a finite-width
-or finite-frequency result is not necessarily a static Berry-curvature map.
-Optical positive-energy dielectric files use the same three increment names,
-with the identity background added only to the integrated total.
+Linear transport and optical conductivity each write `drude`, `quantum_metric`, `berry_curvature`, and `total` native terms. The `berry_curvature` conductivity channel combines ambient-curvature contact and interband Hall and represents the anomalous-Hall-effect mechanism; a finite-width or finite-frequency result is not necessarily a static Berry-curvature map. Optical positive-energy dielectric files use the same three increment names, with the identity background added only to the integrated total.
 
 ## Selecting Wannierization operators for response tasks
 
-Use `WannierizationOutputConfig(profile=:hamiltonian_position)` for the default
-Hamiltonian/position output or `profile=:full` for all eleven operators. For a
-smaller task union, set `profile=nothing` and `operator_tasks` to a tuple of
-`WannierNLQG.Core.OperatorTask(quantity=:orbital_magnetization, method=:all)`
-and any other supported requests. The full [configuration example and dependency table](docs/WANNIERIZATION.md#task-derived-selection-and-canonical-union)
-show the required source files. Task selection controls generation, not the
-subsequent response `TaskSpec`; configure and execute the response separately.
+Use `WannierizationOutputConfig(profile=:hamiltonian_position)` for the default Hamiltonian/position output or `profile=:full` for all eleven operators. For a smaller task union, set `profile=nothing` and `operator_tasks` to a tuple of `WannierNLQG.Core.OperatorTask(quantity=:orbital_magnetization, method=:all)` and any other supported requests. The full [configuration example and dependency table](docs/WANNIERIZATION.md#task-derived-selection-and-canonical-union) show the required source files. Task selection controls generation, not the subsequent response `TaskSpec`; configure and execute the response separately.
 
-OAM plus linear transport and Berry curvature needs only the five OAM operators;
-adding a spin-current task requires the spin source family. Geometry-only tasks
-persist H/position and derive the Berry-connection family at runtime. `:all` stays
-in normalized requested pairs and expands inside the dependency closure. Existing
-spin-profile bundles remain readable; new Wannierization profile choices are only
-`:hamiltonian_position` and `:full`. Runtime rejects missing operators/components,
-and successful readback does not establish material convergence or production eligibility.
+OAM plus linear transport and Berry curvature needs only the five OAM operators; adding a spin-current task requires the spin source family. Geometry-only tasks persist H/position and derive the Berry-connection family at runtime. `:all` stays in normalized requested pairs and expands inside the dependency closure. Existing spin-profile bundles remain readable; new Wannierization profile choices are only `:hamiltonian_position` and `:full`. Runtime rejects missing operators/components, and successful readback does not establish material convergence or production eligibility.
+
+## Quantum metric contribution and input requirements
+
+Quantum Metric, its dipole and quadrupole, and the Quantum Christoffel Symbol default to `include_external=false`. Their primary files then contain internal geometry, without `_internal`/`_external` companion files. Orthogonal Wannier inputs need H/r (TB or an appropriate Packed bundle); nonorthogonal localized inputs need H/S/r. Native inputs retain their declared basis/position conventions and derivative capabilities. Disabling completion does not remove operators independently required by other tasks in a bundle.
+
+With explicit `include_external=true`, orthogonal input requires qualified complete derivative overlaps F, supplied by a full derivative-overlap Packed bundle or an `AnalyticKInput(basis=:explicit)` carrying the declared position connection and full `derivative_overlap` callback. The primary result is total, with `_internal` and `_external` companions. Reconstructed finite-window overlap products do not replace full F. Native point-orbital and fixed-orthonormal constructors cannot supply this external completion and reject that opt-in; they do support the applicable internal tasks. Nonorthogonal `include_external=true` is explicitly unsupported.
+
+In TOML, a task-local `response.tasks.<id>.include_external` overrides shared `response.include_external`; the default is false. This control applies only to the four ordinary metric-family tasks. Interband Quantum Metric and Zeeman interband metrics keep their own pair definitions and do not gain this option. Numerical regularization and each method's existing spectral checks are unchanged. See [the contribution option](docs/GEOMETRY_OPTIONS_MIGRATION.md#external-metric-completion), [Quantum Metric](theory/QuantumGeometry/QuantumMetric.md), and [subspace position matrix elements](theory/SubspacePositionMatrixElements.md).
+
+
+## Third-order responses in version 1.2.0
+
+`JerkParameters` selects the ordered jerk material coefficient. `THGParameters` selects the independent `:unregrouped`, `:regrouped` (default), or `:both` formulas. Both use `Numerics(...)`; see [the breaking migration](docs/NUMERICAL_CONTROLS.md) and [third-order conventions](docs/THIRD_ORDER_RESPONSES.md). `TensorComponents(TensorComponent(1,1,1,1), ...)` selects Integral components. The default Integral tensors contain 81 jerk and 30 input-symmetrized THG components. KSlice uses one energy and `KSliceSelection(component=TensorComponent(1,1,1,1),bands=AllBands())`.
+
+| Quantity | Integral example | KSlice example |
+|---|---|---|
+| `jerk_current` (`JC` / `JCK`) | [JC](examples/tasks/integral/jerk_current_conventional.jl) | [JCK](examples/tasks/kslice/jerk_current_conventional.jl) |
+| `third_harmonic_generation` (`THG` / `THGK`) | [THG](examples/tasks/integral/third_harmonic_generation_conventional.jl) | [THGK](examples/tasks/kslice/third_harmonic_generation_conventional.jl) |
+
+## Text input and preparation workflows
+
+The existing CLI accepts response files and explicitly selected Wannierization or symmetrization files. See [the TOML input contract](docs/TEXT_INPUT.md) and [examples/text_input](examples/text_input/README.md) for energy ranges, columnar Band nodes and the four preparation templates. Check/explain stay cold; an accepted input is not a scientific convergence or publication qualification.
+
+
+## Normalized inputs and checkpoints
+
+See [normalized inputs and checkpoints](docs/NORMALIZED_INPUTS.md) for supported workflows, the removed gauge-aware entry, the limited Packed inventory and historical conversion boundaries.
+
+
+## DC Hall task examples
+
+`IntrinsicHallParameters(fermi_energies=[...], temperature=0.0)` selects static zero-temperature intrinsic AHC occupations; nonzero temperature is rejected. `BerryMultipoleParameters` additionally requires a positive `relaxation_time_fs` and selects `integral_form=:fermi_surface` or `:fermi_sea`. These examples use an explicit closed three-dimensional model, 8 by 8 by 8 demonstration meshes and 2 by 2 by 2 smoke meshes. They do not qualify a material or a degenerate-subspace high-order calculation.
+
+| Quantity | Method | Observable | Example |
+| --- | --- | --- | --- |
+| Intrinsic AHC | Conventional | Full rank-2 static Hall tensor | [input](examples/tasks/integral/intrinsic_ahc_conventional.jl) |
+| Intrinsic AHC | Projector | Full rank-2 static Hall tensor | [input](examples/tasks/integral/intrinsic_ahc_projector.jl) |
+| BCD DC Hall | Conventional | Field-first/current-last rank-3 tensor and geometric moment | [input](examples/tasks/integral/berry_curvature_dipole_conductivity_conventional.jl) |
+| BCQ DC Hall | Conventional | Field-first/current-last rank-4 tensor and geometric moment | [input](examples/tasks/integral/berry_curvature_quadrupole_conductivity_conventional.jl) |
+| Intrinsic AHC slice | Conventional | Selected rank-2 local conductivity density; all bands | [input](examples/tasks/kslice/intrinsic_ahc_conventional.jl) |
+| Intrinsic AHC slice | Projector | Selected rank-2 local conductivity density; all bands | [input](examples/tasks/kslice/intrinsic_ahc_projector.jl) |
+| BCD DC Hall slice | Conventional | Selected field-first/current-last local conductivity and moments | [input](examples/tasks/kslice/berry_curvature_dipole_conductivity_conventional.jl) |
+| BCQ DC Hall slice | Conventional | Selected field-first/current-last local conductivity and moments | [input](examples/tasks/kslice/berry_curvature_quadrupole_conductivity_conventional.jl) |
+
+See [BCD/BCQ domains, units and backend contracts](docs/BCD_BCQ.md). Existing BCDK/BCQK defaults remain finite differences; the new analytic route requires an explicit backend and Direct evaluation. Finite-region integration adds no boundary term and retains its output warning.
+
+
+Geometry defaults and VASP/QE Wannier mesh input are described in [the internal migration note](docs/GEOMETRY_OPTIONS_MIGRATION.md).
+
+## Response near-degeneracy groups
+
+Projector, Wilson Loop and Geometric Loop response paths use adjacent-gap chain grouping: consecutive sorted energy gaps strictly below `degeneracy_threshold` belong to one group. Numerical equality remains grouped even at zero threshold. A group may span more than this threshold. This changes Projector and Geometric QHC threshold consumption and Geometric SC/PDSC/shift-vector span grouping. Exact spectral reconstruction blocks and gap-error guards remain independent; individual energies and pair occupation/resonance weights are retained. Static intrinsic AHC instead retains real-energy zero-temperature occupations and direct nonzero real-gap denominators; it does not consume this grouping threshold. Explicit user band selections remain selections rather than automatic energy partitions.
+
+The legacy Projector and Geometric quantum-geometry marker entries retain their original exact-spectral admissibility check as a separate prerequisite. The returned exact ranges do not determine the response chain. Thus an unresolved distinct tiny gap still rejects at those entries; increasing the response threshold cannot disable that check. Dedicated Wilson and Geometric response-only markers retain their original separation from operator reconstruction checks.
+
+Geometric Loop does not support Quantum Hermitian Connection in 1.2. Such requests are rejected explicitly; select Conventional, Projector, or Wilson Loop QHC explicitly when appropriate. Other Geometric Loop responses are unaffected.
+
+Native orthogonal models can also use [direct low dimensional physical inputs](docs/NATIVE_MODELS.md#direct-low-dimensional-physical-inputs). A physical 1x1/2x2 lattice determines the standard x/xy momentum dimension; model-owned one-Angstrom auxiliary directions supply reference volume without adding sampling axes. Existing complete 3x3 inputs retain their behavior.

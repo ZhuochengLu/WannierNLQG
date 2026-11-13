@@ -8,6 +8,7 @@ function _star_construction_quality_gate!(
     threshold;
     context = "NOT_RECORDED",
 )
+    validate_ordinary_construction_policy(config.construction_policy)
     isfinite(value) && isfinite(threshold) && threshold > 0 ||
         throw(ArgumentError("NONFINITE_STRUCTURAL_HOLD: invalid $(name) value or threshold"))
     passed = value <= threshold
@@ -18,15 +19,12 @@ function _star_construction_quality_gate!(
     maxima["construction_$(name)_threshold"] = Float64(threshold)
     maxima["construction_$(name)_failed"] =
         max(get(maxima, "construction_$(name)_failed", 0.0), passed ? 0.0 : 1.0)
-    action =
-        passed ? "CONTINUE" : config.construction_policy == :standard ? "CONTINUE_STANDARD" : "STOP"
+    action = passed ? "CONTINUE" : "CONTINUE_WITH_NUMERICAL_WARNING"
     if !passed || !haskey(contexts, "construction_$(name)_failed")
         contexts["construction_$(name)_failed"] = action
     end
     if !passed
         _star_append_preflight_diagnostic!(config, name, value, threshold, context, action)
-        config.construction_policy == :strict &&
-            _strict_sewing_gate(String(name), value, threshold; context = String(context))
     end
     return passed
 end
@@ -1035,8 +1033,8 @@ function _star_partition_candidate_solution(
         maximum_contexts = maximum_contexts,
         workspace_eigenvectors = eigenvectors,
         selected_vectors = selected_vectors,
-        target_anchor_sha256 = completion_data === nothing ? nothing :
-                               completion_data.target_anchor_sha256,
+        target_anchor_checked = completion_data === nothing ? nothing :
+                                completion_data.target_anchor_checked,
         complement_basis = completion_data === nothing ? nothing : completion_data.complement_basis,
         complement_rotation = completion_data === nothing ? nothing :
                               completion_data.complement_rotation,
@@ -1223,14 +1221,8 @@ function _star_frozen_target_complement_eigenpair(
     h_tc = target_vectors' * hamiltonian * complement.basis
     h_tc_maximum = maximum(abs, h_tc; init = 0.0)
     threshold = authority.completion.target_complement_max_element_ev
-    get(context, :construction_policy, :strict) == :standard ||
-        h_tc_maximum <= threshold ||
-        throw(
-            ArgumentError(
-                "TARGET_COMPLEMENT_COUPLING_HOLD: maximum_abs_H_TC=$(h_tc_maximum) exceeds $(threshold); " *
-                "star=$(context.star_index),rep=$(context.representative)",
-            ),
-        )
+    isfinite(h_tc_maximum) ||
+        throw(ArgumentError("NONFINITE_STRUCTURAL_HOLD: target-complement coupling"))
     h_cc = Matrix(Hermitian(complement.basis' * hamiltonian * complement.basis))
     outer_values = Float64[]
     outer_vectors = zeros(ComplexF64, dimension, 0)
@@ -1272,20 +1264,13 @@ function _star_frozen_target_complement_eigenpair(
     target_vectors_after = copy(vectors[:, target_indices])
     target_energy_drift = maximum(abs, target_values_after - target_values; init = 0.0)
     target_vector_drift = maximum(abs, target_vectors_after - target_vectors; init = 0.0)
-    anchor_before = bytes2hex(
-        SHA.sha256(
-            vcat(reinterpret(UInt8, vec(target_values)), reinterpret(UInt8, vec(target_vectors))),
-        ),
+    _validate_target_anchor_values(
+        target_values,
+        target_vectors,
+        target_values_after,
+        target_vectors_after,
     )
-    anchor_after = bytes2hex(
-        SHA.sha256(
-            vcat(
-                reinterpret(UInt8, vec(target_values_after)),
-                reinterpret(UInt8, vec(target_vectors_after)),
-            ),
-        ),
-    )
-    target_energy_drift == 0.0 && target_vector_drift == 0.0 && anchor_before == anchor_after ||
+    target_energy_drift == 0.0 && target_vector_drift == 0.0 ||
         throw(ArgumentError("TARGET_ANCHOR_DRIFT_HOLD: frozen target arrays changed"))
     identity_residual = maximum(abs, vectors' * vectors - I)
     isfinite(identity_residual) ||
@@ -1317,7 +1302,7 @@ function _star_frozen_target_complement_eigenpair(
         target_values = target_values,
         target_vectors = target_vectors,
         target_indices = target_indices,
-        target_anchor_sha256 = anchor_before,
+        target_anchor_checked = true,
         complement_basis = complement.basis,
         complement_rotation = complement.basis' * vectors[:, complement_indices],
         target_complement_hamiltonian = h_tc,
@@ -1450,6 +1435,8 @@ function _star_controlled_native_difference_evidence!(
         ),
     )
         value = solution.maxima[name]
+        isfinite(value) && isfinite(threshold) && threshold > 0 ||
+            throw(ArgumentError("NONFINITE_STRUCTURAL_HOLD: controlled correction $(name)"))
         ratio = value / threshold
         metric_context = get(solution.maximum_contexts, name, String(context))
         if audit_only
@@ -1578,7 +1565,7 @@ function _build_star_covariant_paw_payload(
     )
     kpoint_map, reciprocal_shifts =
         build_canonical_kpoint_action(operations, kpoints; tolerance = 1.0e-8)
-    stage_contract = _preparation_contract(config, (; raw_native))
+    stage_contract = _preparation_contract(config, (; raw_native); reusable_stage = true)
     raw_metric, native_norm, native_norm_worst =
         _preparation_cached_stage(config, stage_contract, "raw_metric") do
             _strict_sewing_metric(parent_source, raw_native)
@@ -1640,7 +1627,8 @@ function _build_star_covariant_paw_payload(
     parent_energy_shifts_by_kpoint =
         symmetrized_authority ? zeros(Float64, parent_count, nk) : nothing
     symmetrized_target_authority = symmetrized_authority && target_scope_active
-    target_anchor_sha256_by_star = symmetrized_target_authority ? fill("", length(stars)) : nothing
+    target_anchor_checked_by_star =
+        symmetrized_target_authority ? fill(false, length(stars)) : nothing
     complement_bases =
         symmetrized_target_authority ?
         zeros(ComplexF64, parent_count, parent_count, length(stars)) : nothing
@@ -1851,7 +1839,7 @@ function _build_star_covariant_paw_payload(
         end
         if symmetrized_target_authority
             complement_indices = setdiff(collect(parent_range), authority_indices)
-            target_anchor_sha256_by_star[star_index] = something(solution.target_anchor_sha256)
+            target_anchor_checked_by_star[star_index] = something(solution.target_anchor_checked)
             complement_bases[:, complement_indices, star_index] .=
                 something(solution.complement_basis)
             complement_rotations[complement_indices, complement_indices, star_index] .=
@@ -2128,31 +2116,29 @@ function _build_star_covariant_paw_payload(
     end
     for (name, value, threshold, failure_code) in final_gates
         isfinite(value) || throw(ArgumentError("NONFINITE_STRUCTURAL_HOLD: $(name) is nonfinite"))
-        if config.construction_policy == :standard
-            _star_construction_quality_gate!(
-                config,
-                maxima,
-                contexts,
-                name,
-                value,
-                threshold;
-                context = get(contexts, name, "NOT_RECORDED"),
+        _star_construction_quality_gate!(
+            config,
+            maxima,
+            contexts,
+            name,
+            value,
+            threshold;
+            context = get(contexts, name, "NOT_RECORDED"),
+        )
+        # An explicitly requested correction qualification remains independent
+        # from the ordinary construction policy.
+        if controlled_correction && !diagnostic_controlled && value > threshold
+            throw(
+                ArgumentError(
+                    "$(failure_code): $(name)=$(value) exceeds $(threshold); $(get(contexts,name,"NOT_RECORDED"))",
+                ),
             )
-            continue
         end
-        value <= threshold && continue
-        if diagnostic_controlled
+        if diagnostic_controlled && value > threshold
             maxima["controlled_symmetrization_strict_violation_count"] += 1.0
             maxima["controlled_symmetrization_strict_maximum_ratio"] =
-                max(maxima["controlled_symmetrization_strict_maximum_ratio"], value / threshold)
-            continue
+                max(maxima["controlled_symmetrization_strict_maximum_ratio"], value/threshold)
         end
-        throw(
-            ArgumentError(
-                "$(failure_code): $(name)=$(value) exceeds $(threshold); " *
-                "$(get(contexts, name, "NOT_RECORDED"))",
-            ),
-        )
     end
     if limited_scope_reached
         _star_append_preflight_diagnostic(
@@ -2178,9 +2164,9 @@ function _build_star_covariant_paw_payload(
         )
     end
     block_policy_metadata = _star_block_partition_policy_metadata(gauge.block_partition_policy)
-    block_policy_sha256 = _star_block_partition_policy_sha256(block_policy_metadata)
+    block_policy_sha256 = _star_block_partition_policy_definition(block_policy_metadata)
     correction_metadata = _star_hamiltonian_correction_metadata(gauge.hamiltonian_correction)
-    correction_sha256 = _star_hamiltonian_correction_sha256(gauge.hamiltonian_correction)
+    correction_sha256 = _star_hamiltonian_correction_definition(gauge.hamiltonian_correction)
     authority_metadata = _star_authoritative_hamiltonian_metadata(config.authoritative_hamiltonian)
     target_contract_sha256 = if config.target_subspace_contract === nothing
         "NOT_APPLICABLE"
@@ -2189,12 +2175,10 @@ function _build_star_covariant_paw_payload(
         merge!(authority_metadata, _star_target_subspace_contract_metadata(contract))
         authority_metadata["qualification_scope"] = "target_subspace"
         authority_metadata["auxiliary_parent_qualification"] = "audit_only"
-        authority_metadata["target_scope_production_eligible"] =
-            config.construction_policy == :standard ? "false" : "true"
-        authority_metadata["scoped_production_eligible"] =
-            config.construction_policy == :standard ? "false" : "true"
-        digest = _star_target_subspace_contract_sha256(contract)
-        authority_metadata["target_subspace_contract_sha256"] = digest
+        authority_metadata["target_scope_production_eligible"] = "false"
+        authority_metadata["scoped_production_eligible"] = "false"
+        digest = _star_target_subspace_contract_definition(contract)
+        authority_metadata["target_subspace_contract_definition"] = digest
         digest
     end
     if symmetrized_authority
@@ -2224,28 +2208,29 @@ function _build_star_covariant_paw_payload(
                 maxima["symmetrized_parent_formal_eigen_residual_ev"] >
                 gauge.thresholds.projected_eigen_residual_ev ? "AUXILIARY_PARENT_AUDIT_EXCEEDED" :
                 "WITHIN_AUDIT_REFERENCE"
-            authority_metadata["target_scope_production_eligible"] =
-                config.construction_policy == :standard ? "false" : "true"
+            authority_metadata["target_scope_production_eligible"] = "false"
         end
     end
-    authority_sha256 = _star_authoritative_hamiltonian_sha256(config.authoritative_hamiltonian)
-    strict_source_hashes = _strict_input_hashes(parent_source, raw_native)
+    authority_sha256 = _star_authoritative_hamiltonian_definition(config.authoritative_hamiltonian)
+    _strict_source_definition(parent_source, raw_native)
     input_sha256 = merge(
-        strict_source_hashes,
-        _star_input_audit_hash(config, raw_native.input_sha256, length(operations)),
+        _star_input_audit_definition(
+            config,
+            something(raw_native.source_definition),
+            length(operations),
+        ),
         Dict(
-            "BLOCK_PARTITION_POLICY_SHA256" => block_policy_sha256,
-            "DISCRETE_HAMILTONIAN_CORRECTION_SHA256" => correction_sha256,
+            "BLOCK_PARTITION_POLICY_DEFINITION" => block_policy_sha256,
+            "DISCRETE_HAMILTONIAN_CORRECTION_DEFINITION" => correction_sha256,
             "AUTHORITATIVE_HAMILTONIAN_SHA256" => authority_sha256,
             "TARGET_SUBSPACE_CONTRACT_SHA256" => target_contract_sha256,
         ),
     )
     source_replay_metadata = begin
         metadata = _star_source_replay_metadata(config.source)
-        metadata["source_replay_resource_manifest_sha256"] =
-            _star_input_identity_sha256(strict_source_hashes)
-        metadata["source_replay_descriptor_sha256"] =
-            _star_source_replay_descriptor_sha256(metadata)
+        metadata["source_replay_content_authentication"] = "NOT_PERFORMED"
+        metadata["source_replay_descriptor_definition"] =
+            _star_source_replay_descriptor_definition(metadata)
         metadata
     end
     source_metadata = merge(
@@ -2279,8 +2264,9 @@ function _build_star_covariant_paw_payload(
         native.mp_grid,
         native.spinor,
         final_points,
-        input_sha256,
-        source_metadata,
+        Dict{String, String}(),
+        source_metadata;
+        source_definition = native.source_definition,
     )
     preparation_release!()
     _preparation_stage!(config, "completed_metric_started")
@@ -2350,7 +2336,8 @@ function _build_star_covariant_paw_payload(
             completed_native.spinor,
             data.points,
             completed_native.input_sha256,
-            completed_native.source_metadata,
+            completed_native.source_metadata;
+            source_definition = completed_native.source_definition,
         )
         replay_parent_norm, replay_parent_norm_worst =
             _strict_generalized_norm_from_metric(data.metric, replay_native)
@@ -2412,7 +2399,6 @@ function _build_star_covariant_paw_payload(
         source_band_gauge = "native_dft_eigenstate",
         target_band_gauge = symmetrized_authority ? "symmetrized_dft_hamiltonian" :
                             "sawf_completed_native_dft",
-        source_identity_sha256 = _star_input_identity_sha256(strict_source_hashes),
         physical_isometry_tolerance = target_scope_active ?
                                       something(config.target_subspace_contract).scoped_paw_thresholds.paw_s_norm :
                                       thresholds.paw_s_norm,
@@ -2422,8 +2408,8 @@ function _build_star_covariant_paw_payload(
         replay_evidence = local_replay,
     )
     merge!(source_metadata, band_frame_contract_metadata(band_frame_contract))
-    input_sha256["BAND_FRAME_TRANSFORM_SHA256"] = band_frame_contract.transform_sha256
-    input_sha256["BAND_FRAME_CONTRACT_SHA256"] = band_frame_contract.contract_sha256
+    input_sha256["BAND_FRAME_TRANSFORM_DEFINITION"] = band_frame_contract.transform_definition
+    input_sha256["BAND_FRAME_CONTRACT_DEFINITION"] = band_frame_contract.contract_definition
     completed_native = NativeWavefunctionData(
         completed_native.source_code,
         completed_native.structure,
@@ -2431,8 +2417,9 @@ function _build_star_covariant_paw_payload(
         completed_native.mp_grid,
         completed_native.spinor,
         completed_native.kpoints,
-        input_sha256,
-        source_metadata,
+        Dict{String, String}(),
+        source_metadata;
+        source_definition = completed_native.source_definition,
     )
     if symmetrized_target_authority
         completed_native = NativeWavefunctionData(
@@ -2443,7 +2430,8 @@ function _build_star_covariant_paw_payload(
             completed_native.spinor,
             completed_native.kpoints,
             completed_native.input_sha256,
-            source_metadata,
+            source_metadata;
+            source_definition = completed_native.source_definition,
         )
     end
     audit_payload = if symmetrized_authority
@@ -2465,7 +2453,7 @@ function _build_star_covariant_paw_payload(
             parent_band_assignments,
             target_energy_shifts_by_star,
             parent_energy_shifts_by_kpoint,
-            target_anchor_sha256_by_star,
+            target_anchor_checked_by_star,
             complement_bases,
             complement_rotations,
             target_complement_hamiltonians,
@@ -2516,13 +2504,8 @@ function _prepare_symmetry_covariant_wavefunctions_impl(
     config::SymmetryCovariantWavefunctionPreparationConfig,
 )
     validate_symmetry_covariant_wavefunction_preparation_config(config)
-    input_hashes =
-        Dict(name => sha256_file(path) for (name, path) in _preparation_source_files(config.source))
-    payload_contract =
-        _preparation_contract(config, (; raw_native = (; input_sha256 = input_hashes)))
-    # Pilot selection remains part of the binding; it cannot restore a full-grid run.
-    payload_key = payload_contract * repr((config.maximum_star_count, config.selected_star_indices))
-    payload = _preparation_cached_stage(config, payload_key, "completed_payload") do
+    payload_contract = _preparation_contract(config, nothing)
+    payload = _preparation_cached_stage(config, payload_contract, "completed_payload") do
         _preparation_stage!(config, "native_read_started")
         raw_native = _read_augmentation_aware_native_source(
             _star_source_with_band_range(config.source, nothing),
@@ -2536,13 +2519,7 @@ function _prepare_symmetry_covariant_wavefunctions_impl(
     _preparation_stage!(config, "strict_representation_started")
     diagnostics = String[]
     gauge = config.wavefunction_gauge_backend::StarCovariantPAWGauge
-    standard_route =
-        config.construction_policy == :standard || (
-            gauge.hamiltonian_correction isa FarBandCovarianceCorrection &&
-            (gauge.hamiltonian_correction::FarBandCovarianceCorrection).qualification_mode ==
-            :standard
-        )
-    status = standard_route ? :STANDARD : :PASS
+    status = :STANDARD
     root_cause = if config.authoritative_hamiltonian isa SymmetrizedDFTHamiltonian
         :SYMMETRIZED_DFT_HAMILTONIAN_PASS
     elseif gauge.hamiltonian_correction isa FarBandCovarianceCorrection
@@ -2570,7 +2547,7 @@ function _prepare_symmetry_covariant_wavefunctions_impl(
                 config.sewing_backend::AugmentationAwareSewing,
                 strict_metric = payload.metric,
                 block_partition_policy = (config.wavefunction_gauge_backend::StarCovariantPAWGauge).block_partition_policy,
-                enforce_thresholds = !standard_route,
+                enforce_thresholds = false,
                 diagnostic_outer_masks = diagnostic_outer_masks,
                 diagnostic_frozen_masks = diagnostic_frozen_masks,
             )
@@ -2580,7 +2557,7 @@ function _prepare_symmetry_covariant_wavefunctions_impl(
             config,
             Dict(
                 "stage" => "FULL_STRICT_REPRESENTATION_PASS",
-                "status" => standard_route ? "STANDARD" : "PASS",
+                "status" => "STANDARD",
                 "source_kpoint_count" => length(payload.native.kpoints),
                 "operation_count" => length(payload.operations),
                 "maxima" => payload.maxima,
@@ -2621,13 +2598,18 @@ function _prepare_symmetry_covariant_wavefunctions_impl(
         splitext(config.output_hdf5)[1] * ".hold.h5"
     preparation_release!()
     _preparation_stage!(config, "gauge_write_started")
-    output =
-        _write_star_covariant_paw_gauge_hdf5(output_path, payload; status, root_cause, diagnostics)
+    output = _write_star_covariant_paw_gauge_hdf5(
+        output_path,
+        payload;
+        status,
+        root_cause,
+        diagnostics,
+        ordinary_calculation = status==:STANDARD,
+    )
     if status in (:PASS, :STANDARD)
         eig_path = splitext(output)[1] * ".eig"
         write_wannier_eig(eig_path, WannierEIG(size(energies, 1), size(energies, 2), energies))
     end
-    artifact_sha256 = sha256_file(output)
     native_residual = get(
         payload.maxima,
         "native_fidelity_projected_eigen_residual_ev",
@@ -2639,13 +2621,13 @@ function _prepare_symmetry_covariant_wavefunctions_impl(
     symmetrized_status =
         is_symmetrized_authority(config.authoritative_hamiltonian) ?
         (
-            status == :PASS ? :SYMMETRIZED_DFT_HAMILTONIAN_PASS :
+            status in (:PASS, :STANDARD) ? :SYMMETRIZED_DFT_HAMILTONIAN_COMPUTATION_READY :
             :SYMMETRIZED_DFT_HAMILTONIAN_PRECHECK_HOLD
         ) : :NOT_SELECTED
     target_status =
         config.authoritative_hamiltonian isa SymmetrizedDFTHamiltonian ?
         (
-            status == :PASS ? :SYMMETRIZED_DFT_HAMILTONIAN_PASS :
+            status in (:PASS, :STANDARD) ? :SYMMETRIZED_DFT_HAMILTONIAN_COMPUTATION_READY :
             :SYMMETRIZED_DFT_HAMILTONIAN_TARGET_PRECHECK_HOLD
         ) : :NOT_SELECTED
     auxiliary_parent_status =
@@ -2668,7 +2650,7 @@ function _prepare_symmetry_covariant_wavefunctions_impl(
         status,
         root_cause,
         output,
-        artifact_sha256,
+        "NOT_PERFORMED",
         payload.target_band_range,
         payload.parent_band_range,
         payload.star_representatives,
@@ -2690,33 +2672,28 @@ function _prepare_symmetry_covariant_wavefunctions_impl(
     )
 end
 
-# Hash every QE file whose bytes can affect a completed star-gauge payload.
-function _star_current_source_hashes(source::QuantumEspressoWavefunctionSource)
+# Enumerate actual labelled QE sources for bounded complete-value comparison.
+function _star_current_source_files(source::QuantumEspressoWavefunctionSource)
     metadata = read_qe_xml(source)
-    hashes = Dict("data-file-schema.xml" => sha256_file(metadata.xml_file))
+    files = Dict("data-file-schema.xml" => metadata.xml_file)
     for label in sort!(collect(keys(metadata.upf_files)))
         filename = metadata.upf_files[label]
-        hashes["UPF:$(label):$(basename(filename))"] = sha256_file(filename)
+        files["UPF:$(label):$(basename(filename))"] = filename
     end
     for kpoint in eachindex(metadata.kpoint_nodes)
         filename = qe_wavefunction_file(source, kpoint)
-        hashes[basename(filename)] = sha256_file(filename)
+        files[basename(filename)] = filename
     end
-    return hashes
+    return files
 end
 
-# Hash every VASP file whose bytes can affect a completed star-gauge payload.
-function _star_current_source_hashes(source::VASPWavefunctionSource)
-    hashes = Dict(
-        "POSCAR" => sha256_file(source.poscar_file),
-        "WAVECAR" => sha256_file(source.wavecar_file),
-    )
-    source.potcar_file === nothing ||
-        (hashes["POTCAR"] = sha256_file(something(source.potcar_file)))
-    source.incar_file === nothing || (hashes["INCAR"] = sha256_file(something(source.incar_file)))
-    source.outcar_file === nothing ||
-        (hashes["OUTCAR"] = sha256_file(something(source.outcar_file)))
-    return hashes
+# Include all declared VASP sources, including strict PAW and magnetic inputs.
+function _star_current_source_files(source::VASPWavefunctionSource)
+    files = Dict("POSCAR" => source.poscar_file, "WAVECAR" => source.wavecar_file)
+    source.potcar_file === nothing || (files["POTCAR"] = something(source.potcar_file))
+    source.incar_file === nothing || (files["INCAR"] = something(source.incar_file))
+    source.outcar_file === nothing || (files["OUTCAR"] = something(source.outcar_file))
+    return files
 end
 
 # Fail closed when the raw source or selected target range differs from the gauge capsule.
@@ -2729,10 +2706,8 @@ function _validate_star_gauge_source_identity(
             "WAVEFUNCTION_GAUGE_ARTIFACT_MISMATCH: source band range differs from artifact",
         ),
     )
-    current = _star_current_source_hashes(source)
-    for (key, value) in current
-        get(payload.input_sha256, key, "MISSING") == value ||
-            throw(ArgumentError("INPUT_PROVENANCE_HOLD: source digest differs for $(key)"))
-    end
+    definition = payload.native.source_definition
+    definition === nothing && throw(ArgumentError("NATIVE_SOURCE_COMPLETE_DEFINITION_REQUIRED"))
+    IO.validate_scientific_source_collection(_star_current_source_files(source), definition)
     return nothing
 end

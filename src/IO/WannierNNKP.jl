@@ -1,4 +1,4 @@
-"""One ordered Wannier90 trial projection exactly as serialized in `.nnkp`."""
+"""One ordered Wannier trial projection exactly as serialized in `.nnkp`."""
 struct WannierNNKPProjection
     center_fractional::NTuple{3, Float64}
     angular_code::Int
@@ -14,7 +14,7 @@ end
 """
     WannierNNKP
 
-Strict, immutable view of the Wannier90 preprocessing contract. The `.nnkp`
+Strict, immutable view of the Wannier preprocessing contract. The `.nnkp`
 file is authoritative for k-point order, neighbour topology, reciprocal
 shifts, excluded bands, ordered trial projections, and (when present) spin
 quantization axes. Lattice vectors use row-vector storage.
@@ -28,7 +28,7 @@ struct WannierNNKP
     excluded_bands::Vector{Int}
     projections::Vector{WannierNNKPProjection}
     spinor::Bool
-    source_sha256::String
+    source_sha256::Union{Nothing, String}
 
     function WannierNNKP(
         real_lattice,
@@ -60,10 +60,13 @@ struct WannierNNKP
             throw(ArgumentError("NNKP contains an out-of-range neighbour index"))
         all(>(0), excluded) || throw(ArgumentError("NNKP excluded bands must be positive"))
         isempty(projection_values) && throw(ArgumentError("NNKP contains no trial projections"))
-        digest = lowercase(String(source_sha256))
-        length(digest) == 64 &&
-        all(character -> isdigit(character) || character in 'a':'f', digest) ||
-            throw(ArgumentError("NNKP source SHA-256 is malformed"))
+        digest = source_sha256 === nothing ? nothing : lowercase(String(source_sha256))
+        (
+            digest === nothing || (
+                length(digest) == 64 &&
+                all(character -> isdigit(character) || character in 'a':'f', digest)
+            )
+        ) || throw(ArgumentError("NNKP source SHA-256 is malformed"))
         all(isfinite, real) && all(isfinite, reciprocal) && all(isfinite, kpoints) ||
             throw(ArgumentError("NNKP contains non-finite lattice or k-point values"))
         isapprox(real * transpose(reciprocal), 2.0pi * I; atol = 2.0e-6, rtol = 0.0) ||
@@ -143,7 +146,7 @@ function _nnkp_axis(values, label::AbstractString)
     return Tuple(vector ./ norm(vector))
 end
 
-# Return the number of angular rows associated with a Wannier90 angular code.
+# Return the number of angular rows associated with a Wannier angular code.
 function _nnkp_angular_dimension(code::Int)
     code >= 0 && code <= 3 && return 2 * code + 1
     dimensions = Dict(-1 => 2, -2 => 3, -3 => 4, -4 => 5, -5 => 6)
@@ -215,11 +218,14 @@ end
 """
     read_wannier_nnkp(filename) -> WannierNNKP
 
-Read and strictly validate the complete Wannier90 preprocessing contract. No
+Read and strictly validate the complete Wannier preprocessing contract. No
 MMN or AMN values are consulted, and no missing section is inferred from a WIN
 file or a DFT source.
 """
-function read_wannier_nnkp(filename::AbstractString)::WannierNNKP
+function read_wannier_nnkp(
+    filename::AbstractString;
+    content_authentication::Bool = true,
+)::WannierNNKP
     isfile(filename) || throw(ArgumentError("NNKP file does not exist: $(filename)"))
     lines = readlines(filename)
     sections = _nnkp_sections(lines)
@@ -282,8 +288,12 @@ function read_wannier_nnkp(filename::AbstractString)::WannierNNKP
 
     spinor = has_spinor
     projections = _nnkp_projections(sections[spinor ? "spinor_projections" : "projections"], spinor)
-    digest = open(filename, "r") do io
-        bytes2hex(SHA.sha256(io))
+    digest = if content_authentication
+        open(filename, "r") do io
+            bytes2hex(SHA.sha256(io))
+        end
+    else
+        nothing
     end
     return WannierNNKP(
         real_lattice,
@@ -296,4 +306,111 @@ function read_wannier_nnkp(filename::AbstractString)::WannierNNKP
         spinor,
         digest,
     )
+end
+
+"""Own and validate a native topology definition without creating an NNKP file.
+
+The returned digest identifies these semantic values, not any caller-provided
+file hash. The old file reader continues to identify its original file bytes.
+All mutable arrays are copied before hashing; point and projection order are
+preserved. This does not qualify wavefunctions or a physical overlap metric.
+"""
+function owned_wannier_topology(
+    real_lattice,
+    reciprocal_lattice,
+    kpoints_fractional,
+    neighbors,
+    reciprocal_shifts,
+    excluded_bands,
+    projections,
+    spinor;
+    content_authentication::Bool = true,
+)
+    value = WannierNNKP(
+        real_lattice,
+        reciprocal_lattice,
+        kpoints_fractional,
+        neighbors,
+        reciprocal_shifts,
+        excluded_bands,
+        projections,
+        spinor,
+        nothing,
+    )
+    for item in value.projections
+        all(isfinite, item.center_fractional) || throw(ArgumentError("nonfinite projection center"))
+        1 <= item.angular_index <= _nnkp_angular_dimension(item.angular_code) ||
+            throw(ArgumentError("projection angular index is out of range"))
+        item.radial_index in 1:3 || throw(ArgumentError("unsupported projection radial index"))
+        isfinite(item.radial_scale) && item.radial_scale > 0 ||
+            throw(ArgumentError("projection radial scale must be finite and positive"))
+        for axis in (item.z_axis_cartesian, item.x_axis_cartesian)
+            all(isfinite, axis) && isapprox(norm(axis), 1.0; atol = 1e-12, rtol = 0) ||
+                throw(ArgumentError("projection axes must be finite unit vectors"))
+        end
+        abs(dot(item.z_axis_cartesian, item.x_axis_cartesian)) <= 1e-8 ||
+            throw(ArgumentError("projection axes must be orthogonal"))
+        if value.spinor
+            item.spin_eigenvalue in (-1, 1) && item.spin_axis_cartesian !== nothing ||
+                throw(ArgumentError("spinor projection requires eigenvalue and spin axis"))
+            axis = something(item.spin_axis_cartesian)
+            all(isfinite, axis) && isapprox(norm(axis), 1.0; atol = 1e-12, rtol = 0) ||
+                throw(ArgumentError("spin axis must be a finite unit vector"))
+        else
+            item.spin_eigenvalue === nothing && item.spin_axis_cartesian === nothing ||
+                throw(ArgumentError("scalar projection cannot carry spin labels"))
+        end
+    end
+    fields = (
+        value.real_lattice,
+        value.reciprocal_lattice,
+        value.kpoints_fractional,
+        value.neighbors,
+        value.reciprocal_shifts,
+        value.excluded_bands,
+        value.projections,
+        value.spinor,
+    )
+    digest =
+        content_authentication ?
+        bytes2hex(sha256("WannierNLQG.owned-topology.v1\n" * repr(fields))) : nothing
+    return WannierNNKP(fields..., digest)
+end
+
+# Copy a parsed NNKP topology through the owner constructor with the requested content-authentication policy.
+owned_wannier_topology(value::WannierNNKP; content_authentication::Bool = true) =
+    owned_wannier_topology(
+        value.real_lattice,
+        value.reciprocal_lattice,
+        value.kpoints_fractional,
+        value.neighbors,
+        value.reciprocal_shifts,
+        value.excluded_bands,
+        value.projections,
+        value.spinor;
+        content_authentication,
+    )
+
+"""Complete owned topology values for non-hash scientific comparisons.
+
+This is the actual parsed definition, not a content-authentication credential.
+Order, dimensions, projection axes and spin labels are retained. The caller
+must compare the complete definition, rather than treating a path as identity.
+"""
+function wannier_topology_definition(value::WannierNNKP)
+    projections = [
+        Tuple(getfield(item, name) for name in fieldnames(WannierNNKPProjection)) for
+        item in value.projections
+    ]
+    fields = (
+        copy(value.real_lattice),
+        copy(value.reciprocal_lattice),
+        copy(value.kpoints_fractional),
+        copy(value.neighbors),
+        copy(value.reciprocal_shifts),
+        copy(value.excluded_bands),
+        projections,
+        value.spinor,
+    )
+    return "WannierNLQG.topology-values/1:" * repr(fields)
 end

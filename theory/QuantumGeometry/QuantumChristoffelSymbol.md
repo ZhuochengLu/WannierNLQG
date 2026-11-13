@@ -36,7 +36,7 @@ The release reports the first-kind, equivalently all-lower-index, form and does 
 
 ## 4. Symbols, tensor indices, and subspace normalization
 
-The labels $r,l,j$ are all Cartesian directions in momentum space. Since $g^{ab}=g^{ba}$, one has $\Gamma^{rlj}=\Gamma^{rjl}$, so the last two indices are symmetric. The metric $g_S$ excludes intra-subspace transitions and uses an ordinary sum. The QCS contains only the internal metric contribution within the finite window of the release.
+The labels $r,l,j$ are all Cartesian directions in momentum space. Since $g^{ab}=g^{ba}$, one has $\Gamma^{rlj}=\Gamma^{rjl}$, so the last two indices are symmetric. The metric $g_S$ excludes intra-subspace transitions and uses an ordinary sum. The QCS differentiates the selected metric contribution: internal by default, or total including the full-overlap external term with explicit `include_external=true`.
 
 ## 5. Key limits, symmetries, and relations
 
@@ -56,3 +56,8 @@ The labels $r,l,j$ are all Cartesian directions in momentum space. Since $g^{ab}
 
 1. X.-B. Qiang, X. Liu, H.-Z. Lu, and X. C. Xie, “Quantum Christoffel Nonlinear Magnetization,” *Phys. Rev. Lett.* **136**, 056302 (2026). [DOI](https://doi.org/10.1103/4kmy-59l9)
 2. J. P. Provost and G. Vallée, “Riemannian structure on manifolds of quantum states,” *Commun. Math. Phys.* **76**, 289–301 (1980). [DOI](https://doi.org/10.1007/BF02193559)
+
+
+## Complete-overlap contract
+
+The primary output defaults to internal geometry (`include_external=false`), without component companions. With explicit `include_external=true`, admitted orthogonal input supplies the full derivative-overlap correction, the primary output is total, and `_internal`/`_external` companions retain the same columns and units. Only this opt-in requires qualified full F. Orthogonal internal inputs need H/r; nonorthogonal internal inputs need H/S/r and reject external completion. Numerical regularization and spectral guards are unchanged. Momentum derivatives use the selected contribution at every stencil point, with moving-frame transport retained. See [Quantum Metric](QuantumMetric.md) for input capabilities, subspace versus band-sum semantics, frame transformations, and convergence requirements.

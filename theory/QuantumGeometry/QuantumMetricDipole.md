@@ -16,9 +16,17 @@ where
 
 $$
 g_S^{ab}
-=\sum_{I\in S,J\notin S}
-\mathrm{Re}\left(r_{IJ}^{a}r_{JI}^{b}\right).
+=\sum_{I\in S,\,J\in T}
+\mathrm{Re}\left(r_{IJ}^{a,(H)}r_{JI}^{b,(H)}\right)
++g_{S,\mathrm{external}}^{ab}.
 $$
+
+Here $T$ is the complement of $S$ within the Wannier window, and the
+external term is the full derivative-overlap contraction defined in
+[Quantum metric](QuantumMetric.md). The displayed decomposition is the completed
+metric, selected only by explicit `include_external=true`. By default the K-slice
+output differentiates its internal finite-window term; the same derivative formula
+applies to whichever contribution is selected.
 
 If a Fermi-sea moment is desired, one may separately define
 
@@ -36,7 +44,7 @@ The term “quantum metric dipole” does not denote a unique tensor throughout 
 
 ## 4. Symbols, tensor indices, and normalization
 
-The labels $a,b$ are the symmetric metric indices, and $c$ is the dipole direction, so $D^{ab;c}=D^{ba;c}$. The target subspace excludes intra-subspace transitions and uses an ordinary sum without division by $N_S$. This family contains only the internal metric contribution within the finite window.
+The labels $a,b$ are the symmetric metric indices, and $c$ is the dipole direction, so $D^{ab;c}=D^{ba;c}$. The target subspace excludes intra-subspace transitions and uses an ordinary sum without division by $N_S$. The reported quantity defaults to the internal metric derivative; the full-overlap external contribution is included only with `include_external=true`.
 
 ## 5. Key symmetries and relations
 
@@ -57,3 +65,8 @@ The labels $a,b$ are the symmetric metric indices, and $c$ is the dipole directi
 1. Y. Ulrich, J. Mitscherling, L. Classen, and A. P. Schnyder, “Quantum geometric origin of the intrinsic nonlinear Hall effect,” *Phys. Rev. B* **113**, L201107 (2026). [DOI](https://doi.org/10.1103/4z8z-4kch)
 2. J. P. Provost and G. Vallée, “Riemannian structure on manifolds of quantum states,” *Commun. Math. Phys.* **76**, 289–301 (1980). [DOI](https://doi.org/10.1007/BF02193559)
 3. Y. Gao and D. Xiao, “Nonreciprocal Directional Dichroism Induced by the Quantum Metric Dipole,” *Phys. Rev. Lett.* **122**, 227402 (2019). [DOI](https://doi.org/10.1103/PhysRevLett.122.227402)
+
+
+## Complete-overlap contract
+
+The primary output defaults to internal geometry (`include_external=false`), without component companions. With explicit `include_external=true`, admitted orthogonal input supplies the full derivative-overlap correction, the primary output is total, and `_internal`/`_external` companions retain the same columns and units. Only this opt-in requires qualified full F. Orthogonal internal inputs need H/r; nonorthogonal internal inputs need H/S/r and reject external completion. Numerical regularization and spectral guards are unchanged. Momentum derivatives use the selected contribution at every stencil point, with moving-frame transport retained. See [Quantum Metric](QuantumMetric.md) for input capabilities, subspace versus band-sum semantics, frame transformations, and convergence requirements.

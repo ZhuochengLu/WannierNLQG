@@ -119,6 +119,15 @@ function _compute_preparation_star(common, star_index, star)
             construction_policy = config.construction_policy,
         )
     end
+    _star_construction_quality_gate!(
+        config,
+        maxima,
+        contexts,
+        "buffer_target_leakage",
+        buffer_leakage,
+        gauge.thresholds.state_leakage_amplitude;
+        context = "star=$(star_index),rep=$(representative),workspace=$(first(workspace)):$(last(workspace))",
+    )
     extra_bands =
         length(workspace) - (symmetrized_target_authority ? authority_count : target_count)
     _star_update_maximum!(
@@ -154,14 +163,6 @@ function _compute_preparation_star(common, star_index, star)
                 selected_reconstruction.state_leakage_amplitude_audit,
                 context,
             )
-        elseif config.construction_policy == :strict &&
-               selected_reconstruction.reconstruction_leakage_amplitude_audit >
-               gauge.thresholds.wfc_rotation_reconstruction
-            ArgumentError(
-                "FINITE_BUFFER_HOLD: selected PAW-S reconstruction " *
-                "$(selected_reconstruction.reconstruction_leakage_amplitude_audit) exceeds " *
-                "$(gauge.thresholds.wfc_rotation_reconstruction); $(context)",
-            ) |> throw
         end
     end
     selected_raw = [Matrix(@view(raw[workspace, workspace])) for raw in raw_transports]
@@ -273,7 +274,7 @@ function _compute_preparation_star(common, star_index, star)
             gauge.thresholds.normalized_polar_correction;
             context = formal.polar_correction_worst_context,
         )
-        if config.construction_policy == :standard
+        begin
             for (name, value, threshold) in (
                 (
                     "formal_target_initial_group_law",
@@ -293,6 +294,21 @@ function _compute_preparation_star(common, star_index, star)
                 (
                     "formal_target_analytic_group_law",
                     formal.analytic_group_law,
+                    min(1.0e-10, gauge.thresholds.hamiltonian_covariance_ev),
+                ),
+                (
+                    "formal_target_analytic_theta_squared",
+                    formal.analytic_theta_squared,
+                    min(1.0e-10, gauge.thresholds.hamiltonian_covariance_ev),
+                ),
+                (
+                    "formal_target_analytic_kramers",
+                    formal.analytic_kramers,
+                    min(1.0e-10, gauge.thresholds.hamiltonian_covariance_ev),
+                ),
+                (
+                    "formal_target_analytic_required_block_unitarity",
+                    formal.analytic_required_block_unitarity,
                     min(1.0e-10, gauge.thresholds.hamiltonian_covariance_ev),
                 ),
                 (
@@ -455,8 +471,7 @@ function _compute_preparation_star(common, star_index, star)
                         gauge.block_partition_policy,
                         selected_target_energies,
                         antiunitary_transports,
-                        controlled || config.construction_policy == :standard ? :diagnostic :
-                        :fail_stop,
+                        :diagnostic,
                     ),
                 ],
                 false,
@@ -612,6 +627,19 @@ function _compute_preparation_star(common, star_index, star)
             config.authoritative_hamiltonian,
             target_scope_active,
         )
+        for violation in violations
+            isfinite(violation.value) &&
+            isfinite(violation.threshold) &&
+            violation.threshold >= 0 ||
+                throw(ArgumentError("NONFINITE_STRUCTURAL_HOLD: candidate $(violation.name)"))
+            violation.threshold == 0 &&
+                violation.value != 0 &&
+                throw(
+                    ArgumentError(
+                        "TARGET_ANCHOR_DRIFT_HOLD: $(violation.name) differs from its frozen identity",
+                    ),
+                )
+        end
         if controlled
             correction = gauge.hamiltonian_correction::FarBandCovarianceCorrection
             controlled_thresholds = correction.thresholds
@@ -627,6 +655,17 @@ function _compute_preparation_star(common, star_index, star)
                 isempty(violations) ? 0.0 : first(violations).ratio
             standard_route = correction.qualification_mode == :standard
             if standard_route
+                for violation in violations
+                    _star_construction_quality_gate!(
+                        config,
+                        solution.maxima,
+                        solution.maximum_contexts,
+                        violation.name,
+                        violation.value,
+                        violation.threshold;
+                        context = violation.context,
+                    )
+                end
                 solution.maximum_contexts["controlled_symmetrization_strict_violation_count"] = "star=$(star_index),rep=$(representative),STANDARD"
                 solution.maximum_contexts["controlled_symmetrization_strict_maximum_ratio"] =
                     isempty(violations) ? "PASS" : first(violations).context
@@ -635,7 +674,7 @@ function _compute_preparation_star(common, star_index, star)
                 break
             end
         end
-        if config.construction_policy == :standard
+        if !controlled
             for violation in violations
                 _star_construction_quality_gate!(
                     config,
@@ -648,7 +687,7 @@ function _compute_preparation_star(common, star_index, star)
                 )
             end
         end
-        if isempty(violations) || config.construction_policy == :standard
+        if isempty(violations) || !controlled
             accepted_decision = partition_decision
             accepted_solution = solution
             break
@@ -825,10 +864,8 @@ function _compute_preparation_star(common, star_index, star)
     _star_append_preflight_diagnostic(
         config,
         Dict(
-            "stage" =>
-                config.construction_policy == :standard ? "POST_GAUGE_STAR_COMPLETED" :
-                "POST_GAUGE_STAR_PASS",
-            "status" => config.construction_policy == :standard ? "STANDARD" : "PASS",
+            "stage" => "POST_GAUGE_STAR_COMPLETED",
+            "status" => "STANDARD",
             "star_index" => star_index,
             "representative_kpoint" => representative,
             "star_kpoints" => star,

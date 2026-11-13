@@ -77,6 +77,58 @@ function transport_projector_matrix_to_reference!(
     )
 end
 
+# A shifted transport link consumes closed-group output columns only. Use one
+# enclosing 64-aligned column span, retaining all rows and intermediate bands.
+# This span policy is deliberately conservative for widely separated groups.
+# The public/default link remains complete; nonfinite, small, alias and dense-span
+# fallbacks use the same original GEMM, and no validity survives this call.
+# Shared storage admission only. Each reader retains its own closed-column
+# selection, finite-value checks, product order and full-output fallback.
+@inline function _dense_column_panel_storage_eligible(
+    output,
+    indices,
+    factors::Vararg{Any, N},
+) where {N}
+    n = size(output, 1)
+    if n < 128 ||
+       rem(n, 4) != 0 ||
+       isempty(indices) ||
+       !(output isa StridedMatrix{ComplexF64}) ||
+       size(output) != (n, n)
+        return false
+    end
+    for factor in factors
+        if !(factor isa StridedMatrix{ComplexF64}) ||
+           size(factor) != (n, n) ||
+           Base.mightalias(output, factor)
+            return false
+        end
+    end
+    return true
+end
+
+"""Overwrite eligible 64-column link panels; otherwise compute the complete ordered product. Unselected columns are invalid on the panel path."""
+function _compute_convention_link_columns!(output, left, right, indices)
+    indices === nothing && return mul!(output, left, right)
+    n = size(output, 1)
+    if !_dense_column_panel_storage_eligible(output, indices, left, right)
+        return mul!(output, left, right)
+    end
+    previous = 0
+    for band in indices
+        previous < band <= n || return mul!(output, left, right)
+        previous = band
+    end
+    first_column = 64 * div(first(indices) - 1, 64) + 1
+    last_column = min(n, 64 * cld(last(indices), 64))
+    if 2 * (last_column - first_column + 1) > n || !all(isfinite, left) || !all(isfinite, right)
+        return mul!(output, left, right)
+    end
+    columns = first_column:last_column
+    @views mul!(output[:, columns], left, right[:, columns])
+    return output
+end
+
 """
 Construct a Convention-covariant source-gauge subspace link in place.
 
@@ -84,6 +136,9 @@ For Convention I this computes `U_left^dagger * U_right`. For Convention II it
 inserts `D_tau(k_left) * D_tau(k_right)'` between the source-gauge eigenvectors.
 All scratch storage belongs to the caller; the routine applies no polar
 normalization, physical prefactor, or output normalization.
+The default writes the complete link. Internal `output_columns` may restrict
+valid output columns to a current closed group span; all rows and intermediate
+bands remain complete, and all other output columns are then invalid.
 """
 function compute_convention_covariant_overlap!(
     output::AbstractMatrix{ComplexF64},
@@ -93,11 +148,14 @@ function compute_convention_covariant_overlap!(
     wannier_centers_fractional::AbstractMatrix{<:Real},
     frame_phase_factors::AbstractVector{ComplexF64},
     frame_rotated_eigenvectors::AbstractMatrix{ComplexF64},
+    ;
+    output_columns = nothing,
 )
-    return mul!(
+    return _compute_convention_link_columns!(
         output,
         left.spectrum.source_eigenvectors_adjoint,
         right.spectrum.source_eigenvectors,
+        output_columns,
     )
 end
 
@@ -110,6 +168,8 @@ function compute_convention_covariant_overlap!(
     wannier_centers_fractional::AbstractMatrix{<:Real},
     frame_phase_factors::AbstractVector{ComplexF64},
     frame_rotated_eigenvectors::AbstractMatrix{ComplexF64},
+    ;
+    output_columns = nothing,
 )
     num_orbitals = left.num_orbitals
     right.num_orbitals == num_orbitals || error("Loop overlap orbital counts do not match.")
@@ -139,5 +199,10 @@ function compute_convention_covariant_overlap!(
         frame_rotated_eigenvectors[orbital, column] =
             frame_phase_factors[orbital] * right.spectrum.source_eigenvectors[orbital, column]
     end
-    return mul!(output, left.spectrum.source_eigenvectors_adjoint, frame_rotated_eigenvectors)
+    return _compute_convention_link_columns!(
+        output,
+        left.spectrum.source_eigenvectors_adjoint,
+        frame_rotated_eigenvectors,
+        output_columns,
+    )
 end

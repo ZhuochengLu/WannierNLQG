@@ -1,0 +1,20 @@
+{
+  "private_receipt_shipped": false,
+  "historical_wire": "1.4",
+  "qualification": "Reader/TB/spread workload; no optimizer continuation or physical qualification",
+  "original_fixture_unchanged": true,
+  "schema": "wanniernlqg.current-checkpoint-workload/2",
+  "historical_input": "test/fixtures/first_use_portable/assets/frozen_solver/synthetic.current.wannierization.h5",
+  "solver_status": "MAX_ITERATIONS",
+  "current_wire": "1.7",
+  "generation": "Actual current synthetic solve; independent inputs/geometry and 37 unaffected checks recorded in1268; cross-initialization equality failed and is not claimed",
+  "producer_run": "wannier-plan1268-001",
+  "producer_source": "candidate-r49",
+  "cross_initialization_equality": "FAIL_RETAINED_NOT_A_CURRENT_IO_REQUIREMENT",
+  "reference_checkpoint": "wannier-plan1268-001/execute/refreshed-current-checkpoint/solved.wannierization.h5",
+  "validation_run": "wannier-plan1269-001",
+  "validation": "196 scoped checks including actual producer-to-portable bit equality and independent analytic projector/zero-spread checks",
+  "solution_reference": "SOLUTION_REFERENCE.json",
+  "old_archive_full_byte_identity": "NOT_CLAIMED; original file retained, numerical prefix and raw numerical datasets independently checked",
+  "reference_checkpoint_base": "private scientific campaign runs directory; referenced source is not shipped"
+}

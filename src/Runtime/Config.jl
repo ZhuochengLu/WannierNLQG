@@ -2,6 +2,10 @@
 #
 # Energies and broadening use eV, temperature uses K, and Cartesian momentum uses the configured lattice convention. Construction stores settings; `run` validates combinations and reads inputs before computation.
 struct EffectiveTaskConfig
+    native_model_input::Union{Nothing, AbstractNativeModelInput}
+    integration_bounds::Union{Nothing, Tuple{NTuple{3, Float64}, NTuple{3, Float64}}}
+    integration_affine_region::Union{Nothing, CartesianAffineRegion{2}, CartesianAffineRegion{3}}
+    integration_algorithm::AbstractIntegrationAlgorithm
     gamma_intra_ev::Float64
     gamma_inter_ev::Float64
     fs_kind::Symbol
@@ -9,26 +13,33 @@ struct EffectiveTaskConfig
     spectral_gap_tolerance::Float64
     orbital_input_semantics::Symbol
     shg_low_frequency_broadening::Float64
+    shg_intermediate_regularization::Float64
     shg_eta_correction::Bool
     shg_output::Symbol
     shg_response::Symbol
+    third_order::Union{Nothing, ThirdOrderSettings}
+    derivative_backend::Symbol
+    derivative_backend_was_explicit::Bool
+    berry_multipole::Union{Nothing, BerryMultipoleSettings}
 
     # Original task tuples are retained for validation and run provenance.
     tasks::Vector{<:Tuple}
 
-    k_mesh::Union{NTuple{2, Int}, NTuple{3, Int}}
+    k_mesh::Union{NTuple{1, Int}, NTuple{2, Int}, NTuple{3, Int}}
     fourier_backend::String
-    NKdiv::Union{Nothing, NTuple{2, Int}, NTuple{3, Int}}
-    NKFFT::Union{Nothing, NTuple{2, Int}, NTuple{3, Int}}
+    NKdiv::Union{Nothing, NTuple{1, Int}, NTuple{2, Int}, NTuple{3, Int}}
+    NKFFT::Union{Nothing, NTuple{1, Int}, NTuple{2, Int}, NTuple{3, Int}}
     photon_energies::Vector{Float64}
     fermi_energies::Vector{Float64}
-    fermi_energies_sha256::String
+    fermi_energies_definition::String
     fermi_energy::Float64
     temperature::Float64
     broadening::Float64
     broadening_type::String
     transition_window_factor::Float64
     denominator_regularization::Float64
+    denominator_regularization_was_explicit::Bool
+    include_external::Bool
     spatial_dimension::Int
     band_window_size::Int
 
@@ -41,6 +52,8 @@ struct EffectiveTaskConfig
 
     kpath_nodes::Vector{Tuple{String, NTuple{3, Float64}}}
     kpoints_per_segment::Vector{Int}
+    kpath_branches::Vector{UnitRange{Int}}
+    kpath_provenance::Dict{String, Any}
     real_space_replica_policy::String
     wsvec_file::Union{Nothing, String}
     mp_grid::Union{Nothing, NTuple{3, Int}}
@@ -49,6 +62,7 @@ struct EffectiveTaskConfig
     band_hermiticity_tolerance::Float64
 
     photon_momentum::NTuple{3, Float64}
+    photon_momentum_path::Union{Nothing, PhotonMomentumPath}
     finite_difference_step::Float64
     wannier_center_convention::String
     degeneracy_threshold::Float64
@@ -78,7 +92,11 @@ struct EffectiveTaskConfig
 end
 
 """Construct a task configuration and reject the retired basis-correction switch."""
-function EffectiveTaskConfig(;
+Base.@nospecializeinfer function EffectiveTaskConfig(;
+    native_model_input::Union{Nothing, AbstractNativeModelInput} = nothing,
+    integration_bounds::Union{Nothing, Tuple{NTuple{3, Float64}, NTuple{3, Float64}}} = nothing,
+    integration_affine_region::Union{Nothing, CartesianAffineRegion{2}, CartesianAffineRegion{3}} = nothing,
+    integration_algorithm::AbstractIntegrationAlgorithm = UniformIntegration(),
     gamma_intra_ev::Float64 = 0.0,
     gamma_inter_ev::Float64 = 0.0,
     fs_kind::Symbol = :none,
@@ -87,23 +105,30 @@ function EffectiveTaskConfig(;
     orbital_input_semantics::Symbol = :unspecified,
 
     shg_low_frequency_broadening::Float64 = 0.025,
+    shg_intermediate_regularization::Union{Nothing, Float64} = nothing,
     shg_eta_correction::Bool = true,
     shg_output::Symbol = :total,
     shg_response::Symbol = :both,
+    third_order::Union{Nothing, ThirdOrderSettings} = nothing,
+    derivative_backend::Symbol = :finite_difference,
+    derivative_backend_was_explicit::Bool = false,
+    berry_multipole::Union{Nothing, BerryMultipoleSettings} = nothing,
     tasks::Vector{<:Tuple} = [("SC", "Conventional", "Integral")],
     k_mesh = (2, 2),
     fourier_backend::String,
-    NKdiv::Union{Nothing, NTuple{2, Int}, NTuple{3, Int}} = nothing,
-    NKFFT::Union{Nothing, NTuple{2, Int}, NTuple{3, Int}} = nothing,
+    NKdiv::Union{Nothing, NTuple{1, Int}, NTuple{2, Int}, NTuple{3, Int}} = nothing,
+    NKFFT::Union{Nothing, NTuple{1, Int}, NTuple{2, Int}, NTuple{3, Int}} = nothing,
     photon_energies::Vector{Float64} = Float64[0.10],
     fermi_energies::Vector{Float64} = Float64[],
-    fermi_energies_sha256::String = "NOT_APPLICABLE",
+    fermi_energies_definition::String = "NOT_APPLICABLE",
     fermi_energy::Float64 = 0.0,
     temperature::Float64 = 0.0,
     broadening::Float64 = 0.040,
     broadening_type::String = "Gaussian",
     transition_window_factor::Float64 = 5.0,
     denominator_regularization::Float64 = 0.001,
+    denominator_regularization_was_explicit::Bool = false,
+    include_external::Bool = false,
     spatial_dimension::Int = 2,
     band_window_size::Int = -1,
     tensor_indices = (1, 1, 1),
@@ -114,6 +139,9 @@ function EffectiveTaskConfig(;
     kslice_vector_2::NTuple{3, Float64} = (0.0, 1.0, 0.0),
     kpath_nodes = Tuple{String, NTuple{3, Float64}}[],
     kpoints_per_segment::Vector{Int} = Int[],
+    kpath_branches::Vector{UnitRange{Int}} = isempty(kpath_nodes) ? UnitRange{Int}[] :
+                                             [1:length(kpath_nodes)],
+    kpath_provenance::Dict{String, Any} = Dict{String, Any}(),
     real_space_replica_policy::String = "auto",
     wsvec_file::Union{Nothing, String} = nothing,
     mp_grid::Union{Nothing, NTuple{3, Int}} = nothing,
@@ -121,6 +149,7 @@ function EffectiveTaskConfig(;
     wigner_seitz_search_size::Int = 3,
     band_hermiticity_tolerance::Float64 = 1.0e-10,
     photon_momentum::NTuple{3, Float64} = (0.0, 0.0, 0.0),
+    photon_momentum_path::Union{Nothing, PhotonMomentumPath} = nothing,
     finite_difference_step::Float64 = 0.0001,
     wannier_center_convention::String = "Convention_II",
     degeneracy_threshold::Float64 = 2.0e-3,
@@ -144,19 +173,26 @@ function EffectiveTaskConfig(;
     progress_verbosity::String = "normal",
     kwargs...,
 )
-    k_mesh isa Union{NTuple{2, Int}, NTuple{3, Int}} ||
-        error("cannot convert k_mesh=$(repr(k_mesh)) to NTuple{2,Int} or NTuple{3,Int}")
+    # Callback identities do not change the resolved configuration field layout.
+    @nospecialize native_model_input
+    k_mesh isa Union{NTuple{1, Int}, NTuple{2, Int}, NTuple{3, Int}} || error(
+        "cannot convert k_mesh=$(repr(k_mesh)) to NTuple{1,Int}, NTuple{2,Int}, or NTuple{3,Int}",
+    )
     if haskey(kwargs, :basis_correction_enabled)
         error(
             "basis_correction_enabled has been removed. Select " *
             "wannier_center_convention=\"Convention_I\" or \"Convention_II\"; " *
-            "physical position and external terms are always enabled.",
+            "position conventions are selected here; Quantum Metric completion uses include_external.",
         )
     end
     isempty(kwargs) || error(
         "unsupported keyword argument(s) for EffectiveTaskConfig: $(join(string.(keys(kwargs)), ", ")).",
     )
     return EffectiveTaskConfig(
+        native_model_input,
+        integration_bounds,
+        integration_affine_region,
+        integration_algorithm,
         gamma_intra_ev,
         gamma_inter_ev,
         fs_kind,
@@ -164,9 +200,14 @@ function EffectiveTaskConfig(;
         spectral_gap_tolerance,
         orbital_input_semantics,
         shg_low_frequency_broadening,
+        something(shg_intermediate_regularization, denominator_regularization),
         shg_eta_correction,
         shg_output,
         shg_response,
+        third_order,
+        derivative_backend,
+        derivative_backend_was_explicit,
+        berry_multipole,
         tasks,
         k_mesh,
         fourier_backend,
@@ -174,13 +215,15 @@ function EffectiveTaskConfig(;
         NKFFT,
         photon_energies,
         copy(fermi_energies),
-        fermi_energies_sha256,
+        fermi_energies_definition,
         fermi_energy,
         temperature,
         broadening,
         broadening_type,
         transition_window_factor,
         denominator_regularization,
+        denominator_regularization_was_explicit,
+        include_external,
         spatial_dimension,
         band_window_size,
         tensor_indices,
@@ -191,6 +234,8 @@ function EffectiveTaskConfig(;
         kslice_vector_2,
         normalize_kpath_input(kpath_nodes),
         kpoints_per_segment,
+        kpath_branches,
+        kpath_provenance,
         real_space_replica_policy,
         wsvec_file,
         mp_grid,
@@ -198,6 +243,7 @@ function EffectiveTaskConfig(;
         wigner_seitz_search_size,
         band_hermiticity_tolerance,
         photon_momentum,
+        photon_momentum_path,
         finite_difference_step,
         wannier_center_convention,
         degeneracy_threshold,
@@ -233,11 +279,18 @@ function normalize_kpath_input(nodes)
             error("kpath_nodes entry $(index) must be (label, (k1, k2, k3)); got $(repr(node)).")
         label, coordinate = node
         label isa AbstractString || error("kpath_nodes entry $(index) label must be a string.")
-        coordinate isa Tuple && length(coordinate) == 3 ||
-            error("kpath_nodes entry $(index) coordinate must be a three-entry tuple.")
+        coordinate isa Tuple && length(coordinate) in 1:3 || error(
+            "kpath_nodes entry $(index) coordinate must have one, two or three physical entries.",
+        )
         all(value -> value isa Real, coordinate) ||
             error("kpath_nodes entry $(index) coordinate entries must be real numbers.")
-        push!(normalized, (String(label), ntuple(axis -> Float64(coordinate[axis]), 3)))
+        push!(
+            normalized,
+            (
+                String(label),
+                ntuple(axis -> axis <= length(coordinate) ? Float64(coordinate[axis]) : 0.0, 3),
+            ),
+        )
     end
     return normalized
 end
@@ -275,8 +328,28 @@ struct OperatorDemandPlan
     requires_full_projector_geometry::Bool
 end
 
+"""Local owned-model lifetime admitted before output creation; never an MPI equality key."""
+struct NativeInputAdmission
+    owner::ScientificDataOwner
+    model_generation::String
+    source_identity::Union{Nothing, String}
+end
+
+"""Compare the complete local admission values when sharing contexts."""
+Base.:(==)(left::NativeInputAdmission, right::NativeInputAdmission) =
+    left.owner === right.owner &&
+    left.model_generation == right.model_generation &&
+    isequal(left.source_identity, right.source_identity)
+
+"""Use the same complete value equality in ordinary collections."""
+Base.isequal(left::NativeInputAdmission, right::NativeInputAdmission) = left == right
+
+"""Hash local admission metadata only for ordinary collection lookup."""
+Base.hash(value::NativeInputAdmission, seed::UInt) =
+    hash((value.owner, value.model_generation, value.source_identity), seed)
+
 """
-Validated task bundle, resolved input/output paths, model SHA-256, orbital count and operator-demand contract.
+Validated task bundle, resolved input/output paths, observed model source identity, orbital count and operator-demand contract.
 
 Optional packed-bundle and seed inputs identify the selected loading mode; creating the context may create a run directory.
 """
@@ -284,7 +357,7 @@ struct RunContext
     specs::Vector{NormalizedTaskSpec}
     run_dir::String
     model_file::String
-    model_sha256::String
+    model_identity::String
     model_input_mode::Symbol
     real_space_operator_bundle_file::Union{Nothing, String}
     paired_tb_validation_file::Union{Nothing, String}
@@ -295,6 +368,7 @@ struct RunContext
     progress_out_path::String
     progress_jsonl_path::String
     seed_inputs::Union{Nothing, SeedInputPaths}
+    native_admission::Union{Nothing, NativeInputAdmission}
 end
 
 """
@@ -335,6 +409,7 @@ RunResult(tasks, specs, run_dir, outputs, metadata_path, progress_out_path, prog
     )
 
 # Attach an evaluated qualification while retaining private single-bundle defaults.
+"""Construct a private single-bundle result with its evaluated qualification and empty instance metadata."""
 RunResult(
     tasks,
     specs,
@@ -407,9 +482,19 @@ Resolve accepted quantity labels and aliases to their canonical symbols; reject 
 """
 function normalize_quantity(value::AbstractString)
     key = _canonical_key(value)
-    key in ("linear_transport", "linear_optical_response", "orbital_magnetization") &&
-        return Symbol(key)
-    if key in ("shg", "second_harmonic_generation")
+    key in (
+        "intrinsic_ahc",
+        "linear_transport",
+        "linear_optical_response",
+        "orbital_magnetization",
+        "berry_curvature_dipole_conductivity",
+        "berry_curvature_quadrupole_conductivity",
+    ) && return Symbol(key)
+    if key in ("jc", "jck", "jerk_current")
+        return :jerk_current
+    elseif key in ("thg", "thgk", "third_harmonic_generation")
+        return :third_harmonic_generation
+    elseif key in ("shg", "second_harmonic_generation")
         return :second_harmonic_generation
     elseif key in ("shift_current", "shiftcurrent")
         return :shift_current
@@ -512,8 +597,14 @@ end
 Return the public display name for a normalized quantity symbol, rejecting unsupported quantities.
 """
 function canonical_quantity_name(q::Symbol)
-    q in (:linear_transport, :linear_optical_response, :orbital_magnetization) && return string(q)
-    if q == :second_harmonic_generation
+    q in BERRY_MULTIPOLE_QUANTITIES && return string(q)
+    q in (:intrinsic_ahc, :linear_transport, :linear_optical_response, :orbital_magnetization) &&
+        return string(q)
+    if q == :jerk_current
+        return "jerk_current"
+    elseif q == :third_harmonic_generation
+        return "third_harmonic_generation"
+    elseif q == :second_harmonic_generation
         return "second_harmonic_generation"
     elseif q == :shift_current
         return "shift_current"

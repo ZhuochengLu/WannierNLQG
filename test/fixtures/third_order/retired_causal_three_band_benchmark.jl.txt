@@ -1,0 +1,66 @@
+@testset "Frozen independent three-band THG benchmark" begin
+    response=WannierNLQG.Responses
+    q=Matrix(qr(ComplexF64[1 im 0.3; 0.2im 1 0.7; 0.4 0.2im 1]).Q)
+    connection=q*Diagonal([-1.0, 0, 1])*q'
+    commutator(a, b)=a*b-b*a
+    workspace=response.ThirdHarmonicWorkspace(3)
+    output=zeros(ComplexF64, 1, 1, 4, 2, 2)
+    total=zeros(ComplexF64, 4, 2, 2)
+    policy=response.HarmonicFrequencyPolicy(true, false, 0.06, 0.06, 0.0)
+    for index in 0:127
+        k=2pi*index/128
+        energies=[-1.8+0.2cos(k), 0.15+0.35cos(k+0.4), 2+0.25sin(k)]
+        first=Diagonal([-0.2sin(k), -0.35sin(k+0.4), 0.25cos(k)])
+        second=Diagonal([-0.2cos(k), -0.35cos(k+0.4), -0.25sin(k)])
+        b=zeros(ComplexF64, 3, 3, 3);
+        c=zeros(ComplexF64, 3, 3, 3, 3)
+        b[:, :, 1]=first-im*commutator(connection, Diagonal(energies))
+        c[
+            :,
+            :,
+            1,
+            1,
+        ]=second-2im*commutator(
+            connection,
+            first,
+        )-commutator(connection, commutator(connection, Diagonal(energies)))
+        data=(
+            spectrum = (energies = energies,),
+            internal_connection = zeros(ComplexF64, 3, 3, 3),
+            hamiltonian_derivatives = b,
+            hamiltonian_second_derivatives = c,
+            internal_connection_derivatives = zeros(ComplexF64, 3, 3, 3, 3),
+        )
+        response.third_harmonic_response!(
+            output,
+            workspace,
+            data,
+            [0.37],
+            [(1, 1, 1, 1)];
+            fermi_energy = 0.1,
+            temperature = 0.25/8.617333262145e-5,
+            policy,
+            eta_correction = false,
+            degeneracy_threshold = 0.0,
+            exact_occupations = true,
+            formulation = :both,
+        )
+        total .+= output[1, 1, :, :, :]/128
+    end
+    # Theory note A.1: independent orbital density-matrix recursion/literal A4, Nk=512.
+    reference=ComplexF64[
+        -0.005603836740542179 + 0.021425343931478998im,
+        0.0017283834722072412 - 0.002202526190982517im,
+        0.03922688994872399 - 0.08272606230118257im,
+        0.0800181578709567 + 0.15284562317961298im,
+    ]
+    @test isapprox(total[:, 1, 1], reference; atol = 3e-11, rtol = 3e-10)
+    @test isapprox(sum(total[:, 1, 1]), sum(total[:, 1, 2]); atol = 3e-13, rtol = 3e-12)
+    @test isapprox(
+        total[:, 2, :],
+        (im/(3complex(0.37, 0.06))) .* total[:, 1, :];
+        atol = 3e-13,
+        rtol = 3e-12,
+    )
+end
+

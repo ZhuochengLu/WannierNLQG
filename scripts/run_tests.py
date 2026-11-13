@@ -32,9 +32,11 @@ SHARDS = (
 )
 TASK_CPU_SLOTS = {
     "fast": 3, "interfaces-and-symmetry": 5, "wannier-core": 2,
-    "scientific-contracts": 3, "thread-determinism": 5, "star-gauge-thread": 5,
+    "scientific-contracts": 5, "thread-determinism": 5, "star-gauge-thread": 5,
     "mpi-only": 17,
 }  # Maximum probe threads/ranks plus the serial parent.
+sys.path.insert(0, str(ROOT / "scripts" / "test_support"))
+from full_rank_profiles import contract as mpi_contract, mpi_cpu_slots, PROFILE_ENV, PROFILES
 NESTED_ENV = "WANNIERNLQG_TEST_SCHEDULER_ACTIVE"
 COMPLETE_PREFIX = "WANNIERNLQG_TEST_TASK_COMPLETE:"
 
@@ -46,21 +48,33 @@ class Task:
     name: str
     mode: str
     shard: str | None = None
+    mpi_profile: str = "legacy16"
 
 
-def suite_tasks(suite: str) -> list[Task]:
+def suite_tasks(suite: str, mpi_profile: str = "legacy16", selected: list[str] | None = None) -> list[Task]:
     """Expand Full into Fast, every Full-only shard, and independent MPI."""
-    tasks = [Task("fast", "fast")]
+    mpi_contract(mpi_profile)
+    if selected is not None and suite != "full":
+        raise ValueError("complete task selection is only a development Full operation")
+    if suite == "mpi-only":
+        return [Task("mpi-only", "mpi-only", mpi_profile=mpi_profile)]
+    tasks = [Task("fast", "fast", mpi_profile=mpi_profile)]
     if suite == "full":
-        tasks.extend(Task(name, "full-shard", name) for name in SHARDS)
-        tasks.append(Task("mpi-only", "mpi-only"))
+        tasks.extend(Task(name, "full-shard", name, mpi_profile) for name in SHARDS)
+        tasks.append(Task("mpi-only", "mpi-only", mpi_profile=mpi_profile))
     elif suite != "fast":
         raise ValueError(f"Unknown suite: {suite}")
+    if selected is not None:
+        if suite != "full" or not selected or len(selected) != len(set(selected)) or not set(selected) <= {task.name for task in tasks}:
+            raise ValueError("select distinct complete Full tasks; selections never mean complete Full")
+        tasks = [task for task in tasks if task.name in selected]
     return tasks
 
 
 def task_cpu_slots(task: Task, jobs: int) -> int:
     """Charge both Fast readiness children unless serial fallback is requested."""
+    if task.mode == "mpi-only":
+        return mpi_cpu_slots(task.mpi_profile)
     return 2 if task.mode == "fast" and jobs == 1 else TASK_CPU_SLOTS[task.name]
 
 
@@ -68,6 +82,11 @@ def julia_command(julia: str, task: Task) -> list[str]:
     """Print a task-specific completion receipt only after Pkg.test returns."""
     marker = COMPLETE_PREFIX + task.name
     expression = f'using Pkg; Pkg.test(); println({json.dumps(marker)})'
+    if task.mode == 'mpi-only':
+        expression = ('using WannierNLQG; expected=' + json.dumps(str(ROOT)) +
+                      '; actual=realpath(Base.pkgdir(WannierNLQG)); actual==expected || error("package loading path mismatch"); ' +
+                      'realpath(pathof(WannierNLQG))==joinpath(expected,"src","WannierNLQG.jl") || error("module source path mismatch"); ' +
+                      'println("WANNIERNLQG_FINAL_PATH:"*actual); ' + expression)
     return [julia, "--startup-file=no", "--threads=1", f"--project={ROOT}", "-e", expression]
 
 
@@ -84,12 +103,15 @@ def task_environment(task: Task, directory: Path, temporary_directory: Path, rea
     env.update(
         {
             NESTED_ENV: "1",
+            PROFILE_ENV: task.mpi_profile,
             "WANNIERNLQG_TEST_MODE": task.mode,
             "WANNIERNLQG_TEST_TASK_ID": task.name,
             "WANNIERNLQG_READINESS_JOBS": str(readiness_jobs if task.mode == "fast" else 1),
             "WANNIERNLQG_TEST_OUTPUT_ROOT": str(directory / "output"),
             "TMPDIR": str(temporary_directory),
             "JULIA_NUM_THREADS": "1",
+            # Julia GC1 includes the collecting mutator; no extra mark or sweep worker.
+            "JULIA_NUM_GC_THREADS": "1,0",
             "JULIA_NUM_PRECOMPILE_TASKS": "1",
             "OMP_NUM_THREADS": "1",
             "MKL_NUM_THREADS": "1",
@@ -132,7 +154,9 @@ def _run_suite(tasks: list[Task], julia: str, output: Path, jobs: int, cpu_budge
     if jobs < 1 or cpu_budget < 2:
         raise ValueError("jobs must be positive; cpu-budget must be at least 2")
     if any(task_cpu_slots(task, jobs) > cpu_budget for task in tasks):
-        raise ValueError("CPU budget cannot accommodate the largest task (Full MPI requires 17 slots)")
+        raise ValueError("CPU budget cannot accommodate the largest task including MPI ranks plus driver")
+    if len({task.mpi_profile for task in tasks}) != 1:
+        raise ValueError("mixed MPI profiles in one test suite")
     if len({task.name for task in tasks}) != len(tasks):
         raise ValueError("Duplicate test task")
     output = output.expanduser().resolve()
@@ -260,6 +284,7 @@ def _run_suite(tasks: list[Task], julia: str, output: Path, jobs: int, cpu_budge
         results[task.name] = {"task": task.name, "status": "NOT_RUN", "reason": "scheduler interrupted"}
     summary = {
         "schema": "wanniernlqg.test-scheduler/1.0", "root": str(ROOT),
+        **mpi_contract(tasks[0].mpi_profile),
         "status": "PASS" if len(results) == len(tasks) and all(row["status"] == "PASS" for row in results.values()) else ("INTERRUPTED" if interrupted else "FAIL"),
         "jobs_requested": jobs, "jobs_effective": limit, "cpu_budget": cpu_budget,
         "cpu_slots_per_task": {task.name: task_cpu_slots(task, jobs) for task in tasks}, "mpi_exclusive": True, "owned_group": owned_group,
@@ -276,24 +301,29 @@ def _run_suite(tasks: list[Task], julia: str, output: Path, jobs: int, cpu_budge
 def main(argv: list[str] | None = None) -> int:
     """Validate local scheduling options and preserve a complete run receipt."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("suite", choices=("fast", "full"))
+    parser.add_argument("suite", choices=("fast", "full", "mpi-only"))
+    parser.add_argument("--task", action="append", help="development selection of a complete task; repeat explicitly")
     parser.add_argument("--jobs", type=int, default=2)
     parser.add_argument("--cpu-budget", type=int, default=min(8, os.cpu_count() or 1))
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--julia", default="julia")
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--owned-group", action="store_true", help="inherit supervisor process group; development_runner supplies this")
+    parser.add_argument("--mpi-profile", choices=PROFILES, default="legacy16")
+    parser.add_argument("--owned-group", action="store_true", help="inherit the caller process group instead of creating a test-driver group")
     args = parser.parse_args(argv)
     if os.environ.get(NESTED_ENV):
         parser.error("Nested test scheduling is prohibited")
-    minimum = (2 if args.jobs == 1 else 3) if args.suite == "fast" else 17
+    try:
+        tasks = suite_tasks(args.suite, args.mpi_profile, args.task)
+    except ValueError as exc:
+        parser.error(str(exc))
+    minimum = max(task_cpu_slots(task, args.jobs) for task in tasks)
     if args.jobs < 1 or args.cpu_budget < minimum:
         parser.error(f"--jobs must be positive and --cpu-budget at least {minimum} for {args.suite}")
     if args.cpu_budget > (os.cpu_count() or 1):
         parser.error("--cpu-budget exceeds available logical CPUs")
-    tasks = suite_tasks(args.suite)
     if args.dry_run:
-        print(json.dumps({"suite": args.suite, "jobs_effective": args.jobs, "cpu_slots_per_task": {task.name: task_cpu_slots(task, args.jobs) for task in tasks}, "mpi_exclusive": True, "tasks": [{"task": task.name, "command": julia_command(args.julia, task)} for task in tasks]}, indent=2))
+        print(json.dumps({"suite": args.suite, **mpi_contract(args.mpi_profile), "jobs_effective": args.jobs, "cpu_slots_per_task": {task.name: task_cpu_slots(task, args.jobs) for task in tasks}, "mpi_exclusive": True, "tasks": [{"task": task.name, "command": julia_command(args.julia, task)} for task in tasks]}, indent=2))
         return 0
     output = args.output_dir
     if output is None:
@@ -302,6 +332,10 @@ def main(argv: list[str] | None = None) -> int:
     if output.exists():
         parser.error("--output-dir must be a new directory to preserve earlier evidence")
     summary = run_suite(tasks, args.julia, output, args.jobs, args.cpu_budget, args.owned_group)
+    if args.task:
+        summary["selected_tasks"] = [task.name for task in tasks]
+        summary["coverage_scope"] = "PARTIAL_ENGINEERING_COVERAGE"
+        (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(f"{summary['status']}: {output / 'summary.json'}")
     return 0 if summary["status"] == "PASS" else (130 if summary["status"] == "INTERRUPTED" else 1)
 

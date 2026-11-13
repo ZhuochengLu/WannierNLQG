@@ -1,3 +1,6 @@
+isdefined(@__MODULE__, :SyntheticRuntimeFixture) ||
+    include(joinpath(@__DIR__, "support", "SyntheticRuntimeFixture.jl"))
+
 using Test
 using LinearAlgebra
 using SHA
@@ -8,7 +11,7 @@ import JSON3
 # Its failed covariance declaration is retained; this tests scheduling, not physics qualification.
 function per_task_symmetry_fixture(directory)
     fixture = joinpath(@__DIR__, "..", "examples", "fixtures", "synthetic_runtime")
-    bundle = joinpath(fixture, "synthetic_operators.h5")
+    bundle = SyntheticRuntimeFixture.operator_bundle_file()
     matrix_rows(matrix) =
         [[matrix[row, column] for column in axes(matrix, 2)] for row in axes(matrix, 1)]
     rotations = [
@@ -71,7 +74,7 @@ function per_task_symmetry_task(id, quantity; changed = false)
             fermi_energy = changed ? 0.15 : 0.0,
             temperature = changed ? 175.0 : 0.0,
         ),
-        numerics = WannierNLQG.OpticalNumerics(
+        numerics = WannierNLQG.Numerics(
             broadening = changed ? 0.12 : 0.06,
             denominator_regularization = changed ? 0.02 : 0.001,
             band_window_size = -1,

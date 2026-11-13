@@ -43,13 +43,12 @@ export generate_vasp_band_representation
 export read_band_representation_hdf5, write_band_representation_hdf5
 export band_representation_schema_version
 
-# Captured first-use declarations are specific to the frozen Julia trace.
-if WannierNLQG.FIRST_USE_TRACE_COMPATIBLE
-    include("SymmetryFoundationExtFirstUsePrecompile.jl")
-    include("Generated/SymmetryFoundationResponseWriterSignatures.jl")
-    include("Generated/NativeCanonicalBuilderInference.jl")
-
-    include("SymmetryFoundationTaskInferenceResidualCoverage.jl")
+# Public workloads belong to this three-trigger cache owner.
+if WannierNLQG.FIRST_USE_WORKLOAD_ENABLED
+    include("RepresentativeCrystalSymmetryWorkload.jl")
+    include("RepresentativeAutomaticBandWorkload.jl")
+    include("RepresentativeBandPersistenceWorkload.jl")
+    include("RepresentativeVASPBandWorkload.jl")
 end
 
 end

@@ -27,7 +27,7 @@ end
 # Fill `exp(2pi*i*R.k)/R_degeneracy` for the model's R vectors and fractional reciprocal point.
 function _prepare_fourier_factors!(
     fourier_factors::Vector{ComplexF64},
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     kpoint::AbstractVector{<:Real},
 )
     phases = transpose(model.r_vectors) * kpoint
@@ -42,7 +42,7 @@ end
 function _fourier_hamiltonian!(
     hamiltonian_wannier::Matrix{ComplexF64},
     fourier_factors::Vector{ComplexF64},
-    model::TightBindingModel,
+    model::AbstractResponseModel,
 )
     fill!(hamiltonian_wannier, COMPLEX_ZERO)
     @inbounds for r_vector_index in 1:model.num_r_vectors
@@ -64,13 +64,30 @@ function transform_to_hamiltonian_gauge!(
     input::AbstractMatrix{ComplexF64},
     temporary::AbstractMatrix{ComplexF64},
 )
+    # Exact zero input in a finite, unit-scale frame has two zero products.
+    # Bound both frames conservatively: nonfinite/huge expert frames retain BLAS
+    # semantics (including possible intermediate overflow), as do small matrices.
+    # Generic strided multiplication can retain negative zeros; keep that path.
+    unit_scale(value) = abs(real(value)) <= 1.0 && abs(imag(value)) <= 1.0
+    blas_layout(matrix) = matrix isa StridedMatrix{ComplexF64} && stride(matrix, 1) == 1
+    if size(output, 1) >= 64 &&
+       blas_layout(output) &&
+       blas_layout(temporary) &&
+       blas_layout(input) &&
+       all(iszero, input) &&
+       all(unit_scale, spectrum.eigenvectors_adjoint) &&
+       all(unit_scale, spectrum.eigenvectors)
+        fill!(temporary, COMPLEX_ZERO)
+        fill!(output, COMPLEX_ZERO)
+        return output
+    end
     mul!(temporary, spectrum.eigenvectors_adjoint, input)
     mul!(output, temporary, spectrum.eigenvectors)
     return output
 end
 
 # Convert one integer R vector through the model's row-stored lattice into a Cartesian displacement tuple.
-function _r_vector_cartesian(model::TightBindingModel, r_vector_index::Int)
+function _r_vector_cartesian(model::AbstractResponseModel, r_vector_index::Int)
     r1 = model.r_vectors[1, r_vector_index]
     r2 = model.r_vectors[2, r_vector_index]
     r3 = model.r_vectors[3, r_vector_index]
@@ -90,7 +107,7 @@ Prepare hamiltonian real space in place.
 """
 function prepare_hamiltonian_real_space!(
     scratch::HamiltonianMatrixScratch,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     plan::MatrixElementPlan,
     ;
     scratch_workspace::MatrixElementScratch,
@@ -176,7 +193,8 @@ function prepare_hamiltonian_real_space!(
 end
 
 # Reuse caller-owned scratch and the plan's Wannier-center convention; no k-space or response accumulation occurs.
-function prepare_real_space!(workspace::MatrixElementWorkspace, model::TightBindingModel)
+function prepare_real_space!(workspace::MatrixElementWorkspace, model::AbstractResponseModel)
+    scientific_data_generation(model)
     workspace.prepared && return workspace
     _initialize_wannier_center_scratch!(workspace.scratch, model, workspace.plan)
     workspace.scratch.hamiltonian === nothing || prepare_hamiltonian_real_space!(
@@ -198,11 +216,13 @@ end
 # Assemble the shared Wannier-gauge Hamiltonian for one fractional k point.
 function _assemble_hamiltonian_wannier!(
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     kpoint::AbstractVector{<:Real},
 )
     scratch = workspace.scratch
+    phase_t0 = time_ns()
     _prepare_fourier_factors!(scratch.fourier_factors, model, kpoint)
+    _record_fourier_phase_factors!(workspace, model.num_r_vectors, (time_ns() - phase_t0) * 1e-9)
     used_mixed =
         _shared_or_mixed_copy!(scratch.hamiltonian_wannier, workspace, model, Val(:H), kpoint)
     if !used_mixed
@@ -234,9 +254,10 @@ end
 # Prepare the caller-owned phase and Fourier-factor storage before a cache check.
 function _prepare_spectrum_inputs!(
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     kpoint::AbstractVector{<:Real},
 )
+    scientific_data_generation(model)
     length(kpoint) == 3 || throw(DimensionMismatch("kpoint must have length 3"))
     data = workspace.data
     scratch = workspace.scratch
@@ -259,7 +280,7 @@ end
 # Prepare one uncached workspace generation for a spectrum calculation.
 function _begin_spectrum_evaluation!(
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     kpoint::AbstractVector{<:Real},
 )
     data = _prepare_spectrum_inputs!(workspace, model, kpoint)
@@ -273,7 +294,7 @@ Reuse a spectrum already computed at the same point; otherwise start a new gener
 """
 function compute_spectrum!(
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     kpoint::AbstractVector{<:Real},
 )
     data = _prepare_spectrum_inputs!(workspace, model, kpoint)
@@ -282,21 +303,28 @@ function compute_spectrum!(
     end
     _start_spectrum_generation!(data, kpoint)
     _restore_shared_spectrum!(workspace, model, kpoint) && return data.spectrum
+    cache = _shared_interpolation_cache()
+    timed = cache !== nothing && cache.measure_timings
+    matrix_start = timed ? time_ns() : UInt64(0)
     hamiltonian = _assemble_hamiltonian_wannier!(workspace, model, kpoint)
-    _store_spectrum_eigensystem!(workspace, eigen(Hermitian(hamiltonian)))
+    timed && (cache.matrix_seconds += (time_ns() - matrix_start) / 1.0e9)
+    eigen_start = timed ? time_ns() : UInt64(0)
+    eigensystem = DenseSpectra.hermitian_spectrum(hamiltonian)
+    timed && (cache.eigensystem_seconds += (time_ns() - eigen_start) / 1.0e9)
+    _store_spectrum_eigensystem!(workspace, eigensystem)
     return _store_shared_spectrum!(workspace, model, kpoint)
 end
 
 """
-Compute one spectrum after finite-value and Hermiticity checks.
+Compute one finite spectrum and measure the input Hermiticity residual.
 
-This is the fail-closed Band-task entry point. It calls the same Hamiltonian
-assembly used by `compute_spectrum!`, checks the assembled matrix before
-constructing `Hermitian`, and returns the maximum absolute Hermiticity residual.
+The Band entry point retains the ordinary upper-triangle Hermitian solver
+representation. A finite residual above the reporting tolerance is returned
+for the run-level warning; nonfinite input or eigensolver output remains invalid.
 """
 function compute_checked_spectrum!(
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     kpoint::AbstractVector{<:Real};
     hermiticity_tolerance::Real,
 )
@@ -306,12 +334,15 @@ function compute_checked_spectrum!(
     hamiltonian = _assemble_hamiltonian_wannier!(workspace, model, kpoint)
     all(isfinite, hamiltonian) || error("assembled H(k) contains non-finite values")
     residual = maximum(abs, hamiltonian .- hamiltonian')
-    residual <= hermiticity_tolerance || error(
-        "assembled H(k) Hermiticity residual $(residual) exceeds tolerance $(hermiticity_tolerance)",
+    solution = DenseSpectra.hermitian_spectrum(hamiltonian)
+    all(isfinite, solution.values) && all(isfinite, solution.vectors) ||
+        error("Band eigensolver produced a non-finite eigensystem")
+    spectrum = _store_spectrum_eigensystem!(workspace, solution)
+    return (
+        spectrum = spectrum,
+        hermiticity_residual = Float64(residual),
+        hermiticity_exceeds_tolerance = residual > hermiticity_tolerance,
     )
-    spectrum = _store_spectrum_eigensystem!(workspace, eigen(Hermitian(hamiltonian)))
-    all(isfinite, spectrum.energies) || error("Band eigensolver produced non-finite energies")
-    return (spectrum = spectrum, hermiticity_residual = Float64(residual))
 end
 
 # Assemble and diagonalize the Hermitian Wannier Hamiltonian at fractional `kpoint`, returning the cached spectrum.
@@ -320,7 +351,7 @@ end
 function compute_spectrum!(
     data::KPointMatrixData,
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     kpoint::AbstractVector{<:Real},
 )
     previous_data = workspace.data
@@ -336,7 +367,7 @@ end
 function compute_checked_spectrum!(
     data::KPointMatrixData,
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     kpoint::AbstractVector{<:Real};
     hermiticity_tolerance::Real,
 )
@@ -357,7 +388,7 @@ end
 # Compute missing band-energy differences and selected Hamiltonian gradient/Hessian channels, updating masks and evaluation counters.
 function _compute_hamiltonian_capabilities!(
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
 )
     plan = workspace.plan
     data = workspace.data
@@ -470,12 +501,18 @@ function _compute_hamiltonian_capabilities!(
                 scratch.matrix_temporary,
             )
             if plan.source_gauge_required
-                @views _transform_source_gauge!(
-                    hamiltonian_data.source_gauge_derivatives[:, :, first_direction],
+                # Canonical derivatives above and the shared completion bit remain unchanged.
+                # This private index capacity is rebuilt for every current source column.
+                @views source_gauge_first_product!(
+                    scratch.matrix_temporary,
                     data.spectrum.source_eigenvectors_adjoint,
                     gradient_wannier[:, :, gradient_channel],
-                    data.spectrum.source_eigenvectors,
+                    hamiltonian_scratch.source_nonzero_indices,
+                )
+                @views _source_gauge_product!(
+                    hamiltonian_data.source_gauge_derivatives[:, :, first_direction],
                     scratch.matrix_temporary,
+                    data.spectrum.source_eigenvectors,
                 )
             end
         end
@@ -508,14 +545,36 @@ Fill only capability-plan matrices not yet computed for the current spectrum and
 
 The spectrum must correspond to the requested point; computation updates cache masks and counters and reuses prepared real-space scratch.
 """
-function compute_remaining!(workspace::MatrixElementWorkspace, model::TightBindingModel)
+function compute_remaining!(workspace::MatrixElementWorkspace, model::AbstractResponseModel)
+    scientific_data_generation(model)
     workspace.prepared || error("prepare_real_space! must be called before compute_remaining!.")
     _has_capability(workspace.data.computed_mask, SPECTRUM) ||
         error("compute_spectrum! must be called before compute_remaining!.")
+    _invalidate_numerical_capabilities!(workspace.data, workspace.plan)
+    cache = _shared_interpolation_cache()
+    timed = cache !== nothing && cache.measure_timings
+    matrix_start = timed ? time_ns() : UInt64(0)
+    if _restore_complete_capabilities!(workspace, model)
+        timed && (cache.matrix_seconds += (time_ns() - matrix_start) / 1.0e9)
+        return workspace.data
+    end
     _compute_hamiltonian_capabilities!(workspace, model)
     compute_position_capabilities!(workspace, model)
     compute_spin_capabilities!(workspace, model)
     compute_spin_velocity_capabilities!(workspace, model)
+    if workspace.data.metric_completion_required
+        prepare_quantum_metric_completion!(workspace, model)
+    end
+    if has_capability(workspace.plan, OPTICAL_CUTOFF_VERTICES) &&
+       !_has_capability(workspace.data.computed_mask, OPTICAL_CUTOFF_VERTICES)
+        # Orthogonal data already contain the complete source jet; the optional
+        # capability needs no extra numerical preparation or storage.
+        workspace.data.computed_mask |= _capability_bit(OPTICAL_CUTOFF_VERTICES)
+        workspace.counts.capability_computations[OPTICAL_CUTOFF_VERTICES] += 1
+    end
+    _record_numerical_parameters!(workspace.data, workspace.plan)
+    _store_complete_capabilities!(workspace, model)
+    timed && (cache.matrix_seconds += (time_ns() - matrix_start) / 1.0e9)
     return workspace.data
 end
 
@@ -524,7 +583,7 @@ end
 # Compute the spectrum before dependent matrices and return the populated data; wrapper overloads borrow the common workspace and restore its previous data reference. Caller-owned buffers are reused, and no response prefactor or k-mesh weight is applied.
 function compute_kpoint!(
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     kpoint::AbstractVector{<:Real},
     ;
     denominator_regularization::Real = workspace.plan.denominator_regularization,
@@ -539,6 +598,7 @@ function compute_kpoint!(
         workspace.plan.wannier_center_convention,
         workspace.plan.direction_requirements,
         workspace.plan.source_gauge_required,
+        workspace.plan.geometry_derivatives,
     )
     compute_spectrum!(workspace, model, kpoint)
     return compute_remaining!(workspace, model)
@@ -550,7 +610,7 @@ end
 function compute_kpoint!(
     data::KPointMatrixData,
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     kpoint::AbstractVector{<:Real};
     denominator_regularization::Real = workspace.plan.denominator_regularization,
     degeneracy_threshold::Real = workspace.plan.degeneracy_threshold,

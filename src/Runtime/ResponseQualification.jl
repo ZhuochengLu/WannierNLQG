@@ -28,7 +28,7 @@ function _input_qualification_summary(manifest, input_mode::Symbol)
         "input_mode" => string(input_mode),
         "bundle_present" => false,
         "production_eligible" => false,
-        "quality_review_recommended" => true,
+        "quality_review_recommended" => false,
         "qualification_status" => "NOT_RECORDED",
     )
     construction_policy = _response_qualification_entry(
@@ -46,7 +46,7 @@ function _input_qualification_summary(manifest, input_mode::Symbol)
         "resolved_source_inventory" => manifest.resolved_source_inventory,
         "derived_operator_capabilities" =>
             join(String.(derived_operator_capabilities(manifest.inventory)), ","),
-        "scientific_content_sha256" => manifest.scientific_content_sha256,
+        "publication_identity" => manifest.publication_identity,
         "production_eligible" => manifest.production_eligible,
         "quality_review_recommended" => manifest.quality_review_recommended,
         "construction_policy" => string(construction_policy),
@@ -169,13 +169,13 @@ function _finalize_response_qualification(
         )
         throw(ResponseQualificationError("RESPONSE_QUALIFICATION_CONFLICT", result))
     end
-    production_eligible = input_production_eligible && isempty(unverified)
-    status = production_eligible ? "PASS" : "DIAGNOSTIC_ONLY"
+    production_eligible = false
+    status = "COMPUTATION_READY"
     return ResponseQualificationResult(
         true,
         status,
         production_eligible,
-        !production_eligible || input_quality_review_recommended,
+        input_quality_review_recommended,
         reasons,
         verified,
         unverified,
@@ -196,6 +196,7 @@ function assess_response_qualification(
     specs::Vector{NormalizedTaskSpec};
     response_symmetry_plan = nothing,
 )
+    cfg.native_model_input === nothing || return native_response_qualification(cfg, ctx)
     verified = String["input.structure", "input.required_operators", "input.required_components"]
     unverified = String[]
     conflicts = String[]
@@ -225,10 +226,8 @@ function assess_response_qualification(
                 "NOT_RECORDED",
             ),
         )
-        if construction_policy == "standard"
-            push!(unverified, "input.construction_policy")
-            push!(reasons, "STANDARD_CONSTRUCTION_POLICY_DIAGNOSTIC")
-        end
+        # Historical construction policy remains input provenance. It does not
+        # determine whether the present ordinary calculation is scientific.
         if REAL_SPACE_SPIN in ctx.operator_demand.required_operators
             if manifest.spin_family_production_eligible
                 push!(verified, "input.spin_family")
@@ -262,17 +261,24 @@ function assess_response_qualification(
     end
 
     if response_symmetry_plan !== nothing
-        if response_symmetry_plan.status == :PASS
+        if response_symmetry_plan.covariance_status == "PASS" && (
+            response_symmetry_plan.covariance_max_relative_residual === nothing ||
+            response_symmetry_plan.covariance_max_relative_residual <=
+            response_symmetry_plan.covariance_tolerance
+        )
             push!(verified, "response_symmetry.qualification")
         else
             push!(unverified, "response_symmetry.qualification")
-            push!(reasons, "RESPONSE_SYMMETRY_QUALIFICATION_DIAGNOSTIC")
+            push!(reasons, "RESPONSE_SYMMETRY_COVARIANCE_NOT_PASS")
         end
     end
 
     return _finalize_response_qualification(
         manifest !== nothing && manifest.production_eligible,
-        manifest === nothing || manifest.quality_review_recommended,
+        (
+            manifest !== nothing && manifest.numerical_quality in
+            ("WARNING", "NUMERICAL_WARNING", "INVALID_ACCEPTED_STATE")
+        ) || (response_symmetry_plan !== nothing && !isempty(response_symmetry_plan.warnings)),
         verified,
         unverified,
         conflicts,

@@ -2,12 +2,50 @@ using Test
 
 const EXTENSION_LIFECYCLE_PROBE = joinpath(@__DIR__, "SymmetryFoundationExtensionLifecycleProbe.jl")
 
+# Scientific regression keeps a fresh Julia process for each case while sharing
+# the exact compiled cache for this suite. The default isolated profile is intact.
+function with_extension_lifecycle_depot(f::Function)
+    profile = get(ENV, "WANNIERNLQG_TEST_LIFECYCLE_CACHE", "isolated")
+    profile == "isolated" && return mktempdir(f)
+    profile == "shared_science" || error("unsupported lifecycle cache profile")
+    output_root = get(ENV, "WANNIERNLQG_TEST_OUTPUT_ROOT", "")
+    isabspath(output_root) || error("shared lifecycle cache requires private absolute output root")
+    package_root = realpath(ROOT)
+    normalized_output = normpath(output_root)
+    (
+        normalized_output == package_root ||
+        startswith(normalized_output, package_root * string(Sys.iswindows() ? '\\' : '/'))
+    ) && error("lifecycle cache must remain outside the package")
+    mkpath(normalized_output)
+    actual_output = realpath(normalized_output)
+    (
+        actual_output == package_root ||
+        startswith(actual_output, package_root * string(Sys.iswindows() ? '\\' : '/'))
+    ) && error("lifecycle cache symlink enters the package")
+    depot = joinpath(actual_output, "extension-lifecycle-compiled-cache")
+    mkpath(depot)
+    return f(depot)
+end
+
 # Run one extension lifecycle case in an isolated Julia process.
 function run_extension_lifecycle_probe(mode::AbstractString; threads::Int = 1, arguments = String[])
     loading_options = endswith(mode, "_function_entry") ? ["--compiled-modules=no"] : String[]
-    command =
-        `$(Base.julia_cmd()) --startup-file=no $(loading_options) --project=$(ROOT) $(EXTENSION_LIFECYCLE_PROBE) $(mode) $(arguments)`
-    return mktempdir() do temporary_depot
+    return with_extension_lifecycle_depot() do temporary_depot
+        actual_arguments = copy(arguments)
+        if mode in ("operator_bundle_function_entry", "operator_bundle_cached_entry")
+            isempty(actual_arguments) ||
+                error("operator input admission arguments are owned by this fixture")
+            fixture = joinpath(
+                ROOT,
+                "examples",
+                "fixtures",
+                "synthetic_runtime",
+                "synthetic_operators.h5",
+            )
+            push!(actual_arguments, fixture)
+        end
+        command =
+            `$(Base.julia_cmd()) --startup-file=no $(loading_options) --threads=$(threads) --project=$(ROOT) $(EXTENSION_LIFECYCLE_PROBE) $(mode) $(actual_arguments)`
         depot_separator = Sys.iswindows() ? ';' : ':'
         isolated_depot = join((temporary_depot, Base.DEPOT_PATH...), depot_separator)
         command = addenv(
@@ -54,6 +92,9 @@ end
         "mode=symmetrization_concurrent",
         run_extension_lifecycle_probe("symmetrization_concurrent"; threads = 4),
     )
+    for mode in ("operator_bundle_concurrent", "wannierization_concurrent")
+        @test occursin("mode=$(mode)", run_extension_lifecycle_probe(mode; threads = 4))
+    end
     @test occursin(
         "mode=symmetrization_partial",
         run_extension_lifecycle_probe("symmetrization_partial"),

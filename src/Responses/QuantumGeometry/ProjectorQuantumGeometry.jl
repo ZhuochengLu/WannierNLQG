@@ -22,7 +22,7 @@ function prepare_projector_response_cache!(
     ws::ProjectorResponseWorkspace,
     kpoint::Vector{Float64},
     finite_difference_vectors::Matrix{Float64},
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     num_orbitals::Int64,
     spatial_dimension::Int64;
     denominator_regularization::Float64,
@@ -335,7 +335,7 @@ function compute_projector_quantum_hermitian_connection_kernel!(
     finite_difference_step::Float64,
     denominator_regularization::Float64,
     spatial_dimension::Int64,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     num_orbitals::Int64,
     degeneracy_threshold::Float64,
 )

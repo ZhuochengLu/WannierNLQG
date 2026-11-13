@@ -77,14 +77,12 @@ function compute_shift_spin_current_vertices!(
             M_aa = @view ws.effective_mass_vertex[:, :, a, a]
             mul!(ws.matrix_scratch_1, A_a, H_a)
             mul!(ws.matrix_scratch_2, H_a, A_a)
-            @. M_aa =
+            @views @. M_aa =
                 h2[:, :, a, a] -
                 1.0im * ws.physical_connection_derivative[:, :, a, a] * (energies' - energies) -
                 1.0im * (ws.matrix_scratch_1 - ws.matrix_scratch_2)
-            # Keep the original second subtraction even though the two diagonal
-            # commutators have identical operands.
-            mul!(ws.matrix_scratch_1, A_a, H_a)
-            mul!(ws.matrix_scratch_2, H_a, A_a)
+            # Reuse the unchanged products; retain the separate second subtraction
+            # and its original arithmetic order.
             @. M_aa -= 1.0im * (ws.matrix_scratch_1 - ws.matrix_scratch_2)
             @inbounds for n in 1:count, m in 1:count
                 ws.matrix_scratch_3[m, n] = A_a[m, n] * (energies[n] - energies[m])
@@ -114,7 +112,7 @@ function compute_shift_spin_current_vertices!(
 
             mul!(ws.matrix_scratch_1, A_b, H_a)
             mul!(ws.matrix_scratch_2, H_a, A_b)
-            @. M_ab =
+            @views @. M_ab =
                 h2[:, :, a, b] -
                 1.0im * ws.physical_connection_derivative[:, :, b, a] * (energies' - energies) -
                 1.0im * (ws.matrix_scratch_1 - ws.matrix_scratch_2)
@@ -123,7 +121,7 @@ function compute_shift_spin_current_vertices!(
             mul!(ws.matrix_scratch_1, A_a, H_b)
             mul!(ws.matrix_scratch_2, H_b, A_a)
             @. M_ab -= 1.0im * (ws.matrix_scratch_1 - ws.matrix_scratch_2)
-            @. M_ba =
+            @views @. M_ba =
                 h2[:, :, b, a] -
                 1.0im * ws.physical_connection_derivative[:, :, a, b] * (energies' - energies) -
                 1.0im * (ws.matrix_scratch_1 - ws.matrix_scratch_2)

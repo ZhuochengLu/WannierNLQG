@@ -564,6 +564,12 @@ end
     central_unitary = block_unitary(k0)
     central.spectrum.source_eigenvectors .= central_unitary
     central.spectrum.source_eigenvectors_adjoint .= central_unitary'
+    # This transport-only oracle supplies arbitrary prepared insertions explicitly.
+    central.common.computed_mask |= (
+        WCC_MATRIX._capability_bit(WCC_MATRIX.BERRY_CONNECTION) |
+        WCC_MATRIX._capability_bit(WCC_MATRIX.HAMILTONIAN_DERIVATIVES) |
+        WCC_MATRIX._capability_bit(WCC_MATRIX.INTERNAL_CONNECTION)
+    )
     central.berry_connection[:, :, 1] .= 0.0
     central.berry_connection[1:2, 3:4, 1] .= x_source(k0)
     ws.source_internal_connection[:, :, :] .= 0.0
@@ -580,6 +586,11 @@ end
             shifted_unitary = block_unitary(shifted_k)
             data.spectrum.source_eigenvectors .= shifted_unitary
             data.spectrum.source_eigenvectors_adjoint .= shifted_unitary'
+            data.common.computed_mask |= (
+                WCC_MATRIX._capability_bit(WCC_MATRIX.BERRY_CONNECTION) |
+                WCC_MATRIX._capability_bit(WCC_MATRIX.HAMILTONIAN_DERIVATIVES) |
+                WCC_MATRIX._capability_bit(WCC_MATRIX.INTERNAL_CONNECTION)
+            )
             data.berry_connection[:, :, 1] .= 0.0
             data.berry_connection[1:2, 3:4, 1] .= x_source(shifted_k)
         end
@@ -1128,13 +1139,10 @@ end
     unitary = Matrix(qr(randn(rng, ComplexF64, model.num_orbitals, model.num_orbitals)).Q)
     data.spectrum.source_eigenvectors .= unitary
     data.spectrum.source_eigenvectors_adjoint .= unitary'
-    source_connection = randn(rng, ComplexF64, model.num_orbitals, model.num_orbitals, 2)
-    source_hamiltonian_derivatives =
-        randn(rng, ComplexF64, model.num_orbitals, model.num_orbitals, 2)
-    inverse_energy_differences = randn(rng, model.num_orbitals, model.num_orbitals)
-    data.source_gauge_berry_connection .= source_connection
-    data.source_gauge_hamiltonian_derivatives .= source_hamiltonian_derivatives
-    data.inverse_energy_differences .= inverse_energy_differences
+    # Algebra-only raw-A fixture; no r or inverse-gap reconstruction is prepared.
+    raw_connection = randn(rng, ComplexF64, model.num_orbitals, model.num_orbitals, 2)
+    data.common.position.wannier_gauge .= raw_connection
+    data.common.computed_mask |= WCC_MATRIX._capability_bit(WCC_MATRIX.INTERNAL_CONNECTION)
     WCC_RESPONSES.prepare_geometric_source_external_connection!(
         ws.valence_source_external_connection,
         data,
@@ -1151,12 +1159,12 @@ end
             model.lattice[2, direction] .* centers_fractional[2, :] .+
             model.lattice[3, direction] .* centers_fractional[3, :]
         oracle =
-            source_connection[:, :, direction] .+
-            1.0im .* source_hamiltonian_derivatives[:, :, direction] .* inverse_energy_differences .-
+            unitary' * raw_connection[:, :, direction] * unitary -
             unitary' * Diagonal(center_cartesian) * unitary
         @test ws.valence_source_external_connection[:, :, direction] ≈ oracle rtol = 1.0e-10 atol =
             1.0e-12
     end
+    @test data.common.subspace_position === nothing
 end
 
 @testset "Full Geometric convention covariance at zero and finite q" begin
@@ -1217,7 +1225,7 @@ end
                 model.num_orbitals,
             )
             shift_current = copy(ws.response_kernel)
-            WCC_RESPONSES.compute_geometric_loop_quantum_hermitian_connection_kernel!(
+            @test_throws ArgumentError WCC_RESPONSES.compute_geometric_loop_quantum_hermitian_connection_kernel!(
                 ws,
                 kpoint,
                 photon_momentum,
@@ -1230,7 +1238,6 @@ end
                 ([2], [1]),
                 1.0e-8,
             )
-            quantum_hermitian_connection = copy(ws.response_kernel)
             WCC_RESPONSES.compute_geometric_loop_shift_vector_kernel!(
                 ws,
                 kpoint,
@@ -1245,11 +1252,9 @@ end
                 model.num_orbitals,
             )
             shift_vector = copy(ws.response_kernel)
-            (; shift_current, quantum_hermitian_connection, shift_vector)
+            (; shift_current, shift_vector)
         end
         @test kernels[1].shift_current ≈ kernels[2].shift_current rtol = 2.0e-6 atol = 1.0e-8
-        @test kernels[1].quantum_hermitian_connection ≈ kernels[2].quantum_hermitian_connection rtol =
-            2.0e-6 atol = 1.0e-8
         # Runtime consumes the selected conduction=2, valence=1 transition.
         # Diagonal loops are outside this observable and can sit on opposite
         # sides of the established principal-log branch cut.
@@ -1494,4 +1499,120 @@ end
         WCC_MATRIX.MatrixElementWorkspace(missing_home_model, plan),
         missing_home_model,
     )
+end
+
+@testset "Bare loop plans retain source matrices without regularized preparation" begin
+    E=WannierNLQG.MatrixElements
+    runtime=WannierNLQG.Runtime
+    model, centers=wcc_synthetic_model()
+    for convention in (WCC_CORE.CONVENTION_I, WCC_CORE.CONVENTION_II)
+        directions=E.MatrixElementDirectionRequirements(3)
+        directions=E.require_matrix_element_axes(directions, E.HAMILTONIAN_DERIVATIVES, (1, 3))
+        directions=E.require_matrix_element_axes(directions, E.INTERNAL_CONNECTION, (1, 3))
+        olddirs=E.require_matrix_element_axes(directions, E.VELOCITY_VERTICES, (1, 3))
+        raw=E.compile_matrix_plan(
+            E.MatrixElementRequest(
+                E.HAMILTONIAN_DERIVATIVES,
+                E.INTERNAL_CONNECTION;
+                spatial_dimension = 3,
+            ),
+            directions;
+            wannier_center_convention = convention,
+        )
+        retained=E.compile_matrix_plan(
+            E.MatrixElementRequest(E.VELOCITY_VERTICES; spatial_dimension = 3),
+            olddirs;
+            wannier_center_convention = convention,
+        )
+        ws=E.MatrixElementWorkspace(model, raw);
+        reference=E.MatrixElementWorkspace(model, retained)
+        E.prepare_real_space!(ws, model);
+        E.prepare_real_space!(reference, model)
+        loop=E.GeometricLoopMatrixWorkspace(ws)
+        for kind in (E.BERRY_CONNECTION, E.VELOCITY_VERTICES, E.GAUGE_CORRECTION)
+            @test !E.has_capability(loop.berry_plan, kind)
+        end
+        for point in ([0.173, 0.281, 0.07], [0.175, 0.28, 0.07], [0.173, 0.281, 0.07])
+            data=E.compute_kpoint!(ws, model, point);
+            old=E.compute_kpoint!(reference, model, point)
+            for reader in (E.subspace_connection, E.subspace_velocity_vertices)
+                new_array=reader(data; source_gauge = true);
+                old_array=reader(old; source_gauge = true)
+                @test reinterpret(
+                    UInt64,
+                    vec(new_array[:, :, [1, 3]]),
+                )==reinterpret(UInt64, vec(old_array[:, :, [1, 3]]))
+            end
+            @test !E._has_capability(data.computed_mask, E.GAUGE_CORRECTION)
+            @test !E._has_capability(data.computed_mask, E.BERRY_CONNECTION)
+        end
+        data=E.GeometricLoopMatrixData(ws.data)
+        E.compute_wilson_shifted!(
+            data,
+            loop,
+            model,
+            [0.174, 0.281, 0.07];
+            denominator_regularization = 0.02,
+            spatial_dimension = 3,
+        )
+        @test ws.plan===raw
+        @test !E._has_capability(data.common.computed_mask, E.BERRY_CONNECTION)
+        @test all(isfinite, E.subspace_connection(data.common; source_gauge = true)[:, :, [1, 3]])
+    end
+    default=E.GeometricLoopMatrixWorkspace(model.num_orbitals, model.num_r_vectors, 3)
+    @test E.has_capability(default.matrix_elements.plan, E.HAMILTONIAN_DERIVATIVES)
+    @test E.has_capability(default.matrix_elements.plan, E.INTERNAL_CONNECTION)
+    @test !E.has_capability(default.matrix_elements.plan, E.VELOCITY_VERTICES)
+end
+
+@testset "Public loop bundle plans keep explicit bare roles" begin
+    E=WannierNLQG.MatrixElements
+    R=WannierNLQG.Runtime
+    model_path=joinpath(dirname(@__DIR__), "examples/fixtures/synthetic_runtime/synthetic_tb.dat")
+    for method in ("Geometric_Loop", "Wilson_Loop"), selected in (false, true)
+        task=TaskSpec(
+            id = "bare_loop",
+            quantity = selected ? "SCK" : "SC",
+            method = method,
+            physics = OpticalParameters(
+                photon_energies = [0.73],
+                fermi_energy = 0.0,
+                temperature = 0.0,
+            ),
+            observable = selected ?
+                         KSliceSelection(
+                component = TensorComponent(1, 1, 3),
+                bands = Transition(conduction = [2], valence = [1]),
+            ) : FullTensor(),
+        )
+        sampling=selected ?
+                 KSlice(
+            k_mesh = (2, 2),
+            spatial_dimension = 3,
+            origin = (0.0, 0.0, 0.0),
+            vector_1 = (1.0, 0.0, 0.0),
+            vector_2 = (0.0, 1.0, 0.0),
+        ) : BZMesh(k_mesh = (2, 2, 2), spatial_dimension = 3)
+        input=TaskConfig(
+            model = ModelInput(model_file = model_path),
+            sampling = sampling,
+            tasks = [task],
+            execution = ExecutionOptions(fourier_backend = "Direct"),
+        )
+        cfg=R.compile_task_config(input, task)
+        plan=R.bundle_matrix_element_plan(
+            R.normalize_task_specs(cfg),
+            cfg,
+            selected ? [1, 1, 3] : nothing,
+        )
+        @test plan.source_gauge_required
+        for kind in (E.HAMILTONIAN_DERIVATIVES, E.INTERNAL_CONNECTION)
+            @test E.has_capability(plan, kind)
+            @test E._axis_required(plan, kind, 1) && E._axis_required(plan, kind, 3)
+            @test E._axis_required(plan, kind, 2)==!selected
+        end
+        for kind in (E.BERRY_CONNECTION, E.GAUGE_CORRECTION, E.VELOCITY_VERTICES)
+            @test !E.has_capability(plan, kind)
+        end
+    end
 end

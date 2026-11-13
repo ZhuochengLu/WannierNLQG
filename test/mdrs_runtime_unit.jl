@@ -7,10 +7,45 @@ const MDRS_IO = WannierNLQG.IO
 const MDRS_ME = WannierNLQG.MatrixElements
 const MDRS_RUNTIME = WannierNLQG.Runtime
 
+struct MDRSCountingSupportMatrix <: AbstractMatrix{Int}
+    values::Matrix{Int}
+    reads::Base.RefValue{Int}
+end
+Base.size(values::MDRSCountingSupportMatrix) = size(values.values)
+function Base.getindex(values::MDRSCountingSupportMatrix, row::Int, column::Int)
+    values.reads[] += 1
+    return values.values[row, column]
+end
+
+@testset "Input support is complete and independent of orbital-pair count" begin
+    vectors = [0 1 -1; 0 0 0; 0 0 0]
+    degeneracies = [1, 2, 2]
+    reads = Ref(0)
+    observed = MDRSCountingSupportMatrix(vectors, reads)
+    small = MDRS_ME.input_real_space_support_definition(observed, degeneracies, 2)
+    small_reads = reads[]
+    reads[] = 0
+    large = MDRS_ME.input_real_space_support_definition(observed, degeneracies, 100_000)
+    @test reads[] == small_reads
+    @test small_reads <= 3length(degeneracies)
+    @test large.num_orbitals == 100_000
+    @test large.r_vectors == small.r_vectors == ((0, 0, 0), (1, 0, 0), (-1, 0, 0))
+    @test large.scalar_degeneracies == small.scalar_degeneracies == (1, 2, 2)
+    @test length(large.r_vectors) == length(degeneracies)
+    vectors[1, 2] = 2
+    degeneracies[2] = 3
+    @test small.r_vectors[2] == (1, 0, 0)
+    @test small.scalar_degeneracies == (1, 2, 2)
+    @test MDRS_ME.input_real_space_support_definition(vectors, degeneracies, 2) != small
+    @test_throws ArgumentError MDRS_ME.input_real_space_support_definition(vectors, [1, 2], 2)
+    @test_throws ArgumentError MDRS_ME.input_real_space_support_definition(vectors, [1, 0, 1], 2)
+    @test_throws ArgumentError MDRS_ME.input_real_space_support_definition(vectors, degeneracies, 0)
+end
+
 # Write a minimal official-format ordered one-orbital wsvec fixture.
-# Wannier90 `ws_write_vec` emits a dated header, then fixed-width records in
+# Wannier `ws_write_vec` emits a dated header, then fixed-width records in
 # irpt -> iw -> jw order. These fixtures intentionally bind that source shape;
-# they are not evidence that the locally crashing wannier90.x generated a file.
+# they are not evidence that the locally crashing wannier.x generated a file.
 function write_mdrs_wsvec(path; bad_key = false, duplicate = false, trailing = false)
     fixed(values...) = join(lpad.(string.(values), 5))
     open(path, "w") do io
@@ -74,6 +109,7 @@ function mdrs_test_context(directory)
         joinpath(directory, "metadata.txt"),
         joinpath(directory, "progress.out"),
         joinpath(directory, "progress.jsonl"),
+        nothing,
         nothing,
     )
 end
@@ -253,7 +289,7 @@ function write_mdrs_materialized_bundle(path, model_file)
         "final_wannier_centers_cartesian" => centers,
         "final_wannier_centers_fractional" => centers,
         "center_alignment_lattice_shifts" => zeros(Int, size(centers)),
-        "replica_mapping_sha256" => prepared.summary.mapping_sha256,
+        "replica_mapping_reference" => prepared.summary.mapping_reference,
     )
     MDRS_IO.write_real_space_operator_bundle(
         path,
@@ -261,7 +297,7 @@ function write_mdrs_materialized_bundle(path, model_file)
         prepared.degeneracies,
         operators;
         profile = :hamiltonian_position,
-        paired_tb_sha256 = MDRS_RUNTIME.checksum_file(model_file),
+        paired_tb_file = model_file,
         geometry = geometry,
     )
     return path
@@ -304,7 +340,7 @@ function write_mdrs_full_bundle(path, model_file)
         model.r_degeneracies,
         operators;
         profile = :full,
-        paired_tb_sha256 = MDRS_RUNTIME.checksum_file(model_file),
+        paired_tb_file = model_file,
         geometry = Dict(
             "wannier_center_policy" => "symmetrize",
             "real_space_replica_policy" => "input",
@@ -319,7 +355,7 @@ function write_mdrs_full_bundle(path, model_file)
             "final_wannier_centers_cartesian" => centers,
             "final_wannier_centers_fractional" => centers,
             "center_alignment_lattice_shifts" => zeros(Int, size(centers)),
-            "replica_mapping_sha256" => repeat("0", 64),
+            "replica_mapping_reference" => repeat("0", 64),
         ),
         provenance = Dict(
             name => repeat(string(index, base = 16), 64) for (index, name) in enumerate((
@@ -343,7 +379,7 @@ function write_mdrs_full_bundle(path, model_file)
                 "sHu_generation_algorithm_version" => "mdrs-fixture-v1",
                 "authoritative_hamiltonian" => "native_dft",
                 "authoritative_hamiltonian_digest" => repeat("a", 64),
-                "derivative_overlap_source" => "wannier90_uIu",
+                "derivative_overlap_source" => "neighbor_pair_overlap",
                 "derivative_overlap_completeness" => "full_hilbert_space",
                 "derivative_overlap_source_sha256" => repeat("2", 64),
                 "derivative_overlap_algorithm_version" =>
@@ -375,14 +411,21 @@ function write_mdrs_full_bundle(path, model_file)
     return path
 end
 
-@testset "strict Wannier90 wsvec reader" begin
+@testset "strict Wannier wsvec reader" begin
     mktempdir() do directory
         r_vectors = [0 1; 0 0; 0 0]
         path = write_mdrs_wsvec(joinpath(directory, "case_wsvec.dat"))
         parsed = MDRS_IO.read_wannier_wsvec(path, 1, r_vectors)
         @test parsed.path == abspath(path)
-        @test parsed.file_sha256 == bytes2hex(SHA.sha256(read(path)))
+        @test parsed.identity == MDRS_IO.scientific_file_identity(path)
         @test parsed.translations[1, 1, 1] == [(0, 0, 0)]
+        @test parsed.translations[1, 1, 2] == [(-2, 0, 0), (0, 0, 0)]
+        observed_identity = parsed.identity
+        open(path, "a") do stream
+            write(stream, '\n')
+        end
+        @test parsed.identity == observed_identity
+        @test parsed.identity != MDRS_IO.scientific_file_identity(path)
         @test parsed.translations[1, 1, 2] == [(-2, 0, 0), (0, 0, 0)]
 
         @test_throws ArgumentError MDRS_IO.read_wannier_wsvec(
@@ -431,34 +474,30 @@ end
     end
 end
 
-@testset "input replica mapping digest stays canonical without map materialization" begin
+@testset "input support keeps complete canonical values without pair expansion" begin
     r_vectors = [0 -2 1; 1 0 -3; 0 4 -1]
     degeneracies = [2, 3, 5]
     materialized = MDRS_ME.input_real_space_replica_map(r_vectors, degeneracies, 2)
-    digest = MDRS_ME.input_real_space_replica_mapping_sha256(r_vectors, degeneracies, 2)
-    @test digest == materialized.mapping_sha256
-    @test digest == "513a105d379eee992ed84d9c21e161208eb28fc81e97800b6f783c829ed29daf"
-    @test MDRS_ME.input_real_space_replica_mapping_sha256(r_vectors, degeneracies, 1) != digest
-    @test MDRS_ME.input_real_space_replica_mapping_sha256(copy(r_vectors), [2, 3, 7], 2) != digest
+    digest = MDRS_ME.input_real_space_support_definition(r_vectors, degeneracies, 2)
+    @test digest == (
+        schema = "wanniernlqg.input-r-support/1",
+        num_orbitals = 2,
+        r_vectors = ((0, 1, 0), (-2, 0, 4), (1, -3, -1)),
+        scalar_degeneracies = (2, 3, 5),
+    )
+    @test all(
+        materialized.images[left, right, index]==[Tuple(r_vectors[:, index])] for
+        left in 1:2, right in 1:2, index in 1:3
+    )
+    @test !isdefined(MDRS_ME, :input_real_space_replica_mapping_sha256)
+    @test MDRS_ME.input_real_space_support_definition(r_vectors, degeneracies, 1) != digest
+    @test MDRS_ME.input_real_space_support_definition(copy(r_vectors), [2, 3, 7], 2) != digest
     changed_r_vectors = copy(r_vectors)
     changed_r_vectors[1, 2] -= 1
-    @test MDRS_ME.input_real_space_replica_mapping_sha256(changed_r_vectors, degeneracies, 2) !=
-          digest
-    @test_throws ArgumentError MDRS_ME.input_real_space_replica_mapping_sha256(
-        zeros(Int, 2, 1),
-        [1],
-        1,
-    )
-    @test_throws ArgumentError MDRS_ME.input_real_space_replica_mapping_sha256(
-        zeros(Int, 3, 1),
-        [0],
-        1,
-    )
-    @test_throws ArgumentError MDRS_ME.input_real_space_replica_mapping_sha256(
-        zeros(Int, 3, 1),
-        [1],
-        0,
-    )
+    @test MDRS_ME.input_real_space_support_definition(changed_r_vectors, degeneracies, 2) != digest
+    @test_throws ArgumentError MDRS_ME.input_real_space_support_definition(zeros(Int, 2, 1), [1], 1)
+    @test_throws ArgumentError MDRS_ME.input_real_space_support_definition(zeros(Int, 3, 1), [0], 1)
+    @test_throws ArgumentError MDRS_ME.input_real_space_support_definition(zeros(Int, 3, 1), [1], 0)
 end
 
 @testset "runtime replica lifecycle truth table and canonical identity" begin
@@ -478,11 +517,13 @@ end
         @test automatic_input.source == :input
         @test automatic_input.input_materialized === false
         @test automatic_input.map === nothing
-        @test automatic_input.mapping_sha256 == MDRS_ME.input_real_space_replica_map(
-            model.r_vectors,
-            model.r_degeneracies,
-            model.num_orbitals,
-        ).mapping_sha256
+        @test automatic_input.mapping_reference === nothing
+        definition = automatic_input.input_support_definition
+        @test definition.schema == "wanniernlqg.input-r-support/1"
+        @test definition.num_orbitals == model.num_orbitals
+        @test definition.r_vectors ==
+              Tuple(Tuple(model.r_vectors[:, i]) for i in axes(model.r_vectors, 2))
+        @test definition.scalar_degeneracies == Tuple(model.r_degeneracies)
 
         automatic_grid = MDRS_RUNTIME.build_runtime_replica_plan(
             WannierNLQG.Runtime.EffectiveTaskConfig(; base..., mp_grid = (2, 1, 1)),
@@ -500,7 +541,10 @@ end
             nothing,
         )
         @test automatic_wsvec.source == :wsvec
-        @test automatic_wsvec.map.mapping_sha256 == automatic_grid.map.mapping_sha256
+        @test automatic_wsvec.map.source_r_vectors==automatic_grid.map.source_r_vectors
+        @test automatic_wsvec.map.source_degeneracies==automatic_grid.map.source_degeneracies
+        @test automatic_wsvec.map.target_r_vectors==automatic_grid.map.target_r_vectors
+        @test automatic_wsvec.map.images==automatic_grid.map.images
 
         cross_checked = MDRS_RUNTIME.build_runtime_replica_plan(
             WannierNLQG.Runtime.EffectiveTaskConfig(;
@@ -561,7 +605,7 @@ end
             mp_grid = (2, 1, 1),
             wigner_seitz_tolerance = 1.0e-5,
             wigner_seitz_search_size = 3,
-            replica_mapping_sha256 = repeat("a", 64),
+            replica_mapping_reference = repeat("a", 64),
         )
         inherited = MDRS_RUNTIME.build_runtime_replica_plan(
             WannierNLQG.Runtime.EffectiveTaskConfig(; base...),
@@ -653,8 +697,8 @@ end
             model.r_degeneracies,
             changed_r_translations,
         )
-        @test changed_n_r.mapping_sha256 != automatic_grid.map.mapping_sha256
-        @test changed_r.mapping_sha256 != automatic_grid.map.mapping_sha256
+        @test changed_n_r.source_degeneracies != automatic_grid.map.source_degeneracies
+        @test changed_r.source_r_vectors != automatic_grid.map.source_r_vectors
     end
 end
 
@@ -709,7 +753,7 @@ end
             @test size(only_component) == (1, 1, 3)
             @test vec(only_component) == ComplexF64[0.5 * index, 1.0 * index, 0.5 * index]
         end
-        @test prepared.summary.mapping_sha256 == prepared.plan.map.mapping_sha256
+        @test prepared.summary.mapping_reference == prepared.plan.map.mapping_reference
         @test prepared.summary.scalar_degeneracy_applied
         @test prepared.summary.pair_degeneracy_applied
 
@@ -752,6 +796,19 @@ end
         @test loaded_input.replica_summary.effective_policy == :input
         @test !loaded_input.replica_summary.transformed_this_run
         MDRS_RUNTIME.release_runtime_storage!(loaded_input)
+
+        wsvec_scope_cfg = mdrs_runtime_config(
+            joinpath(directory, "source_scope"),
+            model_file,
+            ("SC", "Conventional", "Integral"),
+            "direct";
+            wsvec_file = wsvec_file,
+            mp_grid = nothing,
+        )
+        scope_specs = MDRS_RUNTIME.validate_config(wsvec_scope_cfg)
+        source_scope_paths = MDRS_RUNTIME.runtime_input_source_paths(wsvec_scope_cfg, scope_specs)
+        @test abspath(wsvec_file) ∉ source_scope_paths
+        @test abspath(model_file) ∈ source_scope_paths
 
         oracle_cfg = mdrs_runtime_config(
             joinpath(directory, "prepared_oracle"),
@@ -920,10 +977,12 @@ end
         @test occursin(r"backend\s*= direct", read(direct_integral.metadata_path, String))
         @test occursin(r"backend\s*= mixed", read(mixed_integral.metadata_path, String))
         @test occursin(r"backend\s*= mixed", read(mixed_kslice.metadata_path, String))
+        expected_wsvec_identity = MDRS_IO.scientific_file_identity(wsvec_file)
         for result in (wsvec_band, wsvec_integral, wsvec_kslice)
             metadata = read(result.metadata_path, String)
             @test occursin(r"source\s*= wsvec", metadata)
-            @test occursin(r"wsvec_sha256\s*= [0-9a-f]{64}", metadata)
+            @test occursin(r"wsvec_identity\s*= wanniernlqg\.file-state/1:", metadata)
+            @test occursin(expected_wsvec_identity, metadata)
         end
 
         events =
@@ -936,10 +995,11 @@ end
             "requested_policy",
             "effective_policy",
             "source",
-            "mapping_sha256",
-            "mapping_digest_scheme",
+            "mapping_reference",
+            "mapping_reference_schema",
+            "input_support_definition",
             "wsvec_file",
-            "wsvec_sha256",
+            "wsvec_identity",
             "mp_grid",
             "wigner_seitz_tolerance",
             "wigner_seitz_search_size",
@@ -952,13 +1012,14 @@ end
             "pair_degeneracy_applied",
         ])
         @test String(replica.source) == "wsvec"
-        @test length(String(replica.mapping_sha256)) == 64
-        @test length(String(replica.wsvec_sha256)) == 64
+        @test startswith(String(replica.mapping_reference), "wanniernlqg.owned-data/1:")
+        @test String(replica.wsvec_identity) == expected_wsvec_identity
         human_progress = read(wsvec_integral.progress_out_path, String)
         @test occursin("mp_grid=nothing", human_progress)
         @test occursin("mapping scheme=", human_progress)
         @test occursin("wsvec=", human_progress)
-        @test occursin("wsvec sha256=", human_progress)
+        @test !occursin("wsvec sha256=", human_progress)
+        @test !occursin(expected_wsvec_identity, human_progress)
         @test occursin("normalization scalar=", human_progress)
         @test occursin("pair=", human_progress)
         @test occursin("transformed=true", human_progress)
@@ -1044,7 +1105,7 @@ end
             ctx0.specs,
             ctx0.run_dir,
             ctx0.model_file,
-            ctx0.model_sha256,
+            ctx0.model_identity,
             ctx0.model_input_mode,
             bundle,
             ctx0.paired_tb_validation_file,
@@ -1055,6 +1116,7 @@ end
             ctx0.progress_out_path,
             ctx0.progress_jsonl_path,
             ctx0.seed_inputs,
+            ctx0.native_admission,
         )
         loaded = MDRS_IO.read_operator_bundle_components(
             bundle,
@@ -1093,17 +1155,13 @@ end
         @test map.source == :wsvec
         @test map.target_r_vectors == [-1 0 1; 0 0 0; 0 0 0]
         raw = reshape(ComplexF64[2.0, 4.0], 1, 1, 2)
-        materialized = MDRS_ME.materialize_replica_component(
-            raw,
-            [2, 4],
-            map,
-            MDRS_ME.SerializedWannier90ReplicaValues(),
-        )
+        materialized =
+            MDRS_ME.materialize_replica_component(raw, [2, 4], map, MDRS_ME.RawReplicaValues())
         @test_throws ArgumentError MDRS_ME.materialize_replica_component(
             raw,
             [1, 4],
             map,
-            MDRS_ME.SerializedWannier90ReplicaValues(),
+            MDRS_ME.RawReplicaValues(),
         )
         @test vec(materialized) == ComplexF64[0.5, 1.0, 0.5]
 
@@ -1176,12 +1234,8 @@ end
     raw = Array{ComplexF64, 3}(undef, 2, 2, 2)
     raw[:, :, 1] = ComplexF64[2 4; 6 8]
     raw[:, :, 2] = ComplexF64[12 16; 20 24]
-    materialized = MDRS_ME.materialize_replica_component(
-        raw,
-        degeneracies,
-        map,
-        MDRS_ME.SerializedWannier90ReplicaValues(),
-    )
+    materialized =
+        MDRS_ME.materialize_replica_component(raw, degeneracies, map, MDRS_ME.RawReplicaValues())
 
     function input_fourier(kpoint)
         value = zeros(ComplexF64, 2, 2)

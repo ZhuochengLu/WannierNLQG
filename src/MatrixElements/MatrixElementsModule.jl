@@ -2,33 +2,79 @@ module MatrixElements
 
 using LinearAlgebra
 using FFTW
+import ..Core.ESKernel: DenseSpectra, FFTBuffers, WorkspacePlanning
+using ForwardDiff
 using Mmap
 using Printf
 using SHA
 using ..Core
+using ..Core: _localized_spin_indices
 using ..IO
 
+include("Interpolated/MixedFourierPrimitives.jl")
+include("Interpolated/OrthogonalGeometryDerivativePlan.jl")
 include("Interpolated/MatrixElementPlan.jl")
 include("Interfaces.jl")
+include("AnalyticDerivativeDiagnostics.jl")
+export make_analytic_derivative_diagnostics,
+    merge_analytic_derivative_diagnostics, validate_analytic_model
+include("AnalyticModelEvaluation.jl")
+include("Interpolated/SubspacePositionMatrixElements.jl")
 include("Interpolated/MatrixElementWorkspace.jl")
+include("NativeModelSources.jl")
 include("Interpolated/WannierCenterConventionTransforms.jl")
 include("Interpolated/MixedFourierMatrixElements.jl")
 include("Interpolated/SharedInterpolationCache.jl")
 include("Interpolated/HamiltonianMatrixElements.jl")
+include("Interpolated/PositionVertexRegularization.jl")
 include("Interpolated/PositionMatrixElements.jl")
+include("Interpolated/PositionCurvatureProjection.jl")
+include("Interpolated/SubspacePositionEvaluation.jl")
+include("Interpolated/QuantumMetricCompletion.jl")
 include("Interpolated/OpticalPositionDerivatives.jl")
+include("Interpolated/ThirdOrderGeometry.jl")
+export ThirdOrderGeometry,
+    JerkCurrentGeometry,
+    prepare_jerk_current_geometry!,
+    prepare_third_order_geometry!,
+    prepare_third_order_band_geometry!,
+    prepare_third_order_combined_geometry!,
+    optical_derivative_combination
 include("Interpolated/SpinMatrixElements.jl")
 include("Interpolated/SpinVelocityMatrixElements.jl")
+include("NonorthogonalOpticalCutoffVertices.jl")
+include("NonorthogonalMatrixElements.jl")
+include("NonorthogonalFourier.jl")
+export NonorthogonalPositionMatrixData,
+    nonorthogonal_operator_matrices, nonorthogonal_metric_diagnostics, isolated_band_curvature
 include("RealSpaceReplicaPolicies.jl")
 include("Interpolated/WannierPairWignerSeitzTransforms.jl")
 include("Interpolated/WannierDerivativeOperators.jl")
 include("ModelTransforms.jl")
+include("Interpolated/WannierCellImageTransforms.jl")
+include("ResponseDegeneracyGroups.jl")
 include("ProjectorMatrixElements.jl")
 include("GeometricLoopMatrixElements.jl")
 include("ConventionCovariantTransport.jl")
+include("OpticalMomentumOverlap.jl")
+include("AnalyticMatrixElements.jl")
+include("PointOrbitalSymmetryEvaluation.jl")
+include("Interpolated/OrthogonalGeometryJets.jl")
+include("Interpolated/OrthogonalBandDerivatives.jl")
+export point_orbital_geometry, validate_point_orbital_group, validate_point_orbital_covariance
 include("MatrixElementsIntegrationContracts.jl")
 
-export optical_position_vertices
+export native_matrix_sources
+export analytic_hamiltonian, analytic_hamiltonian_derivative
+export bare_energy_inverse,
+    regularized_energy_inverse,
+    regularized_energy_weight,
+    eigenvector_corrections!,
+    position_vertices!,
+    physical_velocity_vertices!,
+    raw_position_connections!,
+    physical_velocity_vertices
+export optical_position_vertices, cutoff_optical_position_vertices, OPTICAL_CUTOFF_VERTICES
 export MatrixElementKind, MatrixElementRequest, MatrixElementPlan, MatrixElementSources
 export MatrixElementWorkspace, KPointBatchWorkspace, KPointMatrixData, KPointOffset
 export MatrixElementEvaluationCounts, matrix_data!
@@ -77,12 +123,16 @@ export projector_diff_projectors!,
     projector_pure_diff_projectors!, projector_second_diff_projectors!
 export prepare_projector_covariant_geometry!, transport_projector_matrix_to_reference!
 export GeometricLoopMatrixData, GeometricLoopMatrixWorkspace
-export mark_degenerate_groups!, degenerate_group_summary, extract_wannier_centers
+export mark_degenerate_groups!,
+    mark_geometric_response_groups!, degenerate_group_summary, extract_wannier_centers
 export ConventionFrameConnector,
     IdentityConventionFrameConnector, WannierCenterConventionFrameConnector
 export make_convention_frame_connector, compute_convention_covariant_overlap!
 
 include("Interpolated/SpectralResponseGeometry.jl")
+include("IntrinsicHallGeometry.jl")
+include("IntrinsicHallWorkspace.jl")
+export intrinsic_hall_geometry, prepare_intrinsic_hall_geometry!
 include("Interpolated/OrbitalResponseOperators.jl")
 export OrbitalCompletion,
     finite_model_orbital_completion,
@@ -90,10 +140,11 @@ export OrbitalCompletion,
     orbital_completion,
     validate_orbital_sources,
     SpectralResponseGeometry,
+    NonorthogonalSpectralResponseGeometry,
     spectral_response_geometry,
     conventional_spectral_pair,
     projector_spectral_pair
 
-include("FirstUsePrecompile.jl")
+# First-use compilation is driven by the public workloads.
 
 end

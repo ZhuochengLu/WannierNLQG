@@ -1,5 +1,15 @@
 # Conventional injection-current response.
 
+"""Read the ordinary band velocity without changing the shared Hamiltonian payload."""
+_injection_band_velocity(data::KPointMatrixData, band, axis) =
+    data.hamiltonian_derivatives[band, band, axis]
+"""Use the metric Hellmann-Feynman slope for a localized nonorthogonal frame."""
+_injection_band_velocity(
+    data::KPointMatrixData{H, P},
+    band,
+    axis,
+) where {H, P <: NonorthogonalPositionMatrixData} = data.position.energy_derivatives[band, axis]
+
 """
 The stored Hamiltonian-gauge factor is
 `(v_mm^a-v_nn^a) A_nm^c A_mn^b` at `[n,m,a,b,c]`. `a` is the injected-current
@@ -30,8 +40,7 @@ function compute_injection_current_kernel!(
                 n, m = active_pairs_nmajor[pair_index]
                 for a in 1:spatial_dimension
                     velocity_diff =
-                        data.hamiltonian_derivatives[m, m, a] -
-                        data.hamiltonian_derivatives[n, n, a]
+                        _injection_band_velocity(data, m, a) - _injection_band_velocity(data, n, a)
                     for b in 1:spatial_dimension
                         for c in 1:spatial_dimension
                             response_kernel[n, m, a, b, c] =
@@ -47,7 +56,7 @@ function compute_injection_current_kernel!(
             @inbounds for pair_index in 1:pair_count
                 n, m = active_pairs_nmajor[pair_index]
                 velocity_diff =
-                    data.hamiltonian_derivatives[m, m, a] - data.hamiltonian_derivatives[n, n, a]
+                    _injection_band_velocity(data, m, a) - _injection_band_velocity(data, n, a)
                 response_kernel[n, m, a, b, c] =
                     velocity_diff * data.berry_connection[n, m, c] * data.berry_connection[m, n, b]
             end
@@ -60,8 +69,7 @@ function compute_injection_current_kernel!(
                 active_pair_mask !== nothing && !active_pair_mask[n, m] && continue
                 for a in 1:spatial_dimension
                     velocity_diff =
-                        data.hamiltonian_derivatives[m, m, a] -
-                        data.hamiltonian_derivatives[n, n, a]
+                        _injection_band_velocity(data, m, a) - _injection_band_velocity(data, n, a)
                     for b in 1:spatial_dimension
                         for c in 1:spatial_dimension
                             response_kernel[n, m, a, b, c] =
@@ -79,7 +87,7 @@ function compute_injection_current_kernel!(
             for m in band_start:band_end
                 active_pair_mask !== nothing && !active_pair_mask[n, m] && continue
                 velocity_diff =
-                    data.hamiltonian_derivatives[m, m, a] - data.hamiltonian_derivatives[n, n, a]
+                    _injection_band_velocity(data, m, a) - _injection_band_velocity(data, n, a)
                 response_kernel[n, m, a, b, c] =
                     velocity_diff * data.berry_connection[n, m, c] * data.berry_connection[m, n, b]
             end

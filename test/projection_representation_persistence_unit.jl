@@ -7,94 +7,45 @@ const PROJECTION_PERSIST_S = WannierNLQG.Symmetrization
 const PROJECTION_PERSIST_EXT =
     first(PROJECTION_PERSIST_W._load_wannierization_extension!()).ProjectionSearch
 
-# Construct one sealed result with a single retained scalar projection.
+if !isdefined(@__MODULE__, :projection_materialization_fixture)
+    include(joinpath(@__DIR__, "support", "ProjectionSearchFixtureSupport.jl"))
+end
+
+# Reuse the real tiny search's complete definitions. Requested validation states
+# below are codec cases; changing a label does not certify embedding quality.
 function synthetic_projection_search_result(;
     validation_status = PROJECTION_PERSIST_W.PROJECTION_VALIDATION_PASSED,
     residuals = Dict("frozen_to_target" => 0.0, "target_to_outer" => 0.0),
 )
-    spec = WannierNLQG.WannierProjection.ProjectionSpec(
-        selector = "X",
-        orbital_sets = "s",
-        positions = zeros(3, 1),
-    )
-    candidate = PROJECTION_PERSIST_W.ProjectionCandidateSpec(id = "X:s", specs = [spec])
-    compatibility = PROJECTION_PERSIST_W.ProjectionRepresentationCompatibilityInfo(
-        "WannierBerri",
-        "1.7.0",
-        "50265d5d1cef184f8377f87ed691c8d9a2f6cdbf",
-        "8552e056b568860c4c7dbd868e997fe4e9e6fb4a0349b182665aee2c8330d5c2",
-        true,
-        :spinless_unitary,
-        1.0e-3,
-        3,
-        1.0e-5,
-    )
-    signature =
-        PROJECTION_PERSIST_W.ProjectionRepresentationSignature(1, ["A"], [1], [:unitary], [1], [1])
-    residual_values = Dict{String, Float64}(residuals)
-    validation_sha256 = Base.invokelatest(
-        PROJECTION_PERSIST_EXT._projection_solution_validation_sha256,
-        ["X:s"],
-        [1],
-        validation_status,
-        residual_values,
-    )
+    result = projection_materialization_fixture().result
+    original = only(result.solutions)
     solution = PROJECTION_PERSIST_W.ProjectionRepresentationSolution(
-        ["X:s"],
-        [1],
-        1,
-        1,
-        1,
-        [[1]],
+        original.candidate_ids,
+        original.coefficients,
+        original.total_dimension,
+        original.nonzero_candidate_types,
+        original.total_block_multiplicity,
+        original.signature_multiplicities,
         validation_status,
-        residual_values,
-        validation_sha256,
+        Dict{String, Float64}(residuals),
     )
-    provisional = PROJECTION_PERSIST_W.ProjectionRepresentationSearchResult(
-        PROJECTION_PERSIST_W.PROJECTION_SEARCH_COMPLETE,
-        true,
-        repeat("4", 64),
-        repeat("5", 64),
-        compatibility,
-        repeat("6", 64),
-        "",
-        false,
-        1,
-        repeat("7", 64),
-        repeat("8", 64),
-        [candidate],
-        WannierNLQG.WannierProjection.ProjectionRadialTransformConfig(),
-        3,
-        1,
-        false,
-        [signature],
-        [solution],
-        ["synthetic persistence fixture"],
-    )
-    return Base.invokelatest(PROJECTION_PERSIST_EXT._projection_seal_search_result, provisional)
-end
-
-# Rebuild one result with a deliberately supplied payload identity.
-function projection_result_with_payload(result, payload_sha256)
     return PROJECTION_PERSIST_W.ProjectionRepresentationSearchResult(
         result.status,
         result.complete,
-        result.representation_sha256,
-        result.contract_sha256,
-        result.compatibility_info,
-        result.config_sha256,
-        payload_sha256,
+        result.representation_definition,
+        result.contract_definition,
+        result.algorithm_info,
         result.spinor,
         result.num_wannier,
-        result.outer_mask_sha256,
-        result.frozen_mask_sha256,
+        result.outer_mask_definition,
+        result.frozen_mask_definition,
         result.candidates,
         result.radial_transform,
         result.visited_nodes,
         result.total_solution_count,
         result.truncated,
         result.signatures,
-        result.solutions,
+        [solution],
         result.diagnostics,
     )
 end
@@ -102,22 +53,21 @@ end
 # Rebuild one result with selected compatibility, spin, and solution fields.
 function projection_result_with_changes(
     result;
-    compatibility_info = result.compatibility_info,
+    complete = result.complete,
+    algorithm_info = result.algorithm_info,
     spinor = result.spinor,
     solutions = result.solutions,
 )
     return PROJECTION_PERSIST_W.ProjectionRepresentationSearchResult(
         result.status,
-        result.complete,
-        result.representation_sha256,
-        result.contract_sha256,
-        compatibility_info,
-        result.config_sha256,
-        "",
+        complete,
+        result.representation_definition,
+        result.contract_definition,
+        algorithm_info,
         spinor,
         result.num_wannier,
-        result.outer_mask_sha256,
-        result.frozen_mask_sha256,
+        result.outer_mask_definition,
+        result.frozen_mask_definition,
         result.candidates,
         result.radial_transform,
         result.visited_nodes,
@@ -133,7 +83,7 @@ end
 function projection_solution_with_changes(
     solution;
     nonzero_candidate_types = solution.nonzero_candidate_types,
-    validation_sha256 = solution.validation_sha256,
+    embedding_residuals = solution.embedding_residuals,
 )
     return PROJECTION_PERSIST_W.ProjectionRepresentationSolution(
         solution.candidate_ids,
@@ -143,8 +93,7 @@ function projection_solution_with_changes(
         solution.total_block_multiplicity,
         solution.signature_multiplicities,
         solution.validation_status,
-        solution.embedding_residuals,
-        validation_sha256,
+        embedding_residuals,
     )
 end
 
@@ -170,29 +119,13 @@ function projection_persistence_inventory(object, path = "")
     return rows
 end
 
-@testset "projection-representation original 2.1 migration preserves full content" begin
+@testset "projection-representation digest-only 2.1 requires explicit regeneration" begin
     legacy_path = joinpath(@__DIR__, "fixtures", "schema_compatibility", "projection_search_2_1.h5")
     @test bytes2hex(PROJECTION_PERSIST_EXT.SHA.sha256(read(legacy_path))) ==
-          "44f9af72b868398e392e98ec85e038f315344f59c757ec29eba1dace43353d7d"
-    legacy = PROJECTION_PERSIST_W.read_projection_representation_search_hdf5(legacy_path)
-    mktempdir() do directory
-        path = joinpath(directory, "search-1.0.h5")
-        PROJECTION_PERSIST_W.write_projection_representation_search_hdf5(path, legacy)
-        restored = PROJECTION_PERSIST_W.read_projection_representation_search_hdf5(path)
-        @test restored.payload_sha256 == legacy.payload_sha256
-        old_rows = HDF5.h5open(projection_persistence_inventory, legacy_path, "r")
-        new_rows = HDF5.h5open(projection_persistence_inventory, path, "r")
-        @test keys(old_rows) == keys(new_rows)
-        @test sort!([key for key in keys(old_rows) if !isequal(old_rows[key], new_rows[key])]) == ["@schema_version"]
-        # Wire 1.0 is an alias for the complete 2.1 contract. A complete historical
-        # payload with that label is valid, unlike the actual historical 1.0 layout.
-        cp(legacy_path, path; force = true)
-        HDF5.h5open(path, "r+") do handle
-            write(HDF5.attributes(handle)["schema_version"], "1.0")
-        end
-        @test PROJECTION_PERSIST_W.read_projection_representation_search_hdf5(path).payload_sha256 ==
-              legacy.payload_sha256
-    end
+          "f63aad96e8ded08a5b607b303c9a009a5c8c90c17175039ba22ddaacece67b1e"
+    @test_throws ArgumentError PROJECTION_PERSIST_W.read_projection_representation_search_hdf5(
+        legacy_path,
+    )
 end
 
 @testset "projection-representation schema-1.0 HDF5 and canonical JSON" begin
@@ -204,20 +137,21 @@ end
         PROJECTION_PERSIST_W.write_projection_representation_search_hdf5(hdf5_path, result)
         roundtrip = PROJECTION_PERSIST_W.read_projection_representation_search_hdf5(hdf5_path)
 
-        @test roundtrip.payload_sha256 == result.payload_sha256
-        @test roundtrip.compatibility_info.upstream_commit ==
-              result.compatibility_info.upstream_commit
-        @test roundtrip.compatibility_info.parity_eligible
+        @test PROJECTION_PERSIST_EXT._projection_search_payload_json(roundtrip) ==
+              PROJECTION_PERSIST_EXT._projection_search_payload_json(result)
+        @test roundtrip.algorithm_info.algorithm_contract_sha256 ==
+              result.algorithm_info.algorithm_contract_sha256
+        @test roundtrip.algorithm_info.canonical_reduction_eligible
         @test only(roundtrip.solutions).candidate_ids == only(result.solutions).candidate_ids
         @test only(roundtrip.solutions).coefficients == only(result.solutions).coefficients
         @test only(roundtrip.solutions).validation_status ==
               PROJECTION_PERSIST_W.PROJECTION_VALIDATION_PASSED
-        @test only(roundtrip.solutions).validation_sha256 ==
-              only(result.solutions).validation_sha256
+        @test only(roundtrip.solutions).embedding_residuals ==
+              only(result.solutions).embedding_residuals
         @test roundtrip.candidates[1].specs[1].positions_fractional == zeros(3, 1)
         HDF5.h5open(hdf5_path, "r") do handle
-            @test String(read(HDF5.attributes(handle)["schema_version"])) == "1.0"
-            @test haskey(handle, "compatibility")
+            @test String(read(HDF5.attributes(handle)["schema_version"])) == "4.0"
+            @test haskey(handle, "algorithm")
             @test String(read(HDF5.attributes(handle["solutions/000001"])["validation_status"])) ==
                   "PROJECTION_VALIDATION_PASSED"
         end
@@ -260,23 +194,23 @@ end
 
 @testset "projection-representation pinned compatibility and derived invariants" begin
     result = synthetic_projection_search_result()
-    info = result.compatibility_info
-    wrong_profile = PROJECTION_PERSIST_W.ProjectionRepresentationCompatibilityInfo(
-        info.upstream_package,
+    info = result.algorithm_info
+    wrong_profile = PROJECTION_PERSIST_W.ProjectionRepresentationAlgorithmInfo(
+        info.algorithm_name,
         "1.7.1",
-        info.upstream_commit,
-        info.upstream_source_sha256,
-        info.parity_eligible,
+        info.algorithm_contract_sha256,
+        info.implementation_sha256,
+        info.canonical_reduction_eligible,
         info.scope,
         info.character_tolerance,
         info.character_round_digits,
         info.little_group_tolerance,
     )
-    inconsistent_scope = PROJECTION_PERSIST_W.ProjectionRepresentationCompatibilityInfo(
-        info.upstream_package,
-        info.upstream_version,
-        info.upstream_commit,
-        info.upstream_source_sha256,
+    inconsistent_scope = PROJECTION_PERSIST_W.ProjectionRepresentationAlgorithmInfo(
+        info.algorithm_name,
+        info.algorithm_version,
+        info.algorithm_contract_sha256,
+        info.implementation_sha256,
         false,
         :spinless_unitary,
         info.character_tolerance,
@@ -287,11 +221,11 @@ end
         projection_solution_with_changes(only(result.solutions); nonzero_candidate_types = 0)
     wrong_sha_solution = projection_solution_with_changes(
         only(result.solutions);
-        validation_sha256 = repeat("0", 64),
+        embedding_residuals = Dict("residual" => Inf),
     )
     invalid_results = (
-        projection_result_with_changes(result; compatibility_info = wrong_profile),
-        projection_result_with_changes(result; compatibility_info = inconsistent_scope),
+        projection_result_with_changes(result; algorithm_info = wrong_profile),
+        projection_result_with_changes(result; algorithm_info = inconsistent_scope),
         projection_result_with_changes(result; spinor = true),
         projection_result_with_changes(result; solutions = [wrong_count_solution]),
         projection_result_with_changes(result; solutions = [wrong_sha_solution]),
@@ -314,7 +248,7 @@ end
         probe = joinpath(@__DIR__, "WannierizationFreshProcessProbe.jl")
         project_root = dirname(@__DIR__)
         command =
-            `$(Base.julia_cmd()) --startup-file=no --threads=1 --project=$(project_root) $(probe) projection-search-readback $(path) $(result.payload_sha256)`
+            `$(Base.julia_cmd()) --startup-file=no --threads=1 --project=$(project_root) $(probe) projection-search-readback $(path) $(PROJECTION_PERSIST_EXT._projection_search_payload_json(result))`
         output = read(
             addenv(
                 command,
@@ -331,7 +265,7 @@ end
 
 @testset "projection-representation stale and tampered artifacts fail closed" begin
     result = synthetic_projection_search_result()
-    stale = projection_result_with_payload(result, repeat("0", 64))
+    stale = projection_result_with_changes(result; complete = false)
     mktempdir() do directory
         @test_throws ArgumentError PROJECTION_PERSIST_W.write_projection_representation_search_hdf5(
             joinpath(directory, "stale.h5"),
@@ -372,15 +306,29 @@ end
     end
 end
 
-@testset "projection-representation legacy schema-1.0/2.0 artifacts are rejected" begin
+# Deliberately invalid current copies test version admission; they are not archived assets.
+@testset "projection-representation unsupported version headers fail before decoding" begin
     result = synthetic_projection_search_result()
-    for old_version in ("1.0", "2.0")
+    for unsupported_version in ("1.0", "2.0", "3.0", "5.0")
         mktempdir() do directory
-            path = joinpath(directory, "old-schema.h5")
+            path = joinpath(directory, "unsupported-version.h5")
             PROJECTION_PERSIST_W.write_projection_representation_search_hdf5(path, result)
-            HDF5.h5open(path, "r+") do handle
-                write(HDF5.attributes(handle)["schema_version"], old_version)
-                old_version == "1.0" && HDF5.delete_attribute(handle, "mirror_sha256")
+            canonical_before = HDF5.h5open(path, "r+") do handle
+                attribute = HDF5.attributes(handle)["schema_version"]
+                try
+                    @test String(read(attribute)) == "4.0"
+                    write(attribute, unsupported_version)
+                finally
+                    close(attribute)
+                end
+                String(read(handle["canonical_payload_json"]))
+            end
+            # Reopen the file so the consumer sees the actual persisted mutation.
+            HDF5.h5open(path, "r") do handle
+                @test String(read(HDF5.attributes(handle)["schema"])) ==
+                      "WannierNLQG.projection_representation_search"
+                @test String(read(HDF5.attributes(handle)["schema_version"])) == unsupported_version
+                @test String(read(handle["canonical_payload_json"])) == canonical_before
             end
             error = try
                 PROJECTION_PERSIST_W.read_projection_representation_search_hdf5(path)
@@ -389,8 +337,8 @@ end
                 caught
             end
             @test error isa ArgumentError
-            @test occursin("schema version $(old_version) is unsupported", sprint(showerror, error))
-            @test occursin("regenerate", sprint(showerror, error))
+            @test sprint(showerror, error) ==
+                  "ArgumentError: unsupported projection search schema version: $(unsupported_version); expected 4.0"
         end
     end
 end
@@ -407,20 +355,17 @@ end
         solution.signature_multiplicities,
         solution.validation_status,
         Dict("residual" => Inf),
-        solution.validation_sha256,
     )
     nonfinite_result = PROJECTION_PERSIST_W.ProjectionRepresentationSearchResult(
         result.status,
         result.complete,
-        result.representation_sha256,
-        result.contract_sha256,
-        result.compatibility_info,
-        result.config_sha256,
-        "",
+        result.representation_definition,
+        result.contract_definition,
+        result.algorithm_info,
         result.spinor,
         result.num_wannier,
-        result.outer_mask_sha256,
-        result.frozen_mask_sha256,
+        result.outer_mask_definition,
+        result.frozen_mask_definition,
         result.candidates,
         result.radial_transform,
         result.visited_nodes,

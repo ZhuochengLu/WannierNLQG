@@ -24,7 +24,7 @@ function band_test_bundle_geometry(
     model;
     real_space_replica_policy = "input",
     minimum_distance_materialized = false,
-    replica_mapping_sha256 = repeat("0", 64),
+    replica_mapping_reference = repeat("0", 64),
 )
     centers = Matrix(transpose(BAND_ME.extract_wannier_centers(model)))
     fractional = Matrix(centers * inv(model.lattice))
@@ -42,7 +42,7 @@ function band_test_bundle_geometry(
         "final_wannier_centers_cartesian" => centers,
         "final_wannier_centers_fractional" => fractional,
         "center_alignment_lattice_shifts" => zeros(Int, size(centers)),
-        "replica_mapping_sha256" => replica_mapping_sha256,
+        "replica_mapping_reference" => replica_mapping_reference,
     )
 end
 
@@ -73,12 +73,12 @@ function write_band_test_bundle(
         model.r_degeneracies,
         operators;
         profile = :hamiltonian_position,
-        paired_tb_sha256 = BAND_RUNTIME.checksum_file(model_file),
+        paired_tb_file = model_file,
         geometry = something(geometry, band_test_bundle_geometry(model)),
     )
 end
 
-# Write a small analytic R=0 model using the standard Wannier90 TB layout.
+# Write a small analytic R=0 model using the standard Wannier TB layout.
 function write_band_test_tb(path::AbstractString, hamiltonian::Matrix{ComplexF64})
     orbital_count = size(hamiltonian, 1)
     size(hamiltonian, 2) == orbital_count || error("test Hamiltonian must be square")
@@ -200,8 +200,17 @@ end
         @test !isfile(joinpath(config.output_root, "band_test_bands.pdf"))
         metadata = read(result.metadata_path, String)
         @test occursin("[Band]", metadata)
-        @test occursin("INPUT_QUALIFICATION_NOT_PROVIDED", metadata)
-        @test occursin("exp(2pi*i*R_dot_k)/wannier90_degeneracy", metadata)
+        @test occursin(r"(?m)^schema\s*= wanniernlqg.band-metadata/3$", metadata)
+        @test occursin(r"(?m)^r_vector_support_definition\s*=", metadata)
+        @test occursin(r"(?m)^scalar_degeneracy_definition\s*=", metadata)
+        @test occursin(r"(?m)^r_vector_support_definition\s*= \(\(0, 0, 0\),\)$", metadata)
+        @test occursin(r"(?m)^scalar_degeneracy_definition\s*= \(1,\)$", metadata)
+        @test !occursin(r"(?m)^r_vector_support_sha256\s*=", metadata)
+        @test !occursin(r"(?m)^degeneracy_sha256\s*=", metadata)
+        @test occursin(r"(?m)^qualification\s*= COMPUTATION_READY$", metadata)
+        @test occursin(r"(?m)^maximum_hermiticity_residual\s*= 0.0$", metadata)
+        @test occursin(r"(?m)^hermiticity_warning\s*= false$", metadata)
+        @test occursin("exp(2pi*i*R_dot_k)/real_space_multiplicity", metadata)
 
         oracle_model = BAND_IO.read_wannier_tb(two_band_file)
         matrix_plan = BAND_ME.compile_matrix_plan(
@@ -259,9 +268,34 @@ end
         mkpath(output)
         write(joinpath(output, "band_test_bands.dat"), "stale\n")
         write(joinpath(output, "band_test_kpath.json"), "stale\n")
-        @test_throws ErrorException WannierNLQG.run(band_test_config(output, bad_file))
-        @test !isfile(joinpath(output, "band_test_bands.dat"))
-        @test !isfile(joinpath(output, "band_test_kpath.json"))
+        config = band_test_config(output, bad_file)
+        result = WannierNLQG.run(config)
+        @test length(result.outputs) == 2
+        @test all(isfile, result.outputs)
+        @test all(path -> read(path, String) != "stale\n", result.outputs)
+        table = read_band_test_table(first(result.outputs))
+        @test size(table) == (9, 6)
+        @test all(isfinite, table)
+        # The documented upper-triangle Hermitian solver representation has ±1 eV.
+        @test table[:, 5] == fill(-1.25, 9)
+        @test table[:, 6] == fill(0.75, 9)
+        metadata = read(result.metadata_path, String)
+        residual_match = match(r"(?m)^maximum_hermiticity_residual\s*= ([^\n]+)$", metadata)
+        tolerance_match = match(r"(?m)^hermiticity_tolerance\s*= ([^\n]+)$", metadata)
+        @test residual_match !== nothing
+        @test tolerance_match !== nothing
+        residual = parse(Float64, residual_match.captures[1])
+        tolerance = parse(Float64, tolerance_match.captures[1])
+        @test isfinite(residual)
+        @test residual == 1.0
+        @test tolerance == config.band_hermiticity_tolerance
+        @test residual > tolerance
+        @test occursin(r"(?m)^hermiticity_warning\s*= true$", metadata)
+        @test occursin(r"(?m)^qualification\s*= COMPUTATION_READY$", metadata)
+        @test occursin(
+            r"(?m)^hermiticity_tolerance_semantics\s*= reporting threshold; finite residual does not prevent spectrum output$",
+            metadata,
+        )
     end
 
     mktempdir() do directory
@@ -292,7 +326,7 @@ end
         manifest = BAND_IO.read_real_space_operator_bundle_manifest(bundle)
         @test manifest.wigner_seitz_tolerance == 1.0e-5
         @test manifest.wigner_seitz_search_size == 3
-        @test manifest.replica_mapping_sha256 == repeat("0", 64)
+        @test manifest.replica_mapping_reference == repeat("0", 64)
         @test_throws ArgumentError WannierNLQG.run(
             band_test_config(
                 joinpath(directory, "mp_conflict"),
@@ -339,7 +373,7 @@ end
                 model;
                 real_space_replica_policy = "minimum_distance",
                 minimum_distance_materialized = true,
-                replica_mapping_sha256 = materialized_sha,
+                replica_mapping_reference = materialized_sha,
             ),
         )
         materialized = WannierNLQG.run(
@@ -419,8 +453,11 @@ if BAND_STRUCTURE_TEST_MODE in ("full-shard", "mpi-only")
             include(joinpath(ROOT, "scripts", "plot_band_structure.jl"))
         mktempdir() do directory
             result = WannierNLQG.run(band_test_config(directory, BAND_SYNTHETIC_TB))
-            python = something(Sys.which("python3"), "")
+            python =
+                get(ENV, "WANNIERNLQG_VISUALIZATION_PYTHON", something(Sys.which("python3"), ""))
             isempty(python) && error("python3 is required for the official Band postprocessor test")
+            isabspath(python) && isfile(python) ||
+                error("Band postprocessor test interpreter must be an existing absolute file")
             function write_plot_config(config_path, bands_path, path_json)
                 payload = Dict(
                     "mode" => "single",

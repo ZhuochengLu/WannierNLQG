@@ -82,12 +82,50 @@ function linear_transport_response(
     fs_kind = :none,
     eta_fs_ev = 0.0,
 )
+    return _linear_transport_response(
+        geometry,
+        Val(temperature == 0);
+        projector,
+        fermi_energies,
+        temperature,
+        gamma_intra_ev,
+        gamma_inter_ev,
+        fs_kind,
+        eta_fs_ev,
+    )
+end
+
+# Two bounded specializations: T=0 exact-zero arithmetic and the unchanged
+# positive-temperature arithmetic. No physical threshold or band mask is added.
+function _linear_transport_response(
+    geometry,
+    ::Val{SKIP_ZERO};
+    projector = false,
+    fermi_energies::Vector{Float64},
+    temperature,
+    gamma_intra_ev,
+    gamma_inter_ev,
+    fs_kind = :none,
+    eta_fs_ev = 0.0,
+) where {SKIP_ZERO}
     axis = validate_fermi_energies(fermi_energies)
     # Keep the four algebraic summands in their original accumulation order so
     # the unchanged total retains its established numerical baseline.
     summands = zeros(Float64, length(axis), 3, 3, 5)
     factor = RESPONSE_CHARGE_C^2 / RESPONSE_HBAR_JS * 1e-20
     kernel = linear_transport_kernel(geometry; projector)
+    # Preserve invalid-data propagation: only finite q/gap/rate with a nonzero
+    # original denominator can omit exact-zero multiplication/addition.
+    eligible = if SKIP_ZERO
+        [
+            isfinite(gap) &&
+                isfinite(gamma_inter_ev) &&
+                !iszero(gap^2 + gamma_inter_ev^2) &&
+                all(isfinite, q) for (_, _, gap, q) in kernel.interband
+        ]
+    else
+        nothing
+    end
     for (mu_index, fermi_energy) in enumerate(axis)
         for (energy, weight) in kernel.contact
             occupation = response_occupation(energy, fermi_energy, temperature)
@@ -98,10 +136,13 @@ function linear_transport_response(
                 response_fermi_derivative(energy, fermi_energy, temperature, fs_kind, eta_fs_ev)
             @views summands[mu_index, :, :, 2] .+= factor * derivative .* weight ./ gamma_intra_ev
         end
-        for (left_energy, right_energy, gap, q) in kernel.interband
+        for (index, (left_energy, right_energy, gap, q)) in enumerate(kernel.interband)
             occupation =
                 response_occupation(left_energy, fermi_energy, temperature) -
                 response_occupation(right_energy, fermi_energy, temperature)
+            if SKIP_ZERO && eligible[index] && iszero(occupation)
+                continue
+            end
             for b in 1:3, a in 1:3
                 summands[mu_index, a, b, 3] +=
                     2factor * occupation * gap * gamma_inter_ev / (gap^2 + gamma_inter_ev^2) *

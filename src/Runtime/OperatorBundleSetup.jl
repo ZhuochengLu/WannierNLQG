@@ -44,14 +44,40 @@ function operator_demand_plan(specs::Vector{NormalizedTaskSpec}, cfg::EffectiveT
     matrix_plan = bundle_matrix_element_plan(specs, cfg, tensor_indices)
     requires_full_projector_geometry = any(specs) do spec
         definition = task_definition(spec.quantity, spec.method, spec.calculation)
-        definition !== nothing &&
-            definition.matrix_policy in (MATRIX_PROJECTOR_SHIFT_CURRENT, MATRIX_PROJECTOR_QHC)
+        (
+            cfg.include_external && spec.quantity in (
+                :quantum_metric,
+                :quantum_metric_dipole,
+                :quantum_metric_quadrupole,
+                :quantum_christoffel_symbol,
+            )
+        ) || (
+            definition !== nothing && definition.matrix_policy in
+            (MATRIX_PROJECTOR_SHIFT_CURRENT, MATRIX_PROJECTOR_QHC)
+        )
     end
     resolution = resolve_operator_requirements(
         [OperatorTask(quantity = spec.quantity, method = spec.method) for spec in specs];
         orbital_input_semantics = cfg.orbital_input_semantics,
     )
     required = collect(resolution.required_operators)
+    if !requires_full_projector_geometry &&
+       !cfg.include_external &&
+       any(spec -> spec.quantity in EXTERNAL_METRIC_QUANTITIES, specs)
+        # Disable only the metric completion dependency. Other tasks keep their
+        # independently registered F requirements, including orbital magnetization.
+        independent_tasks = [
+            OperatorTask(quantity = spec.quantity, method = spec.method) for
+            spec in specs if !(spec.quantity in EXTERNAL_METRIC_QUANTITIES)
+        ]
+        independent_requires_overlap =
+            !isempty(independent_tasks) &&
+            REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR in resolve_operator_requirements(
+                independent_tasks;
+                orbital_input_semantics = cfg.orbital_input_semantics,
+            ).required_operators
+        independent_requires_overlap || filter!(!=(REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR), required)
+    end
     components = Dict{RealSpaceOperatorKind, Vector{NTuple{2, Int8}}}(
         REAL_SPACE_HAMILTONIAN => [(Int8(0), Int8(0))],
         REAL_SPACE_POSITION => _all_rank_one_components(),
@@ -74,24 +100,35 @@ function operator_demand_plan(specs::Vector{NormalizedTaskSpec}, cfg::EffectiveT
             _required_rank_two_components(matrix_plan, capability, integral)
     end
     if requires_full_projector_geometry
-        components[REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR] = if integral || band_structure
-            _all_rank_two_components()
-        else
-            selected = Set{NTuple{2, Int8}}()
-            a, b, c = something(tensor_indices)
-            for spec in specs
-                definition = task_definition(spec.quantity, spec.method, spec.calculation)
-                definition === nothing && continue
-                pairs =
-                    definition.matrix_policy == MATRIX_PROJECTOR_SHIFT_CURRENT ?
-                    ((a, b), (b, a), (a, c), (c, a)) :
-                    definition.matrix_policy == MATRIX_PROJECTOR_QHC ? ((a, c), (c, a)) : ()
-                for (first, second) in pairs
-                    push!(selected, (Int8(first), Int8(second)))
+        components[REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR] =
+            if integral ||
+               band_structure ||
+               any(
+                   spec -> spec.quantity in (
+                       :quantum_metric,
+                       :quantum_metric_dipole,
+                       :quantum_metric_quadrupole,
+                       :quantum_christoffel_symbol,
+                   ),
+                   specs,
+               )
+                _all_rank_two_components()
+            else
+                selected = Set{NTuple{2, Int8}}()
+                a, b, c = something(tensor_indices)
+                for spec in specs
+                    definition = task_definition(spec.quantity, spec.method, spec.calculation)
+                    definition === nothing && continue
+                    pairs =
+                        definition.matrix_policy == MATRIX_PROJECTOR_SHIFT_CURRENT ?
+                        ((a, b), (b, a), (a, c), (c, a)) :
+                        definition.matrix_policy == MATRIX_PROJECTOR_QHC ? ((a, c), (c, a)) : ()
+                    for (first, second) in pairs
+                        push!(selected, (Int8(first), Int8(second)))
+                    end
                 end
+                sort!(collect(selected))
             end
-            sort!(collect(selected))
-        end
     end
     for kind in (
         REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION,
@@ -161,24 +198,8 @@ function _require_spin_current_bundle(manifest::OperatorBundleManifest)
         REAL_SPACE_SPIN_TIMES_POSITION,
         REAL_SPACE_SPIN_TIMES_HAMILTONIAN_POSITION,
     )
-    if manifest.operator_selection_mode == "tasks"
-        _manifest_task_closure(manifest)
-        all(kind -> kind in inventory, family) || throw(
-            ArgumentError(
-                "TASK_DERIVED_OPERATOR_SELECTION_INVALID: injection/shift spin current " *
-                "requires the complete spin-current family; persisted inventory is " *
-                "$(join(real_space_operator_name.(inventory), ", "))",
-            ),
-        )
-        return manifest
-    end
-    inventory == collect(OPERATOR_PROFILE_INVENTORIES[:full]) || throw(
-        ArgumentError(
-            "Injection/shift spin current requires a formal schema-6 full bundle. Current " *
-            "bundle inventory: $(join(real_space_operator_name.(inventory), ", ")). Regenerate " *
-            "with qualified SPN/uIu/uHu/sIu/sHu provenance.",
-        ),
-    )
+    all(kind->kind in inventory, family) ||
+        throw(ArgumentError("spin-current calculation requires its complete operator family"))
     return manifest
 end
 
@@ -188,7 +209,7 @@ function validate_operator_demand(manifest::OperatorBundleManifest, demand::Oper
     if demand.requires_full_projector_geometry
         manifest.schema_version == OPERATOR_BUNDLE_SCHEMA_VERSION || throw(
             ArgumentError(
-                "PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: current Packed HDF5 schema $(OPERATOR_BUNDLE_SCHEMA_VERSION) exact-uIu provenance is required",
+                "PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: current Packed HDF5 schema $(OPERATOR_BUNDLE_SCHEMA_VERSION) full-uIu provenance is required",
             ),
         )
         manifest.derivative_overlap_completeness == "full_hilbert_space" || throw(
@@ -197,17 +218,9 @@ function validate_operator_demand(manifest::OperatorBundleManifest, demand::Oper
                 "$(manifest.derivative_overlap_completeness), not full_hilbert_space",
             ),
         )
-        manifest.derivative_overlap_source == "wannier90_uIu" || throw(
+        manifest.derivative_overlap_source == "neighbor_pair_overlap" || throw(
             ArgumentError(
-                "PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: source must be wannier90_uIu",
-            ),
-        )
-        manifest.derivative_overlap_source_sha256 === nothing && throw(
-            ArgumentError("PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: uIu SHA-256 is absent"),
-        )
-        occursin(r"^[0-9a-f]{64}$", something(manifest.derivative_overlap_source_sha256)) || throw(
-            ArgumentError(
-                "PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: uIu SHA-256 is not lowercase hexadecimal",
+                "PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: source must be neighbor_pair_overlap",
             ),
         )
         manifest.derivative_overlap_algorithm_version ==
@@ -283,8 +296,11 @@ end
 
 # Report whether the public shared-window lifecycle used below is available.
 function _mpi_shared_window_available()
+    # MPI may be imported during this same run. Resolve its module once at the
+    # setup boundary; capability checks below do not enter numerical hot loops.
+    mpi_module = Base.invokelatest(() -> MPI)
     return all(
-        name -> isdefined(MPI, name),
+        name -> isdefined(mpi_module, name),
         (:Win_allocate_shared, :Win_lock, :Win_unlock, :Win_sync, :Win_shared_query),
     )
 end
@@ -506,6 +522,16 @@ function _mpi_node_shared_bundle_components(
     )
 end
 
+"""
+Borrow numerical sources without carrying their storage-lifetime provider type.
+
+The caller must retain and release the original source record. Model scientific
+ownership/generation and all numerical component objects remain unchanged.
+"""
+function borrow_runtime_numerical_sources(sources::NamedTuple)
+    return merge(sources, (storage_owner = nothing,))
+end
+
 """Release MPI windows and derived communicators after a completed run."""
 function release_runtime_storage!(loaded_sources)
     owner = loaded_sources.storage_owner
@@ -535,21 +561,37 @@ function _runtime_sources_from_component_load(loaded, ctx::RunContext)
     validate_operator_demand(loaded.manifest, ctx.operator_demand)
     wannierization_status = something(loaded.manifest.wannierization_status, "not_provided")
     stopping_reason = something(loaded.manifest.stopping_reason, "not_provided")
-    loaded.manifest.production_eligible || runtime_notice(
-        "WARNING: operator bundle is quality-review-recommended " *
-        "wannier_center_policy=$(loaded.manifest.wannier_center_policy); " *
-        "wannierization_status=$(wannierization_status); " *
-        "stopping_reason=$(stopping_reason); " *
-        "do not use it as a release model",
+    if loaded.manifest.numerical_quality in
+       ("WARNING", "NUMERICAL_WARNING", "INVALID_ACCEPTED_STATE") || (
+        loaded.manifest.converged === false &&
+        loaded.manifest.convergence_metric !== nothing &&
+        loaded.manifest.convergence_tolerance !== nothing
     )
-    if REAL_SPACE_SPIN in ctx.operator_demand.required_operators &&
-       !loaded.manifest.spin_family_production_eligible
         runtime_notice(
-            "WARNING: requested spin-family operators are DIAGNOSTIC_ONLY; " *
-            "qualification=$(loaded.manifest.spin_family_qualification); " *
+            "WARNING: operator bundle numerical measurements " *
+            "numerical_quality=$(loaded.manifest.numerical_quality); " *
+            "converged=$(loaded.manifest.converged); " *
+            "wannierization_status=$(wannierization_status); stopping_reason=$(stopping_reason); " *
+            "convergence_metric=$(loaded.manifest.convergence_metric); " *
+            "convergence_tolerance=$(loaded.manifest.convergence_tolerance); " *
+            "hamiltonian_hermiticity_residual=$(loaded.manifest.hamiltonian_hermiticity_residual); " *
+            "position_hermiticity_residual=$(loaded.manifest.position_hermiticity_residual); " *
+            "roundtrip_tolerance=$(loaded.manifest.roundtrip_tolerance)",
+        )
+    end
+    if loaded.manifest.schema_version != OPERATOR_BUNDLE_SCHEMA_VERSION &&
+       REAL_SPACE_SPIN in ctx.operator_demand.required_operators &&
+       !loaded.manifest.spin_family_production_eligible
+        spin_record =
+            get(get(loaded.manifest.operator_qualification, "operators", Dict()), "spin", Dict())
+        runtime_notice(
+            "Requested spin-family input measurements: " *
+            "recorded_status=$(loaded.manifest.spin_family_qualification); " *
             "reason=$(loaded.manifest.spin_family_qualification_reason); " *
-            "schema=$(loaded.manifest.schema_version). Results may be inspected diagnostically " *
-            "but are not production-qualified spin-response input.",
+            "covariance_after=$(get(spin_record, "covariance_after", nothing)); " *
+            "covariance_tolerance=$(get(spin_record, "covariance_tolerance", nothing)); " *
+            "idempotence_residual=$(get(spin_record, "idempotence_residual", nothing)); " *
+            "idempotence_tolerance=$(get(spin_record, "idempotence_tolerance", nothing))",
         )
     end
     hamiltonian = loaded.components[REAL_SPACE_HAMILTONIAN][(Int8(0), Int8(0))]
@@ -618,7 +660,7 @@ function _runtime_sources_from_component_load(loaded, ctx::RunContext)
     )
 end
 
-# Read Legacy Wannier90 inputs once on global rank zero into component ranges.
+# Read Legacy Wannier inputs once on global rank zero into component ranges.
 function _legacy_root_components(ctx::RunContext, cfg::EffectiveTaskConfig, rank::Int)
     rank != 0 && return nothing, nothing, nothing
     try
@@ -754,7 +796,7 @@ function _runtime_sources_from_legacy_components(
     )
 end
 
-# Distribute Legacy Wannier90 components through the shared MPI data layer.
+# Distribute Legacy Wannier components through the shared MPI data layer.
 function _mpi_distribute_legacy_components(ctx::RunContext, cfg::EffectiveTaskConfig)
     comm = bundle_mpi_comm_world()
     rank = bundle_mpi_comm_rank(comm)
@@ -851,10 +893,8 @@ const RuntimeLoadedSources = NamedTuple{
 }
 
 """Load the selected Runtime source mode without changing hot-loop summation order."""
-function load_runtime_model_and_sources(
-    ctx::RunContext,
-    cfg::EffectiveTaskConfig,
-)::RuntimeLoadedSources
+function load_runtime_model_and_sources(ctx::RunContext, cfg::EffectiveTaskConfig)
+    cfg.native_model_input === nothing || return load_native_runtime_sources(ctx, cfg)
     if ctx.model_input_mode == :legacy
         comm = bundle_mpi_comm_world()
         bundle_mpi_comm_size(comm) > 1 && return _mpi_distribute_legacy_components(ctx, cfg)

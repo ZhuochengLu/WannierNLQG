@@ -14,6 +14,10 @@
             ),
             String,
         )
+        if threads == 4
+            print(output) # Retain the original preparation test summaries in the owned log.
+        end
+        @test occursin("NATIVE_AMN_ACTUAL_THREADS=4", output) == (threads == 4)
         matched = match(r"WANNIERIZATION_THREAD_DIGEST=([0-9a-f]{64})", output)
         @test matched !== nothing
         push!(digests, something(matched).captures[1])

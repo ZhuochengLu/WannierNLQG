@@ -587,10 +587,10 @@ function _read_qe_wavefunctions(
                 )
             end
     end
-    hashes = Dict("data-file-schema.xml" => sha256_file(metadata_value.xml_file))
+    sources = Dict("data-file-schema.xml" => metadata_value.xml_file)
     for label in sort!(collect(keys(metadata_value.upf_files)))
         upf_file = metadata_value.upf_files[label]
-        hashes["UPF:$(label):$(basename(upf_file))"] = sha256_file(upf_file)
+        sources["UPF:$(label):$(basename(upf_file))"] = upf_file
     end
     # Retain coordinates while each point is already loaded; a second traversal
     # would reread every coefficient file through a bounded source provider.
@@ -615,7 +615,7 @@ function _read_qe_wavefunctions(
             ) : points[kpoint_index]
         points isa Vector && push!(points, point)
         kpoints[kpoint_index, :] .= point.k_fractional
-        hashes[basename(wavefunction_file)] = sha256_file(wavefunction_file)
+        sources[basename(wavefunction_file)] = wavefunction_file
     end
     return NativeWavefunctionData(
         :qe,
@@ -624,7 +624,7 @@ function _read_qe_wavefunctions(
         infer_mp_grid(kpoints),
         metadata_value.noncollinear,
         points,
-        hashes,
+        Dict{String, String}(),
         Dict(
             "qe_atomic_type_labels" => join(metadata_value.atomic_type_labels, ","),
             "qe_atomic_type_to_element" => join(
@@ -655,7 +655,8 @@ function _read_qe_wavefunctions(
                 metadata_value.noncollinear ? "noncollinear_spinor" : "scalar",
             "spinorbit" => string(metadata_value.spinorbit),
             "spin_channel" => string(source.spin_channel),
-        ),
+        );
+        source_definition = IO.scientific_source_collection_definition(sources),
     )
 end
 
@@ -682,5 +683,28 @@ function _read_qe_raw_wavefunctions(source::QuantumEspressoWavefunctionSource, m
                         nothing &&
                         get(task_local_storage(), :wannier_preparation_execution, nothing).mode ==
                         :dense_reference ? nothing : :bounded_source,
+    )
+end
+
+# Header-only geometry for normalized native input. The existing physical reader
+# remains authoritative for UPF mapping and spin; coefficients are not decoded.
+function native_qe_wannier_metadata(source::QuantumEspressoWavefunctionSource)
+    metadata = _read_qe_xml(source)
+    points = Matrix{Float64}(undef, length(metadata.kpoint_nodes), 3)
+    for k in axes(points, 1)
+        header = _read_qe_wavefunction_header(
+            _qe_wavefunction_file(source, k),
+            metadata.noncollinear ? 2 : 1,
+        )
+        header.num_bands == metadata.num_bands ||
+            throw(ArgumentError("QE header/XML band count mismatch"))
+        points[k, :] .= header.k_fractional
+    end
+    all(isfinite, points) || throw(ArgumentError("QE header contains nonfinite k points"))
+    return (
+        structure = metadata.structure,
+        kpoints_fractional = points,
+        spinor = metadata.noncollinear,
+        atomic_type_labels = copy(metadata.atomic_type_labels),
     )
 end

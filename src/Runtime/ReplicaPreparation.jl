@@ -4,14 +4,15 @@ struct RuntimeReplicaPlan
     effective_policy::Symbol
     source::Symbol
     map::Union{Nothing, MatrixElements.RealSpaceReplicaMap}
-    mapping_sha256::Union{Nothing, String}
+    mapping_reference::Union{Nothing, String}
     wsvec_file::Union{Nothing, String}
-    wsvec_sha256::Union{Nothing, String}
+    wsvec_identity::Union{Nothing, String}
     mp_grid::Union{Nothing, NTuple{3, Int}}
     wigner_seitz_tolerance::Float64
     wigner_seitz_search_size::Int
     input_materialized::Union{Nothing, Bool}
     transformed_this_run::Bool
+    input_support_definition::Union{Nothing, NamedTuple}
 end
 
 """Schema-stable audit summary shared by Band, Integral, and K-slice runs."""
@@ -19,10 +20,10 @@ struct RuntimeReplicaSummary
     requested_policy::Symbol
     effective_policy::Symbol
     source::Symbol
-    mapping_sha256::String
-    mapping_digest_scheme::String
+    mapping_reference::Union{Nothing, String}
+    mapping_reference_schema::Union{Nothing, String}
     wsvec_file::Union{Nothing, String}
-    wsvec_sha256::Union{Nothing, String}
+    wsvec_identity::Union{Nothing, String}
     mp_grid::Union{Nothing, NTuple{3, Int}}
     wigner_seitz_tolerance::Float64
     wigner_seitz_search_size::Int
@@ -33,19 +34,27 @@ struct RuntimeReplicaSummary
     output_num_r_vectors::Int
     scalar_degeneracy_applied::Bool
     pair_degeneracy_applied::Bool
+    input_support_definition::Union{Nothing, NamedTuple}
 end
 
 """Return the machine-readable replica summary used by metadata and progress."""
 Base.@noinline function runtime_replica_summary(summary::RuntimeReplicaSummary)
+    (summary.mapping_reference === nothing) != (summary.input_support_definition === nothing) ||
+        throw(
+            ArgumentError(
+                "replica summary requires exactly one map reference or explicit input support",
+            ),
+        )
     return (
-        schema = "wanniernlqg.runtime-replica-summary",
+        schema = "wanniernlqg.runtime-replica-summary/4",
         requested_policy = summary.requested_policy,
         effective_policy = summary.effective_policy,
         source = summary.source,
-        mapping_sha256 = summary.mapping_sha256,
-        mapping_digest_scheme = summary.mapping_digest_scheme,
+        mapping_reference = summary.mapping_reference,
+        mapping_reference_schema = summary.mapping_reference_schema,
+        input_support_definition = summary.input_support_definition,
         wsvec_file = summary.wsvec_file,
-        wsvec_sha256 = summary.wsvec_sha256,
+        wsvec_identity = summary.wsvec_identity,
         mp_grid = summary.mp_grid,
         wigner_seitz_tolerance = summary.wigner_seitz_tolerance,
         wigner_seitz_search_size = summary.wigner_seitz_search_size,
@@ -60,7 +69,7 @@ Base.@noinline function runtime_replica_summary(summary::RuntimeReplicaSummary)
 end
 
 # Extract normalized row-wise centers from serialized position matrices.
-function _runtime_wannier_centers_fractional(model::TightBindingModel)
+function _runtime_wannier_centers_fractional(model::AbstractResponseModel)
     home = findall(index -> all(iszero, @view(model.r_vectors[:, index])), axes(model.r_vectors, 2))
     length(home) == 1 ||
         throw(ArgumentError("replica preparation requires exactly one home-cell R vector"))
@@ -88,7 +97,7 @@ function _runtime_wsvec_path(cfg::EffectiveTaskConfig, ctx::RunContext)
     path =
         isabspath(configured) ? normpath(configured) :
         normpath(joinpath(resolve_case_root(cfg.case_root), configured))
-    isfile(path) || throw(ArgumentError("Wannier90 wsvec file does not exist: $(path)"))
+    isfile(path) || throw(ArgumentError("Wannier wsvec file does not exist: $(path)"))
     return path
 end
 
@@ -96,9 +105,10 @@ end
 function build_runtime_replica_plan(
     cfg::EffectiveTaskConfig,
     ctx::RunContext,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     manifest,
 )
+    scientific_data_generation(model)
     requested = Symbol(_canonical_key(cfg.real_space_replica_policy))
     requested in (:auto, :input, :minimum_distance) ||
         throw(ArgumentError("invalid real-space replica policy $(cfg.real_space_replica_policy)"))
@@ -163,7 +173,7 @@ function build_runtime_replica_plan(
             :minimum_distance,
             :materialized_bundle,
             nothing,
-            manifest.replica_mapping_sha256,
+            manifest.replica_mapping_reference,
             nothing,
             nothing,
             grid,
@@ -171,6 +181,7 @@ function build_runtime_replica_plan(
             Int(search_size),
             true,
             false,
+            nothing,
         )
     end
 
@@ -206,7 +217,7 @@ function build_runtime_replica_plan(
                 "real_space_replica_policy=input requires the default wigner_seitz_search_size",
             ),
         )
-        identity_mapping_sha256 = MatrixElements.input_real_space_replica_mapping_sha256(
+        support_definition = MatrixElements.input_real_space_support_definition(
             model.r_vectors,
             model.r_degeneracies,
             model.num_orbitals,
@@ -216,7 +227,7 @@ function build_runtime_replica_plan(
             :input,
             legacy_manifest ? :legacy_input : :input,
             nothing,
-            identity_mapping_sha256,
+            nothing,
             nothing,
             nothing,
             grid,
@@ -224,6 +235,7 @@ function build_runtime_replica_plan(
             cfg.wigner_seitz_search_size,
             input_materialized,
             false,
+            support_definition,
         )
     end
 
@@ -263,8 +275,6 @@ function build_runtime_replica_plan(
         wsvec_map.target_r_vectors == recomputed_map.target_r_vectors &&
         wsvec_map.images == recomputed_map.images ||
             throw(ArgumentError("wsvec_file and mp_grid produce different canonical replica maps"))
-        wsvec_map.mapping_sha256 == recomputed_map.mapping_sha256 ||
-            error("internal error: equal replica maps produced different canonical digests")
     end
     map = wsvec_map === nothing ? something(recomputed_map) : something(wsvec_map)
     return RuntimeReplicaPlan(
@@ -272,14 +282,15 @@ function build_runtime_replica_plan(
         :minimum_distance,
         parsed_wsvec === nothing ? :recomputed : :wsvec,
         map,
-        map.mapping_sha256,
+        map.mapping_reference,
         wsvec_path,
-        parsed_wsvec === nothing ? nothing : parsed_wsvec.file_sha256,
+        parsed_wsvec === nothing ? nothing : parsed_wsvec.identity,
         grid,
         cfg.wigner_seitz_tolerance,
         cfg.wigner_seitz_search_size,
         false,
         true,
+        nothing,
     )
 end
 
@@ -288,7 +299,7 @@ function prepare_runtime_components(
     cfg::EffectiveTaskConfig,
     ctx::RunContext,
     components,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     manifest,
 )
     plan = build_runtime_replica_plan(cfg, ctx, model, manifest)
@@ -301,26 +312,27 @@ function prepare_runtime_components(
             components,
             model.r_degeneracies,
             map,
-            MatrixElements.SerializedWannier90ReplicaValues(),
+            MatrixElements.RawReplicaValues(),
         )
         output_vectors = map.target_r_vectors
         output_degeneracies = ones(Int, size(output_vectors, 2))
     end
-    mapping_sha = plan.mapping_sha256
-    if mapping_sha === nothing
-        throw(ArgumentError("materialized bundle is missing replica_mapping_sha256"))
+    mapping_reference = plan.mapping_reference
+    if mapping_reference === nothing && plan.input_support_definition === nothing
+        throw(ArgumentError("materialized bundle is missing replica_mapping_reference"))
     end
-    digest_scheme =
-        plan.source == :materialized_bundle ? "manifest-provided:operator-bundle-v6" :
-        MatrixElements.REAL_SPACE_REPLICA_MAP_DIGEST_SCHEME
+    reference_schema =
+        mapping_reference === nothing ? nothing :
+        plan.source == :materialized_bundle ? "manifest-provided:current-publication-reference" :
+        MatrixElements.REAL_SPACE_REPLICA_MAP_REFERENCE_SCHEMA
     summary = RuntimeReplicaSummary(
         plan.requested_policy,
         plan.effective_policy,
         plan.source,
-        mapping_sha,
-        digest_scheme,
+        mapping_reference,
+        reference_schema,
         plan.wsvec_file,
-        plan.wsvec_sha256,
+        plan.wsvec_identity,
         plan.mp_grid,
         plan.wigner_seitz_tolerance,
         plan.wigner_seitz_search_size,
@@ -331,6 +343,7 @@ function prepare_runtime_components(
         size(output_vectors, 2),
         plan.transformed_this_run,
         plan.transformed_this_run,
+        plan.input_support_definition,
     )
     return (
         components = prepared,

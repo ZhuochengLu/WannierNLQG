@@ -38,7 +38,7 @@ function build_config(;
                     fermi_energy = 0.0,
                     temperature = 0.0,
                 ),
-                numerics = SHGNumerics(),
+                numerics = Numerics(),
                 observable = KSliceSelection(
                     component = TensorComponent(2, 2, 2),
                     bands = AllBands(),

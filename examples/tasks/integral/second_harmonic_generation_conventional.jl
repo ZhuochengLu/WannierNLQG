@@ -32,7 +32,7 @@ function build_config(;
                     fermi_energy = 0.0,
                     temperature = 0.0,
                 ),
-                numerics = SHGNumerics(),
+                numerics = Numerics(),
                 observable = FullTensor(),
             ),
         ],

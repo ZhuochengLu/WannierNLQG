@@ -1,7 +1,7 @@
 # Preserve the established unconstrained initialization for random/restart and
 # for AMN inputs without frozen bands.
 function _legacy_initial_frames(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     representation::BandRepresentation,
     outer_indices::Vector{Vector{Int}},
     frozen_indices::Vector{Vector{Int}},
@@ -32,19 +32,28 @@ function _legacy_initial_frames(
         free_dimension = num_wannier - length(frozen)
         length(free) >= free_dimension ||
             throw(ArgumentError("free outer subspace is too small at k-point $(kpoint)"))
-        free_amplitudes = @view source[free, :]
-        free_projector = Matrix{ComplexF64}(free_amplitudes * free_amplitudes')
-        decomposition = _validated_hermitian_spectrum(
-            free_projector;
-            tolerance = config.input.representation_tolerance,
-            context = "legacy_initial_free_complement:kpoint=$(kpoint)",
-            audit = spectrum_audit,
-        )
-        decomposition.success || throw(
-            ArgumentError("HERMITIAN_SPECTRAL_DECOMPOSITION_FAILED at initial k-point $(kpoint)"),
-        )
-        order = sortperm(decomposition.values; rev = true)
-        free_frame = Matrix{ComplexF64}(decomposition.vectors[:, order[1:free_dimension]])
+        # A fully frozen target has no free complement to diagonalize.
+        # Keep the frozen embedding and alignment checks below unchanged.
+        free_frame = if free_dimension == 0
+            zeros(ComplexF64, length(free), 0)
+        else
+            free_amplitudes = @view source[free, :]
+            free_projector = Matrix{ComplexF64}(free_amplitudes * free_amplitudes')
+            decomposition = _validated_hermitian_spectrum(
+                free_projector;
+                tolerance = config.input.representation_tolerance,
+                context = "legacy_initial_free_complement:kpoint=$(kpoint)",
+                audit = spectrum_audit,
+            )
+            decomposition.success || throw(
+                ArgumentError(
+                    "HERMITIAN_SPECTRAL_DECOMPOSITION_FAILED at initial k-point $(kpoint)",
+                ),
+            )
+            order = sortperm(decomposition.values; rev = true)
+            free_frame = Matrix{ComplexF64}(decomposition.vectors[:, order[1:free_dimension]])
+            free_frame
+        end
         frame = zeros(ComplexF64, nb, num_wannier)
         for (column, band) in enumerate(frozen)
             frame[band, column] = 1.0
@@ -98,8 +107,11 @@ function _initialization_frozen_residual(frame::AbstractMatrix{<:Complex}, froze
     return residual
 end
 
-"""gfortran-16 `-O3` scalar complex product used by the W90 4.0.1 oracle."""
-@inline function _wannier90_reference_gfortran_complex_product(left::ComplexF64, right::ComplexF64)
+"""Fixed scalar complex product with the retained fused-operation ordering."""
+@inline function _recursive_localization_ordered_complex_product(
+    left::ComplexF64,
+    right::ComplexF64,
+)
     left_real, left_imaginary = reim(left)
     right_real, right_imaginary = reim(right)
     return ComplexF64(
@@ -109,7 +121,7 @@ end
 end
 
 """gfortran-16 `-O3` paired-lane `M(:,n)*conjg(M_nn)` assignment."""
-@inline function _wannier90_reference_gfortran_column_conjugate_product(
+@inline function _recursive_localization_ordered_column_conjugate_product(
     value::ComplexF64,
     diagonal::ComplexF64,
 )
@@ -122,13 +134,13 @@ end
 end
 
 @static if Sys.ARCH === :aarch64
-    # ARM64 `FCMLA` product used by the locked gfortran-16 Wannier90 oracle.
-    # The monolithic Wannier90 4.0.1 build lowers the phase-column assignment to
+    # ARM64 `FCMLA` product used by the locked gfortran-16 Wannier oracle.
+    # The monolithic Wannier 4.0.1 build lowers the phase-column assignment to
     # two `FCMLA` instructions. Scalar `fma` expressions implement the same
     # complex product but do not reproduce the instruction's rounding. Keeping
     # the instruction inside the Julia method avoids importing observer state or
-    # calling an external Wannier90 numerical kernel.
-    @inline function _wannier90_reference_aarch64_fcmla_product(
+    # calling an external Wannier numerical kernel.
+    @inline function _recursive_localization_aarch64_fcmla_product(
         value::ComplexF64,
         phase::ComplexF64,
     )
@@ -153,43 +165,50 @@ end
 The locked Apple-arm64 oracle uses `FCMLA`; other architectures retain the
 portable scalar operation order and require their own platform qualification.
 """
-@inline function _wannier90_reference_gfortran_phase_column_product(
+@inline function _recursive_localization_ordered_phase_column_product(
     value::ComplexF64,
     phase::ComplexF64,
 )
     @static if Sys.ARCH === :aarch64
-        return _wannier90_reference_aarch64_fcmla_product(value, phase)
+        return _recursive_localization_aarch64_fcmla_product(value, phase)
     else
-        return _wannier90_reference_gfortran_column_conjugate_product(value, conj(phase))
+        return _recursive_localization_ordered_column_conjugate_product(value, conj(phase))
     end
 end
 
 """gfortran-16 `-O3` real part of `z*conjg(z)` used by `wann_omega`."""
-@inline function _wannier90_reference_gfortran_magnitude_squared(value::ComplexF64)
+@inline function _recursive_localization_ordered_magnitude_squared(value::ComplexF64)
     value_real, value_imaginary = reim(value)
     return fma(value_imaginary, value_imaginary, value_real * value_real)
 end
 
 """gfortran-16 `-O3` scalar `real(z*conjg(z))` used by `omega_od`."""
-@inline function _wannier90_reference_gfortran_scalar_magnitude_squared(value::ComplexF64)
+@inline function _recursive_localization_ordered_scalar_magnitude_squared(value::ComplexF64)
     value_real, value_imaginary = reim(value)
     return fma(value_real, value_real, value_imaginary * value_imaginary)
 end
 
 """`wann_omega`: `rave += (wb*b)*ln_tmp`, with the final product fused."""
-@inline _wannier90_reference_objective_center_accumulate(accumulator, weight, b_cartesian, phase) =
-    fma(weight * b_cartesian, phase, accumulator)
+@inline _recursive_localization_objective_center_accumulate(
+    accumulator,
+    weight,
+    b_cartesian,
+    phase,
+) = fma(weight * b_cartesian, phase, accumulator)
 
 """`wann_domega`: `ln_tmp=wb*phase`; then `rave += b*ln_tmp`."""
-@inline _wannier90_reference_gradient_center_accumulate(accumulator, b_cartesian, weighted_phase) =
-    muladd(b_cartesian, weighted_phase, accumulator)
+@inline _recursive_localization_gradient_center_accumulate(
+    accumulator,
+    b_cartesian,
+    weighted_phase,
+) = muladd(b_cartesian, weighted_phase, accumulator)
 
-"""Locked gfortran-16 `-O3` accumulation of Wannier90's diagonal spread."""
-@inline _wannier90_reference_omega_d_accumulate(accumulator, weight, shifted_phase) =
+"""Locked gfortran-16 `-O3` accumulation of Wannier's diagonal spread."""
+@inline _recursive_localization_omega_d_accumulate(accumulator, weight, shifted_phase) =
     fma(weight, shifted_phase^2, accumulator)
 
 """gfortran-16 `-O3` paired-lane `M(:,n)/M_nn` assignment."""
-@inline function _wannier90_reference_gfortran_column_division(
+@inline function _recursive_localization_ordered_column_division(
     value::ComplexF64,
     diagonal::ComplexF64,
 )
@@ -218,9 +237,9 @@ conjugate product in two SIMD lanes, and then adds lane zero followed by lane
 one.  Expressing the same formula as a scalar complex dot product changes the
 last bit of the projected Hamiltonian and, through ZHPEVX, the later FR step
 trajectory.  This helper records that numerical contract without calling an
-external Wannier90 or probe kernel.
+external Wannier or probe kernel.
 """
-function _wannier90_reference_gfortran_weighted_conjugate_dot(
+function _recursive_localization_ordered_weighted_conjugate_dot(
     left::AbstractVector{<:Complex},
     right::AbstractVector{<:Complex},
     weights::AbstractVector{<:Real},
@@ -247,7 +266,7 @@ function _wannier90_reference_gfortran_weighted_conjugate_dot(
         ar, ai = reim(ComplexF64(left[index]))
         br, bi = reim(ComplexF64(right[index]))
         weight = Float64(weights[index])
-        product = _wannier90_reference_gfortran_complex_product(
+        product = _recursive_localization_ordered_complex_product(
             conj(ComplexF64(left[index])),
             ComplexF64(right[index]),
         )
@@ -257,7 +276,7 @@ function _wannier90_reference_gfortran_weighted_conjugate_dot(
     return ComplexF64(accumulator_real, accumulator_imaginary)
 end
 
-"""Wannier90 4.0.1 `dis_project` full-SVD polar factor.
+"""Wannier 4.0.1 `dis_project` full-SVD polar factor.
 
 The reference implementation calls `ZGESVD('A','A')` and forms the product of
 the first `num_wann` left singular vectors with the complete right singular
@@ -266,7 +285,7 @@ the general exact-frozen initializer; those conventions are physically
 equivalent but can select a measurably different vector in a nearly degenerate
 Cr Z boundary cluster.
 """
-function _wannier90_reference_dis_project(
+function _recursive_localization_dis_project(
     source::AbstractMatrix{<:Complex};
     parent_dimension::Int = size(source, 1),
 )
@@ -288,7 +307,7 @@ function _wannier90_reference_dis_project(
     right_adjoint = zeros(ComplexF64, parent_dimension, parent_dimension)
     work = zeros(ComplexF64, 4parent_dimension)
     real_work = zeros(Float64, 5parent_dimension)
-    use_external_lp64 = _WANNIER90_REFERENCE_LP64_LAPACK !== nothing
+    use_external_lp64 = _RECURSIVE_LOCALIZATION_LP64_LAPACK !== nothing
     integer_type = use_external_lp64 ? Cint : LinearAlgebra.BlasInt
     m = integer_type(num_outer)
     n = integer_type(num_wannier)
@@ -300,7 +319,7 @@ function _wannier90_reference_dis_project(
     all_vectors = UInt8('A')
     if use_external_lp64
         ccall(
-            (:zgesvd_, _WANNIER90_REFERENCE_LP64_LAPACK),
+            (:zgesvd_, _RECURSIVE_LOCALIZATION_LP64_LAPACK),
             Cvoid,
             (
                 Ref{UInt8},
@@ -378,7 +397,7 @@ function _wannier90_reference_dis_project(
     reconstructed = zeros(ComplexF64, num_outer, num_wannier)
     if successful
         # Match the explicit j,i,l loops and the gfortran-16 -O3 complex
-        # contraction used by the registered Wannier90 4.0.1 oracle.  The
+        # contraction used by the registered Wannier 4.0.1 oracle.  The
         # compiler forms each complex product with one rounded cross product
         # followed by one fused operation.  Julia's generic Complex `*` is
         # algebraically identical, but its two-ULP reconstruction drift is
@@ -387,7 +406,7 @@ function _wannier90_reference_dis_project(
         for column in 1:num_wannier, row in 1:num_outer, inner in 1:num_wannier
             left_real, left_imaginary = reim(left[row, inner])
             right_real, right_imaginary = reim(right_adjoint[inner, column])
-            product = _wannier90_reference_gfortran_complex_product(
+            product = _recursive_localization_ordered_complex_product(
                 left[row, inner],
                 right_adjoint[inner, column],
             )
@@ -413,9 +432,9 @@ function _wannier90_reference_dis_project(
     )
 end
 
-"""Reproduce Wannier90 4.0.1 `dis_project` followed by `dis_proj_froz`."""
-function _wannier90_reference_frozen_amn_initial_frames(
-    config::SymmetryAdaptedWannierizationConfig,
+"""Reproduce Wannier 4.0.1 `dis_project` followed by `dis_proj_froz`."""
+function _recursive_localization_frozen_amn_initial_frames(
+    config::WannierizationConfig,
     representation::BandRepresentation,
     outer_indices::Vector{Vector{Int}},
     frozen_indices::Vector{Vector{Int}},
@@ -424,7 +443,7 @@ function _wannier90_reference_frozen_amn_initial_frames(
 )
     num_bands, num_kpoints = size(representation.energies_ev)
     size(amn) == (num_bands, num_wannier, num_kpoints) ||
-        throw(DimensionMismatch("AMN dimensions disagree with the Wannier90 initializer"))
+        throw(DimensionMismatch("AMN dimensions disagree with the Wannier initializer"))
     frames = Vector{Matrix{ComplexF64}}(undef, num_kpoints)
     diagnostics = WannierInitializationKPointDiagnostic[]
     maximum_isometry = 0.0
@@ -442,10 +461,10 @@ function _wannier90_reference_frozen_amn_initial_frames(
         source = Matrix{ComplexF64}(@view amn[outer, :, kpoint])
         all(isfinite, source) ||
             throw(ArgumentError("AMN contains NaN or Inf at k-point $(kpoint)"))
-        projected = _wannier90_reference_dis_project(source; parent_dimension = num_bands)
+        projected = _recursive_localization_dis_project(source; parent_dimension = num_bands)
         projected.success || throw(
             ArgumentError(
-                "WANNIER90_REFERENCE_ZGESVD_FAILED at k-point $(kpoint), info=$(projected.info)",
+                "RECURSIVE_LOCALIZATION_ZGESVD_FAILED at k-point $(kpoint), info=$(projected.info)",
             ),
         )
         initial = projected.frame
@@ -464,12 +483,12 @@ function _wannier90_reference_frozen_amn_initial_frames(
             # Exact dis_proj_froz loop order: cp_s(m,n) sums over projected
             # columns, followed by the two explicit Q multiplications.  The
             # diagonal Q could be applied as a mask, but that would skip the
-            # registered accumulation sequence used by Wannier90 4.0.1.
+            # registered accumulation sequence used by Wannier 4.0.1.
             for column in 1:dimension
                 for row in 1:dimension
                     for inner in 1:num_wannier
                         projected_subspace[row, column] +=
-                            _wannier90_reference_gfortran_complex_product(
+                            _recursive_localization_ordered_complex_product(
                                 initial[row, inner],
                                 conj(initial[column, inner]),
                             )
@@ -479,22 +498,22 @@ function _wannier90_reference_frozen_amn_initial_frames(
             end
             for column in 1:dimension, row in 1:dimension, inner in 1:dimension
                 projected_times_complement[row, column] +=
-                    _wannier90_reference_gfortran_complex_product(
+                    _recursive_localization_ordered_complex_product(
                         projected_subspace[row, inner],
                         frozen_complement[inner, column],
                     )
             end
             for column in 1:dimension, row in 1:dimension, inner in 1:dimension
-                qpq_storage[row, column] += _wannier90_reference_gfortran_complex_product(
+                qpq_storage[row, column] += _recursive_localization_ordered_complex_product(
                     frozen_complement[row, inner],
                     projected_times_complement[inner, column],
                 )
             end
             qpq = Matrix{ComplexF64}(@view qpq_storage[1:dimension, 1:dimension])
-            eigensystem = _wannier90_reference_zhpevx(qpq; leading_dimension = num_bands)
+            eigensystem = _recursive_localization_zhpevx(qpq; leading_dimension = num_bands)
             eigensystem.success || throw(
                 ArgumentError(
-                    "WANNIER90_REFERENCE_FROZEN_ZHPEVX_FAILED at k-point $(kpoint), info=$(eigensystem.info)",
+                    "RECURSIVE_LOCALIZATION_FROZEN_ZHPEVX_FAILED at k-point $(kpoint), info=$(eigensystem.info)",
                 ),
             )
             first_selected = dimension - needed + 1
@@ -538,7 +557,7 @@ function _wannier90_reference_frozen_amn_initial_frames(
                 end
                 all(!iszero, selected_indices) || throw(
                     ArgumentError(
-                        "WANNIER90_REFERENCE_FROZEN_ORTHO_FIX_FAILED at k-point $(kpoint)",
+                        "RECURSIVE_LOCALIZATION_FROZEN_ORTHO_FIX_FAILED at k-point $(kpoint)",
                     ),
                 )
             end
@@ -559,12 +578,12 @@ function _wannier90_reference_frozen_amn_initial_frames(
         frozen_residual = _initialization_frozen_residual(frame, frozen)
         isometry <= 1.0e-8 || throw(
             ArgumentError(
-                "Wannier90 initial frame isometry residual $(isometry) exceeds 1e-8 at k-point $(kpoint)",
+                "Wannier initial frame isometry residual $(isometry) exceeds 1e-8 at k-point $(kpoint)",
             ),
         )
         frozen_residual <= 1.0e-8 || throw(
             ArgumentError(
-                "Wannier90 initial frozen residual $(frozen_residual) exceeds 1e-8 at k-point $(kpoint)",
+                "Wannier initial frozen residual $(frozen_residual) exceeds 1e-8 at k-point $(kpoint)",
             ),
         )
         maximum_isometry = max(maximum_isometry, isometry)
@@ -614,8 +633,8 @@ function _wannier90_reference_frozen_amn_initial_frames(
         frames[kpoint] = frame
     end
     report = WannierInitializationReport(
-        :wannier90_reference_amn_frozen_projection,
-        "wannier90-4.0.1-dis_project-dis_proj_froz-v1",
+        :recursive_localization_amn_frozen_projection,
+        "wannier-4.0.1-dis_project-dis_proj_froz-v1",
         :COMPLETED,
         diagnostics,
     )
@@ -627,7 +646,7 @@ end
 # Rank deficiency of either AMN factor is diagnostic: missing directions are
 # completed deterministically in the target or outer-free band complement.
 function _no_symmetry_exact_frozen_amn_initial_frames(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     representation::BandRepresentation,
     outer_indices::Vector{Vector{Int}},
     frozen_indices::Vector{Vector{Int}},
@@ -889,8 +908,9 @@ function _constrained_frozen_initial_frames(
     invariant_tolerance::Float64 = 1.0e-10,
     covariance_tolerance::Float64 = 1.0e-3,
     repair_expanded_invariants::Bool = false,
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
+    validate_ordinary_construction_policy(construction_policy)
     num_bands, num_kpoints = size(representation.energies_ev)
     num_wannier = size(plan.representation_matrices, 1)
     size(amn) == (num_bands, num_wannier, num_kpoints) ||
@@ -1038,7 +1058,7 @@ function _constrained_frozen_initial_frames(
         )
     end
     frames = _expand_ibz_frames(frames, representation, plan)
-    if repair_expanded_invariants || construction_policy == :standard
+    begin
         for kpoint in eachindex(frames)
             # Keep exact qualified input arithmetic unchanged. Diagnostic repair
             # is needed only when approximate sewing broke a hard frame invariant.
@@ -1079,8 +1099,9 @@ function _constrained_frozen_initial_frames(
     covariance = _maximum_projector_covariance_error(frames, representation)
     if isometry > invariant_tolerance ||
        frozen_residual > invariant_tolerance ||
-       !isfinite(covariance) ||
-       (construction_policy == :strict && covariance > covariance_tolerance)
+       !isfinite(isometry) ||
+       !isfinite(frozen_residual) ||
+       !isfinite(covariance)
         throw(
             FrozenCorepresentationInitializationError(
                 :FROZEN_COREPRESENTATION_INITIALIZATION_FAILED,
@@ -1105,218 +1126,6 @@ function _constrained_frozen_initial_frames(
         covariance_residual = covariance,
         amn_projection_residual = maximum_amn_projection_residual,
     )
-end
-
-"""
-Construct one deterministic symmetry-adapted gauge inside a sealed Bloch subspace.
-
-This is an initialization-only operation.  Frozen bands constrain the supplied
-projector and the initial embedding; the returned frame may subsequently rotate
-by an arbitrary symmetry-allowed `U(k)` without retaining a frozen target block.
-"""
-function _fixed_subspace_initial_frames(
-    representation::BandRepresentation,
-    plan::WannierSymmetryPlan,
-    projectors::Vector{Matrix{ComplexF64}},
-    amn::Array{ComplexF64, 3},
-    frozen_indices::Vector{Vector{Int}};
-    minimum_singular_value::Float64 = 1.0e-5,
-    maximum_condition::Float64 = 1.0e8,
-    probe_count::Int = 8,
-    invariant_tolerance::Float64 = 1.0e-10,
-    covariance_tolerance::Float64 = 1.0e-3,
-)
-    num_bands, num_kpoints = size(representation.energies_ev)
-    num_wannier = size(plan.representation_matrices, 1)
-    length(projectors) == num_kpoints ||
-        throw(DimensionMismatch("fixed projector mesh disagrees with the representation"))
-    size(amn) == (num_bands, num_wannier, num_kpoints) ||
-        throw(DimensionMismatch("fixed-subspace AMN dimensions disagree"))
-    operation_mapping, inventory_diagnostics =
-        validate_target_operation_inventory(representation, plan, invariant_tolerance)
-    isempty(inventory_diagnostics) || throw(
-        FrozenCorepresentationInitializationError(
-            :FROZEN_TARGET_COREPRESENTATION_MISMATCH,
-            "band and target operation inventories cannot be matched",
-            Dict{String, String}(),
-        ),
-    )
-    frames = [zeros(ComplexF64, num_bands, num_wannier) for _ in 1:num_kpoints]
-    diagnostics = NamedTuple[]
-    for representative in representation.irreducible_indices
-        fixed_projector = projectors[representative]
-        size(fixed_projector) == (num_bands, num_bands) ||
-            throw(DimensionMismatch("fixed projector dimension disagrees at k=$(representative)"))
-        frozen = frozen_indices[representative]
-        frozen_count = length(frozen)
-        free_count = num_wannier - frozen_count
-        best_frozen = nothing
-        best_frozen_spectrum = Float64[]
-        best_frozen_condition = Inf
-        best_frozen_score = -Inf
-        for probe_index in 1:probe_count
-            projected = _frozen_target_embedding(
-                representation,
-                plan,
-                representative,
-                frozen,
-                operation_mapping,
-                probe_index,
-            )
-            embedding, spectrum, condition =
-                _rank_gated_polar_columns(projected; minimum_singular_value, maximum_condition)
-            score = embedding === nothing || isempty(spectrum) ? -Inf : minimum(spectrum)
-            if score > best_frozen_score
-                best_frozen = embedding
-                best_frozen_spectrum = spectrum
-                best_frozen_condition = condition
-                best_frozen_score = score
-            end
-        end
-        best_frozen === nothing && throw(
-            FrozenCorepresentationInitializationError(
-                :FROZEN_TARGET_COREPRESENTATION_MISMATCH,
-                "fixed-subspace frozen embedding lost rank",
-                Dict(
-                    "kpoint" => string(representative),
-                    "singular_values" => repr(best_frozen_spectrum),
-                    "condition" => string(best_frozen_condition),
-                ),
-            ),
-        )
-        frozen_embedding = something(best_frozen)
-        frozen_band_basis = zeros(ComplexF64, num_bands, frozen_count)
-        for (column, band) in enumerate(frozen)
-            frozen_band_basis[band, column] = 1.0
-        end
-        frozen_band_projector = frozen_band_basis * frozen_band_basis'
-        frozen_target_projector = frozen_embedding * frozen_embedding'
-        target_complement_projector =
-            Matrix{ComplexF64}(I, num_wannier, num_wannier) - frozen_target_projector
-        target_complement_basis = _deterministic_projector_basis(
-            target_complement_projector,
-            free_count,
-            minimum_singular_value,
-        )
-        target_complement_basis === nothing && throw(
-            FrozenCorepresentationInitializationError(
-                :FROZEN_FREE_COMPLEMENT_RANK_DEFICIENT,
-                "fixed-subspace target complement lost rank",
-                Dict("kpoint" => string(representative)),
-            ),
-        )
-        best_free = nothing
-        best_free_spectrum = Float64[]
-        best_free_condition = Inf
-        best_free_score = -Inf
-        for probe_index in 1:probe_count
-            probe = if probe_index == 1
-                Matrix{ComplexF64}(@view amn[:, :, representative])
-            else
-                rng = MersenneTwister(
-                    UInt64(0x66697865642d7a) + UInt64(8191 * representative + probe_index),
-                )
-                randn(rng, num_bands, num_wannier) .+ 1.0im .* randn(rng, num_bands, num_wannier)
-            end
-            projected = zeros(ComplexF64, num_bands, num_wannier)
-            count = 0
-            for operation_index in eachindex(representation.operations)
-                representation.kpoint_map[operation_index, representative] == representative ||
-                    continue
-                sewing = @view representation.sewing_matrices[:, :, operation_index, representative]
-                target = target_representation(
-                    plan,
-                    representation,
-                    operation_index,
-                    representative,
-                    operation_mapping[operation_index],
-                )
-                projected .+=
-                    sewing *
-                    _operation_action(representation.operations[operation_index], probe) *
-                    target'
-                count += 1
-            end
-            count > 0 || throw(ArgumentError("IBZ representative has an empty little group"))
-            projected ./= count
-            projected =
-                fixed_projector *
-                (Matrix{ComplexF64}(I, num_bands, num_bands) - frozen_band_projector) *
-                projected *
-                target_complement_projector
-            columns = projected * something(target_complement_basis)
-            free_frame, spectrum, condition =
-                _rank_gated_polar_columns(columns; minimum_singular_value, maximum_condition)
-            score = free_frame === nothing || isempty(spectrum) ? -Inf : minimum(spectrum)
-            if score > best_free_score
-                best_free = free_frame
-                best_free_spectrum = spectrum
-                best_free_condition = condition
-                best_free_score = score
-            end
-        end
-        best_free === nothing && throw(
-            FrozenCorepresentationInitializationError(
-                :FROZEN_FREE_COMPLEMENT_RANK_DEFICIENT,
-                "fixed-subspace free complement lost rank",
-                Dict(
-                    "kpoint" => string(representative),
-                    "singular_values" => repr(best_free_spectrum),
-                    "condition" => string(best_free_condition),
-                ),
-            ),
-        )
-        frames[representative] =
-            frozen_band_basis * frozen_embedding' +
-            something(best_free) * something(target_complement_basis)'
-        push!(
-            diagnostics,
-            (
-                kpoint = representative,
-                frozen_singular_values = best_frozen_spectrum,
-                frozen_condition = best_frozen_condition,
-                free_singular_values = best_free_spectrum,
-                free_condition = best_free_condition,
-            ),
-        )
-    end
-    frames = _expand_ibz_frames(frames, representation, plan)
-    residuals = _candidate_invariant_residuals(frames, frozen_indices, representation)
-    projector_residual = maximum(
-        maximum(abs, frames[kpoint] * frames[kpoint]' - projectors[kpoint]) for
-        kpoint in eachindex(frames)
-    )
-    target_symmetry = _maximum_target_frame_symmetry_error(frames, representation, plan)
-    maximum((residuals.isometry, residuals.frozen, projector_residual)) <= invariant_tolerance ||
-        throw(
-            FrozenCorepresentationInitializationError(
-                :FROZEN_COREPRESENTATION_INITIALIZATION_FAILED,
-                "fixed-subspace initial frame violates a hard invariant",
-                Dict(
-                    "isometry_residual" => string(residuals.isometry),
-                    "frozen_projector_residual" => string(residuals.frozen),
-                    "fixed_projector_residual" => string(projector_residual),
-                    "target_symmetry_residual" => string(target_symmetry),
-                ),
-            ),
-        )
-    residuals.covariance <= covariance_tolerance || throw(
-        FrozenCorepresentationInitializationError(
-            :FROZEN_COREPRESENTATION_INITIALIZATION_FAILED,
-            "fixed-subspace covariance exceeds the empirical budget",
-            Dict("covariance_residual" => string(residuals.covariance)),
-        ),
-    )
-    target_symmetry <= covariance_tolerance || throw(
-        FrozenCorepresentationInitializationError(
-            :FROZEN_COREPRESENTATION_INITIALIZATION_FAILED,
-            "fixed-subspace target-frame covariance exceeds the empirical budget",
-            Dict("target_symmetry_residual" => string(target_symmetry)),
-        ),
-    )
-    return frames,
-    diagnostics,
-    merge(residuals, (fixed_projector = projector_residual, target_symmetry = target_symmetry))
 end
 
 # Diagnose one AMN/target candidate with exactly the rank, conditioning, and
@@ -1487,7 +1296,7 @@ end
 # frozen runs project the numerical AMN seed; symmetry-free runs use the ordinary
 # full-BZ AMN/frozen embedding without a target corepresentation.
 function _initial_frames_with_diagnostics(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     representation::BandRepresentation,
     outer_indices::Vector{Vector{Int}},
     frozen_indices::Vector{Vector{Int}},
@@ -1545,7 +1354,7 @@ function _initial_frames_with_diagnostics(
         amn === nothing && throw(ArgumentError("frozen AMN initialization data are missing"))
         if effective_wannierization_algorithms(config, representation).disentanglement ==
            :smv_fletcher_reeves_two_stage
-            return _wannier90_reference_frozen_amn_initial_frames(
+            return _recursive_localization_frozen_amn_initial_frames(
                 config,
                 representation,
                 outer_indices,
@@ -1600,10 +1409,7 @@ function _initial_frames(arguments...; keywords...)
 end
 
 # Return projection centers in Wannier order as Cartesian row vectors.
-function _initial_wannier_centers(
-    config::SymmetryAdaptedWannierizationConfig,
-    representation::BandRepresentation,
-)
+function _initial_wannier_centers(config::WannierizationConfig, representation::BandRepresentation)
     basis = something(config.input.projection_basis)
     centers = zeros(Float64, basis.num_wannier, 3)
     for block in basis.blocks, center in axes(block.positions_fractional, 2)
@@ -1714,7 +1520,7 @@ end
 # `_centers_spreads_and_directions`: the latter advances one symmetry-adapted
 # solver iterate and therefore depends on the previous centers, the IBZ star
 # weights, and the target-Wannier ordering.  A checkpoint evaluator must instead
-# reproduce the translationally invariant Wannier90 formula directly from its
+# reproduce the translationally invariant Wannier formula directly from its
 # own gauge.
 function _evaluate_full_mesh_centers_spreads_and_directions(
     frames::Vector{Matrix{ComplexF64}},
@@ -1722,8 +1528,11 @@ function _evaluate_full_mesh_centers_spreads_and_directions(
     representation::BandRepresentation,
     mmn::WannierMMN,
     weights::Vector{Float64},
-    localized_overlaps::Union{Nothing, Array{ComplexF64, 4}} = nothing,
+    localized_overlaps::Union{Nothing, Array{ComplexF64, 4}} = nothing;
+    center_image_policy::Symbol = :nearest_reference,
 )
+    center_image_policy in (:nearest_reference, :principal) ||
+        throw(ArgumentError("unsupported Wannier center image policy"))
     nk = length(frames)
     num_wannier = size(frames[1], 2)
     centers = zeros(Float64, num_wannier, 3)
@@ -1760,7 +1569,9 @@ function _evaluate_full_mesh_centers_spreads_and_directions(
 
     # Return the equivalent lattice image nearest the checkpoint-provided
     # center, while retaining the spread evaluated from the gauge itself.
-    fractional_offset = (center_images - centers) * inv(representation.real_lattice)
-    centers .+= round.(fractional_offset) * representation.real_lattice
+    if center_image_policy == :nearest_reference
+        fractional_offset = (center_images - centers) * inv(representation.real_lattice)
+        centers .+= round.(fractional_offset) * representation.real_lattice
+    end
     return centers, spreads, (directional[1], directional[2], directional[3])
 end

@@ -33,7 +33,7 @@ end
 
 """Use rank zero as the unique floating-point authority for a matrix field.
 
-Wannier90-reference initialization deliberately reproduces LAPACK and scalar
+Wannier-reference initialization deliberately reproduces LAPACK and scalar
 arithmetic order.  Separate processes can nevertheless return last-bit
 different singular/eigenvector gauges at the Z-to-U boundary.  A subsequent
 rank-local acceptance decision would then desynchronise MPI collectives.  The
@@ -153,7 +153,7 @@ end
 
 """Use rank zero's Boolean branch decision on every MPI rank.
 
-The Wannier90 parabolic step contains comparisons whose inputs may differ by a
+The Wannier parabolic step contains comparisons whose inputs may differ by a
 last bit after process-local BLAS/LAPACK calls.  The distributed edge
 contractions remain collective, but the reference algorithm has one scalar
 control flow.  Broadcasting that decision prevents one rank from entering a
@@ -224,14 +224,14 @@ function _localized_overlap_state(
     return overlaps
 end
 
-"""Construct the initial localized M state with Wannier90's two ZGEMMs.
+"""Construct the initial localized M state with Wannier's two ZGEMMs.
 
 The generic path is mathematically identical but may dispatch through a
 different BLAS ABI.  The one-ULP difference it leaves in the first U gradient
 is amplified by the second parabolic step, so the explicit reference profile
 uses the same LP64 ZGEMM contract as all recursive M updates.
 """
-function _wannier90_reference_localized_overlap_state(
+function _recursive_localization_localized_overlap_state(
     frames::Vector{Matrix{ComplexF64}},
     mmn::WannierMMN,
     parallel::Symbol,
@@ -247,20 +247,20 @@ function _wannier90_reference_localized_overlap_state(
         edge = (kpoint - 1) * mmn.num_neighbors + neighbor
         mod(edge - 1, size_value) == rank || continue
         target = mmn.neighbors[neighbor, kpoint]
-        left = _wannier90_reference_zgemm(
+        left = _recursive_localization_zgemm(
             frames[kpoint],
             'C',
             @view(mmn.data[:, :, neighbor, kpoint]),
             'N',
         )
         @views overlaps[:, :, neighbor, kpoint] .=
-            _wannier90_reference_zgemm(left, 'N', frames[target], 'N')
+            _recursive_localization_zgemm(left, 'N', frames[target], 'N')
     end
     parallel == :mpi && MPI.Allreduce!(overlaps, +, something(communicator))
     return overlaps
 end
 
-"""Construct Wannier90's Z-to-U M state in its two algebraic stages.
+"""Construct Wannier's Z-to-U M state in its two algebraic stages.
 
 The reference program first contracts the raw band overlaps with `U_opt` and
 only afterwards rotates that slim overlap with the square localization `U`.
@@ -268,9 +268,9 @@ Collapsing both stages into a completed frame `V = U_opt*U` is mathematically
 equivalent, but not floating-point equivalent; the resulting one-ULP M drift
 is amplified by the later parabolic FR steps.  Active window rows are compacted
 in their declared band order while all BLAS leading dimensions remain those of
-the parent arrays used by Wannier90 4.0.1.
+the parent arrays used by Wannier 4.0.1.
 """
-function _wannier90_reference_initial_slim_overlap_state(
+function _recursive_localization_initial_slim_overlap_state(
     subspace_frames::Vector{Matrix{ComplexF64}},
     localization_unitaries::Vector{Matrix{ComplexF64}},
     outer_indices::Vector{Vector{Int}},
@@ -278,7 +278,7 @@ function _wannier90_reference_initial_slim_overlap_state(
     parallel::Symbol,
 )
     length(subspace_frames) == length(localization_unitaries) == length(outer_indices) ||
-        throw(DimensionMismatch("Wannier90-reference Z-to-U state lengths disagree"))
+        throw(DimensionMismatch("Wannier-reference Z-to-U state lengths disagree"))
     parallel == :mpi && !MPI.Initialized() && MPI.Init()
     communicator = parallel == :mpi ? MPI.COMM_WORLD : nothing
     rank = parallel == :mpi ? MPI.Comm_rank(something(communicator)) : 0
@@ -309,7 +309,7 @@ function _wannier90_reference_initial_slim_overlap_state(
         # dis_main: CWB = Uopt(k)^H M(k,b), then CWW = CWB Uopt(k+b).
         cwb = zeros(ComplexF64, num_wannier, num_bands)
         cww = zeros(ComplexF64, num_wannier, num_wannier)
-        _wannier90_reference_zgemm_storage!(
+        _recursive_localization_zgemm_storage!(
             cwb,
             source_uopt,
             'C',
@@ -319,7 +319,7 @@ function _wannier90_reference_initial_slim_overlap_state(
             target_count,
             source_count,
         )
-        _wannier90_reference_zgemm_storage!(
+        _recursive_localization_zgemm_storage!(
             cww,
             cwb,
             'N',
@@ -336,7 +336,7 @@ function _wannier90_reference_initial_slim_overlap_state(
         slim_storage[1:num_wannier, 1:num_wannier] .= cww
         rotated_left = zeros(ComplexF64, num_wannier, num_bands)
         final_overlap = zeros(ComplexF64, num_wannier, num_wannier)
-        _wannier90_reference_zgemm_storage!(
+        _recursive_localization_zgemm_storage!(
             rotated_left,
             localization_unitaries[kpoint],
             'C',
@@ -346,7 +346,7 @@ function _wannier90_reference_initial_slim_overlap_state(
             num_wannier,
             num_wannier,
         )
-        _wannier90_reference_zgemm_storage!(
+        _recursive_localization_zgemm_storage!(
             final_overlap,
             rotated_left,
             'N',
@@ -362,7 +362,7 @@ function _wannier90_reference_initial_slim_overlap_state(
     return overlaps
 end
 
-"""Apply the Wannier90 recursive `R_k' * M_kb * R_k+b` link update."""
+"""Apply the Wannier recursive `R_k' * M_kb * R_k+b` link update."""
 function _rotate_localized_overlap_state(
     overlaps::Array{ComplexF64, 4},
     rotations::Vector{Matrix{ComplexF64}},
@@ -376,21 +376,21 @@ function _rotate_localized_overlap_state(
     for kpoint in eachindex(rotations), neighbor in 1:mmn.num_neighbors
         target = mmn.neighbors[neighbor, kpoint]
         @views begin
-            left = _wannier90_reference_zgemm(
+            left = _recursive_localization_zgemm(
                 rotations[kpoint],
                 'C',
                 overlaps[:, :, neighbor, kpoint],
                 'N',
             )
             updated[:, :, neighbor, kpoint] .=
-                _wannier90_reference_zgemm(left, 'N', rotations[target], 'N')
+                _recursive_localization_zgemm(left, 'N', rotations[target], 'N')
         end
     end
     return updated
 end
 
-"""Evaluate Wannier90 4.0.1's invariant spread in its scalar loop order."""
-function _wannier90_reference_invariant_spread(
+"""Evaluate Wannier 4.0.1's invariant spread in its scalar loop order."""
+function _recursive_localization_invariant_spread(
     overlaps::Array{ComplexF64, 4},
     weights::Vector{Float64},
 )
@@ -401,22 +401,23 @@ function _wannier90_reference_invariant_spread(
         link_norm = 0.0
         for m in 1:num_wannier, n in 1:num_wannier
             value = overlaps[n, m, neighbor, kpoint]
-            link_norm += _wannier90_reference_gfortran_magnitude_squared(value)
+            link_norm += _recursive_localization_ordered_magnitude_squared(value)
         end
         total += weights[neighbor] * (num_wannier - link_norm)
     end
     return total / nk
 end
 
-"""Evaluate Wannier90 4.0.1 `om_i + om_d + om_od` without reassociation."""
-function _wannier90_reference_total_spread(
+"""Evaluate Wannier 4.0.1 `om_i + om_d + om_od` without reassociation."""
+function _recursive_localization_total_spread(
     overlaps::Array{ComplexF64, 4},
     centered_phases::Array{Float64, 3},
     centers::Matrix{Float64},
     representation::BandRepresentation,
     mmn::WannierMMN,
     weights::Vector{Float64},
-    omega_invariant::Float64,
+    omega_invariant::Float64;
+    geometry::Union{Nothing, LocalizationGeometryWorkspace} = nothing,
 )
     num_wannier = size(overlaps, 1)
     nk = size(overlaps, 4)
@@ -427,7 +428,7 @@ function _wannier90_reference_total_spread(
                 value = overlaps[n, m, neighbor, kpoint]
                 omega_od = fma(
                     weights[neighbor],
-                    _wannier90_reference_gfortran_scalar_magnitude_squared(value),
+                    _recursive_localization_ordered_scalar_magnitude_squared(value),
                     omega_od,
                 )
             end
@@ -435,28 +436,35 @@ function _wannier90_reference_total_spread(
     end
     omega_od /= nk
     omega_d = 0.0
-    for kpoint in 1:nk, neighbor in axes(overlaps, 3), n in 1:num_wannier
-        b_cartesian = _wannier90_reference_edge_b_cartesian(representation, mmn, neighbor, kpoint)
-        brn = 0.0
-        for direction in 1:3
-            brn += b_cartesian[direction] * centers[n, direction]
+    for kpoint in 1:nk, neighbor in axes(overlaps, 3)
+        # Geometry is fixed for this edge. Empty Wannier loops retain their
+        # original no-access behavior, including invalid unused mesh inputs.
+        num_wannier == 0 && continue
+        b_cartesian =
+            _localization_edge_b_cartesian(representation, mmn, neighbor, kpoint, true, geometry)
+        for n in 1:num_wannier
+            brn = 0.0
+            for direction in 1:3
+                brn += b_cartesian[direction] * centers[n, direction]
+            end
+            phase = centered_phases[n, neighbor, kpoint]
+            # The locked gfortran -O3 Wannier 4.0.1 build contracts the
+            # `om_d = om_d + wb * (ln_tmp + brn)^2` assignment.  The uncontracted
+            # Julia expression first differs at Cr U17 by one ULP and the
+            # parabolic step amplifies that bit into a different FR trajectory.
+            # Make the reference backend's scalar assignment explicit; other
+            # localization algorithms keep their established arithmetic.
+            omega_d =
+                _recursive_localization_omega_d_accumulate(omega_d, weights[neighbor], phase + brn)
         end
-        phase = centered_phases[n, neighbor, kpoint]
-        # The locked gfortran -O3 Wannier90 4.0.1 build contracts the
-        # `om_d = om_d + wb * (ln_tmp + brn)^2` assignment.  The uncontracted
-        # Julia expression first differs at Cr U17 by one ULP and the
-        # parabolic step amplifies that bit into a different FR trajectory.
-        # Make the reference backend's scalar assignment explicit; other
-        # localization algorithms keep their established arithmetic.
-        omega_d = _wannier90_reference_omega_d_accumulate(omega_d, weights[neighbor], phase + brn)
     end
     omega_d /= nk
     total = omega_invariant + omega_d + omega_od
-    if lowercase(strip(get(ENV, "WANNIERNLQG_W90_REFERENCE_DEBUG_COMPONENTS", "0"))) in
+    if lowercase(strip(get(ENV, "WANNIERNLQG_LOCALIZATION_DEBUG_COMPONENTS", "0"))) in
        ("1", "true", "yes")
         println(
             stderr,
-            "W90REF_SPREAD_COMPONENTS omega_i=$(repr(omega_invariant)) omega_d=$(repr(omega_d)) " *
+            "LOCALIZATION_SPREAD_COMPONENTS omega_i=$(repr(omega_invariant)) omega_d=$(repr(omega_d)) " *
             "omega_od=$(repr(omega_od)) total=$(repr(total))",
         )
     end
@@ -486,6 +494,7 @@ function _mv_centered_full_mesh_centers_spreads_and_directions(
     parallel::Symbol = :serial,
     compensated::Bool = true,
     localized_overlaps::Union{Nothing, Array{ComplexF64, 4}} = nothing,
+    geometry::Union{Nothing, LocalizationGeometryWorkspace} = nothing,
 )
     nk = length(frames)
     num_wannier = size(first(frames), 2)
@@ -512,10 +521,14 @@ function _mv_centered_full_mesh_centers_spreads_and_directions(
                 mpi_overlaps === nothing ?
                 frames[kpoint]' * @view(mmn.data[:, :, neighbor, kpoint]) * frames[target] :
                 @view(mpi_overlaps[:, :, neighbor, kpoint])
-            displacement = _mesh_neighbor_displacement(representation, mmn, neighbor, kpoint)
-            b_cartesian =
-                compensated ? transpose(representation.reciprocal_lattice) * displacement :
-                _wannier90_reference_edge_b_cartesian(representation, mmn, neighbor, kpoint)
+            b_cartesian = _localization_edge_b_cartesian(
+                representation,
+                mmn,
+                neighbor,
+                kpoint,
+                !compensated,
+                geometry,
+            )
             compensated ||
                 (something(reference_b_cartesian)[neighbor, kpoint] = Vector(b_cartesian))
             direction_norm = sum(abs2, b_cartesian)
@@ -526,7 +539,7 @@ function _mv_centered_full_mesh_centers_spreads_and_directions(
                     diagonal * cis(dot(@view(phase_reference_centers[wannier, :]), b_cartesian))
                 centered_phase =
                     compensated ? angle(phased_diagonal) :
-                    _wannier90_reference_phase(phased_diagonal)
+                    _recursive_localization_phase(phased_diagonal)
                 if retain_reference_links
                     something(centered_phases)[wannier, neighbor, kpoint] = centered_phase
                     something(diagonal_norms_squared)[wannier, neighbor, kpoint] = abs2(diagonal)
@@ -562,7 +575,7 @@ function _mv_centered_full_mesh_centers_spreads_and_directions(
         end
     end
     if !compensated
-        # Wannier90 4.0.1 `wann_omega` deliberately uses different loop nests
+        # Wannier 4.0.1 `wann_omega` deliberately uses different loop nests
         # for r_n and <r^2>_n.  Preserve those scalar assignment sequences:
         # the resulting last-bit differences otherwise perturb the parabolic
         # step and are amplified by the subsequent Fletcher--Reeves history.
@@ -572,12 +585,13 @@ function _mv_centered_full_mesh_centers_spreads_and_directions(
                 # `(weight * b) * phase + accumulator`.  `wann_domega` uses a
                 # distinct grouping reconstructed below; sharing either center
                 # would perturb the Fletcher--Reeves trajectory.
-                center_delta[wannier, direction] = _wannier90_reference_objective_center_accumulate(
-                    center_delta[wannier, direction],
-                    weights[neighbor],
-                    something(reference_b_cartesian)[neighbor, kpoint][direction],
-                    something(centered_phases)[wannier, neighbor, kpoint],
-                )
+                center_delta[wannier, direction] =
+                    _recursive_localization_objective_center_accumulate(
+                        center_delta[wannier, direction],
+                        weights[neighbor],
+                        something(reference_b_cartesian)[neighbor, kpoint][direction],
+                        something(centered_phases)[wannier, neighbor, kpoint],
+                    )
             end
             center_delta[wannier, direction] = -center_delta[wannier, direction] / nk
         end
@@ -601,7 +615,7 @@ function _mv_centered_full_mesh_centers_spreads_and_directions(
             @views r_squared_directional[wannier, :] ./= nk
         end
     end
-    # The Wannier90 reference branch is ordinary no-symmetry localization.
+    # The Wannier reference branch is ordinary no-symmetry localization.
     # Sending its Cartesian `rave` through the generic symmetry helper performs
     # an unnecessary Cartesian -> fractional -> Cartesian round trip even for
     # the identity operation.  That round trip is absent from `wann_omega` and
@@ -629,16 +643,17 @@ end
 """
 Reconstruct the distinct `wann_domega` center increment used by the gradient.
 
-Wannier90 intentionally evaluates the spread center in `wann_omega` and the
+Wannier intentionally evaluates the spread center in `wann_omega` and the
 gradient center in `wann_domega` with different multiplication grouping.  A
 single shared center is algebraically equivalent but not Float64 trajectory
 equivalent after the Fletcher--Reeves parabola amplifies the final bits.
 """
-function _wannier90_reference_gradient_center_delta(
+function _recursive_localization_gradient_center_delta(
     centered_phases::Array{Float64, 3},
     representation::BandRepresentation,
     mmn::WannierMMN,
-    weights::Vector{Float64},
+    weights::Vector{Float64};
+    geometry::Union{Nothing, LocalizationGeometryWorkspace} = nothing,
 )
     num_wannier, num_neighbors, nk = size(centered_phases)
     num_neighbors == mmn.num_neighbors ||
@@ -646,14 +661,22 @@ function _wannier90_reference_gradient_center_delta(
     nk == mmn.num_kpts || throw(DimensionMismatch("gradient-center k mesh disagrees"))
     length(weights) == num_neighbors || throw(DimensionMismatch("gradient-center weights disagree"))
     center_delta = zeros(Float64, num_wannier, 3)
+    # Direct callers own a per-evaluation table. The solver may instead supply
+    # its private geometry workspace, refreshed at each evaluation boundary.
+    # Both paths preserve reference arithmetic and never borrow mutable inputs.
+    num_wannier == 0 && return center_delta
+    edge_vectors = geometry === nothing ? Array{Float64}(undef, 3, num_neighbors, nk) : nothing
+    for kpoint in 1:nk, neighbor in 1:num_neighbors
+        edge = _localization_edge_b_cartesian(representation, mmn, neighbor, kpoint, true, geometry)
+        geometry === nothing && (edge_vectors[:, neighbor, kpoint] = edge)
+    end
     for wannier in 1:num_wannier, direction in 1:3
         for kpoint in 1:nk, neighbor in 1:num_neighbors
-            b_cartesian =
-                _wannier90_reference_edge_b_cartesian(representation, mmn, neighbor, kpoint)
             weighted_phase = weights[neighbor] * centered_phases[wannier, neighbor, kpoint]
-            center_delta[wannier, direction] = _wannier90_reference_gradient_center_accumulate(
+            center_delta[wannier, direction] = _recursive_localization_gradient_center_accumulate(
                 center_delta[wannier, direction],
-                b_cartesian[direction],
+                geometry === nothing ? edge_vectors[direction, neighbor, kpoint] :
+                geometry.reference_edges[neighbor, kpoint][direction],
                 weighted_phase,
             )
         end
@@ -664,7 +687,7 @@ end
 
 # Evaluate one solver iterate with either the SAWF or ordinary full-BZ contract.
 function _solver_centers_spreads_and_directions(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     frames::Vector{Matrix{ComplexF64}},
     previous_centers::Matrix{Float64},
     representation::BandRepresentation,
@@ -680,7 +703,13 @@ function _solver_centers_spreads_and_directions(
         representation,
         mmn,
         weights,
-        localized_overlaps,
+        localized_overlaps;
+        # With no localization steps the projected-AMN frame is unchanged.
+        # A primitive-cell center relabel alone would change the position
+        # construction without its required k-dependent frame phase.
+        center_image_policy = config.input.wannierization_mode == :ordinary &&
+                              config.solver.stage_controls.num_iter == 0 ? :principal :
+                              :nearest_reference,
     ) :
            _centers_spreads_and_directions(
         frames,
@@ -953,8 +982,9 @@ function _target_symmetry_tangent_plan(
     matrices::Vector{Matrix{ComplexF64}},
     antiunitary::Vector{Bool};
     tolerance::Float64 = 1.0e-10,
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
+    validate_ordinary_construction_policy(construction_policy)
     length(matrices) == length(antiunitary) ||
         throw(DimensionMismatch("target tangent operation inventory disagrees"))
     isempty(matrices) && throw(ArgumentError("target tangent operation inventory is empty"))
@@ -982,11 +1012,6 @@ function _target_symmetry_tangent_plan(
     isempty(basis) && throw(ArgumentError("target symmetry tangent nullspace is empty"))
     maximum_residual = maximum(abs, constraints * basis)
     isfinite(maximum_residual) || throw(ArgumentError("target symmetry tangent is nonfinite"))
-    construction_policy == :standard ||
-        maximum_residual <= 64tolerance ||
-        throw(
-            ArgumentError("target symmetry tangent residual $(maximum_residual) exceeds tolerance"),
-        )
     return TargetSymmetryTangentPlan(dimension, basis, rank, maximum_residual)
 end
 
@@ -1006,8 +1031,9 @@ function _build_target_symmetry_tangent_plans(
     representation::BandRepresentation,
     plan::WannierSymmetryPlan;
     tolerance::Float64 = 1.0e-10,
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
+    validate_ordinary_construction_policy(construction_policy)
     operation_mapping, inventory_diagnostics =
         validate_target_operation_inventory(representation, plan, tolerance)
     isempty(inventory_diagnostics) ||
@@ -1393,12 +1419,12 @@ struct MVLocalizationEvaluation
     branch_jump_representatives::Vector{Vector{Matrix{ComplexF64}}}
     branch_jump_full::Vector{Vector{Matrix{ComplexF64}}}
     clarke_coefficients::Vector{Float64}
-    active_orbit_digests::Vector{String}
     minimum_phase_margin::Float64
     minimum_phase_kpoint::Int
     minimum_phase_neighbor::Int
     minimum_phase_wannier::Int
     minimum_phase_value::Float64
+    active_orbit_definitions::Vector{String}
 end
 
 """Cancellation-safe objective change between evaluations in one center chart."""
@@ -1476,16 +1502,8 @@ function _full_tangent_inner(left::Vector{Matrix{ComplexF64}}, right::Vector{Mat
     return sum(real(dot(a, b)) for (a, b) in zip(left, right))
 end
 
-"""
-Stable digest for the discrete link membership of one Type-IV branch orbit.
-
-The projected jump field changes continuously with the accepted frame and must
-not define active-set identity: hashing it would reset RCG/L-BFGS history after
-every accepted step even when exactly the same cut orbit remains active.  The
-identity is therefore the sorted set of `(kpoint, neighbor, wannier, side)`
-labels, where `side` records the signed `2pi` alternative branch.
-"""
-function _mv_branch_orbit_digest(links::Vector{MVPhaseBranchLink})
+"""Keep every sorted discrete link label; continuously changing jumps are absent."""
+function _mv_branch_orbit_definition(links::Vector{MVPhaseBranchLink})
     buffer = IOBuffer()
     ordered = sort(
         links;
@@ -1500,7 +1518,7 @@ function _mv_branch_orbit_digest(links::Vector{MVPhaseBranchLink})
         side = signbit(link.alternative_phase_jump) ? -1 : 1
         write(buffer, "$(link.kpoint),$(link.neighbor),$(link.wannier),$(side)\n")
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return String(take!(buffer))
 end
 
 """Minimum-norm point in `base + sum(alpha_j*jump_j)`, `0 <= alpha_j <= 1`."""
@@ -1583,7 +1601,8 @@ function _mv_centered_gradient_data(
     ;
     parallel::Symbol = :serial,
     localized_overlaps::Union{Nothing, Array{ComplexF64, 4}} = nothing,
-    wannier90_arithmetic::Bool = false,
+    fixed_order_arithmetic::Bool = false,
+    geometry::Union{Nothing, LocalizationGeometryWorkspace} = nothing,
 )
     nk = length(frames)
     num_wannier = size(frames[1], 2)
@@ -1605,11 +1624,14 @@ function _mv_centered_gradient_data(
                 mpi_overlaps === nothing ?
                 frames[kpoint]' * @view(mmn.data[:, :, neighbor, kpoint]) * frames[target] :
                 @view(mpi_overlaps[:, :, neighbor, kpoint])
-            displacement = _mesh_neighbor_displacement(representation, mmn, neighbor, kpoint)
-            b_cartesian =
-                wannier90_arithmetic ?
-                _wannier90_reference_edge_b_cartesian(representation, mmn, neighbor, kpoint) :
-                transpose(representation.reciprocal_lattice) * displacement
+            b_cartesian = _localization_edge_b_cartesian(
+                representation,
+                mmn,
+                neighbor,
+                kpoint,
+                fixed_order_arithmetic,
+                geometry,
+            )
             cr = zeros(ComplexF64, num_wannier, num_wannier)
             crt = zeros(ComplexF64, num_wannier, num_wannier)
             q = zeros(Float64, num_wannier)
@@ -1624,7 +1646,7 @@ function _mv_centered_gradient_data(
                     wannier,
                     minimum_diagonal_overlap = abs(diagonal),
                 )
-                if wannier90_arithmetic
+                if fixed_order_arithmetic
                     # gfortran 16 vectorizes the full-column assignments in
                     # `wann_domega` before entering the scalar (n,m) gradient
                     # loop.  On arm64 the paired SIMD lanes use a different
@@ -1635,13 +1657,15 @@ function _mv_centered_gradient_data(
                     paired_rows = num_wannier - num_wannier % 2
                     for row in 1:paired_rows
                         value = ComplexF64(overlap[row, wannier])
-                        cr[row, wannier] =
-                            _wannier90_reference_gfortran_column_conjugate_product(value, diagonal)
+                        cr[row, wannier] = _recursive_localization_ordered_column_conjugate_product(
+                            value,
+                            diagonal,
+                        )
                         crt[row, wannier] =
-                            _wannier90_reference_gfortran_column_division(value, diagonal)
+                            _recursive_localization_ordered_column_division(value, diagonal)
                     end
                     if isodd(num_wannier)
-                        # The registered Cr and Wannier90 parity lanes are
+                        # The registered Cr and Wannier parity lanes are
                         # even-dimensional.  Retain the language scalar
                         # semantics for the unpaired general-size tail.
                         value = ComplexF64(overlap[end, wannier])
@@ -1655,7 +1679,7 @@ function _mv_centered_gradient_data(
                 phased_diagonal =
                     diagonal * cis(dot(@view(phase_reference_centers[wannier, :]), b_cartesian))
                 centered_phase =
-                    wannier90_arithmetic ? _wannier90_reference_phase(phased_diagonal) :
+                    fixed_order_arithmetic ? _recursive_localization_phase(phased_diagonal) :
                     angle(phased_diagonal)
                 margin = pi - abs(centered_phase)
                 if margin < minimum_margin
@@ -1693,8 +1717,8 @@ function _mv_centered_gradient_data(
                     push!(raw_jumps, jump_field)
                 end
             end
-            if wannier90_arithmetic
-                # Preserve the scalar assignment sequence in Wannier90 4.0.1
+            if fixed_order_arithmetic
+                # Preserve the scalar assignment sequence in Wannier 4.0.1
                 # `wann_domega`.  Algebraically fusing these terms into BLAS
                 # matrix operations changes the first gradient in its last
                 # bits, which nonlinearly changes later FR steps.
@@ -1723,7 +1747,7 @@ function _mv_centered_gradient_data(
             crt_cache[neighbor, kpoint] = crt
             b_cartesian_cache[neighbor, kpoint] = Vector{Float64}(b_cartesian)
         end
-        if wannier90_arithmetic
+        if fixed_order_arithmetic
             gradient ./= nk
             gradient .*= 4.0
         else
@@ -1788,7 +1812,7 @@ end
 
 """Evaluate one MV objective/gradient chart and its Type-IV Clarke active set."""
 function _evaluate_mv_localization(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     frames::Vector{Matrix{ComplexF64}},
     phase_reference_centers::Matrix{Float64},
     representation::BandRepresentation,
@@ -1797,17 +1821,26 @@ function _evaluate_mv_localization(
     plan::WannierSymmetryPlan,
     tangent_plans::Vector{Union{Nothing, TargetSymmetryTangentPlan}},
     localized_overlaps::Union{Nothing, Array{ComplexF64, 4}} = nothing,
-    wannier90_reference_omega_i::Union{Nothing, Float64} = nothing,
+    recursive_localization_omega_i::Union{Nothing, Float64} = nothing;
+    geometry::Union{Nothing, LocalizationGeometryWorkspace} = nothing,
+    defer_reference_gradient::Bool = false,
 )
     reference_arithmetic =
         effective_wannierization_algorithms(config, representation).localization ==
         :smv_fletcher_reeves_two_stage
-    if reference_arithmetic && localized_overlaps === nothing
+    geometry === nothing || _prepare_localization_geometry!(geometry, representation, mmn)
+    # One evaluation owns these overlaps. Objective and gradient keep their
+    # distinct center/phase arithmetic but consume the same F†MF values.
+    # Nothing escapes into another frame, MMN, direction, alpha or phase chart.
+    # MPI already materializes this full edge buffer for each consumer. Share it
+    # within this evaluation only. Keep serial SAWF streaming: caching all edges
+    # there would add an unbudgeted dense allocation on large meshes.
+    if (reference_arithmetic || config.solver.parallel == :mpi) && localized_overlaps === nothing
         localized_overlaps = _localized_overlap_state(frames, mmn, config.solver.parallel)
     end
-    if reference_arithmetic && wannier90_reference_omega_i === nothing
-        wannier90_reference_omega_i =
-            _wannier90_reference_invariant_spread(something(localized_overlaps), weights)
+    if reference_arithmetic && recursive_localization_omega_i === nothing
+        recursive_localization_omega_i =
+            _recursive_localization_invariant_spread(something(localized_overlaps), weights)
     end
     objective_components = _mv_centered_full_mesh_centers_spreads_and_directions(
         frames,
@@ -1819,18 +1852,111 @@ function _evaluate_mv_localization(
         return_link_components = true,
         parallel = config.solver.parallel,
         compensated = !reference_arithmetic,
+        geometry = geometry,
         localized_overlaps = localized_overlaps,
     )
+    if defer_reference_gradient && !(
+        lowercase(strip(get(ENV, "WANNIERNLQG_LOCALIZATION_DEBUG_GRADIENT", "0"))) in
+        ("1", "true", "yes")
+    )
+        reference_arithmetic || throw(ArgumentError("deferred gradient is ordinary reference-only"))
+        # The first trial owns its overlaps/objective arrays. Its caller does not
+        # mutate them before selection; a second trial allocates separate arrays.
+        # Retain the original gradient's only failure gate, in k/edge/band order.
+        overlaps = something(localized_overlaps)
+        for kpoint in eachindex(frames),
+            neighbor in 1:mmn.num_neighbors,
+            wannier in axes(first(frames), 2)
+
+            diagonal = overlaps[wannier, wannier, neighbor, kpoint]
+            abs(diagonal) > config.input.representation_tolerance || return (
+                success = false,
+                code = :SPREAD_GRADIENT_DIAGONAL_OVERLAP_SINGULAR,
+                kpoint,
+                neighbor,
+                wannier,
+                minimum_diagonal_overlap = abs(diagonal),
+            )
+        end
+        objective = _recursive_localization_total_spread(
+            overlaps,
+            objective_components.centered_phases,
+            objective_components.centers,
+            representation,
+            mmn,
+            weights,
+            something(recursive_localization_omega_i);
+            geometry = geometry,
+        )
+        finish_gradient =
+            () -> _complete_mv_localization(
+                config,
+                frames,
+                phase_reference_centers,
+                representation,
+                mmn,
+                weights,
+                plan,
+                tangent_plans,
+                localized_overlaps,
+                recursive_localization_omega_i,
+                geometry,
+                reference_arithmetic,
+                objective_components,
+            )
+        evaluation = (
+            centers = objective_components.centers,
+            spreads = objective_components.spreads,
+            directional = objective_components.directional,
+            objective,
+            finish_gradient,
+        )
+        return (success = true, code = :OK, evaluation)
+    end
+    return _complete_mv_localization(
+        config,
+        frames,
+        phase_reference_centers,
+        representation,
+        mmn,
+        weights,
+        plan,
+        tangent_plans,
+        localized_overlaps,
+        recursive_localization_omega_i,
+        geometry,
+        reference_arithmetic,
+        objective_components,
+    )
+end
+
+# Complete the same call-owned objective data; never a retained solver cache.
+function _complete_mv_localization(
+    config,
+    frames,
+    phase_reference_centers,
+    representation,
+    mmn,
+    weights,
+    plan,
+    tangent_plans,
+    localized_overlaps,
+    recursive_localization_omega_i,
+    geometry,
+    reference_arithmetic,
+    objective_components,
+)
     centers = objective_components.centers
     spreads = objective_components.spreads
     directional = objective_components.directional
     gradient_center_delta =
         reference_arithmetic ?
-        _wannier90_reference_gradient_center_delta(
+        _recursive_localization_gradient_center_delta(
             objective_components.centered_phases,
             representation,
             mmn,
-            weights,
+            weights;
+            geometry = geometry,
         ) : centers - phase_reference_centers
     gradient_data = _mv_centered_gradient_data(
         frames,
@@ -1843,21 +1969,22 @@ function _evaluate_mv_localization(
         config.solver.acceleration.u_phase_branch_tolerance,
         parallel = config.solver.parallel,
         localized_overlaps = localized_overlaps,
-        wannier90_arithmetic = reference_arithmetic,
+        fixed_order_arithmetic = reference_arithmetic,
+        geometry = geometry,
     )
     gradient_data.success || return gradient_data
     if reference_arithmetic &&
-       lowercase(strip(get(ENV, "WANNIERNLQG_W90_REFERENCE_DEBUG_GRADIENT", "0"))) in
+       lowercase(strip(get(ENV, "WANNIERNLQG_LOCALIZATION_DEBUG_GRADIENT", "0"))) in
        ("1", "true", "yes")
         println(
             stderr,
-            "W90REF_EVALUATED_GRADIENT_SHA256=" * _complex_field_sha256(gradient_data.gradients),
+            "LOCALIZATION_EVALUATED_GRADIENT_KCOUNT=" * string(length(gradient_data.gradients)),
         )
     end
     apply_symmetry = symmetry_constraints_applied(config, representation)
     principal = if reference_arithmetic
         # `wann_domega` constructs the anti-Hermitian field entry by entry and
-        # Wannier90 consumes that array directly.  Applying (G-G')/2 again is
+        # Wannier consumes that array directly.  Applying (G-G')/2 again is
         # algebraically redundant but changes its last bits and therefore the
         # FR/parabolic trajectory.
         norm_squared = _full_tangent_inner(gradient_data.gradients, gradient_data.gradients)
@@ -1883,21 +2010,22 @@ function _evaluate_mv_localization(
     if reference_arithmetic
         apply_symmetry && throw(
             ArgumentError(
-                "WANNIER90_REFERENCE_MODE_MISMATCH: exact principal-sheet gradient is no-symmetry only",
+                "RECURSIVE_LOCALIZATION_MODE_MISMATCH: exact principal-sheet gradient is no-symmetry only",
             ),
         )
         norm_squared = principal.norm_squared
         dimension = size(first(frames), 2)
         reference_overlaps = something(localized_overlaps)
-        reference_omega_i = something(wannier90_reference_omega_i)
-        reference_objective = _wannier90_reference_total_spread(
+        reference_omega_i = something(recursive_localization_omega_i)
+        reference_objective = _recursive_localization_total_spread(
             reference_overlaps,
             objective_components.centered_phases,
             centers,
             representation,
             mmn,
             weights,
-            reference_omega_i,
+            reference_omega_i;
+            geometry = geometry,
         )
         evaluation = MVLocalizationEvaluation(
             centers,
@@ -1917,12 +2045,12 @@ function _evaluate_mv_localization(
             Vector{Vector{Matrix{ComplexF64}}}(),
             Vector{Vector{Matrix{ComplexF64}}}(),
             Float64[],
-            String[],
             gradient_data.minimum_margin,
             gradient_data.minimum_context.kpoint,
             gradient_data.minimum_context.neighbor,
             gradient_data.minimum_context.wannier,
             gradient_data.minimum_context.phase,
+            String[],
         )
         return (success = true, code = :OK, evaluation)
     end
@@ -2017,12 +2145,12 @@ function _evaluate_mv_localization(
         branch_representatives,
         branch_full,
         clarke.coefficients,
-        sort([_mv_branch_orbit_digest(members) for members in branch_members]),
         gradient_data.minimum_margin,
         gradient_data.minimum_context.kpoint,
         gradient_data.minimum_context.neighbor,
         gradient_data.minimum_context.wannier,
         gradient_data.minimum_context.phase,
+        sort([_mv_branch_orbit_definition(members) for members in branch_members]),
     )
     return (success = true, code = :OK, evaluation)
 end
@@ -2117,7 +2245,6 @@ function _localization_backtracking_limit(
     acceleration::WannierizationAccelerationConfig,
     mode::Symbol,
 )
-    mode == :polar && return acceleration.u_backtracking_max_steps
     acceleration.u_acceptance in (:armijo, :strong_wolfe) &&
         return acceleration.u_line_search_max_trials - 1
     return acceleration.u_backtracking_max_steps
@@ -2175,7 +2302,6 @@ function _localization_objective_accepts(
 )
     algorithm in (
         :symmetry_projected_gradient,
-        :polar_then_gradient,
         :riemannian_cg,
         :riemannian_lbfgs,
         :smv_fletcher_reeves_two_stage,

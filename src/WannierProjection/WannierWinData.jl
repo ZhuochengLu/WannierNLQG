@@ -1,5 +1,5 @@
 """
-Structure and projection data read from one Wannier90 `.win` file.
+Structure and projection data read from one Wannier `.win` file.
 
 The `.win` file is the sole structural authority for symmetrization. K-point
 rows are intentionally not stored: only `mp_grid` is retained for mesh
@@ -24,12 +24,12 @@ function parse_wannier_float(value::AbstractString, field::AbstractString)
     return parsed
 end
 
-# Return the unit conversion for a Wannier90 Cartesian block.
+# Return the unit conversion for a Wannier Cartesian block.
 function _wannier_length_factor(unit::AbstractString)
     normalized = lowercase(strip(unit))
     normalized in ("", "ang", "angstrom", "angstroms", "a") && return 1.0
     normalized in ("bohr", "bohrs", "au", "a.u.") && return BOHR_TO_ANGSTROM
-    throw(ArgumentError("unsupported Wannier90 length unit $(repr(unit))"))
+    throw(ArgumentError("unsupported Wannier length unit $(repr(unit))"))
 end
 
 # Collect named begin/end blocks and scalar parameters from a WIN file.
@@ -65,7 +65,7 @@ function _split_wannier_input(lines::Vector{String})
             key, value = split(line, '='; limit = 2)
             normalized_key = lowercase(strip(key))
             haskey(parameters, normalized_key) &&
-                throw(ArgumentError("duplicate Wannier90 parameter $(normalized_key)"))
+                throw(ArgumentError("duplicate Wannier parameter $(normalized_key)"))
             parameters[normalized_key] = strip(value)
         end
         index += 1
@@ -131,7 +131,7 @@ function _parse_wannier_atoms(blocks::Dict{String, Vector{String}}, lattice::Mat
 end
 
 """
-Read structure, projection, spinor, and `mp_grid` data from a Wannier90 input.
+Read structure, projection, spinor, and `mp_grid` data from a Wannier input.
 
 The parser deliberately ignores `begin kpoints` contents and has no SCF-input
 argument. It requires the structure and projection fields needed to construct a

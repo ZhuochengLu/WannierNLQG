@@ -1,0 +1,25 @@
+[model]
+source = "wannier"
+model_file = "../fixtures/synthetic_runtime/synthetic_tb.dat"
+
+[response]
+fermi_energy_ev = 0.0
+
+[response.sampling]
+kind = "k_path"
+spatial_dimension = 3
+kpoints_per_segment = 3
+
+[response.sampling.nodes]
+label = ["G", "X", "G", "outside"]
+fractional_coordinates = [[0.0,0.0,0.0], [0.5,0.0,0.0], [0.0,0.0,0.0], [1.25,0.0,0.0]]
+
+[response.execution]
+fourier_backend = "direct"
+
+[response.tasks.bands]
+kind = "Band"
+
+[output]
+output_root = "results/column-band"
+progress_enabled = false

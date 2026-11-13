@@ -129,9 +129,9 @@ function _tb_symmetry_unavailable_metadata(input_summary)
         ),
         target_scope_production_eligible = false,
         target_leakage_semantics = get(input_summary, "target_leakage_semantics", "NOT_APPLICABLE"),
-        target_leakage_formula_sha256 = get(
+        target_leakage_formula_definition = get(
             input_summary,
-            "target_leakage_formula_sha256",
+            "target_leakage_formula_definition",
             "NOT_RECORDED",
         ),
         target_leakage_threshold = threshold,
@@ -223,10 +223,7 @@ function _tb_symmetry_payload(qualification::TBSymmetryQualification)
         "overall" => qualification.overall,
         "reason" => qualification.reason,
         "metrics" => metrics,
-        "payload_sha256" => qualification.payload_sha256,
-        "digest_convention" =>
-            qualification.schema_version == "1.7" ? "typed-scalar-records-v2" :
-            "typed-scalar-records-v1",
+        "content_authentication" => "NOT_PERFORMED",
         "authoritative_hamiltonian" => qualification.authoritative_hamiltonian,
         "authoritative_hamiltonian_sha256" => qualification.authoritative_hamiltonian_sha256,
         "energy_shift_qualification" => qualification.energy_shift_qualification,
@@ -249,7 +246,7 @@ function _tb_symmetry_payload(qualification::TBSymmetryQualification)
         "auxiliary_parent_audit_status" => qualification.auxiliary_parent_audit_status,
         "target_scope_production_eligible" => qualification.target_scope_production_eligible,
         "target_leakage_semantics" => qualification.target_leakage_semantics,
-        "target_leakage_formula_sha256" => qualification.target_leakage_formula_sha256,
+        "target_leakage_formula_definition" => qualification.target_leakage_formula_definition,
         "target_leakage_threshold" => qualification.target_leakage_threshold,
         "scoped_production_eligible" => qualification.scoped_production_eligible,
         "global_production_eligible" => qualification.global_production_eligible,
@@ -272,10 +269,7 @@ function write_tb_symmetry_qualification_group(parent, qualification::TBSymmetry
     attributes["schema_version"] = qualification.schema_version
     attributes["overall"] = qualification.overall
     attributes["reason"] = qualification.reason
-    attributes["payload_sha256"] = qualification.payload_sha256
-    attributes["digest_convention"] =
-        qualification.schema_version == "1.7" ? "typed-scalar-records-v2" :
-        "typed-scalar-records-v1"
+    attributes["content_authentication"] = "NOT_PERFORMED"
     attributes["authoritative_hamiltonian"] = qualification.authoritative_hamiltonian
     attributes["authoritative_hamiltonian_sha256"] = qualification.authoritative_hamiltonian_sha256
     attributes["energy_shift_qualification"] = qualification.energy_shift_qualification
@@ -300,7 +294,8 @@ function write_tb_symmetry_qualification_group(parent, qualification::TBSymmetry
     attributes["auxiliary_parent_audit_status"] = qualification.auxiliary_parent_audit_status
     attributes["target_scope_production_eligible"] = qualification.target_scope_production_eligible
     attributes["target_leakage_semantics"] = qualification.target_leakage_semantics
-    attributes["target_leakage_formula_sha256"] = qualification.target_leakage_formula_sha256
+    attributes["target_leakage_formula_definition"] =
+        qualification.target_leakage_formula_definition
     attributes["target_leakage_threshold"] = something(qualification.target_leakage_threshold, NaN)
     attributes["target_leakage_threshold_present"] =
         qualification.target_leakage_threshold !== nothing
@@ -322,19 +317,30 @@ function write_tb_symmetry_qualification_group(parent, qualification::TBSymmetry
     return group
 end
 
-# Read and digest-validate one HDF5 payload, preserving legacy-file readability.
-function read_tb_symmetry_qualification_group(parent; missing_reason = "LEGACY_SCHEMA_FIELD_ABSENT")
+# Read current typed scientific values; this wire does not authenticate content hashes.
+function read_tb_symmetry_qualification_group(
+    parent;
+    missing_reason = "LEGACY_SCHEMA_FIELD_ABSENT",
+    explicit_legacy_migration::Bool = false,
+)
     haskey(parent, "tb_symmetry_qualification") || return tb_symmetry_not_run(missing_reason)
     group = parent["tb_symmetry_qualification"]
     attributes = HDF5.attributes(group)
-    required = ("schema", "schema_version", "overall", "reason", "payload_sha256")
-    all(name -> haskey(attributes, name), required) || return tb_symmetry_not_run(missing_reason)
+    required = ("schema", "schema_version", "overall", "reason")
+    all(name -> haskey(attributes, name), required) || throw(
+        ArgumentError(
+            "TB_QUALIFICATION_EXPLICIT_MIGRATION_REQUIRED: incomplete or legacy qualification must not be relabeled not checked",
+        ),
+    )
     String(read(attributes["schema"])) == TB_SYMMETRY_QUALIFICATION_SCHEMA ||
         throw(ArgumentError("unsupported final TB symmetry qualification schema"))
-    version = String(read(attributes["schema_version"]))
-    version in
-    ("1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION) ||
-        throw(ArgumentError("unsupported final TB symmetry qualification schema version"))
+    stored_version = String(read(attributes["schema_version"]))
+    version =
+        explicit_legacy_migration && stored_version == "1.7" ?
+        TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION : stored_version
+    version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION || throw(
+        ArgumentError("TB_QUALIFICATION_EXPLICIT_MIGRATION_REQUIRED: legacy qualification schema"),
+    )
     haskey(group, "metrics") ||
         throw(ArgumentError("final TB symmetry qualification omits metrics"))
     metrics = TBSymmetryMetric[]
@@ -373,80 +379,97 @@ function read_tb_symmetry_qualification_group(parent; missing_reason = "LEGACY_S
     end
     overall = String(read(attributes["overall"]))
     reason = String(read(attributes["reason"]))
-    stored_digest = String(read(attributes["payload_sha256"]))
-    if version == "1.0"
-        legacy_digest = tb_symmetry_payload_sha256(overall, reason, metrics; schema_version = "1.0")
-        stored_digest == legacy_digest ||
-            throw(ArgumentError("final TB symmetry payload SHA-256 mismatch"))
-        return TBSymmetryQualification(overall, reason, metrics; schema_version = version)
+    legacy_record =
+        explicit_legacy_migration && stored_version != TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION
+    legacy_record && (reason *= "; LEGACY_RECORDED_RESULT_NOT_REVALIDATED")
+    if stored_version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION
+        String(required_attribute(group, "content_authentication")) == "NOT_PERFORMED" ||
+            throw(ArgumentError("TB_QUALIFICATION_AUTHENTICATION_POLICY_MISMATCH"))
     end
     authority = String(required_attribute(group, "authoritative_hamiltonian"))
     validate_persisted_authority_key(authority)
     authority_sha = String(required_attribute(group, "authoritative_hamiltonian_sha256"))
-    scoped = Bool(required_attribute(group, "scoped_production_eligible"))
+    scoped = Bool(required_attribute(group, "scoped_production_eligible")) && !legacy_record
     Bool(required_attribute(group, "global_production_eligible")) == false ||
         throw(ArgumentError("TB qualification cannot assert global production eligibility"))
     energy_shift_qualification =
-        version in ("1.2", "1.3", "1.4", "1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         String(required_attribute(group, "energy_shift_qualification")) :
         "legacy_energy_shift_hard_gate"
     maximum_energy_shift_audit_reference_ev =
-        version in ("1.2", "1.3", "1.4", "1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         String(required_attribute(group, "maximum_energy_shift_audit_reference_ev")) :
         "NOT_APPLICABLE"
     rms_energy_shift_audit_reference_ev =
-        version in ("1.2", "1.3", "1.4", "1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         String(required_attribute(group, "rms_energy_shift_audit_reference_ev")) : "NOT_APPLICABLE"
     target_energy_shift_audit_status =
-        version in ("1.2", "1.3", "1.4", "1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         String(required_attribute(group, "target_energy_shift_audit_status")) : "NOT_APPLICABLE"
     symmetrized_parent_energy_shift_audit_status =
-        version in ("1.2", "1.3", "1.4", "1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         String(required_attribute(group, "symmetrized_parent_energy_shift_audit_status")) :
         "NOT_APPLICABLE"
     residual_gate_phase =
-        version in ("1.3", "1.4", "1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         String(required_attribute(group, "residual_gate_phase")) : "legacy_pre_symmetrization"
     raw_preflight_diagnostic_status =
-        version in ("1.3", "1.4", "1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         String(required_attribute(group, "raw_preflight_diagnostic_status")) : "NOT_APPLICABLE"
     native_difference_qualification =
-        version in ("1.4", "1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         String(required_attribute(group, "native_difference_qualification")) : "legacy_hard_gate"
     native_difference_audit_status =
-        version in ("1.4", "1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         String(required_attribute(group, "native_difference_audit_status")) : "NOT_APPLICABLE"
     qualification_scope =
-        version in ("1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         String(required_attribute(group, "qualification_scope")) : "full_parent"
     target_anchor =
-        version in ("1.5", "1.6", "1.7") ? String(required_attribute(group, "target_anchor")) :
-        "NOT_APPLICABLE"
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
+        String(required_attribute(group, "target_anchor")) : "NOT_APPLICABLE"
     target_complement_completion =
-        version in ("1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         String(required_attribute(group, "target_complement_completion")) : "NOT_APPLICABLE"
     target_complement_max_element_ev =
-        version in ("1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         String(required_attribute(group, "target_complement_max_element_ev")) : "NOT_APPLICABLE"
     auxiliary_parent_qualification =
-        version in ("1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         String(required_attribute(group, "auxiliary_parent_qualification")) : "legacy_hard_gate"
     symmetrized_target_subspace_status =
-        version in ("1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         String(required_attribute(group, "symmetrized_target_subspace_status")) : "NOT_APPLICABLE"
     auxiliary_parent_audit_status =
-        version in ("1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         String(required_attribute(group, "auxiliary_parent_audit_status")) : "NOT_APPLICABLE"
     target_scope_production_eligible =
-        version in ("1.5", "1.6", "1.7") ?
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
         Bool(required_attribute(group, "target_scope_production_eligible")) : false
     target_leakage_semantics =
-        version == "1.7" ? String(required_attribute(group, "target_leakage_semantics")) :
+        version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION ?
+        String(required_attribute(group, "target_leakage_semantics")) :
         "LEGACY_AMPLITUDE_LEAKAGE_CONTRACT"
-    target_leakage_formula_sha256 =
-        version == "1.7" ? String(required_attribute(group, "target_leakage_formula_sha256")) :
-        "NOT_RECORDED"
-    target_leakage_threshold = if version == "1.7"
+    target_leakage_formula_definition =
+        if stored_version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION
+            String(required_attribute(group, "target_leakage_formula_definition"))
+        elseif explicit_legacy_migration &&
+               stored_version == "1.7" &&
+               qualification_scope == "target_subspace"
+            # This version's formula is a known protocol literal, not arbitrary
+            # missing mathematical data. Accept only that exact recorded formula;
+            # never infer masks/inputs or promote old qualification eligibility.
+            String(required_attribute(group, "target_leakage_formula_sha256")) ==
+            TB_TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256 || throw(
+                ArgumentError(
+                    "UNSUPPORTED_LEGACY_TARGET_LEAKAGE_SEMANTICS: archived TB formula differs",
+                ),
+            )
+            TB_TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION
+        else
+            "NOT_RECORDED"
+        end
+    target_leakage_threshold = if version == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION
         Bool(required_attribute(group, "target_leakage_threshold_present")) ?
         Float64(required_attribute(group, "target_leakage_threshold")) : nothing
     else
@@ -457,7 +480,6 @@ function read_tb_symmetry_qualification_group(parent; missing_reason = "LEGACY_S
         reason,
         metrics;
         schema_version = version,
-        payload_sha256 = stored_digest,
         authoritative_hamiltonian = authority,
         authoritative_hamiltonian_sha256 = authority_sha,
         energy_shift_qualification,
@@ -476,9 +498,9 @@ function read_tb_symmetry_qualification_group(parent; missing_reason = "LEGACY_S
         auxiliary_parent_qualification,
         symmetrized_target_subspace_status,
         auxiliary_parent_audit_status,
-        target_scope_production_eligible,
+        target_scope_production_eligible = target_scope_production_eligible && !legacy_record,
         target_leakage_semantics,
-        target_leakage_formula_sha256,
+        target_leakage_formula_definition,
         target_leakage_threshold,
         scoped_production_eligible = scoped,
         global_production_eligible = false,
@@ -504,7 +526,7 @@ function _write_tb_symmetry_json(filename, qualification::TBSymmetryQualificatio
     return path
 end
 
-# Divide serialized Wannier90 TB values by real-space degeneracy exactly once.
+# Divide serialized Wannier TB values by real-space degeneracy exactly once.
 function _normalized_tb_operator(operator, degeneracies)
     values = copy(operator.data)
     length(degeneracies) == size(values, ndims(values)) ||
@@ -666,6 +688,10 @@ end
 # Interpolate final-TB eigenvalues and compare every mapped k point.
 function _qualification_kstar_residual(hamiltonian, degeneracies, representation)
     nk = size(representation.kpoints_fractional, 1)
+    nk > 0 && size(hamiltonian.data, 1) > 0 ||
+        throw(ArgumentError("k-star comparison requires nonempty physical bands and k points"))
+    size(representation.kpoint_map, 1) == length(representation.operations) > 0 ||
+        throw(ArgumentError("k-star comparison requires a complete nonempty operation action"))
     size(representation.kpoint_map, 2) == nk ||
         throw(DimensionMismatch("representation k-point map is incomplete"))
     spectra = zeros(Float64, size(hamiltonian.data, 1), nk)
@@ -696,15 +722,50 @@ end
 
 # Derive the fixed overall status without allowing partial passes to mask failures.
 function _final_tb_symmetry_overall(metrics)
-    failed = sort!([metric.name for metric in metrics if metric.status == "FAIL"])
+    names = [metric.name for metric in metrics]
+    length(unique(names)) == length(names) ||
+        throw(ArgumentError("final TB symmetry metric names must be unique"))
+    unknown = setdiff(names, TB_SYMMETRY_REQUIRED_METRICS)
+    isempty(unknown) ||
+        throw(ArgumentError("unknown final TB symmetry metrics: " * join(sort!(unknown), ",")))
+    # A numerical failure (including missing R/-R support) cannot be hidden by
+    # absent measurements or a contradictory PASS label.
+    failed = sort!([
+        metric.name for metric in metrics if metric.status == "FAIL" || (
+            metric.value !== nothing &&
+            metric.threshold !== nothing &&
+            metric.value > metric.threshold
+        )
+    ])
     isempty(failed) || return "FAIL", "FAILED_METRICS:" * join(failed, ",")
-    incomplete = sort!([metric.name for metric in metrics if metric.status != "PASS"])
-    isempty(incomplete) || return "INCOMPLETE", "MISSING_REQUIRED_METRICS:" * join(incomplete, ",")
+    missing = sort!(collect(setdiff(TB_SYMMETRY_REQUIRED_METRICS, names)))
+    incomplete = [
+        metric.name for metric in metrics if metric.status != "PASS" ||
+        metric.applicability != "APPLICABLE" ||
+        metric.value === nothing ||
+        metric.threshold === nothing ||
+        metric.value < 0.0
+    ]
+    append!(incomplete, missing)
+    isempty(incomplete) ||
+        return "INCOMPLETE", "MISSING_REQUIRED_METRICS:" * join(sort!(unique(incomplete)), ",")
     return "PASS", "ALL_REQUIRED_FINAL_TB_SYMMETRY_METRICS_PASS"
 end
 
-"""Resolve separately bound materialized-data, authority-contract, and gauge digests."""
+"""Resolve materialized-data, authority-policy and gauge definitions without hashing."""
 function _tb_authority_identity(manifest)
+    if manifest.schema_version==IO.OPERATOR_BUNDLE_SCHEMA_VERSION
+        definitions=get(
+            manifest.operator_qualification,
+            "mathematical_definitions",
+            Dict{String, Any}(),
+        )
+        data_digest=manifest.authoritative_hamiltonian_sha256
+        policy=String(get(definitions, "authoritative_hamiltonian_policy_definition", ""))
+        isempty(policy) && throw(ArgumentError("Hamiltonian authority policy definition is absent"))
+        gauge=get(definitions, "hamiltonian.gauge_definition", nothing)
+        return (; data_digest, contract_digest = policy, gauge_digest = gauge)
+    end
     data_digest = manifest.authoritative_hamiltonian_sha256
     qualification = manifest.operator_qualification
     qualification isa AbstractDict ||
@@ -715,8 +776,8 @@ function _tb_authority_identity(manifest)
     record = get(operators, "hamiltonian", nothing)
     record isa AbstractDict ||
         return (; data_digest, contract_digest = data_digest, gauge_digest = nothing)
-    String(get(record, "qualification", "NOT_RECORDED")) == "NOT_RECORDED" &&
-        return (; data_digest, contract_digest = data_digest, gauge_digest = nothing)
+    String(get(record, "source_status", get(record, "qualification", "NOT_RECORDED"))) ==
+    "NOT_RECORDED" && return (; data_digest, contract_digest = data_digest, gauge_digest = nothing)
 
     String(get(record, "authoritative_hamiltonian", "NOT_RECORDED")) ==
     manifest.authoritative_hamiltonian || throw(
@@ -724,38 +785,51 @@ function _tb_authority_identity(manifest)
             "HAMILTONIAN_REFERENCE_MISMATCH: TB root and Hamiltonian qualification authorities differ",
         ),
     )
-    String(get(record, "authoritative_hamiltonian_digest", "NOT_RECORDED")) == data_digest || throw(
-        ArgumentError(
-            "HAMILTONIAN_REFERENCE_MISMATCH: TB root and Hamiltonian qualification data digests differ",
-        ),
-    )
-    input_hashes = get(record, "authoritative_hamiltonian_input_sha256", nothing)
-    input_hashes isa AbstractDict || throw(
-        ArgumentError(
-            "HAMILTONIAN_REFERENCE_MISMATCH: Hamiltonian qualification input digests are missing",
-        ),
-    )
-    contract_digest = String(get(input_hashes, "AUTHORITATIVE_HAMILTONIAN_SHA256", ""))
-    occursin(r"^[0-9a-f]{64}$", contract_digest) || throw(
-        ArgumentError(
-            "HAMILTONIAN_REFERENCE_MISMATCH: Hamiltonian authority contract digest is missing or invalid",
-        ),
-    )
-    raw_gauge_digest = get(input_hashes, "WAVEFUNCTION_GAUGE_HDF5", nothing)
-    gauge_digest = raw_gauge_digest === nothing ? nothing : String(raw_gauge_digest)
-    gauge_digest === nothing ||
-        occursin(r"^[0-9a-f]{64}$", gauge_digest) ||
+    String(get(record, "authoritative_hamiltonian_definition", "NOT_RECORDED")) == data_digest ||
         throw(
             ArgumentError(
-                "HAMILTONIAN_REFERENCE_MISMATCH: Hamiltonian gauge-artifact digest is invalid",
+                "HAMILTONIAN_REFERENCE_MISMATCH: TB root and Hamiltonian qualification data definitions differ",
             ),
         )
+    get(record, "content_authentication", "") == "NOT_PERFORMED" || throw(
+        ArgumentError(
+            "LEGACY_COMPLETE_EVIDENCE_REQUIRED: authority qualification requires actual definitions",
+        ),
+    )
+    contract_digest = String(get(record, "authoritative_hamiltonian_policy_definition", ""))
+    isempty(contract_digest) && throw(
+        ArgumentError(
+            "HAMILTONIAN_REFERENCE_MISMATCH: actual authority policy definition is missing",
+        ),
+    )
+    raw_gauge_definition = String(get(record, "gauge_definition", "NOT_APPLICABLE"))
+    gauge_digest = raw_gauge_definition == "NOT_APPLICABLE" ? nothing : raw_gauge_definition
     return (; data_digest, contract_digest, gauge_digest)
 end
 
-"""Qualify one final Packed-HDF5 SAWF TB and optionally seal HDF5/JSON payloads."""
-function qualify_exported_wannierization_tb(
+"""Qualify an external Packed-HDF5 file, including reading its numerical operators."""
+qualify_exported_wannierization_tb(
     packed_hdf5::AbstractString,
+    representation::Union{Nothing, BandRepresentation},
+    plan::Union{Nothing, WannierSymmetryPlan};
+    kwargs...,
+) = _qualify_exported_wannierization_tb(packed_hdf5, nothing, representation, plan; kwargs...)
+
+# Normal export transfers its local, already written operators. No numerical payload
+# is read from disk. The synchronous qualification only reads these arrays; its
+# normalization/projector helpers create their own copies. Nothing is cached.
+qualify_exported_wannierization_tb(
+    packed_hdf5::AbstractString,
+    operators::AbstractDict,
+    representation::Union{Nothing, BandRepresentation},
+    plan::Union{Nothing, WannierSymmetryPlan};
+    kwargs...,
+) = _qualify_exported_wannierization_tb(packed_hdf5, operators, representation, plan; kwargs...)
+
+# Re-read exported operators and evaluate the supplied symmetry, Hermiticity and Wannier-center residual gates.
+function _qualify_exported_wannierization_tb(
+    packed_hdf5::AbstractString,
+    exported_operators::Union{Nothing, AbstractDict},
     representation::Union{Nothing, BandRepresentation},
     plan::Union{Nothing, WannierSymmetryPlan};
     hamiltonian_covariance_threshold::Union{Nothing, Real},
@@ -767,8 +841,14 @@ function qualify_exported_wannierization_tb(
     hamiltonian_idempotence_threshold_ev::Real = TB_HAMILTONIAN_IDEMPOTENCE_THRESHOLD_EV,
     position_idempotence_threshold_angstrom::Real = TB_POSITION_IDEMPOTENCE_THRESHOLD_ANGSTROM,
     json_file::Union{Nothing, AbstractString} = nothing,
-    persist_hdf5::Bool = true,
+    persist_hdf5::Bool = false,
 )
+    persist_hdf5 && throw(
+        ArgumentError("model HDF5 stores mathematics only; record checks in model.out/model.json"),
+    )
+    json_file===nothing || throw(
+        ArgumentError("standalone validation sidecars are removed; use the model report writer"),
+    )
     thresholds = Float64[
         value for value in (
             position_covariance_threshold,
@@ -794,7 +874,36 @@ function qualify_exported_wannierization_tb(
         return qualification
     end
 
-    loaded = IO.read_real_space_operator_bundle(packed_hdf5)
+    loaded = if exported_operators === nothing
+        IO.read_real_space_operator_bundle(packed_hdf5)
+    else
+        manifest = IO.read_real_space_operator_bundle_manifest(packed_hdf5)
+        Set(keys(exported_operators)) == Set(manifest.inventory) ||
+            throw(ArgumentError("TB_QUALIFICATION_OPERATOR_INVENTORY_MISMATCH"))
+        for (kind, operator) in exported_operators
+            operator.spec.kind == kind ||
+                throw(ArgumentError("TB_QUALIFICATION_OPERATOR_KIND_MISMATCH"))
+            all(
+                entry -> entry.component_rank == operator.spec.cartesian_rank,
+                filter(entry -> entry.kind == kind, manifest.entries),
+            ) || throw(
+                DimensionMismatch("TB qualification component rank disagrees with metadata"),
+            )
+            operator.r_vectors == manifest.r_vectors ||
+                throw(ArgumentError("TB_QUALIFICATION_SUPPORT_MISMATCH"))
+            size(operator.data, 1) == size(operator.data, 2) == manifest.num_orbitals || throw(
+                DimensionMismatch("TB qualification orbital count disagrees with metadata"),
+            )
+            all(isfinite, operator.data) ||
+                throw(ArgumentError("TB qualification rejects non-finite operators"))
+        end
+        (;
+            manifest,
+            lattice = manifest.lattice,
+            operators = exported_operators,
+            degeneracies = manifest.degeneracies,
+        )
+    end
     authority = loaded.manifest.authoritative_hamiltonian
     authority_sha = loaded.manifest.authoritative_hamiltonian_sha256
     authority_identity = _tb_authority_identity(loaded.manifest)
@@ -808,21 +917,35 @@ function qualify_exported_wannierization_tb(
         get(representation.conventions, "authoritative_hamiltonian_sha256", "LEGACY_NATIVE_DFT") ==
         authority_identity.contract_digest || throw(
             ArgumentError(
-                "HAMILTONIAN_REFERENCE_MISMATCH: TB and representation authority contract digests differ",
+                "HAMILTONIAN_REFERENCE_MISMATCH: TB and representation authority policy definitions differ",
             ),
         )
         if authority_identity.gauge_digest !== nothing
-            get(representation.conventions, "wavefunction_gauge_hdf5_sha256", "NOT_RECORDED") ==
+            get(representation.conventions, "wavefunction_gauge_definition", "NOT_RECORDED") ==
             something(authority_identity.gauge_digest) || throw(
                 ArgumentError(
-                    "HAMILTONIAN_REFERENCE_MISMATCH: TB and representation gauge-artifact digests differ",
+                    "HAMILTONIAN_REFERENCE_MISMATCH: TB and representation gauge definitions differ",
                 ),
             )
         end
         if loaded.manifest.qualification_scope == "target_subspace"
+            if loaded.manifest.schema_version==IO.OPERATOR_BUNDLE_SCHEMA_VERSION
+                loaded.manifest.target_leakage_semantics ∉ ("NOT_RECORDED", "NOT_APPLICABLE", "") &&
+                loaded.manifest.target_leakage_formula_sha256 ∉
+                ("NOT_RECORDED", "NOT_APPLICABLE", "") &&
+                loaded.manifest.target_leakage_threshold!==nothing &&
+                isfinite(loaded.manifest.target_leakage_threshold) || throw(
+                    ArgumentError(
+                        "Target-subspace symmetry check requires its actual leakage semantics, formula and finite threshold",
+                    ),
+                )
+            end
             for (key, bundle_value) in (
                 ("target_leakage_semantics", loaded.manifest.target_leakage_semantics),
-                ("target_leakage_formula_sha256", loaded.manifest.target_leakage_formula_sha256),
+                (
+                    "target_leakage_formula_definition",
+                    loaded.manifest.target_leakage_formula_sha256,
+                ),
             )
                 get(representation.conventions, key, "NOT_RECORDED") == bundle_value || throw(
                     ArgumentError(
@@ -1130,7 +1253,7 @@ function qualify_exported_wannierization_tb(
         target_scope_production_eligible = overall == "PASS" &&
                                            loaded.manifest.target_scope_production_eligible,
         target_leakage_semantics = loaded.manifest.target_leakage_semantics,
-        target_leakage_formula_sha256 = loaded.manifest.target_leakage_formula_sha256,
+        target_leakage_formula_definition = loaded.manifest.target_leakage_formula_sha256,
         target_leakage_threshold = loaded.manifest.target_leakage_threshold,
         scoped_production_eligible = overall == "PASS" &&
                                      loaded.manifest.scoped_production_eligible,
@@ -1140,6 +1263,12 @@ function qualify_exported_wannierization_tb(
         HDF5.h5open(packed_hdf5, "r+") do handle
             write_tb_symmetry_qualification_group(handle, qualification)
         end
+        IO.write_scientific_file_publication(
+            packed_hdf5;
+            artifact_schema = IO.OPERATOR_BUNDLE_SCHEMA,
+            artifact_version = IO.OPERATOR_BUNDLE_SCHEMA_VERSION,
+            publication_identity = loaded.manifest.publication_identity,
+        )
     end
     json_file === nothing || _write_tb_symmetry_json(json_file, qualification)
     return qualification

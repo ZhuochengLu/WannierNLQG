@@ -16,11 +16,10 @@ end
 
 # Activate the extension once and report whether this task needs a world-age bridge.
 function _load_symmetrization_extension!()
-    extension = _active_symmetrization_extension()
-    extension === nothing || return extension, false
     lock(SYMMETRIZATION_EXTENSION_LOCK)
     try
         extension = _active_symmetrization_extension()
+        extension === nothing || return extension, false
         if extension === nothing
             _import_symmetrization_extension_triggers!()
             extension = _active_symmetrization_extension()

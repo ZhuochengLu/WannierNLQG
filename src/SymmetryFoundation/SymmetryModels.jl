@@ -166,11 +166,10 @@ struct WannierSymmetryPlan
         wannier_shifts;
         operation_indices = nothing,
         tolerance = 1.0e-8,
-        construction_policy::Symbol = :strict,
+        construction_policy::Symbol = :standard,
         diagnostics = nothing,
     )
-        construction_policy in (:strict, :standard) ||
-            throw(ArgumentError("construction_policy must be :strict or :standard"))
+        validate_ordinary_construction_policy(construction_policy)
         operation_values = SymmetryOperation[operations...]
         representation_matrix_values = Array{ComplexF64, 3}(representation_matrices)
         wannier_shift_values = Array{Int, 3}(wannier_shifts)
@@ -211,10 +210,9 @@ struct WannierSymmetryPlan
                 throw(ArgumentError("Wannier representation is rank deficient"))
             residual =
                 norm(representation_matrix' * representation_matrix - identity_representation)
+            isfinite(residual) ||
+                throw(ArgumentError("Wannier representation normalization residual is nonfinite"))
             threshold = 10tolerance_value
-            construction_policy == :standard ||
-                residual <= threshold ||
-                throw(ArgumentError("Wannier representation $(operation_index) is not unitary"))
             diagnostics === nothing || push!(
                 diagnostics,
                 (

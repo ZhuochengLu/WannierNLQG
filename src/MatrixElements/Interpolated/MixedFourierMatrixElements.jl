@@ -28,6 +28,7 @@ end
     group === :ddH && return HAMILTONIAN_SECOND_DERIVATIVES
     group === :A && return WANNIER_POSITION
     group === :dA && return INTERNAL_CONNECTION_DERIVATIVES
+    group === :curlA && return WANNIER_CURVATURE
     group === :SS && return SPIN
     group === :SH && return SPIN_TIMES_HAMILTONIAN
     group === :SR && return SPIN_TIMES_POSITION
@@ -37,7 +38,10 @@ end
 
 # Return the scalar, active-axis, or active-pair channel count needed to pack one Fourier group.
 @inline function _mixed_group_channel_count(plan::MatrixElementPlan, group::Symbol)
-    group === :H && return 1
+    group in (:H, :S) && return 1
+    group === :curlA && return _position_curl_channel_count(plan)
+    group in (:nao_dH, :nao_dS, :nao_r) && return 3
+    group in (:nao_ddH, :nao_ddS, :nao_dr) && return 9
     kind = _mixed_group_kind(group)
     return kind in (
         HAMILTONIAN_SECOND_DERIVATIVES,
@@ -72,6 +76,14 @@ mutable struct MixedFourierBlockStore
     cache_hits::Int
     evictions::Int
     access_clock::Int
+    buffer_allocations::Int
+    plan_builds::Int
+    buffer_allocation_seconds::Float64
+    plan_build_seconds::Float64
+    repack_seconds::Float64
+    phase_builds::Int
+    phase_entries::Int
+    phase_seconds::Float64
 end
 
 """
@@ -80,7 +92,7 @@ Model, grid decomposition, capability layout and bounded FFT store for one matri
 Mutable base-point, logical/block indices and FFT indices identify the current extraction position.
 """
 mutable struct MixedFourierProvider
-    model::TightBindingModel
+    model::AbstractResponseModel
     grid::MixedFourierGrid
     layout::MixedFourierLayout
     store::MixedFourierBlockStore
@@ -93,6 +105,11 @@ mutable struct MixedFourierProvider
     pack_factors::Vector{ComplexF64}
     pack_key::Union{Nothing, Tuple{NTuple{3, Int}, NTuple{3, Float64}}}
     reuse_completed_blocks::Bool
+    # One workspace-owned value-major pack scratch, reused across groups and
+    # offsets. Its reservation is deducted from the same original byte limit.
+    pack_scratch::Union{Nothing, Matrix{ComplexF64}}
+    pack_scratch_reserved_bytes::Int
+    total_memory_limit_bytes::Int
 end
 
 const _MIXED_PROVIDER_LOCK = ReentrantLock()
@@ -103,6 +120,9 @@ Accumulated direct-Fourier wall time in seconds and call count for one instrumen
 mutable struct FourierTiming
     direct_seconds::Float64
     direct_calls::Int
+    phase_calls::Int
+    phase_entries::Int
+    phase_seconds::Float64
 end
 const _FOURIER_TIMINGS = IdDict{Any, FourierTiming}()
 
@@ -113,7 +133,7 @@ Registration is lock-protected; subsequent direct-transform calls accumulate sec
 """
 function enable_fourier_timing!(workspace::MatrixElementWorkspace)
     return lock(_MIXED_PROVIDER_LOCK) do
-        _FOURIER_TIMINGS[workspace] = FourierTiming(0.0, 0)
+        _FOURIER_TIMINGS[workspace] = FourierTiming(0.0, 0, 0, 0, 0.0)
     end
 end
 
@@ -137,6 +157,22 @@ function _record_direct_fourier!(workspace::MatrixElementWorkspace, seconds::Flo
     return nothing
 end
 
+# Record full-R phase preparation only in an explicitly instrumented workspace.
+function _record_fourier_phase_factors!(
+    workspace::MatrixElementWorkspace,
+    entries::Int,
+    seconds::Float64,
+)
+    timing = lock(_MIXED_PROVIDER_LOCK) do
+        get(_FOURIER_TIMINGS, workspace, nothing)
+    end
+    timing === nothing && return nothing
+    timing.phase_calls += 1
+    timing.phase_entries += entries
+    timing.phase_seconds += seconds
+    return nothing
+end
+
 """
 Return direct-transform seconds/counts and the Mixed-FFT statistics for a workspace.
 
@@ -150,6 +186,9 @@ function fourier_timing_stats(workspace::MatrixElementWorkspace)
     return (
         direct_seconds = timing === nothing ? 0.0 : timing.direct_seconds,
         direct_calls = timing === nothing ? 0 : timing.direct_calls,
+        phase_calls = timing === nothing ? 0 : timing.phase_calls,
+        phase_entries = timing === nothing ? 0 : timing.phase_entries,
+        phase_seconds = timing === nothing ? 0.0 : timing.phase_seconds,
         mixed = provider_stats,
     )
 end
@@ -157,9 +196,10 @@ end
 # Normalize two mesh counts to a three-tuple with a singleton third axis; reject ranks other than two or three.
 function _mixed_mesh_tuple(mesh)
     values = Tuple(Int(x) for x in mesh)
-    return length(values) == 2 ? (values[1], values[2], 1) :
+    return length(values) == 1 ? (values[1], 1, 1) :
+           length(values) == 2 ? (values[1], values[2], 1) :
            length(values) == 3 ? values :
-           error("mixed Fourier mesh must have two or three entries.")
+           error("mixed Fourier mesh must have one to three entries.")
 end
 
 # Normalize an optional positive two/three-dimensional decomposition factor, appending a singleton third axis when needed.
@@ -167,8 +207,9 @@ function _mixed_factor_tuple(value, label::AbstractString)
     value === nothing && return nothing
     values = Tuple(Int(x) for x in value)
     values =
+        length(values) == 1 ? (values[1], 1, 1) :
         length(values) == 2 ? (values[1], values[2], 1) :
-        length(values) == 3 ? values : error("$(label) must contain two or three integers.")
+        length(values) == 3 ? values : error("$(label) must contain one to three integers.")
     all(>(0), values) || error("$(label) entries must be positive; got $(values).")
     return values
 end
@@ -228,7 +269,7 @@ Return the integral Mixed-FFT grid and an empty diagnostic string after resolvin
 
 Copy the integer real-space R grid; reject factors that do not multiply exactly to the requested mesh.
 """
-function mixed_fourier_grid(model::TightBindingModel, mesh; nkdiv = nothing, nkfft = nothing)
+function mixed_fourier_grid(model::AbstractResponseModel, mesh; nkdiv = nothing, nkfft = nothing)
     nkmesh = _mixed_mesh_tuple(mesh)
     r_grid = Matrix{Int}(model.r_vectors)
     resolved_nkdiv, resolved_nkfft, factor_source =
@@ -251,7 +292,7 @@ Return a Mixed-FFT slice grid when all projected R coordinates are integral with
 Geometry is in fractional reciprocal coordinates. Return `(nothing,reason)` for incommensurate projections; reject invalid mesh factors and require two mesh counts.
 """
 function mixed_fourier_kslice_grid(
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     mesh,
     origin::AbstractVector{<:Real},
     vector_1::AbstractVector{<:Real},
@@ -307,6 +348,10 @@ function MixedFourierLayout(plan::MatrixElementPlan)
         push!(groups, :dA)
         channels += _mixed_group_channel_count(plan, :dA)
     end
+    if _uses_position_curl(plan) && _position_curl_channel_count(plan) > 0
+        push!(groups, :curlA)
+        channels += _mixed_group_channel_count(plan, :curlA)
+    end
     if has_capability(plan, SPIN)
         push!(groups, :SS)
         channels += _mixed_group_channel_count(plan, :SS)
@@ -341,18 +386,42 @@ function MixedFourierBlockStore(; memory_limit_bytes::Int = _mixed_memory_limit(
         0,
         0,
         0,
+        0,
+        0,
+        0.0,
+        0.0,
+        0.0,
+        0,
+        0,
+        0.0,
     )
 end
 
 # Compute ComplexF64 FFT-buffer bytes from FFT mesh volume, orbital pairs and active operator channels.
 function _mixed_entry_bytes(
     grid::MixedFourierGrid,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     plan::MatrixElementPlan,
     group::Symbol,
 )
     channels = _mixed_group_channel_count(plan, group)
-    return prod(grid.nkfft) * model.num_orbitals^2 * channels * sizeof(ComplexF64)
+    return WorkspacePlanning.checked_array_bytes(
+        ComplexF64,
+        (grid.nkfft..., model.num_orbitals, model.num_orbitals, channels),
+    )
+end
+
+# Reserve at most one largest-group scratch, only for the qualified orthogonal
+# static-curvature plan. Low-memory configurations retain the original pack;
+# they do not acquire a larger memory allowance or a different Fourier formula.
+function _mixed_pack_scratch_bytes(grid, workspace, model, memory_limit_bytes::Int)
+    model isa TightBindingModel && _uses_position_curl(workspace.plan) || return 0
+    largest = 0
+    for group in _mixed_layout(workspace, model).groups
+        _mixed_source(workspace, model, group) === nothing && continue
+        largest = max(largest, _mixed_entry_bytes(grid, model, workspace.plan, group))
+    end
+    return largest <= div(memory_limit_bytes, 2) ? largest : 0
 end
 
 # Reject a provider if even its largest required single-group FFT buffer exceeds the workspace memory share.
@@ -378,6 +447,15 @@ function _mixed_preflight_provider!(
     error("Mixed Fourier memory/configuration error: $(reason)")
 end
 
+"""Select operator groups for the orthogonal workspace capability plan."""
+_mixed_layout(workspace, model) = MixedFourierLayout(workspace.plan)
+
+"""Retain the existing orthogonal grid contract without additional localized restrictions."""
+_validate_mixed_model_grid(model, grid) = nothing
+
+"""Return the declared replica degeneracy used to weight an orthogonal real-space cell."""
+_mixed_r_degeneracy(model, cell) = model.r_degeneracies[cell]
+
 """
 Register a Mixed-FFT provider for this workspace and model, with explicit grid factors and byte limit.
 
@@ -385,16 +463,18 @@ Set FFTW to one thread and preflight the required buffer size; incompatible memo
 """
 function enable_mixed_fourier!(
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     grid::MixedFourierGrid;
     memory_limit_bytes::Int = _mixed_memory_limit(),
 )
+    _validate_mixed_model_grid(model, grid)
     FFTW.set_num_threads(1)
+    reserved = _mixed_pack_scratch_bytes(grid, workspace, model, memory_limit_bytes)
     provider = MixedFourierProvider(
         model,
         grid,
-        MixedFourierLayout(workspace.plan),
-        MixedFourierBlockStore(; memory_limit_bytes = memory_limit_bytes),
+        _mixed_layout(workspace, model),
+        MixedFourierBlockStore(; memory_limit_bytes = memory_limit_bytes - reserved),
         zeros(Float64, 3),
         (0, 0, 0),
         (0, 0, 0),
@@ -411,11 +491,15 @@ function enable_mixed_fourier!(
         zeros(ComplexF64, model.num_r_vectors),
         nothing,
         false,
+        nothing,
+        reserved,
+        memory_limit_bytes,
     )
+    # A failing preflight must not leave a registered provider behind.
+    _mixed_preflight_provider!(provider, workspace)
     lock(_MIXED_PROVIDER_LOCK) do
         _MIXED_PROVIDERS[workspace] = provider
     end
-    _mixed_preflight_provider!(provider, workspace)
     return provider
 end
 
@@ -434,6 +518,10 @@ function _mixed_provider(workspace::MatrixElementWorkspace)
         get(_MIXED_PROVIDERS, workspace, nothing)
     end
 end
+
+"""Report whether one workspace owns a Mixed-FFT provider, without exposing it."""
+has_mixed_fourier_provider(workspace::MatrixElementWorkspace) =
+    _mixed_provider(workspace) !== nothing
 
 """
 Set the provider's base fractional point and derive its block/FFT indices from the logical mesh index.
@@ -466,12 +554,17 @@ end
 end
 
 # Resolve a Fourier group to its prepared model/operator array, retaining the source's existing gauge.
-function _mixed_source(workspace::MatrixElementWorkspace, model::TightBindingModel, group::Symbol)
+function _mixed_source(
+    workspace::MatrixElementWorkspace,
+    model::AbstractResponseModel,
+    group::Symbol,
+)
     group === :H && return model.hamiltonian_r
     group === :dH && return workspace.scratch.hamiltonian.gradient_real_space
     group === :ddH && return workspace.scratch.hamiltonian.hessian_real_space
     group === :A && return model.position_r
     group === :dA && return workspace.scratch.position.gradient_real_space
+    group === :curlA && return workspace.scratch.position.curl_real_space
     group === :SS && return workspace.sources.spin.spin_r
     group === :SH && return workspace.sources.spin_velocity.spin_hamiltonian_r
     group === :SR && return workspace.sources.spin_velocity.spin_position_r
@@ -485,13 +578,14 @@ Estimate resident buffers when every planned group is cached at each offset.
 function mixed_fourier_buffer_estimate(
     grid::MixedFourierGrid,
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel;
+    model::AbstractResponseModel;
     offset_count::Int = 1,
     safety_factor::Float64 = 1.0,
+    memory_limit_bytes::Int = _mixed_memory_limit(),
 )
     offset_count > 0 || error("offset_count must be positive; got $(offset_count).")
     safety_factor >= 1.0 || error("safety_factor must be at least 1.0; got $(safety_factor).")
-    layout = MixedFourierLayout(workspace.plan)
+    layout = _mixed_layout(workspace, model)
     group_bytes = NamedTuple[]
     bytes_per_offset = 0
     largest_group = :H
@@ -507,10 +601,16 @@ function mixed_fourier_buffer_estimate(
             largest_group_bytes = bytes
         end
     end
-    estimated_bytes = ceil(Int, safety_factor * offset_count * bytes_per_offset)
+    fixed_scratch_bytes = _mixed_pack_scratch_bytes(grid, workspace, model, memory_limit_bytes)
+    raw_bytes = WorkspacePlanning.checked_sum_bytes((
+        Base.checked_mul(offset_count, bytes_per_offset),
+        fixed_scratch_bytes,
+    ))
+    estimated_bytes = ceil(Int, safety_factor * raw_bytes)
     return (
         estimated_bytes = estimated_bytes,
         bytes_per_offset = bytes_per_offset,
+        fixed_scratch_bytes = fixed_scratch_bytes,
         largest_group = largest_group,
         largest_group_bytes = largest_group_bytes,
         offset_count = offset_count,
@@ -586,8 +686,20 @@ function _mixed_allocate_entry!(
     )
     # ESTIMATE planning does not read or write the array (FFTW.jl fft.jl).
     # _mixed_pack_and_fft! clears every element before its first numerical use.
+    allocation_t0 = time_ns()
     buffer = Array{ComplexF64}(undef, shape)
-    plan = plan_bfft!(buffer, (1, 2, 3); flags = FFTW.ESTIMATE)
+    store.buffer_allocation_seconds += (time_ns() - allocation_t0) * 1e-9
+    store.buffer_allocations += 1
+    plan_t0 = time_ns()
+    plan = FFTBuffers.LocalComplexFFTPlan(
+        buffer,
+        (1, 2, 3);
+        direction = :backward,
+        flags = FFTW.ESTIMATE,
+        execution = Val(:multiply),
+    )
+    store.plan_build_seconds += (time_ns() - plan_t0) * 1e-9
+    store.plan_builds += 1
     entry = MixedFourierCacheEntry((-1, -1, -1), buffer, plan, bytes, 0)
     store.entries[key] = entry
     store.allocated_bytes += bytes
@@ -597,7 +709,9 @@ end
 
 # Build compact Cartesian source indices, returning nothing when the selected payload already has dense storage order.
 function _mixed_source_indices(source, plan::MatrixElementPlan, group::Symbol, num_orbitals::Int)
-    group in (:H, :dH, :ddH, :dA) && return nothing
+    group in
+    (:H, :S, :dH, :ddH, :dA, :curlA, :nao_dH, :nao_dS, :nao_ddH, :nao_ddS, :nao_r, :nao_dr) &&
+        return nothing
     kind = _mixed_group_kind(group)
     channels = _mixed_group_channel_count(plan, group)
     indices = Vector{Int}(undef, num_orbitals^2 * channels)
@@ -640,7 +754,7 @@ function _mixed_pack_values!(
     flattened,
     source_flat,
     grid::MixedFourierGrid,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     phase_point,
     ::Nothing,
 )
@@ -654,7 +768,7 @@ function _mixed_pack_values!(
         r3 = model.r_vectors[3, r_index]
         factor =
             cis(2pi * (r1 * phase_point[1] + r2 * phase_point[2] + r3 * phase_point[3])) /
-            model.r_degeneracies[r_index]
+            _mixed_r_degeneracy(model, r_index)
         for value_index in axes(source_flat, 1)
             flattened[linear, value_index] += factor * source_flat[value_index, r_index]
         end
@@ -667,7 +781,7 @@ function _mixed_pack_values!(
     flattened,
     source_flat,
     grid::MixedFourierGrid,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     phase_point,
     source_indices::Vector{Int},
 )
@@ -681,7 +795,7 @@ function _mixed_pack_values!(
         r3 = model.r_vectors[3, r_index]
         factor =
             cis(2pi * (r1 * phase_point[1] + r2 * phase_point[2] + r3 * phase_point[3])) /
-            model.r_degeneracies[r_index]
+            _mixed_r_degeneracy(model, r_index)
         for value_index in eachindex(source_indices)
             flattened[linear, value_index] +=
                 factor * source_flat[source_indices[value_index], r_index]
@@ -709,6 +823,133 @@ function _mixed_pack_cached!(flattened, source_flat, bins, factors, indices)
     return flattened
 end
 
+# Caller-owned, zero-origin pack hypothesis; no global scratch, no phase or FFT policy.
+function _mixed_contiguous_zero_pack!(
+    dest::AbstractMatrix{ComplexF64},
+    source::AbstractMatrix{ComplexF64},
+    bins::Vector{Int},
+    factors::Vector{ComplexF64},
+    indices::Union{Nothing, Vector{Int}},
+    scratch::AbstractMatrix{ComplexF64},
+)
+    Base.require_one_based_indexing(dest, source, bins, factors, scratch)
+    indices===nothing || Base.require_one_based_indexing(indices)
+    nr=size(source, 2);
+    nv=indices===nothing ? size(source, 1) : length(indices);
+    nb=size(dest, 1)
+    length(bins)==length(factors)==nr || throw(DimensionMismatch("R metadata"))
+    size(dest, 2)==nv && size(scratch)==(nv, nb) ||
+        throw(DimensionMismatch("pack scratch/destination"))
+    all(b->1<=b<=nb, bins) || throw(BoundsError(dest, bins))
+    indices===nothing ||
+        all(i->1<=i<=size(source, 1), indices) ||
+        throw(BoundsError(source, indices))
+    (
+        Base.mightalias(dest, scratch) ||
+        any(x->Base.mightalias(dest, x)||Base.mightalias(scratch, x), (source, bins, factors)) ||
+        (indices!==nothing && (Base.mightalias(dest, indices)||Base.mightalias(scratch, indices)))
+    ) && throw(ArgumentError("owned pack scratch/output aliases input"))
+    fill!(scratch, 0)
+    if indices===nothing
+        for r in axes(source, 2)
+            b=bins[r];
+            factor=factors[r]
+            @inbounds for v in axes(source, 1)
+                scratch[v, b]+=factor*source[v, r]
+            end
+        end
+    else
+        for r in axes(source, 2)
+            b=bins[r];
+            factor=factors[r]
+            @inbounds for v in eachindex(indices)
+                scratch[v, b]+=factor*source[indices[v], r]
+            end
+        end
+    end
+    permutedims!(dest, scratch, (2, 1))
+    dest
+end
+
+# Borrow the existing loaded Cartesian component arrays once per group pack.
+# The same validated numerical pack kernel handles each component: no dense A
+# materialization, changed R sum order, extra cache, or IO-owned computation.
+function _mixed_contiguous_position_pack!(
+    dest::AbstractMatrix{ComplexF64},
+    source::PackedCartesianOperator{1, 4},
+    bins::Vector{Int},
+    factors::Vector{ComplexF64},
+    indices::Union{Nothing, Vector{Int}},
+    scratch::AbstractMatrix{ComplexF64},
+)
+    Base.require_one_based_indexing(dest, source, bins, factors, scratch)
+    indices === nothing || Base.require_one_based_indexing(indices)
+    n = size(source, 1)
+    pair_values = Base.checked_mul(n, n)
+    size(source, 2) == n && pair_values > 0 ||
+        throw(DimensionMismatch("position component orbitals"))
+    nr = size(source, 4)
+    nv = size(dest, 2)
+    rem(nv, pair_values) == 0 || throw(DimensionMismatch("position component values"))
+    channels = div(nv, pair_values)
+    length(bins) == length(factors) == nr || throw(DimensionMismatch("R metadata"))
+    size(scratch) == (nv, size(dest, 1)) || throw(DimensionMismatch("pack scratch/destination"))
+    all(b -> 1 <= b <= size(dest, 1), bins) || throw(BoundsError(dest, bins))
+    indices === nothing ||
+        length(indices) == nv ||
+        throw(DimensionMismatch("position source indices"))
+    # Resolve/validate every selected component before any output mutation.
+    components = map(1:channels) do channel
+        first_value = (channel-1)*pair_values+1
+        direction = indices === nothing ? channel : fld(indices[first_value]-1, pair_values)+1
+        1 <= direction <= size(source, 3) || throw(BoundsError(source, direction))
+        if indices !== nothing
+            all(v -> indices[first_value + v - 1] == (direction-1)*pair_values+v, 1:pair_values) || throw(
+                ArgumentError("position source indices must select complete Cartesian components"),
+            )
+        end
+        reshape(view(source,:,:,direction,:), pair_values, nr)
+    end
+    (
+        Base.mightalias(dest, scratch) ||
+        any(
+            x -> Base.mightalias(dest, x) || Base.mightalias(scratch, x),
+            (bins, factors, source.components...),
+        ) ||
+        (
+            indices !== nothing &&
+            (Base.mightalias(dest, indices) || Base.mightalias(scratch, indices))
+        )
+    ) && throw(ArgumentError("owned pack scratch/output aliases input"))
+    for channel in eachindex(components)
+        values = ((channel - 1) * pair_values + 1):(channel * pair_values)
+        _mixed_contiguous_zero_pack!(
+            view(dest, :, values),
+            components[channel],
+            bins,
+            factors,
+            nothing,
+            view(scratch, values, :),
+        )
+    end
+    return dest
+end
+
+# Allocate once, before the first pack; logical reservation was already taken
+# out of the FFT cache budget. A short group uses the leading rows of the same
+# scratch. No cache entry can alias this independent allocation.
+function _mixed_pack_scratch!(provider::MixedFourierProvider, values::Int)
+    bytes = provider.pack_scratch_reserved_bytes
+    bytes > 0 || return nothing
+    bins = prod(provider.grid.nkfft)
+    max_values = div(bytes, sizeof(ComplexF64) * bins)
+    0 <= values <= max_values || throw(DimensionMismatch("pack scratch reservation"))
+    if provider.pack_scratch === nothing
+        provider.pack_scratch = Matrix{ComplexF64}(undef, max_values, bins)
+    end
+    return @view provider.pack_scratch[1:values, :]
+end
+
 # Clear and repack one cache entry for the current block/offset, execute its backward FFT, and update timings and block identity.
 function _mixed_pack_and_fft!(
     entry::MixedFourierCacheEntry,
@@ -718,11 +959,13 @@ function _mixed_pack_and_fft!(
     group::Symbol,
     delta::NTuple{3, Float64},
 )
+    repack_t0 = time_ns()
     grid = provider.grid
     model = provider.model
     buffer = entry.buffer
-    fill!(buffer, COMPLEX_ZERO)
     flattened = reshape(buffer, prod(grid.nkfft), :)
+    scratch = _mixed_pack_scratch!(provider, size(flattened, 2))
+    scratch === nothing && fill!(buffer, COMPLEX_ZERO)
     source_flat = reshape(source, :, model.num_r_vectors)
     source_indices = get!(provider.pack_indices, group) do
         _mixed_source_indices(source, plan, group, model.num_orbitals)
@@ -738,26 +981,53 @@ function _mixed_pack_and_fft!(
     pack_t0 = time_ns()
     key = (provider.block, delta)
     if provider.pack_key != key
+        phase_t0 = time_ns()
         for r_index in 1:model.num_r_vectors
             r1 = model.r_vectors[1, r_index]
             r2 = model.r_vectors[2, r_index]
             r3 = model.r_vectors[3, r_index]
             provider.pack_factors[r_index] =
                 cis(2pi * (r1 * phase_point[1] + r2 * phase_point[2] + r3 * phase_point[3])) /
-                model.r_degeneracies[r_index]
+                _mixed_r_degeneracy(model, r_index)
         end
         provider.pack_key = key
+        provider.store.phase_builds += 1
+        provider.store.phase_entries += model.num_r_vectors
+        provider.store.phase_seconds += (time_ns() - phase_t0) * 1e-9
     end
-    _mixed_pack_cached!(
-        flattened,
-        source_flat,
-        provider.pack_bins,
-        provider.pack_factors,
-        source_indices,
-    )
+    if scratch === nothing
+        _mixed_pack_cached!(
+            flattened,
+            source_flat,
+            provider.pack_bins,
+            provider.pack_factors,
+            source_indices,
+        )
+    elseif group === :A && source isa PackedCartesianOperator{1, 4}
+        _mixed_contiguous_position_pack!(
+            flattened,
+            source,
+            provider.pack_bins,
+            provider.pack_factors,
+            source_indices,
+            scratch,
+        )
+    else
+        _mixed_contiguous_zero_pack!(
+            flattened,
+            source_flat,
+            provider.pack_bins,
+            provider.pack_factors,
+            source_indices,
+            scratch,
+        )
+    end
     provider.store.pack_seconds += (time_ns() - pack_t0) * 1e-9
+    # Inclusive repack time contains the existing pack timer as a subset, plus
+    # clearing and source-index/phase preparation. These two times are not additive.
+    provider.store.repack_seconds += (time_ns() - repack_t0) * 1e-9
     fft_t0 = time_ns()
-    entry.plan * buffer
+    FFTBuffers.execute_fft!(entry.plan)
     provider.store.fft_seconds += (time_ns() - fft_t0) * 1e-9
     provider.store.fft_calls += 1
     entry.block = provider.block
@@ -768,7 +1038,7 @@ end
 function _mixed_copy!(
     destination,
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     group::Symbol,
     kpoint::AbstractVector{<:Real},
 )
@@ -781,7 +1051,7 @@ end
 function _mixed_copy!(
     destination,
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     ::Val{G},
     kpoint::AbstractVector{<:Real},
 ) where {G}
@@ -808,7 +1078,7 @@ function _mixed_copy!(
     entry.last_used = provider.store.access_clock
     extract_t0 = time_ns()
     m1, m2, m3 = provider.fft_index
-    if group === :H
+    if group in (:H, :S)
         ndims(destination) == 2 || error("Mixed Fourier H destination must be a matrix.")
         @views destination .= entry.buffer[m1 + 1, m2 + 1, m3 + 1, :, :, 1]
     elseif ndims(destination) == 3
@@ -816,6 +1086,11 @@ function _mixed_copy!(
             "Mixed Fourier destination channels $(size(destination, 3)) do not match planned $(_mixed_group_channel_count(workspace.plan, group)).",
         )
         @views destination .= entry.buffer[m1 + 1, m2 + 1, m3 + 1, :, :, :]
+    elseif ndims(destination) == 4 && group in (:nao_ddH, :nao_ddS, :nao_dr)
+        size(destination)[3:4] == (3, 3) ||
+            error("localized Fourier jets require complete Cartesian pairs")
+        @views reshape(destination, size(destination, 1), size(destination, 2), 9) .=
+            entry.buffer[m1 + 1, m2 + 1, m3 + 1, :, :, :]
     elseif ndims(destination) == 4
         kind = _mixed_group_kind(group)
         kind in (
@@ -855,11 +1130,34 @@ function mixed_fourier_stats(workspace::MatrixElementWorkspace)
     provider === nothing && return nothing
     store = provider.store
     return (
+        # Keep allocated_bytes as the historical logical peak-buffer metric.
+        # Neither current nor peak buffer bytes is an OS RSS measurement.
         allocated_bytes = store.peak_allocated_bytes,
-        memory_limit_bytes = store.memory_limit_bytes,
+        current_allocated_bytes = store.allocated_bytes,
+        peak_allocated_bytes = store.peak_allocated_bytes,
+        memory_limit_bytes = provider.total_memory_limit_bytes,
+        fft_cache_memory_limit_bytes = store.memory_limit_bytes,
+        pack_scratch_reserved_bytes = provider.pack_scratch_reserved_bytes,
+        pack_scratch_allocated_bytes = provider.pack_scratch === nothing ? 0 :
+                                       provider.pack_scratch_reserved_bytes,
+        total_current_buffer_bytes = WorkspacePlanning.checked_sum_bytes((
+            store.allocated_bytes,
+            provider.pack_scratch === nothing ? 0 : provider.pack_scratch_reserved_bytes,
+        )),
+        packing_layout = provider.pack_scratch_reserved_bytes == 0 ? :original :
+                         :value_major_scratch,
+        buffer_allocations = store.buffer_allocations,
+        plan_builds = store.plan_builds,
+        buffer_allocation_seconds = store.buffer_allocation_seconds,
+        plan_build_seconds = store.plan_build_seconds,
+        repack_seconds = store.repack_seconds,
         fft_calls = store.fft_calls,
         cache_hits = store.cache_hits,
         evictions = store.evictions,
+        pack_calls = store.fft_calls,
+        phase_builds = store.phase_builds,
+        phase_entries = store.phase_entries,
+        phase_seconds = store.phase_seconds,
         pack_seconds = store.pack_seconds,
         fft_seconds = store.fft_seconds,
         extract_seconds = store.extract_seconds,

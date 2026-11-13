@@ -358,6 +358,7 @@ struct BandRepresentation
     full_to_operation::Vector{Int}
     conventions::Dict{String, String}
     input_sha256::Dict{String, String}
+    input_definitions::Dict{String, IO.ScientificInputDefinition}
 
     function BandRepresentation(
         schema_version,
@@ -378,6 +379,7 @@ struct BandRepresentation
         full_to_operation;
         conventions = Dict{String, String}(),
         input_sha256 = Dict{String, String}(),
+        input_definitions = Dict{String, IO.ScientificInputDefinition}(),
     )
         lattice = Matrix{Float64}(real_lattice)
         reciprocal = Matrix{Float64}(reciprocal_lattice)
@@ -446,6 +448,7 @@ struct BandRepresentation
             full_operation,
             Dict{String, String}(conventions),
             Dict{String, String}(input_sha256),
+            Dict{String, IO.ScientificInputDefinition}(input_definitions),
         )
     end
 end

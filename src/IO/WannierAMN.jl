@@ -1,4 +1,4 @@
-"""Formatted Wannier90 AMN data in `(band, wannier, kpoint)` storage order."""
+"""Formatted Wannier AMN data in `(band, wannier, kpoint)` storage order."""
 struct WannierAMN
     num_bands::Int
     num_kpts::Int
@@ -24,7 +24,7 @@ end
 """
     read_wannier_amn(filename) -> WannierAMN
 
-Read a complete formatted Wannier90 `.amn` file. Indexed rows may appear in any
+Read a complete formatted Wannier `.amn` file. Indexed rows may appear in any
 order, but duplicates, missing rows, non-finite coefficients, and out-of-range
 indices fail before an object is returned.
 """

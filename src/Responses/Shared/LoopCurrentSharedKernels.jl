@@ -36,7 +36,7 @@ function compute_geometric_loop_shift_current_kernel!(
     denominator_regularization::Float64,
     finite_difference_step::Float64,
     spatial_dimension::Int64,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     num_orbitals::Int64,
     band_start::Int64,
     band_end::Int64,
@@ -259,46 +259,118 @@ function compute_geometric_loop_shift_current_kernel!(
     denominator_regularization::Float64,
     finite_difference_step::Float64,
     spatial_dimension::Int64,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     band_start::Int64,
     band_end::Int64;
     active_pair_mask::Union{Nothing, AbstractMatrix{Bool}} = nothing,
     tensor_indices::Union{Nothing, AbstractVector{<:Integer}} = nothing,
+    use_full_velocity_vertices::Bool = false,
+    optical_q_cartesian = nothing,
 )
+    if use_full_velocity_vertices
+        if optical_q_cartesian === nothing
+            # Expert in-memory calls still carry physical q through the existing fractional contract.
+            ws.optical_q_cartesian .= 2pi .* (model.lattice \ photon_momentum_fractional)
+        else
+            ws.optical_q_cartesian .= optical_q_cartesian
+        end
+    end
     _clear_response_kernel!(ws.response_kernel, tensor_indices)
     derivative_axes = tensor_indices === nothing ? (1:spatial_dimension) : (tensor_indices[1],)
     insertion_directions =
         tensor_indices === nothing ? (1:spatial_dimension) :
         tensor_indices[2] == tensor_indices[3] ? (tensor_indices[2],) :
         (tensor_indices[2], tensor_indices[3])
-    prepare_geometric_loop_covariant_center!(
-        ws,
-        wannier_centers_fractional,
-        model,
-        insertion_directions,
-        insertion_directions,
-    )
-    prepare_geometric_loop_external_connections!(
-        ws,
-        wannier_centers_fractional,
-        model,
-        derivative_axes,
-    )
+    active_columns =
+        use_full_velocity_vertices &&
+        active_pair_mask !== nothing &&
+        any(!iszero, photon_momentum_fractional) &&
+        MatrixElements.supports_active_velocity_insertions(
+            model,
+            wannier_centers_fractional,
+            spatial_dimension,
+        ) &&
+        prepare_active_geometric_bands!(ws, active_pair_mask, band_start, band_end)
+    if active_columns
+        prepare_active_geometric_center!(
+            ws,
+            model,
+            insertion_directions,
+            wannier_centers_fractional,
+        )
+    else
+        if use_full_velocity_vertices
+            bind_kpoint_offset!(ws.optical_center_data, ws.scratch, KPointOffset((0, 0, 0), 0))
+            compute_kpoint!(
+                ws.optical_center_data,
+                ws.scratch,
+                model,
+                kpoint;
+                denominator_regularization,
+                spatial_dimension = ws.scratch.matrix_elements.plan.spatial_dimension,
+            )
+        end
+        # Runtime may have prepared spectrum only before learning the group sizes.
+        if use_full_velocity_vertices && MatrixElements.supports_active_velocity_insertions(
+            model,
+            wannier_centers_fractional,
+            spatial_dimension,
+        )
+            for data in (ws.valence_central_data, ws.conduction_central_data)
+                compute_kpoint!(
+                    data,
+                    ws.scratch,
+                    model,
+                    copy(data.common.kpoint);
+                    denominator_regularization,
+                    spatial_dimension = ws.scratch.matrix_elements.plan.spatial_dimension,
+                )
+            end
+        end
+        prepare_geometric_loop_covariant_center!(
+            ws,
+            wannier_centers_fractional,
+            model,
+            insertion_directions,
+            insertion_directions;
+            use_full_velocity_vertices,
+        )
+        prepare_geometric_loop_external_connections!(
+            ws,
+            wannier_centers_fractional,
+            model,
+            derivative_axes,
+        )
+    end
 
     @inbounds for a in derivative_axes
-        prepare_geometric_loop_covariant_axis!(
-            ws,
-            kpoint,
-            photon_momentum_fractional,
-            finite_difference_vectors,
-            wannier_centers_fractional,
-            denominator_regularization,
-            finite_difference_step,
-            spatial_dimension,
-            model,
-            a,
-            insertion_directions,
-        )
+        if active_columns
+            prepare_active_geometric_axis!(
+                ws,
+                kpoint,
+                photon_momentum_fractional,
+                finite_difference_vectors,
+                model,
+                a,
+                insertion_directions,
+                wannier_centers_fractional,
+            )
+        else
+            prepare_geometric_loop_covariant_axis!(
+                ws,
+                kpoint,
+                photon_momentum_fractional,
+                finite_difference_vectors,
+                wannier_centers_fractional,
+                denominator_regularization,
+                finite_difference_step,
+                spatial_dimension,
+                model,
+                a,
+                insertion_directions;
+                use_full_velocity_vertices,
+            )
+        end
         fill!(ws.forward_loop_links, COMPLEX_ZERO)
         fill!(ws.loop_link_valid, false)
         for n in band_start:band_end

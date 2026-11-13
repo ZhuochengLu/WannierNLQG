@@ -7,7 +7,7 @@
     "kpoint_coordinate_convention": "fractional_crystal", "spin_channel": 1
   },
   "models": [{
-    "type": "table", "id": "tb", "label": "TB", "data": "vasp_tb.dat", "path": "vasp_path.json",
+    "type": "table", "id": "tb", "label": "TB", "data": "vasp_tb.dat", "path": "vasp_branch_path.json",
     "x_column": 0, "energy_columns": {"start": 1, "stop": 3},
     "energy_unit": "ev", "energy_convention": "absolute"
   }],

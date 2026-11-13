@@ -83,6 +83,44 @@ function record_check!(errors, condition, message)
     return nothing
 end
 
+# Publication generations identify the global input publisher, never content digests.
+# Both MPI transports broadcast the root summary; private storage does not republish it.
+function record_replica_summary_parity!(errors, shared, private, publisher_pid)
+    names = propertynames(shared)
+    record_check!(errors, propertynames(private) == names, "Replica summary fields changed")
+    for name in names
+        name == :mapping_reference && continue
+        record_check!(
+            errors,
+            getproperty(private, name) == getproperty(shared, name),
+            "Replica summary semantic field differs: $(name)",
+        )
+    end
+    generation = r"^wanniernlqg\.owned-data/1:[0-9]+:[0-9]+:[0-9]+$"
+    record_check!(
+        errors,
+        shared.mapping_reference isa String && occursin(generation, shared.mapping_reference),
+        "Shared replica publication generation is malformed",
+    )
+    record_check!(
+        errors,
+        private.mapping_reference isa String && occursin(generation, private.mapping_reference),
+        "Private replica publication generation is malformed",
+    )
+    record_check!(
+        errors,
+        private.mapping_reference != shared.mapping_reference,
+        "Independent replica publications reused a lifetime generation",
+    )
+    record_check!(
+        errors,
+        startswith(private.mapping_reference, "wanniernlqg.owned-data/1:$(publisher_pid):") &&
+            startswith(shared.mapping_reference, "wanniernlqg.owned-data/1:$(publisher_pid):"),
+        "Replica publication does not belong to the global input publisher",
+    )
+    return nothing
+end
+
 function runtime_model_payload_digest(model)
     payload_buffer = IOBuffer()
     write(payload_buffer, reinterpret(UInt8, Int64.(model.r_vectors)))
@@ -149,7 +187,7 @@ if rank == 0
         input_model.r_degeneracies,
         operators;
         profile = :hamiltonian_position,
-        paired_tb_sha256 = WannierNLQG.Runtime.checksum_file(model_file),
+        paired_tb_file = model_file,
         geometry = test_operator_bundle_geometry(
             input_model.lattice,
             input_model.r_degeneracies,
@@ -215,6 +253,7 @@ ctx = RunContext(
     "",
     "",
     nothing,
+    nothing,
 )
 loaded = load_runtime_model_and_sources(ctx, cfg)
 model = loaded.model
@@ -260,6 +299,8 @@ record_check!(
 )
 legacy_shared_digest = runtime_model_payload_digest(model)
 legacy_shared_summary = loaded.replica_summary
+# The original root input reader creates the summary before either transport.
+input_publisher_pid = MPI.bcast(getpid(), 0, MPI.COMM_WORLD)
 all_support = MPI.Allgather(Int[model.num_r_vectors], MPI.COMM_WORLD)
 record_check!(
     validation_errors,
@@ -309,6 +350,7 @@ packed_ctx = RunContext(
     "",
     "",
     "",
+    nothing,
     nothing,
 )
 packed_loaded = load_runtime_model_and_sources(packed_ctx, packed_cfg)
@@ -404,11 +446,45 @@ try
             legacy_private_digest == legacy_shared_digest,
             "Legacy rank-private payload is not byte-exact with node-shared payload",
         )
-        record_check!(
+        private_summary = legacy_private_loaded.replica_summary
+        record_replica_summary_parity!(
             validation_errors,
-            legacy_private_loaded.replica_summary == legacy_shared_summary,
-            "Legacy rank-private replica summary differs from node-shared summary",
+            legacy_shared_summary,
+            private_summary,
+            input_publisher_pid,
         )
+        # Negative controls preserve semantic-field and stale-owner rejection.
+        private_fields = (;
+            (
+                name => getproperty(private_summary, name) for
+                name in propertynames(private_summary)
+            )...
+        )
+        for wrong in (
+            merge(private_fields, (input_num_r_vectors = private_summary.input_num_r_vectors + 1,)),
+            merge(
+                private_fields,
+                (scalar_degeneracy_applied = !private_summary.scalar_degeneracy_applied,),
+            ),
+            merge(private_fields, (mapping_reference = legacy_shared_summary.mapping_reference,)),
+            merge(
+                private_fields,
+                (mapping_reference = "wanniernlqg.owned-data/1:$(input_publisher_pid + 1):1:1",),
+            ),
+        )
+            negative_errors = String[]
+            record_replica_summary_parity!(
+                negative_errors,
+                legacy_shared_summary,
+                wrong,
+                input_publisher_pid,
+            )
+            record_check!(
+                validation_errors,
+                !isempty(negative_errors),
+                "Replica semantic/owner negative control was silently accepted",
+            )
+        end
     catch exception
         push!(
             validation_errors,

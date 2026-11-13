@@ -1,0 +1,18 @@
+workflow = "symmetrization"
+mode = "projection"
+
+[source]
+kind = "qe"
+save_directory = "inputs/seed.save"
+
+[basis]
+projections = ["Si:s", "Si:p"]
+
+[model]
+tb_file = "inputs/seed_tb.dat"
+wannier_center_policy = "symmetrize"
+real_space_replica_policy = "minimum_distance"
+
+[output]
+tb_file = "results/seed_tb.dat"
+packed_file = "results/seed.h5"

@@ -1,5 +1,5 @@
 """Return the native input group without exposing flat SAW properties."""
-_wannierization_input_config(config::SymmetryAdaptedWannierizationConfig) = config.input
+_wannierization_input_config(config::WannierizationConfig) = config.input
 # Preserve the already-flat preparation config through the same narrow adapter.
 _wannierization_input_config(config::BandRepresentationPreparationConfig) = config
 
@@ -95,8 +95,6 @@ function _validate_wannierization_mode_contract(config)
     (:auto, :ordinary, :symmetry_adapted) ||
         throw(ArgumentError("wannierization_mode must be :auto, :ordinary, or :symmetry_adapted"))
     config isa BandRepresentationPreparationConfig && return nothing
-    config.solver.algorithm_profile in (:auto, :custom) ||
-        throw(ArgumentError("algorithm_profile must be :auto or :custom"))
     validate_smv_fletcher_reeves_two_stage_audit_thresholds(
         config.solver.smv_fletcher_reeves_two_stage_audit_thresholds,
     )
@@ -142,7 +140,7 @@ end
 _configured_identity_group_fast_path(config) = false
 
 """Return whether the configured in-memory representation is exactly the identity group."""
-function _configured_identity_group_fast_path(config::SymmetryAdaptedWannierizationConfig)
+function _configured_identity_group_fast_path(config::WannierizationConfig)
     representation = _wannierization_input_config(config).band_representation
     representation === nothing && return false
     if representation.schema_version == "1.0"
@@ -195,15 +193,7 @@ function _symmetry_constraints_applied(config, representation::BandRepresentatio
 end
 
 """Resolve the active Z/U algorithms without coupling provenance to constraints."""
-function _effective_wannierization_algorithms(config::SymmetryAdaptedWannierizationConfig)
-    if config.solver.algorithm_profile == :custom
-        return (
-            disentanglement = config.solver.acceleration.disentanglement_algorithm,
-            localization = config.solver.acceleration.localization_algorithm,
-            profile = :custom,
-            default_selection_reason = "EXPLICIT_CUSTOM",
-        )
-    end
+function _effective_wannierization_algorithms(config::WannierizationConfig)
     if _effective_wannierization_mode(config) == :ordinary
         return (
             disentanglement = :smv_fletcher_reeves_two_stage,
@@ -230,11 +220,10 @@ end
 
 """Resolve Z/U algorithms after a supplied representation has been loaded."""
 function _effective_wannierization_algorithms(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     representation::BandRepresentation,
 )
-    if config.solver.algorithm_profile == :auto &&
-       _configured_identity_group_fast_path(config, representation)
+    if _configured_identity_group_fast_path(config, representation)
         return (
             disentanglement = :smv_fletcher_reeves_two_stage,
             localization = :smv_fletcher_reeves_two_stage,
@@ -249,8 +238,7 @@ end
 function _validate_symmetry_covariant_wavefunction_preparation_config(
     config::SymmetryCovariantWavefunctionPreparationConfig,
 )
-    config.construction_policy in (:standard, :strict) ||
-        throw(ArgumentError("construction_policy must be :standard or :strict"))
+    validate_ordinary_construction_policy(config.construction_policy)
     config.sewing_backend isa AugmentationAwareSewing || throw(
         ArgumentError("star-covariant wavefunction preparation requires AugmentationAwareSewing"),
     )
@@ -354,8 +342,7 @@ end
 function _validate_band_representation_preparation_config(
     config::BandRepresentationPreparationConfig,
 )
-    config.construction_policy in (:standard, :strict) ||
-        throw(ArgumentError("construction_policy must be :standard or :strict"))
+    validate_ordinary_construction_policy(config.construction_policy)
     _validate_wannierization_mode_contract(config)
     representation_source = _representation_source(config)
     if config.sewing_backend isa AugmentationAwareSewing
@@ -380,10 +367,10 @@ function _validate_band_representation_preparation_config(
     end
     config.outer_min_ev <= config.outer_max_ev ||
         throw(ArgumentError("outer_min_ev must not exceed outer_max_ev"))
-    (
-        config.frozen_min_ev > config.frozen_max_ev ||
-        config.outer_min_ev <= config.frozen_min_ev <= config.frozen_max_ev <= config.outer_max_ev
-    ) || throw(ArgumentError("frozen window must be empty or contained in the outer window"))
+    # Interval overhang is valid when it selects no state outside the outer mask.
+    # Check containment after complete degeneracy blocks have been materialized.
+    !isnan(config.frozen_min_ev) && !isnan(config.frozen_max_ev) ||
+        throw(ArgumentError("frozen window bounds must not be NaN"))
     config.num_wannier >= 0 || throw(ArgumentError("num_wannier must be nonnegative"))
     all(state -> state[1] > 0 && state[2] > 0, config.frozen_states) ||
         throw(ArgumentError("frozen_states entries must contain positive one-based indices"))
@@ -403,16 +390,11 @@ function _validate_band_representation_preparation_config(
 end
 
 # Validate all scalar configuration contracts before any expensive I/O.
-function _validate_wannierization_config(config::SymmetryAdaptedWannierizationConfig)
-    config.input.construction_policy in (:standard, :strict) ||
-        throw(ArgumentError("construction_policy must be :standard or :strict"))
+function _validate_wannierization_config(config::WannierizationConfig)
+    validate_wannierization_geometry_source(config.input)
+    validate_ordinary_construction_policy(config.input.construction_policy)
     _validate_wannierization_mode_contract(config)
     representation_source = _representation_source(config)
-    if _effective_wannierization_mode(config) == :ordinary
-        config.solver.initialization != :fixed_subspace || throw(
-            ArgumentError("initialization=:fixed_subspace requires a symmetry-constrained mode"),
-        )
-    end
     if config.input.sewing_backend isa AugmentationAwareSewing
         if representation_source == :detected
             source = something(config.input.source)
@@ -435,17 +417,14 @@ function _validate_wannierization_config(config::SymmetryAdaptedWannierizationCo
     end
     config.input.outer_min_ev <= config.input.outer_max_ev ||
         throw(ArgumentError("outer_min_ev must not exceed outer_max_ev"))
-    (
-        config.input.frozen_min_ev > config.input.frozen_max_ev ||
-        config.input.outer_min_ev <=
-        config.input.frozen_min_ev <=
-        config.input.frozen_max_ev <=
-        config.input.outer_max_ev
-    ) || throw(ArgumentError("frozen window must be empty or contained in the outer window"))
-    config.solver.initialization in (:amn, :random, :restart, :fixed_subspace) ||
-        throw(ArgumentError("initialization must be :amn, :random, :restart, or :fixed_subspace"))
-    if config.input.matrix_elements isa ExternalWannier90Matrices
-        external = config.input.matrix_elements::ExternalWannier90Matrices
+    # Interval overhang is valid when it selects no state outside the outer mask.
+    # Check containment after complete degeneracy blocks have been materialized.
+    !isnan(config.input.frozen_min_ev) && !isnan(config.input.frozen_max_ev) ||
+        throw(ArgumentError("frozen window bounds must not be NaN"))
+    config.solver.initialization in (:amn, :random, :restart) ||
+        throw(ArgumentError("initialization must be :amn, :random, or :restart"))
+    if config.input.matrix_elements isa ExternalOverlapProjectionMatrices
+        external = config.input.matrix_elements::ExternalOverlapProjectionMatrices
         config.input.mmn_file == external.mmn_file ||
             throw(ArgumentError("matrix_elements MMN path disagrees with legacy mmn_file"))
         config.input.amn_file === nothing ||
@@ -513,25 +492,31 @@ function _validate_wannierization_config(config::SymmetryAdaptedWannierizationCo
             ),
         )
     end
-    config.solver.initialization == :fixed_subspace &&
-        config.checkpoint.fixed_subspace_hdf5 === nothing &&
-        throw(ArgumentError("fixed_subspace_hdf5 is required for initialization=:fixed_subspace"))
-    config.solver.initialization != :fixed_subspace &&
-        config.checkpoint.fixed_subspace_hdf5 !== nothing &&
-        throw(ArgumentError("fixed_subspace_hdf5 requires initialization=:fixed_subspace"))
     config.solver.parallel in (:serial, :threads, :mpi) ||
         throw(ArgumentError("parallel must be :serial, :threads, or :mpi"))
     config.input.compatibility_policy in (:strict, :warn, :off) ||
         throw(ArgumentError("compatibility_policy must be :strict, :warn, or :off"))
     0.0 <= config.solver.z_mix_ratio <= 1.0 || throw(ArgumentError("z_mix_ratio must be in [0, 1]"))
     0.0 <= config.solver.u_mix_ratio <= 1.0 || throw(ArgumentError("u_mix_ratio must be in [0, 1]"))
-    config.solver.max_iterations > 0 || throw(ArgumentError("max_iterations must be positive"))
-    config.solver.convergence_window > 0 ||
+    (
+        Base.Checked.checked_add(
+            config.solver.stage_controls.dis_num_iter,
+            config.solver.stage_controls.num_iter,
+        ) > 0 || (
+            config.solver.stage_controls !== nothing &&
+            Base.Checked.checked_add(
+                config.solver.stage_controls.dis_num_iter,
+                config.solver.stage_controls.num_iter,
+            ) == 0
+        )
+    ) || throw(ArgumentError("max_iterations must be positive"))
+    max(2, config.solver.stage_controls.conv_window) > 0 ||
         throw(ArgumentError("convergence_window must be positive"))
     config.solver.little_group_max_iterations > 0 ||
         throw(ArgumentError("little_group_max_iterations must be positive"))
-    config.solver.convergence_tolerance > 0.0 && isfinite(config.solver.convergence_tolerance) ||
-        throw(ArgumentError("convergence_tolerance must be positive and finite"))
+    config.solver.stage_controls.conv_tol >= 0.0 &&
+    isfinite(config.solver.stage_controls.conv_tol) ||
+        throw(ArgumentError("conv_tol must be nonnegative and finite"))
     config.solver.little_group_tolerance > 0.0 && isfinite(config.solver.little_group_tolerance) ||
         throw(ArgumentError("little_group_tolerance must be positive and finite"))
     config.input.degeneracy_tolerance_ev > 0.0 && isfinite(config.input.degeneracy_tolerance_ev) ||
@@ -550,16 +535,34 @@ function _validate_wannierization_config(config::SymmetryAdaptedWannierizationCo
     config.input.target_center_matching_tolerance > 0.0 &&
     isfinite(config.input.target_center_matching_tolerance) ||
         throw(ArgumentError("target_center_matching_tolerance must be positive and finite"))
-    config.runtime.progress_interval >= 0 ||
+    config.runtime.num_print_cycles >= 0 ||
         throw(ArgumentError("progress_interval must be nonnegative"))
-    config.checkpoint.checkpoint_interval >= 0 ||
+    config.checkpoint.recovery in (:continue, :export) ||
+        throw(ArgumentError("checkpoint.recovery must be continue or export"))
+    config.checkpoint.storage in (:embedded, :referenced) ||
+        throw(ArgumentError("checkpoint.storage must be embedded or referenced"))
+    (config.checkpoint.storage == :referenced) == (config.checkpoint.reference_root !== nothing) ||
+        throw(ArgumentError("checkpoint.reference_root is required only for referenced storage"))
+    if config.checkpoint.reference_root !== nothing
+        IO.scientific_reference_root(config.checkpoint.reference_root)
+    end
+    if config.checkpoint.recovery == :export
+        config.solver.initialization == :restart &&
+        config.checkpoint.restart_hdf5 !== nothing &&
+        config.checkpoint.checkpoint_hdf5 !== nothing &&
+        config.solver.stage_controls !== nothing &&
+        config.solver.stage_controls.dis_num_iter == 0 &&
+        config.solver.stage_controls.num_iter == 0 ||
+            throw(ArgumentError("export recovery requires restart and both stage limits zero"))
+    end
+    config.checkpoint.num_dump_cycles >= 0 ||
         throw(ArgumentError("checkpoint_interval must be nonnegative"))
     config.runtime.iteration_observer === nothing ||
         config.runtime.iteration_observer isa Function ||
         throw(ArgumentError("iteration_observer must be nothing or callable"))
-    allowed_formats = (:packed_hdf5, :wannier90_tb)
+    allowed_formats = (:packed_hdf5, :model_tb)
     all(format -> format in allowed_formats, config.output.tb_output_formats) ||
-        throw(ArgumentError("tb_output_formats accepts only :packed_hdf5 and :wannier90_tb"))
+        throw(ArgumentError("tb_output_formats accepts only :packed_hdf5 and :model_tb"))
     length(unique(config.output.tb_output_formats)) == length(config.output.tb_output_formats) ||
         throw(ArgumentError("tb_output_formats must not contain duplicates"))
     config.output.final_tb_symmetry_report_enabled === nothing ||
@@ -569,8 +572,11 @@ function _validate_wannierization_config(config::SymmetryAdaptedWannierizationCo
     # selection once.  Every downstream requirement is derived from this
     # resolved source closure so that unrequested operator sources never become
     # a configuration hard gate.
-    operator_selection =
-        resolve_operator_selection(config.output.profile, config.output.operator_tasks)
+    operator_selection = resolve_operator_selection(
+        config.output.profile,
+        config.output.operator_tasks;
+        content_authentication = false,
+    )
     resolved_operator_sources = resolved_source_inventory(operator_selection)
     isfinite(config.output.operator_closure_tolerance) &&
     config.output.operator_closure_tolerance > 0.0 || throw(
@@ -613,57 +619,40 @@ function _validate_wannierization_config(config::SymmetryAdaptedWannierizationCo
         throw(ArgumentError("OPERATOR_SOURCE_INPUT_REQUIRED: operator_tasks require $(label)"))
     end
     acceleration = config.solver.acceleration
-    acceleration.strategy in (:fixed, :adaptive, :anderson_z) ||
-        throw(ArgumentError("acceleration strategy must be :fixed, :adaptive, or :anderson_z"))
+    acceleration.strategy == :fixed || throw(
+        ArgumentError(
+            "REMOVED_ACCELERATION_STRATEGY: only the mode-owned fixed algorithm is supported",
+        ),
+    )
     acceleration.schedule == :nested && throw(
         ArgumentError(
             "UNSUPPORTED_LEGACY_SCHEDULE: schedule=:nested was removed; use schedule=:two_stage",
         ),
     )
-    acceleration.schedule in (:two_stage, :joint, :fixed_subspace) ||
-        throw(ArgumentError("acceleration schedule must be :two_stage, :joint, or :fixed_subspace"))
-    acceleration.localization_algorithm == :wannier90_fletcher_reeves && throw(
-        ArgumentError(
-            "REMOVED_LEGACY_LOCALIZATION_ALGORITHM: :wannier90_fletcher_reeves was not " *
-            "Wannier90-equivalent; use algorithm_profile=:auto for ordinary no-symmetry " *
-            "Wannierization or choose an expert algorithm with algorithm_profile=:custom",
-        ),
-    )
-    acceleration.localization_algorithm in (
-        :symmetry_projected_gradient,
-        :polar_then_gradient,
-        :riemannian_cg,
-        :riemannian_lbfgs,
-        :smv_fletcher_reeves_two_stage,
-        :symmetry_projected_smv_fletcher_reeves_two_stage,
-    ) || throw(ArgumentError("unsupported localization_algorithm"))
-    acceleration.disentanglement_algorithm in (
-        :smv_fixed_point,
-        :grassmann_trust_region,
-        :smv_fletcher_reeves_two_stage,
-        :symmetry_projected_smv_fletcher_reeves_two_stage,
-    ) || throw(ArgumentError("unsupported disentanglement_algorithm"))
+    acceleration.schedule == :two_stage ||
+        throw(ArgumentError("acceleration schedule must be :two_stage"))
     acceleration.subspace_gauge_policy == :boundary_cluster_procrustes ||
         throw(ArgumentError("subspace_gauge_policy must be :boundary_cluster_procrustes"))
     acceleration.hot_storage_backend in (:legacy_vector, :contiguous, :auto) ||
         throw(ArgumentError("hot_storage_backend must be :legacy_vector, :contiguous, or :auto"))
-    acceleration.u_w90_restart_interval > 0 ||
-        throw(ArgumentError("u_w90_restart_interval must be positive"))
-    acceleration.u_w90_trial_step > 0.0 && isfinite(acceleration.u_w90_trial_step) ||
-        throw(ArgumentError("u_w90_trial_step must be positive and finite"))
+    acceleration.u_recursive_localization_restart_interval > 0 ||
+        throw(ArgumentError("u_recursive_localization_restart_interval must be positive"))
+    acceleration.u_recursive_localization_trial_step > 0.0 &&
+    isfinite(acceleration.u_recursive_localization_trial_step) ||
+        throw(ArgumentError("u_recursive_localization_trial_step must be positive and finite"))
     effective_algorithms = _effective_wannierization_algorithms(config)
     effective_algorithms.localization == :smv_fletcher_reeves_two_stage &&
         _symmetry_constraints_applied(config) &&
         throw(
             ArgumentError(
-                "WANNIER90_REFERENCE_MODE_MISMATCH: :smv_fletcher_reeves_two_stage is valid only for ordinary",
+                "RECURSIVE_LOCALIZATION_MODE_MISMATCH: :smv_fletcher_reeves_two_stage is valid only for ordinary",
             ),
         )
     effective_algorithms.disentanglement == :smv_fletcher_reeves_two_stage &&
         acceleration.schedule != :two_stage &&
         throw(
             ArgumentError(
-                "WANNIER90_REFERENCE_SCHEDULE_MISMATCH: exact Wannier90 disentanglement requires schedule=:two_stage",
+                "RECURSIVE_LOCALIZATION_SCHEDULE_MISMATCH: exact Wannier disentanglement requires schedule=:two_stage",
             ),
         )
     effective_algorithms.disentanglement == :symmetry_projected_smv_fletcher_reeves_two_stage &&
@@ -673,20 +662,6 @@ function _validate_wannierization_config(config::SymmetryAdaptedWannierizationCo
                 "SYMMETRY_PROJECTED_SMV_FR_SCHEDULE_MISMATCH: the projected profile requires schedule=:two_stage",
             ),
         )
-    0.0 < acceleration.trust_radius_initial <= acceleration.trust_radius_maximum ||
-        throw(ArgumentError("trust radii must be positive and ordered"))
-    isfinite(acceleration.trust_radius_maximum) ||
-        throw(ArgumentError("trust radii must be finite"))
-    0.0 < acceleration.trust_acceptance_threshold < 1.0 ||
-        throw(ArgumentError("trust_acceptance_threshold must be in (0, 1)"))
-    0.0 < acceleration.trust_shrink_threshold < acceleration.trust_expand_threshold < 1.0 ||
-        throw(ArgumentError("trust shrink/expand thresholds must be ordered in (0, 1)"))
-    config.solver.initialization == :fixed_subspace &&
-        acceleration.schedule != :fixed_subspace &&
-        throw(ArgumentError("initialization=:fixed_subspace requires schedule=:fixed_subspace"))
-    acceleration.schedule == :fixed_subspace &&
-        config.solver.initialization != :fixed_subspace &&
-        throw(ArgumentError("schedule=:fixed_subspace requires initialization=:fixed_subspace"))
     acceleration.u_acceptance in (:armijo, :strong_wolfe, :monotone, :invariant_only) || throw(
         ArgumentError("u_acceptance must be :armijo, :strong_wolfe, :monotone, or :invariant_only"),
     )
@@ -707,10 +682,6 @@ function _validate_wannierization_config(config::SymmetryAdaptedWannierizationCo
         throw(ArgumentError("u_phase_branch_tolerance must be smaller than pi"))
     acceleration.u_branch_active_set_max_orbits > 0 ||
         throw(ArgumentError("u_branch_active_set_max_orbits must be positive"))
-    acceleration.u_lbfgs_history > 0 || throw(ArgumentError("u_lbfgs_history must be positive"))
-    acceleration.u_lbfgs_curvature_tolerance > 0.0 &&
-    isfinite(acceleration.u_lbfgs_curvature_tolerance) ||
-        throw(ArgumentError("u_lbfgs_curvature_tolerance must be positive and finite"))
     acceleration.u_armijo_c1 < acceleration.u_wolfe_c2 < 1.0 ||
         throw(ArgumentError("u_wolfe_c2 must lie in (u_armijo_c1, 1)"))
     acceleration.u_line_search_max_trials > 0 ||
@@ -720,10 +691,14 @@ function _validate_wannierization_config(config::SymmetryAdaptedWannierizationCo
     acceleration.u_gradient_norm_tolerance > 0.0 &&
     isfinite(acceleration.u_gradient_norm_tolerance) ||
         throw(ArgumentError("u_gradient_norm_tolerance must be positive and finite"))
-    acceleration.localization_max_steps > 0 ||
-        throw(ArgumentError("localization_max_steps must be positive"))
-    acceleration.disentanglement_max_steps > 0 ||
-        throw(ArgumentError("disentanglement_max_steps must be positive"))
+    (
+        acceleration.localization_max_steps > 0 ||
+        (config.solver.stage_controls !== nothing && acceleration.localization_max_steps == 0)
+    ) || throw(ArgumentError("localization_max_steps must be positive"))
+    (
+        acceleration.disentanglement_max_steps > 0 ||
+        (config.solver.stage_controls !== nothing && acceleration.disentanglement_max_steps == 0)
+    ) || throw(ArgumentError("disentanglement_max_steps must be positive"))
     acceleration.disentanglement_objective_tolerance >= 0.0 &&
     isfinite(acceleration.disentanglement_objective_tolerance) ||
         throw(ArgumentError("disentanglement_objective_tolerance must be nonnegative and finite"))
@@ -734,10 +709,6 @@ function _validate_wannierization_config(config::SymmetryAdaptedWannierizationCo
     acceleration.disentanglement_limit_policy in (:standard_continue, :strict_hold) || throw(
         ArgumentError("disentanglement_limit_policy must be :standard_continue or :strict_hold"),
     )
-    0.0 < acceleration.joint_z_backtracking_factor < 1.0 ||
-        throw(ArgumentError("joint_z_backtracking_factor must be in (0, 1)"))
-    acceleration.joint_z_backtracking_max_steps >= 0 ||
-        throw(ArgumentError("joint_z_backtracking_max_steps must be nonnegative"))
     acceleration.constraint_operation_scope in (:full, :unitary, :identity) ||
         throw(ArgumentError("constraint_operation_scope must be :full, :unitary, or :identity"))
     _effective_wannierization_mode(config) == :ordinary &&
@@ -750,32 +721,9 @@ function _validate_wannierization_config(config::SymmetryAdaptedWannierizationCo
     acceleration.localization_max_condition >= 1.0 &&
     isfinite(acceleration.localization_max_condition) ||
         throw(ArgumentError("localization_max_condition must be finite and at least one"))
-    acceleration.polar_warm_start_max_steps >= 0 ||
-        throw(ArgumentError("polar_warm_start_max_steps must be nonnegative"))
     acceleration.u_inner_sweeps > 0 || throw(ArgumentError("u_inner_sweeps must be positive"))
     isfinite(acceleration.u_inner_tolerance) && acceleration.u_inner_tolerance > 0.0 ||
         throw(ArgumentError("u_inner_tolerance must be positive and finite"))
-    for (name, bounds) in (
-        ("adaptive_z_bounds", acceleration.adaptive_z_bounds),
-        ("adaptive_u_bounds", acceleration.adaptive_u_bounds),
-    )
-        0.0 < bounds[1] <= bounds[2] <= 1.0 ||
-            throw(ArgumentError("$(name) must be ordered inside (0, 1]"))
-    end
-    acceleration.adaptive_growth > 1.0 && isfinite(acceleration.adaptive_growth) ||
-        throw(ArgumentError("adaptive_growth must be finite and greater than one"))
-    0.0 < acceleration.adaptive_shrink < 1.0 ||
-        throw(ArgumentError("adaptive_shrink must be in (0, 1)"))
-    0.0 < acceleration.adaptive_improvement_ratio <= 1.0 ||
-        throw(ArgumentError("adaptive_improvement_ratio must be in (0, 1]"))
-    acceleration.adaptive_reject_ratio > 1.0 ||
-        throw(ArgumentError("adaptive_reject_ratio must exceed one"))
-    acceleration.adaptive_patience > 0 || throw(ArgumentError("adaptive_patience must be positive"))
-    acceleration.anderson_depth > 0 || throw(ArgumentError("anderson_depth must be positive"))
-    acceleration.anderson_start_iteration > 0 ||
-        throw(ArgumentError("anderson_start_iteration must be positive"))
-    acceleration.anderson_regularization >= 0.0 && isfinite(acceleration.anderson_regularization) ||
-        throw(ArgumentError("anderson_regularization must be nonnegative and finite"))
     acceleration.u_cg_restart_interval > 0 ||
         throw(ArgumentError("u_cg_restart_interval must be positive"))
     acceleration.u_cg_beta_cap > 0.0 && isfinite(acceleration.u_cg_beta_cap) ||
@@ -857,7 +805,7 @@ end
 
 # Return the requested target dimension and cross-check a supplied projection basis.
 function _configured_num_wannier(
-    config::Union{SymmetryAdaptedWannierizationConfig, BandRepresentationPreparationConfig},
+    config::Union{WannierizationConfig, BandRepresentationPreparationConfig},
 )
     basis_dimension =
         _wannierization_input_config(config).projection_basis === nothing ? 0 :

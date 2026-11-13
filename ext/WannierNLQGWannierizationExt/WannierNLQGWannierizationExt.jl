@@ -10,8 +10,11 @@ include("components/OperatorExport.jl")
 include("components/WorkflowOrchestration.jl")
 
 const ENTRYPOINT_OWNERS = Dict{Symbol, Module}(
+    :native_qe_wannier_metadata => RepresentationPreparation,
+    :native_vasp_wannier_metadata => RepresentationPreparation,
     :audit_paw_block_partitions => PAWMatrixElements,
-    :construct_symmetry_adapted_wannier_functions => WorkflowOrchestration,
+    :construct_wannier_functions => WorkflowOrchestration,
+    :construct_wannier_functions_with_native_inputs => WorkflowOrchestration,
     :prepare_band_representation => WorkflowOrchestration,
     :prepare_wannier_operator_target_contract => WorkflowOrchestration,
     :prepare_symmetry_covariant_wavefunctions => PAWMatrixElements,
@@ -26,14 +29,13 @@ const ENTRYPOINT_OWNERS = Dict{Symbol, Module}(
     :generate_qe_paw_matrix_elements => PAWMatrixElements,
     :generate_symmetry_completed_qe_paw_matrix_elements => PAWMatrixElements,
     :generate_wannier_uiu => PAWMatrixElements,
-    :prepare_exact_wannier_operator_bundle => OperatorExport,
+    :prepare_full_uiu_derivative_operator_bundle => OperatorExport,
     :generate_wannier_uhu => OperatorExport,
     :generate_wannier_shu => OperatorExport,
     :generate_wannier_siu => OperatorExport,
     :read_wannierization_checkpoint_hdf5 => SolverCheckpoint,
+    :adopt_wannierization_checkpoint_hdf5 => SolverCheckpoint,
     :write_wannierization_checkpoint_hdf5 => SolverCheckpoint,
-    :read_wannierization_fixed_subspace_hdf5 => SolverCheckpoint,
-    :write_wannierization_fixed_subspace_hdf5 => SolverCheckpoint,
     :classify_wannierization_u_periodicity => SolverCheckpoint,
     :evaluate_full_3d_wannier_spreads => SolverCheckpoint,
     :smv_fletcher_reeves_two_stage_audit => SolverCheckpoint,
@@ -54,6 +56,10 @@ const ENTRYPOINT_OWNERS = Dict{Symbol, Module}(
 )
 
 const TEST_ENTRYPOINT_OWNERS = Dict{Symbol, Module}(
+    :_publish_native_input_views => WorkflowOrchestration,
+    :_adopt_native_input_views => WorkflowOrchestration,
+    :_native_input_reuse_phase => WorkflowOrchestration,
+    :_validate_native_input_view_lifetimes => WorkflowOrchestration,
     :_complete_window_indices => WannierizationInternalSupport,
     :_hungarian_maximum_assignment => WannierizationInternalSupport,
     :_target_representation => WannierizationInternalSupport,
@@ -68,7 +74,7 @@ const TEST_ENTRYPOINT_OWNERS = Dict{Symbol, Module}(
     :_group_law_combination_index => RepresentationPreparation,
     :_match_symmetry_operations => RepresentationPreparation,
     :_paired_matrix_residual_metrics => RepresentationPreparation,
-    :_representation_static_sha256 => RepresentationPreparation,
+    :_representation_static_definition => RepresentationPreparation,
     :_stable_subspace_alignment => RepresentationPreparation,
     :_symmetry_constraints_applied => RepresentationPreparation,
     :_validate_band_representation_preparation_config => RepresentationPreparation,
@@ -76,12 +82,8 @@ const TEST_ENTRYPOINT_OWNERS = Dict{Symbol, Module}(
     :_validate_target_operation_inventory => RepresentationPreparation,
     :_validate_wannierization_config => RepresentationPreparation,
     :_wannier_gauge_link_diagnostics => RepresentationPreparation,
-    :_acceleration_trial_action => SolverCheckpoint,
     :_accepted_unitary_displacement => SolverCheckpoint,
-    :_adaptive_next_mixing => SolverCheckpoint,
     :_amn_target_qualification_metrics => SolverCheckpoint,
-    :_anderson_trial_policy => SolverCheckpoint,
-    :_anderson_z_proposal => SolverCheckpoint,
     :_backtracking_step_scale => SolverCheckpoint,
     :_best_fletcher_reeves_finite_descent => SolverCheckpoint,
     :_build_target_symmetry_tangent_plans => SolverCheckpoint,
@@ -89,7 +91,6 @@ const TEST_ENTRYPOINT_OWNERS = Dict{Symbol, Module}(
     :_candidate_invariant_residuals => SolverCheckpoint,
     :_centers_spreads_and_directions => SolverCheckpoint,
     :_complete_selected_subspace_star => SolverCheckpoint,
-    :_complex_field_sha256 => SolverCheckpoint,
     :_corepresentation_aware_maximum_subspace_result => SolverCheckpoint,
     :_deterministic_sealed_subspace_perturbation => SolverCheckpoint,
     :_disentanglement_candidate => SolverCheckpoint,
@@ -98,7 +99,6 @@ const TEST_ENTRYPOINT_OWNERS = Dict{Symbol, Module}(
     :_expand_ibz_frames => SolverCheckpoint,
     :_expand_ibz_target_tangents => SolverCheckpoint,
     :_finite_difference_weights => SolverCheckpoint,
-    :_fixed_subspace_initial_frames => SolverCheckpoint,
     :_fixed_subspace_projector_drift_tolerance => SolverCheckpoint,
     :_frame_geodesic_distance => SolverCheckpoint,
     :_frozen_indices => SolverCheckpoint,
@@ -131,7 +131,6 @@ const TEST_ENTRYPOINT_OWNERS = Dict{Symbol, Module}(
     :_mv_generalized_directional_derivative => SolverCheckpoint,
     :_mv_localization_phase => SolverCheckpoint,
     :_mv_spread_gradient => SolverCheckpoint,
-    :_objective_aware_anderson_decision => SolverCheckpoint,
     :_orthonormalize_columns => SolverCheckpoint,
     :_orthonormalize_columns_result => SolverCheckpoint,
     :_pack_complex_real => SolverCheckpoint,
@@ -149,18 +148,12 @@ const TEST_ENTRYPOINT_OWNERS = Dict{Symbol, Module}(
     :_repair_expanded_frozen_frame => SolverCheckpoint,
     :_representation_target_subspace_contract => SolverCheckpoint,
     :_restart_config_repr => SolverCheckpoint,
-    :_restart_config_sha256 => SolverCheckpoint,
-    :_restart_config_sha256_pre_v2_11 => SolverCheckpoint,
-    :_restart_config_sha256_pre_v2_6 => SolverCheckpoint,
-    :_restart_config_sha256_pre_v2_7 => SolverCheckpoint,
     :_restart_matrix_field => SolverCheckpoint,
     :_restore_expanded_frames_to_subspaces => SolverCheckpoint,
-    :_riemannian_lbfgs_direction => SolverCheckpoint,
     :_rotate_hermitian_field_entry => SolverCheckpoint,
     :_rotate_localized_overlap_state => SolverCheckpoint,
     :_sealed_amn_polar => SolverCheckpoint,
     :_select_wannierization_multistart => SolverCheckpoint,
-    :_shrunken_acceleration_mixing => SolverCheckpoint,
     :_solve_symmetry_adapted_wannierization => SolverCheckpoint,
     :_symmetry_projected_spread_gradient => SolverCheckpoint,
     :_target_symmetry_tangent_plan => SolverCheckpoint,
@@ -170,31 +163,37 @@ const TEST_ENTRYPOINT_OWNERS = Dict{Symbol, Module}(
     :_unpack_complex_real => SolverCheckpoint,
     :_validate_hermitian_eigensystem => SolverCheckpoint,
     :_validated_hermitian_spectrum => SolverCheckpoint,
-    :_wannier90_reference_amn_polar => SolverCheckpoint,
-    :_wannier90_reference_b_cartesian => SolverCheckpoint,
-    :_wannier90_reference_complex_exponential => SolverCheckpoint,
-    :_wannier90_reference_dis_project => SolverCheckpoint,
-    :_wannier90_reference_edge_b_cartesian => SolverCheckpoint,
-    :_wannier90_reference_finite_difference_weights => SolverCheckpoint,
-    :_wannier90_reference_gfortran_column_conjugate_product => SolverCheckpoint,
-    :_wannier90_reference_gfortran_column_division => SolverCheckpoint,
-    :_wannier90_reference_gfortran_complex_product => SolverCheckpoint,
-    :_wannier90_reference_gfortran_magnitude_squared => SolverCheckpoint,
-    :_wannier90_reference_gfortran_phase_column_product => SolverCheckpoint,
-    :_wannier90_reference_gfortran_scalar_magnitude_squared => SolverCheckpoint,
-    :_wannier90_reference_gradient_center_accumulate => SolverCheckpoint,
-    :_wannier90_reference_invariant_spread => SolverCheckpoint,
-    :_wannier90_reference_maximum_subspace_result => SolverCheckpoint,
-    :_wannier90_reference_objective_center_accumulate => SolverCheckpoint,
-    :_wannier90_reference_omega_d_accumulate => SolverCheckpoint,
-    :_wannier90_reference_optimal_step => SolverCheckpoint,
-    :_wannier90_reference_phase => SolverCheckpoint,
-    :_wannier90_reference_search_direction => SolverCheckpoint,
-    :_wannier90_reference_unitary_step => SolverCheckpoint,
-    :_wannier90_reference_weight_total => SolverCheckpoint,
-    :_wannier90_reference_zdot => SolverCheckpoint,
-    :_wannier90_reference_zgemm => SolverCheckpoint,
-    :_wannier90_reference_zhpevx => SolverCheckpoint,
+    :_recursive_localization_amn_polar => SolverCheckpoint,
+    :_recursive_localization_b_cartesian => SolverCheckpoint,
+    :_recursive_localization_complex_exponential => SolverCheckpoint,
+    :_recursive_localization_dis_project => SolverCheckpoint,
+    :_recursive_localization_edge_b_cartesian => SolverCheckpoint,
+    :_recursive_localization_finite_difference_weights => SolverCheckpoint,
+    :_recursive_localization_ordered_column_conjugate_product => SolverCheckpoint,
+    :_recursive_localization_ordered_column_division => SolverCheckpoint,
+    :_recursive_localization_ordered_complex_product => SolverCheckpoint,
+    :_recursive_localization_ordered_magnitude_squared => SolverCheckpoint,
+    :_recursive_localization_ordered_phase_column_product => SolverCheckpoint,
+    :_recursive_localization_ordered_scalar_magnitude_squared => SolverCheckpoint,
+    :_recursive_localization_gradient_center_accumulate => SolverCheckpoint,
+    :_recursive_localization_invariant_spread => SolverCheckpoint,
+    :_recursive_localization_maximum_subspace_result => SolverCheckpoint,
+    :_recursive_localization_objective_center_accumulate => SolverCheckpoint,
+    :_recursive_localization_omega_d_accumulate => SolverCheckpoint,
+    :_recursive_localization_optimal_step => SolverCheckpoint,
+    :_recursive_localization_phase => SolverCheckpoint,
+    :_recursive_localization_search_direction => SolverCheckpoint,
+    :_recursive_localization_unitary_step => SolverCheckpoint,
+    :_recursive_localization_weight_total => SolverCheckpoint,
+    :_recursive_localization_zdot => SolverCheckpoint,
+    :_recursive_localization_zgemm => SolverCheckpoint,
+    :_recursive_localization_zhpevx => SolverCheckpoint,
+    :_mv_branch_orbit_definition => SolverCheckpoint,
+    :_u_branch_definition => SolverCheckpoint,
+    :_validate_u_branch_definition => SolverCheckpoint,
+    :_write_restart_branch_definition_hdf5 => SolverCheckpoint,
+    :_read_restart_branch_definition_hdf5 => SolverCheckpoint,
+    :_restart_input_definition => SolverCheckpoint,
 )
 
 isempty(intersect(keys(ENTRYPOINT_OWNERS), keys(TEST_ENTRYPOINT_OWNERS))) ||
@@ -217,7 +216,8 @@ resolve_wannierization_entrypoint(name::Symbol) = getfield(
     name,
 )
 
-export construct_symmetry_adapted_wannier_functions
+export construct_wannier_functions
+export construct_wannier_functions_with_native_inputs
 export prepare_band_representation
 export prepare_symmetry_covariant_wavefunctions
 export prepare_paw_scdm_input_artifact, read_paw_scdm_input_artifact
@@ -229,10 +229,10 @@ export read_vasp_paw_spn_provenance
 export read_qe_paw_spn_provenance
 export generate_qe_paw_matrix_elements
 export generate_symmetry_completed_qe_paw_matrix_elements
-export generate_wannier_uiu, prepare_exact_wannier_operator_bundle
+export generate_wannier_uiu, prepare_full_uiu_derivative_operator_bundle
 export generate_wannier_uhu, generate_wannier_shu, generate_wannier_siu
 export read_wannierization_checkpoint_hdf5, write_wannierization_checkpoint_hdf5
-export read_wannierization_fixed_subspace_hdf5, write_wannierization_fixed_subspace_hdf5
+export adopt_wannierization_checkpoint_hdf5
 export write_wannierization_u_convergence_diagnostics_hdf5
 export build_wannier_tight_binding_model
 export AuthoritativeBandHamiltonian, authoritative_band_hamiltonian
@@ -245,15 +245,13 @@ export materialize_projection_basis
 export materialize_symmetry_adapted_wannierization_config
 
 # Captured first-use declarations are specific to the frozen Julia trace.
-if WannierizationInternalSupport.WannierNLQG.FIRST_USE_TRACE_COMPATIBLE
-    include("WannierizationExtFirstUsePrecompile.jl")
-    include("Generated/VASPPAWSPNResidualSignatures.jl")
-
-    include("TBQualificationFirstUseCoverage.jl")
-
-    include("RemainingExpertColdNativeCoverage.jl")
-
-    include("WannierizationTaskInferenceResidualCoverage.jl")
+include("RepresentativePersistenceReaders.jl")
+include("RepresentativeQEPAWWorkload.jl")
+include("RepresentativeQENativeOperatorWorkload.jl")
+include("RepresentativeVASPPAWWorkload.jl")
+if WannierNLQG.FIRST_USE_WORKLOAD_ENABLED
+    include("RepresentativeCheckpointTBWorkload.jl")
 end
+include("WannierizationExtFirstUsePrecompile.jl")
 
 end

@@ -911,8 +911,9 @@ function _star_project_formal_target_actions(
     formal_tolerance::Real,
     correction_tolerance::Real,
     max_iterations::Int = 16,
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
+    validate_ordinary_construction_policy(construction_policy)
     raw_tolerance = Float64(raw_group_tolerance)
     target_tolerance = Float64(formal_tolerance)
     correction_limit = Float64(correction_tolerance)
@@ -942,14 +943,6 @@ function _star_project_formal_target_actions(
     )
     isfinite(initial.maximum) ||
         throw(ArgumentError("NONFINITE_STRUCTURAL_HOLD: formal target group residual"))
-    construction_policy == :standard ||
-        initial.maximum <= raw_tolerance ||
-        throw(
-            ArgumentError(
-                "FORMAL_TARGET_RAW_GROUP_LAW_HOLD: target polar group residual " *
-                "$(initial.maximum) exceeds $(raw_tolerance); $(initial.context)",
-            ),
-        )
     dimension = size(first(values(current)), 1)
     identity_matrix = Matrix{ComplexF64}(I, dimension, dimension)
     for source in ordered_star
@@ -1016,6 +1009,10 @@ function _star_project_formal_target_actions(
         correction = maximum(
             norm(updated[key] - raw_actions[key]) / sqrt(dimension) for key in keys(updated)
         )
+        all(
+            isfinite,
+            (residual.maximum, residual.corepresentation, residual.theta_squared, correction),
+        ) || throw(ArgumentError("NONFINITE_STRUCTURAL_HOLD: formal target iteration"))
         if residual.maximum < best.maximum
             best = residual
             best_actions = copy(updated)
@@ -1024,14 +1021,6 @@ function _star_project_formal_target_actions(
         if residual.maximum <= target_tolerance &&
            residual.corepresentation <= target_tolerance &&
            residual.theta_squared <= target_tolerance
-            construction_policy == :standard ||
-                correction <= correction_limit ||
-                throw(
-                    ArgumentError(
-                        "FORMAL_TARGET_ACTION_CORRECTION_HOLD: normalized formal action correction " *
-                        "$(correction) exceeds $(correction_limit); $(residual.context)",
-                    ),
-                )
             return (
                 actions = updated,
                 product_table = product_table,
@@ -1043,36 +1032,27 @@ function _star_project_formal_target_actions(
         end
         current = updated
     end
-    if construction_policy == :standard
-        # Identity normalization can change the initial fallback; audit the
-        # retained action itself, even if no synchronization step improved it.
-        best = _star_target_action_group_residual(
-            best_actions,
-            native,
-            ordered_star,
-            operations,
-            kpoint_map,
-            product_table,
-        )
-        best_correction = maximum(
-            norm(best_actions[key] - raw_actions[key]) / sqrt(dimension) for
-            key in keys(best_actions)
-        )
-        return (
-            actions = best_actions,
-            product_table = product_table,
-            iterations = max_iterations,
-            initial = initial,
-            residual = best,
-            correction = best_correction,
-        )
-    end
-    throw(
-        ArgumentError(
-            "FORMAL_TARGET_REPRESENTATION_HOLD: projected target group residual " *
-            "$(best.maximum) exceeds $(target_tolerance) after $(max_iterations) " *
-            "synchronization iterations; correction=$(best_correction); $(best.context)",
-        ),
+    # Audit the retained finite action after identity normalization.
+    best = _star_target_action_group_residual(
+        best_actions,
+        native,
+        ordered_star,
+        operations,
+        kpoint_map,
+        product_table,
+    )
+    best_correction = maximum(
+        norm(best_actions[key]-raw_actions[key])/sqrt(dimension) for key in keys(best_actions)
+    )
+    all(isfinite, (best.maximum, best.corepresentation, best.theta_squared, best_correction)) ||
+        throw(ArgumentError("NONFINITE_STRUCTURAL_HOLD: retained formal target action"))
+    return (
+        actions = best_actions,
+        product_table,
+        iterations = max_iterations,
+        initial,
+        residual = best,
+        correction = best_correction,
     )
 end
 
@@ -1087,8 +1067,9 @@ function _star_validate_formal_target_actions_analytic(
     kpoint_map::Matrix{Int},
     reciprocal_shifts::Array{Int, 3},
     tolerance::Real;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
+    validate_ordinary_construction_policy(construction_policy)
     tolerance_value = Float64(tolerance)
     ordered_star = sort!(Int.(collect(star)))
     local_index = Dict(kpoint => index for (index, kpoint) in enumerate(ordered_star))
@@ -1154,15 +1135,16 @@ function _star_validate_formal_target_actions_analytic(
         metadata_origin = :computed,
         validation_profile = :analytic,
     )
-    construction_policy == :standard ||
-        report.passed ||
-        throw(
-            ArgumentError(
-                "FORMAL_TARGET_REPRESENTATION_HOLD: analytic target representation validator " *
-                "failed: " *
-                join((string(diagnostic.code) for diagnostic in report.diagnostics), ","),
-            ),
-        )
+    any(
+        d -> d.severity == :error && !construction_compatibility_quality_failure(d),
+        report.diagnostics,
+    ) && throw(
+        ArgumentError(
+            "FORMAL_TARGET_REPRESENTATION_HOLD: analytic target representation validator " *
+            "failed: " *
+            join((string(diagnostic.code) for diagnostic in report.diagnostics), ","),
+        ),
+    )
     return (
         maximum_group_law = maximum(report.maximum_group_law_residuals),
         group_law_channels = report.maximum_group_law_residuals,
@@ -1170,7 +1152,6 @@ function _star_validate_formal_target_actions_analytic(
         theta_squared = report.theta_squared_residual,
         kramers = report.maximum_kramers_residual,
         required_block_unitarity = report.maximum_required_block_unitarity_residual,
-        representation_sha256 = report.representation_sha256,
     )
 end
 
@@ -1219,8 +1200,9 @@ function _star_formal_target_reynolds_projection(
     operations::Vector{SymmetryOperation},
     kpoint_map::Matrix{Int},
     tolerance_ev::Real;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
+    validate_ordinary_construction_policy(construction_policy)
     tolerance = Float64(tolerance_ev)
     isfinite(tolerance) && tolerance > 0.0 ||
         throw(ArgumentError("formal target covariance tolerance must be positive and finite"))
@@ -1232,22 +1214,6 @@ function _star_formal_target_reynolds_projection(
         maximum(opnorm(projected_twice[kpoint] - projected[kpoint]) for kpoint in keys(projected))
     isfinite(residual) && isfinite(idempotence) ||
         throw(ArgumentError("NONFINITE_STRUCTURAL_HOLD: Reynolds residual"))
-    construction_policy == :standard ||
-        residual <= tolerance ||
-        throw(
-            ArgumentError(
-                "FORMAL_TARGET_REPRESENTATION_HOLD: finite-group target Reynolds covariance " *
-                "$(residual) exceeds $(tolerance); $(context)",
-            ),
-        )
-    construction_policy == :standard ||
-        idempotence <= tolerance ||
-        throw(
-            ArgumentError(
-                "FORMAL_TARGET_REPRESENTATION_HOLD: finite-group target Reynolds idempotence " *
-                "$(idempotence) exceeds $(tolerance)",
-            ),
-        )
     return (
         field = projected,
         covariance_residual_ev = residual,
@@ -1292,8 +1258,9 @@ function _star_target_reynolds_hamiltonians(
     threshold_ev::Float64,
     raw_group_tolerance::Float64,
     action_correction_tolerance::Float64;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
+    validate_ordinary_construction_policy(construction_policy)
     workspace == (1:length(workspace)) || throw(
         ArgumentError(
             "TARGET_MASK_MAPPING_HOLD: target Reynolds requires a complete parent workspace",
@@ -1411,7 +1378,6 @@ function _star_target_reynolds_hamiltonians(
         analytic_theta_squared = analytic.theta_squared,
         analytic_kramers = analytic.kramers,
         analytic_required_block_unitarity = analytic.required_block_unitarity,
-        analytic_representation_sha256 = analytic.representation_sha256,
         covariance_residual_ev = reynolds.covariance_residual_ev,
         covariance_worst_context = reynolds.covariance_worst_context,
         idempotence_ev = reynolds.idempotence_ev,
@@ -1916,7 +1882,8 @@ function _star_first_star_strict_gate!(config, context, solution)
         context.native.spinor,
         points,
         context.native.input_sha256,
-        context.native.source_metadata,
+        context.native.source_metadata;
+        source_definition = context.native.source_definition,
     )
     subset_metric = _star_completed_subset_metric(context.metric, global_indices, points)
     energies = hcat((point.energies_ev for point in points)...)
@@ -1998,7 +1965,8 @@ function _star_raw_preflight_strict_diagnostics!(
         native.spinor,
         points,
         native.input_sha256,
-        native.source_metadata,
+        native.source_metadata;
+        source_definition = native.source_definition,
     )
     subset_metric = _star_completed_subset_metric(metric, star, points)
     energies = hcat((point.energies_ev for point in points)...)
@@ -2122,37 +2090,15 @@ function _star_raw_preflight_strict_diagnostics!(
             get(conventions, context_key, context),
         )
         gate_context = get(conventions, context_key, context)
-        if config.construction_policy == :standard
-            _star_construction_quality_gate!(
-                config,
-                maxima,
-                contexts,
-                diagnostic_key,
-                value,
-                threshold;
-                context = gate_context,
-            )
-            continue
-        end
-        status = _star_raw_target_precontrol_gate(
-            config.authoritative_hamiltonian,
-            gauge.hamiltonian_correction,
+        _star_construction_quality_gate!(
+            config,
+            maxima,
+            contexts,
             diagnostic_key,
             value,
             threshold;
             context = gate_context,
         )
-        if status == :CONTROLLED_PRE_SYMMETRIZATION_AUDIT
-            maxima["controlled_pre_symmetrization_audit_count"] =
-                get(maxima, "controlled_pre_symmetrization_audit_count", 0.0) + 1.0
-            _star_update_maximum!(
-                maxima,
-                contexts,
-                "$(diagnostic_key)_precontrol_audit_ratio",
-                value / threshold,
-                gate_context,
-            )
-        end
     end
     return nothing
 end

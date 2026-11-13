@@ -68,6 +68,22 @@ function gauge_scope_representation_fixture()
     )
 end
 
+@testset "subgroup membership compares actual ordered actions" begin
+    extension =
+        Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).RepresentationPreparation
+    for count in 1:4
+        mapping =
+            [mod(kpoint + operation - 2, count) + 1 for operation in 1:count, kpoint in 1:count]
+        before = copy(mapping)
+        @test extension._validate_constraint_kpoint_subgroup(mapping) === nothing
+        @test mapping == before
+    end
+    large_identity = reshape(collect(1:100_000), 1, :)
+    @test extension._validate_constraint_kpoint_subgroup(large_identity) === nothing
+    @test_throws ArgumentError extension._validate_constraint_kpoint_subgroup([1 2; 1 2])
+    @test_throws ArgumentError extension._validate_constraint_kpoint_subgroup([1 2 3; 2 3 1])
+end
+
 @testset "constraint operation scopes rebuild closed k-stars" begin
     extension =
         Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).RepresentationPreparation
@@ -75,7 +91,7 @@ end
     representation = gauge_scope_representation_fixture()
     full = extension._constraint_scoped_representation(representation, :full)
     @test full.representation === representation
-    @test full.parent_sha256 == full.subgroup_sha256
+    @test full.parent_operation_indices == collect(eachindex(representation.operations))
 
     unitary = extension._constraint_scoped_representation(representation, :unitary)
     @test length(unitary.representation.operations) == 2
@@ -83,7 +99,8 @@ end
     @test unitary.representation.irreducible_indices == [1]
     @test unitary.representation.full_to_irreducible == [1, 1]
     @test unitary.parent_operation_indices == [1, 2]
-    @test unitary.subgroup_sha256 != unitary.parent_sha256
+    @test unitary.parent_operation_indices ==
+          findall(op -> !op.antiunitary, representation.operations)
 
     identity = extension._constraint_scoped_representation(representation, :identity)
     @test length(identity.representation.operations) == 1
@@ -102,13 +119,8 @@ end
         falses(2, 2);
         source_sha256 = Dict("z_seal_class" => "CONVERGED"),
     )
-    identity_fixed = extension._constraint_scoped_fixed_subspace(
-        fixed,
-        identity.representation,
-        identity.parent_sha256,
-        identity.subgroup_sha256,
-        :identity,
-    )
+    identity_fixed =
+        extension._constraint_scoped_fixed_subspace(fixed, identity.representation, :identity)
     @test identity_fixed.projectors == fixed.projectors
     @test identity_fixed.frames == fixed.frames
     @test identity_fixed.irreducible_indices == [1, 2]
@@ -121,7 +133,7 @@ end
     @test GAUGE_W.WannierizationAccelerationConfig(constraint_operation_scope = :unitary).constraint_operation_scope ==
           :unitary
     @test_throws ArgumentError GAUGE_W._validate_wannierization_config(
-        GAUGE_W.SymmetryAdaptedWannierizationConfig(
+        GAUGE_W.WannierizationConfig(
             input = GAUGE_W.WannierizationInputConfig(
                 wannierization_mode = :ordinary,
                 win_file = "x.win",
@@ -129,7 +141,6 @@ end
                 mmn_file = "x.mmn",
             ),
             solver = GAUGE_W.WannierizationSolverConfig(
-                algorithm_profile = :custom,
                 acceleration = GAUGE_W.WannierizationAccelerationConfig(
                     constraint_operation_scope = :identity,
                 ),

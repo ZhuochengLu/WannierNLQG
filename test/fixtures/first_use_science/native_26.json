@@ -12,25 +12,25 @@
       },
       {
         "finite": true,
-        "path": "result.compatibility_info.parity_eligible",
+        "path": "result.algorithm_info.parity_eligible",
         "payload": "01",
         "type": "Bool"
       },
       {
         "finite": true,
-        "path": "result.compatibility_info.character_tolerance",
+        "path": "result.algorithm_info.character_tolerance",
         "payload": "fca9f1d24d62503f",
         "type": "Float64"
       },
       {
         "finite": true,
-        "path": "result.compatibility_info.character_round_digits",
+        "path": "result.algorithm_info.character_round_digits",
         "payload": "0300000000000000",
         "type": "Int64"
       },
       {
         "finite": true,
-        "path": "result.compatibility_info.little_group_tolerance",
+        "path": "result.algorithm_info.little_group_tolerance",
         "payload": "f168e388b5f8e43e",
         "type": "Float64"
       },

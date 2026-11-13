@@ -29,7 +29,6 @@ function _record_construction_symmetry_quality!(
     stage;
     residuals = nothing,
 )
-    config.input.construction_policy == :standard || return nothing
     residuals =
         residuals === nothing ?
         _candidate_invariant_residuals(frames, frozen_indices, representation) : residuals
@@ -55,40 +54,14 @@ function _record_construction_symmetry_quality!(
                 ),
             )
             summary["construction_quality_failed"] = "true"
-            summary["model_qualification"] = "STANDARD"
+            summary["model_qualification"] = "COMPUTATION_READY"
         end
     end
     return nothing
 end
 
-const _CONSTRUCTION_COMPATIBILITY_QUALITY_CODES = (
-    :REQUIRED_BLOCK_UNITARITY_FAILED,
-    :ANTIUNITARY_GROUP_LAW_FAILED,
-    :TARGET_REPRESENTATION_GROUP_LAW_FAILED,
-    :THETA_SQUARED_FAILED,
-    :ANTIUNITARY_PROJECTOR_COVARIANCE_FAILED,
-    :EMPIRICAL_COVARIANCE_BUDGET_VACUOUS,
-)
-
-# Closure residuals are quality failures only when the discrete rank contracts
-# hold. Odd Kramers rank and mismatched mask ranks remain construction failures.
-function _construction_compatibility_quality_failure(diagnostic::WannierizationDiagnostic)
-    diagnostic.code in _CONSTRUCTION_COMPATIBILITY_QUALITY_CODES && return true
-    diagnostic.code in (:KRAMERS_BLOCK_NOT_CLOSED, :COREPRESENTATION_BLOCK_NOT_CLOSED) ||
-        return false
-    source_rank = tryparse(Int, get(diagnostic.context, "source_rank", ""))
-    target_rank = tryparse(Int, get(diagnostic.context, "target_rank", ""))
-    residual = tryparse(Float64, get(diagnostic.context, "maximum_error", ""))
-    source_rank !== nothing &&
-    source_rank == target_rank &&
-    residual !== nothing &&
-    isfinite(residual) || return false
-    if diagnostic.code == :KRAMERS_BLOCK_NOT_CLOSED &&
-       get(diagnostic.context, "source_kpoint", "") == get(diagnostic.context, "target_kpoint", "")
-        iseven(source_rank) || return false
-    end
-    return true
-end
+# Retained private test hook forwards to the single preparation assessment.
+const _construction_compatibility_quality_failure = construction_compatibility_quality_failure
 
 # Resolve mode, authority and provenance before validating input dimensions.
 function _prepare_solver_input_summary(state::NamedTuple)
@@ -97,8 +70,6 @@ function _prepare_solver_input_summary(state::NamedTuple)
         compatibility_report,
         config,
         eig,
-        fixed_subspace,
-        initialization_amn_sha256,
         mmn,
         observer,
         paw_scdm_input,
@@ -113,10 +84,8 @@ function _prepare_solver_input_summary(state::NamedTuple)
     spectrum_audit = HermitianSpectrumAudit()
     apply_symmetry = symmetry_constraints_applied(config, representation)
     effective_algorithms = effective_wannierization_algorithms(config, representation)
-    smv_fr_audit = _smv_fletcher_reeves_two_stage_audit(
-        config.solver.smv_fletcher_reeves_two_stage_audit_manifest,
-        config.solver.smv_fletcher_reeves_two_stage_audit_thresholds,
-    )
+    # Source/evidence authentication belongs to the explicit development audit.
+    # A normal solve does not recompute software/evidence content fingerprints.
     full_constraint_scope = config.solver.acceleration.constraint_operation_scope == :full
     representation_magnetic =
         lowercase(get(representation.conventions, "magnetic_structure", "false")) == "true"
@@ -154,10 +123,7 @@ function _prepare_solver_input_summary(state::NamedTuple)
             "1.17",
         )
     )
-    effective_compatibility_policy =
-        config.input.construction_policy == :standard ? config.input.compatibility_policy :
-        representation_magnetic || representation_antiunitary || representation_legacy_uncertain ?
-        :strict : config.input.compatibility_policy
+    effective_compatibility_policy = config.input.compatibility_policy
     u_localization_mpi_size = if config.solver.parallel == :mpi
         MPI.Initialized() || MPI.Init()
         MPI.Comm_size(MPI.COMM_WORLD)
@@ -175,7 +141,7 @@ function _prepare_solver_input_summary(state::NamedTuple)
         "effective_wannierization_mode" => String(effective_wannierization_mode(config)),
         "representation_source" => String(representation_source(config)),
         "symmetry_constraints_applied" => string(apply_symmetry),
-        "algorithm_profile" => String(config.solver.algorithm_profile),
+        "algorithm_profile" => "auto",
         "effective_algorithm_profile" => String(effective_algorithms.profile),
         "symmetry_projected_smv_fr_contract" =>
             _is_symmetry_projected_smv_fr(effective_algorithms.disentanglement) ||
@@ -198,15 +164,10 @@ function _prepare_solver_input_summary(state::NamedTuple)
         "smv_fletcher_reeves_two_stage_audit_accepted_step_relative_tolerance" => string(
             config.solver.smv_fletcher_reeves_two_stage_audit_thresholds.accepted_step_relative_tolerance,
         ),
-        "smv_fletcher_reeves_two_stage_audit_contract_sha256" =>
-            smv_fletcher_reeves_two_stage_audit_contract_sha256(
-                config.solver.smv_fletcher_reeves_two_stage_audit_thresholds,
-            ),
         "smv_fletcher_reeves_two_stage_default_selection_reason" =>
             effective_algorithms.default_selection_reason,
-        "smv_fletcher_reeves_two_stage_audit_status" => smv_fr_audit.status,
-        "smv_fletcher_reeves_two_stage_audit_reason" => smv_fr_audit.reason,
-        "smv_fletcher_reeves_two_stage_audit_manifest_sha256" => smv_fr_audit.manifest_sha256,
+        "smv_fletcher_reeves_two_stage_audit_status" => "NOT_CHECKED",
+        "smv_fletcher_reeves_two_stage_audit_reason" => "EXPLICIT_DEVELOPMENT_AUDIT_ONLY",
         "symmetry_constraints_applied" => string(apply_symmetry),
         "effective_symmetry_operation_count" =>
             string(apply_symmetry ? length(representation.operations) : 1),
@@ -234,15 +195,17 @@ function _prepare_solver_input_summary(state::NamedTuple)
             get(representation.conventions, "sewing_metric", "pseudo_coefficient_linear_map"),
         "paw_sewing_thresholds" =>
             get(representation.conventions, "paw_sewing_thresholds", "NOT_APPLICABLE"),
-        "strict_sewing_diagnostics_sha256" => _strict_sewing_diagnostics_sha256(representation),
         "wavefunction_gauge_backend" =>
             get(representation.conventions, "wavefunction_gauge_backend", "native_eigenstate"),
-        "wavefunction_gauge_hdf5_sha256" =>
-            get(representation.conventions, "wavefunction_gauge_hdf5_sha256", "NOT_APPLICABLE"),
+        "wavefunction_gauge_definition" =>
+            get(representation.conventions, "wavefunction_gauge_definition", "NOT_APPLICABLE"),
         "block_partition_policy" =>
             get(representation.conventions, "block_partition_policy", "NOT_APPLICABLE"),
-        "block_partition_policy_sha256" =>
-            get(representation.input_sha256, "BLOCK_PARTITION_POLICY_SHA256", "NOT_APPLICABLE"),
+        "block_partition_policy_definition" => get(
+            representation.conventions,
+            "block_partition_policy_definition",
+            "NOT_APPLICABLE",
+        ),
         "discrete_hamiltonian_correction" =>
             get(representation.conventions, "discrete_hamiltonian_correction", "none"),
         "authoritative_hamiltonian" => authoritative_hamiltonian,
@@ -310,9 +273,10 @@ function _prepare_solver_input_summary(state::NamedTuple)
         ),
         "target_authority" => target_contract.target_authority,
         "parent_audit_policy" => target_contract.parent_audit_policy,
-        "target_subspace_contract_sha256" => target_contract.contract_sha256,
+        "target_subspace_contract_definition" => target_contract.contract_definition,
         "target_leakage_semantics" => target_contract.target_leakage_semantics,
-        "target_leakage_formula_sha256" => target_contract.target_leakage_formula_sha256,
+        "target_leakage_formula_definition" =>
+            target_contract.target_leakage_formula_definition,
         "target_leakage_threshold" => target_contract.target_leakage_threshold,
         "target_anchor" => get(
             representation.conventions,
@@ -366,8 +330,7 @@ function _prepare_solver_input_summary(state::NamedTuple)
             :symmetry_projected_smv_fletcher_reeves_two_stage ?
             "FULL_BZ_SMV_COREPRESENTATION_CONTINUITY_STAR_COMPLETION" :
             "MAXIMUM_EIGENSPACE_BOUNDARY_CLUSTER_PROCRUSTES",
-        "disentanglement_algorithm_requested" =>
-            String(config.solver.acceleration.disentanglement_algorithm),
+        "disentanglement_algorithm_requested" => String(effective_algorithms.disentanglement),
         "disentanglement_algorithm" => String(effective_algorithms.disentanglement),
         "subspace_gauge_policy" => String(config.solver.acceleration.subspace_gauge_policy),
         "initialization_backend" => string(typeof(config.solver.initialization_backend)),
@@ -376,30 +339,23 @@ function _prepare_solver_input_summary(state::NamedTuple)
         "multi_start_index" => string(config.solver.multi_start.start_index),
         "hot_storage_backend" => String(config.solver.acceleration.hot_storage_backend),
         "requested_initializer" => String(config.solver.initialization),
-        "localization_algorithm_requested" =>
-            String(config.solver.acceleration.localization_algorithm),
+        "localization_algorithm_requested" => String(effective_algorithms.localization),
         "localization_algorithm" => String(effective_algorithms.localization),
         "smv_fletcher_reeves_two_stage_protocol" =>
             effective_algorithms.localization == :smv_fletcher_reeves_two_stage ?
             "smv-fixed-point-plus-fletcher-reeves-two-stage-v4" : "NOT_APPLICABLE",
         "smv_fletcher_reeves_two_stage_lapack_backend" =>
             effective_algorithms.localization == :smv_fletcher_reeves_two_stage ?
-            _wannier90_reference_lapack_backend() : "NOT_APPLICABLE",
-        "smv_fletcher_reeves_two_stage_lapack_sha256" =>
-            effective_algorithms.localization == :smv_fletcher_reeves_two_stage ?
-            _wannier90_reference_lapack_sha256() : "NOT_APPLICABLE",
+            _recursive_localization_lapack_backend() : "NOT_APPLICABLE",
+        "content_hash_authentication" => "NOT_PERFORMED",
         "smv_fletcher_reeves_two_stage_phase_backend" =>
             effective_algorithms.localization == :smv_fletcher_reeves_two_stage ?
-            "PLATFORM_LIBM:" * _WANNIER90_REFERENCE_SYSTEM_LIBM : "NOT_APPLICABLE",
+            "PLATFORM_LIBM:" * _RECURSIVE_LOCALIZATION_SYSTEM_LIBM : "NOT_APPLICABLE",
         "localization_gradient_contract" => LOCALIZATION_GRADIENT_CONTRACT,
         "joint_update_contract" => JOINT_UPDATE_CONTRACT,
         "z_u_stage_semantics" => "disentanglement_localization_decoupled_v1",
         "disentanglement_limit_policy" =>
             String(config.solver.acceleration.disentanglement_limit_policy),
-        "joint_z_backtracking_factor" =>
-            string(config.solver.acceleration.joint_z_backtracking_factor),
-        "joint_z_backtracking_max_steps" =>
-            string(config.solver.acceleration.joint_z_backtracking_max_steps),
         "constraint_operation_scope" =>
             String(config.solver.acceleration.constraint_operation_scope),
         "constraint_operation_scope_history_reset" =>
@@ -413,14 +369,13 @@ function _prepare_solver_input_summary(state::NamedTuple)
             string(config.solver.acceleration.u_phase_branch_tolerance),
         "u_branch_active_set_max_orbits" =>
             string(config.solver.acceleration.u_branch_active_set_max_orbits),
-        "u_lbfgs_history" => string(config.solver.acceleration.u_lbfgs_history),
-        "u_lbfgs_curvature_tolerance" =>
-            string(config.solver.acceleration.u_lbfgs_curvature_tolerance),
         "u_wolfe_c2" => string(config.solver.acceleration.u_wolfe_c2),
         "u_line_search_max_trials" =>
             string(config.solver.acceleration.u_line_search_max_trials),
-        "u_w90_restart_interval" => string(config.solver.acceleration.u_w90_restart_interval),
-        "u_w90_trial_step" => string(config.solver.acceleration.u_w90_trial_step),
+        "u_recursive_localization_restart_interval" =>
+            string(config.solver.acceleration.u_recursive_localization_restart_interval),
+        "u_recursive_localization_trial_step" =>
+            string(config.solver.acceleration.u_recursive_localization_trial_step),
         "hermitian_residual_rtol" =>
             string(config.solver.numerical_thresholds.hermitian_residual_rtol),
         "subspace_cluster_atol" =>
@@ -436,7 +391,8 @@ function _prepare_solver_input_summary(state::NamedTuple)
         "maximum_transport_condition" =>
             string(config.solver.numerical_thresholds.maximum_transport_condition),
         "construction_policy" => String(config.input.construction_policy),
-        "quality_review_recommended" => "true",
+        "quality_review_recommended" => "false",
+        "ordinary_calculation_policy_version" => "1.0",
         "compatibility_policy_requested" => String(config.input.compatibility_policy),
         "compatibility_policy_effective" => String(effective_compatibility_policy),
         "symmetry_tolerance" => string(config.input.symmetry_tolerance),
@@ -454,12 +410,11 @@ function _prepare_solver_input_summary(state::NamedTuple)
         "phase_branch_backtracking_extension_count" => "0",
         "minimum_localization_diagonal_phase_margin" => "NOT_APPLICABLE",
         "disentanglement_convergence" => "IN_PROGRESS",
-        "z_seal_class" =>
-            config.solver.acceleration.schedule == :fixed_subspace ? "NOT_APPLICABLE" :
-            "IN_PROGRESS",
-        "localization_convergence" => config.solver.localize ? "NOT_STARTED" : "NOT_APPLICABLE",
+        "z_seal_class" => "IN_PROGRESS",
+        "localization_convergence" =>
+            (config.solver.stage_controls.num_iter > 0) ? "NOT_STARTED" : "NOT_APPLICABLE",
         "localization_qualification" =>
-            config.solver.localize ? "NOT_STARTED" : "NOT_APPLICABLE",
+            (config.solver.stage_controls.num_iter > 0) ? "NOT_STARTED" : "NOT_APPLICABLE",
         "model_qualification" => "NOT_AVAILABLE",
         "random_seed" => string(config.solver.random_seed),
         "parallel" => String(config.solver.parallel),
@@ -467,8 +422,8 @@ function _prepare_solver_input_summary(state::NamedTuple)
             config.solver.parallel == :mpi ?
             "CYCLIC_KPOINT_NEIGHBOR_EDGE_DENSE_OWNER_REDUCTION" : "LOCAL_CANONICAL_EDGE_ORDER",
         "u_localization_mpi_size" => string(u_localization_mpi_size),
-        "convergence_tolerance" => string(config.solver.convergence_tolerance),
-        "convergence_window" => string(config.solver.convergence_window),
+        "convergence_tolerance" => string(config.solver.stage_controls.conv_tol),
+        "convergence_window" => string(max(2, config.solver.stage_controls.conv_window)),
     )
     if !full_constraint_scope
         push!(
@@ -489,30 +444,10 @@ function _prepare_solver_input_summary(state::NamedTuple)
         )
     end
     _record_hermitian_spectrum_audit!(input_summary, spectrum_audit)
-    input_entries = [
-        "$(key)\0$(representation.input_sha256[key])" for
-        key in sort!(collect(keys(representation.input_sha256)))
-    ]
-    input_summary["input_sha256"] = bytes2hex(SHA.sha256(codeunits(join(input_entries, '\n'))))
     projection_basis = something(config.input.projection_basis)
-    radial_contract = projection_radial_transform_contract(projection_basis.radial_transform)
-    basis_sha256 = projection_basis_sha256(projection_basis)
-    amn_sha256 = if !isempty(initialization_amn_sha256)
-        String(initialization_amn_sha256)
-    elseif amn === nothing
-        restart_state === nothing ? "" : restart_state.amn_sha256
-    else
-        buffer = IOBuffer()
-        write(buffer, reinterpret(UInt8, Int64[ndims(amn), size(amn)...]))
-        write(buffer, reinterpret(UInt8, vec(amn)))
-        bytes2hex(SHA.sha256(take!(buffer)))
-    end
-    input_summary["projection_basis_sha256"] = basis_sha256
+    input_summary["content_hash_authentication"] = "NOT_PERFORMED"
     input_summary["projection_radial_transform_method"] =
         String(projection_basis.radial_transform.method)
-    input_summary["projection_radial_transform_digest"] =
-        bytes2hex(SHA.sha256(codeunits(repr(radial_contract))))
-    input_summary["amn_sha256"] = amn_sha256
     nb, nk = size(representation.energies_ev)
     eig.num_bands == nb && eig.num_kpts == nk || return _failure_result(
         INVALID_INPUT,
@@ -549,15 +484,14 @@ function _prepare_solver_input_summary(state::NamedTuple)
     )
     return (;
         amn,
-        amn_sha256,
+
         apply_symmetry,
-        basis_sha256,
+
         compatibility_report,
         config,
         diagnostics,
         effective_algorithms,
         effective_compatibility_policy,
-        fixed_subspace,
         full_constraint_scope,
         input_summary,
         mmn,
@@ -580,15 +514,14 @@ end
 function _qualify_solver_inputs(state::NamedTuple)
     (;
         amn,
-        amn_sha256,
+
         apply_symmetry,
-        basis_sha256,
+
         compatibility_report,
         config,
         diagnostics,
         effective_algorithms,
         effective_compatibility_policy,
-        fixed_subspace,
         full_constraint_scope,
         input_summary,
         mmn,
@@ -649,18 +582,19 @@ function _qualify_solver_inputs(state::NamedTuple)
     frozen_masks = [BitVector([band in frozen_indices[kpoint] for band in 1:nb]) for kpoint in 1:nk]
     solver_qualification_scope = BandRepresentationQualificationScope(
         BitMatrix(hcat(outer_masks...)),
-        BitMatrix(hcat(frozen_masks...)),
+        BitMatrix(hcat(frozen_masks...));
+        content_authentication = false,
     )
-    input_summary["disentanglement_outer_mask_sha256"] =
-        solver_qualification_scope.outer_mask_sha256
-    input_summary["disentanglement_frozen_mask_sha256"] =
-        solver_qualification_scope.frozen_mask_sha256
+    input_summary["disentanglement_outer_mask_definition"] =
+        solver_qualification_scope.outer_mask_definition
+    input_summary["disentanglement_frozen_mask_definition"] =
+        solver_qualification_scope.frozen_mask_definition
     if target_subspace_authority
         for (key, observed) in (
-            ("outer_mask_sha256", solver_qualification_scope.outer_mask_sha256),
-            ("frozen_mask_sha256", solver_qualification_scope.frozen_mask_sha256),
+            ("outer_mask_definition", solver_qualification_scope.outer_mask_definition),
+            ("frozen_mask_definition", solver_qualification_scope.frozen_mask_definition),
         )
-            recorded = get(representation.conventions, key, observed)
+            recorded = get(representation.conventions, key, nothing)
             recorded == observed || return _failure_result(
                 INVALID_INPUT,
                 [
@@ -670,8 +604,8 @@ function _qualify_solver_inputs(state::NamedTuple)
                         "solver window mask differs from the sealed target-subspace contract";
                         context = Dict(
                             "mask" => key,
-                            "recorded_sha256" => recorded,
-                            "observed_sha256" => observed,
+                            "recorded_definition" => string(recorded),
+                            "observed_definition" => string(observed),
                         ),
                     ),
                 ],
@@ -690,17 +624,6 @@ function _qualify_solver_inputs(state::NamedTuple)
     else
         compatibility_report
     end
-    input_summary["representation_sha256"] = compatibility.representation_sha256
-    input_summary["constraint_operation_parent_representation_sha256"] = get(
-        representation.conventions,
-        "constraint_operation_parent_representation_sha256",
-        compatibility.representation_sha256,
-    )
-    input_summary["constraint_operation_subgroup_sha256"] = get(
-        representation.conventions,
-        "constraint_operation_subgroup_sha256",
-        compatibility.representation_sha256,
-    )
     input_summary["constraint_operation_parent_indices"] = get(
         representation.conventions,
         "constraint_operation_parent_indices",
@@ -708,21 +631,12 @@ function _qualify_solver_inputs(state::NamedTuple)
     )
     input_summary["representation_compatible"] =
         apply_symmetry ? string(compatibility.passed) : "NOT_APPLICABLE"
-    config_sha256 = _restart_config_sha256(config, representation)
-    input_summary["restart_config_sha256"] = config_sha256
-    standard_construction = config.input.construction_policy == :standard
-    compatibility_records =
-        standard_construction ?
-        [
-            _construction_compatibility_quality_failure(diagnostic) ?
-            _construction_quality_diagnostic(diagnostic, "representation_compatibility") :
-            diagnostic for diagnostic in compatibility.diagnostics
-        ] :
-        apply_symmetry ?
-        representation_diagnostics_for_policy(
-            compatibility.diagnostics,
-            effective_compatibility_policy,
-        ) : compatibility.diagnostics
+    compatibility_records = [
+        effective_compatibility_policy != :strict &&
+        _construction_compatibility_quality_failure(diagnostic) ?
+        _construction_quality_diagnostic(diagnostic, "representation_compatibility") :
+        diagnostic for diagnostic in compatibility.diagnostics
+    ]
     append!(diagnostics, compatibility_records)
     structural_compatibility_failure = any(
         diagnostic ->
@@ -730,10 +644,8 @@ function _qualify_solver_inputs(state::NamedTuple)
             !_construction_compatibility_quality_failure(diagnostic),
         compatibility.diagnostics,
     )
-    if !compatibility.passed && (
-        standard_construction ? structural_compatibility_failure :
-        effective_compatibility_policy == :strict
-    )
+    if !compatibility.passed &&
+       (structural_compatibility_failure || effective_compatibility_policy == :strict)
         input_summary["failure_class"] = "REPRESENTATION_A"
         return _failure_result(REPRESENTATION_INCOMPATIBLE, diagnostics, input_summary)
     elseif !compatibility.passed
@@ -759,7 +671,7 @@ function _qualify_solver_inputs(state::NamedTuple)
     input_summary["final_tb_hamiltonian_covariance_threshold_contract"] = "FORMAL_REPRESENTATION_TOLERANCE"
     tangent_plans = Vector{Union{Nothing, TargetSymmetryTangentPlan}}(undef, nk)
     fill!(tangent_plans, nothing)
-    if config.solver.localize && apply_symmetry
+    if (config.solver.stage_controls.num_iter > 0) && apply_symmetry
         tangent_plans = try
             _build_target_symmetry_tangent_plans(
                 representation,
@@ -810,14 +722,16 @@ function _qualify_solver_inputs(state::NamedTuple)
                 context = Dict(
                     "representation_tolerance" => config.input.representation_tolerance,
                     "projector_covariance_tolerance" => projector_covariance_tolerance,
-                    "qualification_sha256" => something(compatibility.qualification_sha256, ""),
+                    "qualification_record" =>
+                        compatibility.qualification_record === nothing ? "NOT_AVAILABLE" :
+                        "ACTUAL_DEFINITIONS_PRESENT",
                 ),
             ),
         )
     end
     stencil = try
         effective_algorithms.disentanglement == :smv_fletcher_reeves_two_stage ?
-        _wannier90_reference_finite_difference_weights(
+        _recursive_localization_finite_difference_weights(
             representation,
             mmn;
             construction_policy = config.input.construction_policy,
@@ -858,20 +772,18 @@ function _qualify_solver_inputs(state::NamedTuple)
     end
     weights = stencil.weights
     input_summary["spread_metric"] = "full_3d"
-    input_summary["finite_difference_stencil_sha256"] = stencil.digest
     input_summary["finite_difference_completeness_residual"] = string(stencil.completeness_residual)
     return (;
         amn,
-        amn_sha256,
+
         apply_symmetry,
-        basis_sha256,
+
         compatibility,
         config,
-        config_sha256,
+
         diagnostics,
         effective_algorithms,
         effective_compatibility_policy,
-        fixed_subspace,
         frozen_indices,
         frozen_masks,
         full_constraint_scope,
@@ -899,19 +811,28 @@ function _qualify_solver_inputs(state::NamedTuple)
 end
 
 # Validate continuation controls and persisted provenance without changing accepted state.
+# Preserve only a version actually present in the validated predecessor;
+# an absent value stays absent and is never inferred here.
+function _inherit_restart_initializer_version!(summary, restart_state, previous_summary)
+    if restart_state !== nothing && haskey(previous_summary, "initializer_algorithm_version")
+        summary["initializer_algorithm_version"] = previous_summary["initializer_algorithm_version"]
+    end
+    return summary
+end
+
+# Validate complete restart inputs and accepted-state identity before initializing frames.
 function _validate_solver_restart(state::NamedTuple)
     (;
         amn,
-        amn_sha256,
+
         apply_symmetry,
-        basis_sha256,
+
         compatibility,
         config,
-        config_sha256,
+
         diagnostics,
         effective_algorithms,
         effective_compatibility_policy,
-        fixed_subspace,
         frozen_indices,
         frozen_masks,
         full_constraint_scope,
@@ -936,19 +857,85 @@ function _validate_solver_restart(state::NamedTuple)
         tangent_plans,
         weights,
     ) = state
-    if restart_state !== nothing
-        get(restart_input_summary, "construction_policy", "strict") ==
-        String(config.input.construction_policy) || return _failure_result(
+    input_definition=try
+        allow_owned_hr_operator_upgrade =
+            restart_state !== nothing &&
+            (
+                uses_native_operator_generation(config.input) ||
+                config.input.matrix_elements isa ExternalOverlapProjectionMatrices
+            ) &&
+            config.output.profile === :full &&
+            restart_state.input_definition !== nothing &&
+            !haskey(restart_state.input_definition.auxiliary_sources, "operator_profile_sources") &&
+            haskey(representation.input_definitions, "operator_profile_sources") &&
+            get(restart_input_summary, "operator_profile_preflight_profile", "") ==
+            "hamiltonian_position" &&
+            get(restart_input_summary, "operator_profile_preflight_status", "") == "NOT_APPLICABLE"
+        definition=_restart_input_definition(
+            config,
+            representation,
+            mmn,
+            amn,
+            effective_algorithms,
+            apply_symmetry;
+            require_expected = restart_state!==nothing,
+            expected = restart_state===nothing ? nothing : restart_state.input_definition,
+            allow_new_operator_profile_sources = allow_owned_hr_operator_upgrade,
+        )
+        restart_state===nothing || _validate_current_u_branch_history(restart_state.optimizer_state)
+        definition
+    catch exception
+        exception isa ArgumentError || rethrow()
+        message=sprint(showerror, exception)
+        codes=(
+            :RESTART_CONFIG_MISMATCH,
+            :RESTART_PROJECTION_BASIS_MISMATCH,
+            :RESTART_REPRESENTATION_MISMATCH,
+            :RESTART_MMN_MISMATCH,
+            :RESTART_AMN_MISMATCH,
+            :RESTART_INPUT_DEFINITION_REQUIRED,
+            :RESTART_U_BRANCH_DEFINITION_REQUIRED,
+            :RESTART_U_BRANCH_AUDIT_MISMATCH,
+        )
+        selected=findfirst(code->occursin(String(code), message), codes)
+        code=selected===nothing ? :RESTART_INPUT_DEFINITION_INVALID : codes[selected]
+        context=Dict{String, String}()
+        if code==:RESTART_CONFIG_MISMATCH && restart_state!==nothing
+            stored_profile=get(restart_input_summary, "effective_algorithm_profile", "")
+            current_profile=String(effective_algorithms.profile)
+            if !isempty(stored_profile) && stored_profile!=current_profile
+                code=:RESTART_EFFECTIVE_PROFILE_MISMATCH
+                message="restart effective algorithm profile is incompatible with the explicit current configuration"
+                context["stored_effective_algorithm_profile"]=stored_profile
+                context["current_effective_algorithm_profile"]=current_profile
+            end
+        end
+        return _failure_result(
             INVALID_INPUT,
-            [
-                WannierizationDiagnostic(
-                    :RESTART_CONSTRUCTION_POLICY_MISMATCH,
-                    :error,
-                    "checkpoint construction policy differs; missing historical policy means strict",
-                ),
-            ],
+            [WannierizationDiagnostic(code, :error, message; context)],
             input_summary,
         )
+    end
+    if restart_state !== nothing
+        # The complete configuration and source definitions were compared above.
+        # In-memory accepted states need no redundant digest identity proof.
+        recorded_construction_policy = get(
+            restart_input_summary,
+            "construction_policy",
+            String(config.input.construction_policy),
+        )
+        recorded_construction_policy == String(config.input.construction_policy) ||
+            return _failure_result(
+                INVALID_INPUT,
+                [
+                    WannierizationDiagnostic(
+                        :RESTART_CONSTRUCTION_POLICY_MISMATCH,
+                        :error,
+                        "checkpoint construction policy differs; missing historical policy means strict",
+                    ),
+                ],
+                input_summary,
+            )
         restart_state.stencil !== nothing || return _failure_result(
             INVALID_INPUT,
             [
@@ -960,171 +947,6 @@ function _validate_solver_restart(state::NamedTuple)
             ],
             input_summary,
         )
-        restart_contract = WannierizationRestartContract(config)
-        pre_v2_12_config_sha256 = restart_contract.legacy_sha256.pre_v2_12
-        pre_v2_11_config_sha256 = restart_contract.legacy_sha256.pre_v2_11
-        pre_v2_10_config_sha256 = restart_contract.legacy_sha256.pre_v2_10
-        pre_v2_9_config_sha256 = restart_contract.legacy_sha256.pre_v2_9
-        pre_v2_8_config_sha256 = restart_contract.legacy_sha256.pre_v2_8
-        pre_v2_7_config_sha256 = restart_contract.legacy_sha256.pre_v2_7
-        pre_v2_6_config_sha256 = restart_contract.legacy_sha256.pre_v2_6
-        config_matches =
-            restart_state.config_sha256 == config_sha256 ||
-            (
-                pre_v2_12_config_sha256 !== nothing &&
-                restart_state.config_sha256 == pre_v2_12_config_sha256
-            ) ||
-            (
-                pre_v2_11_config_sha256 !== nothing &&
-                restart_state.config_sha256 == pre_v2_11_config_sha256
-            ) ||
-            (
-                pre_v2_10_config_sha256 !== nothing &&
-                restart_state.config_sha256 == pre_v2_10_config_sha256
-            ) ||
-            (
-                pre_v2_9_config_sha256 !== nothing &&
-                restart_state.config_sha256 == pre_v2_9_config_sha256
-            ) ||
-            (
-                pre_v2_8_config_sha256 !== nothing &&
-                restart_state.config_sha256 == pre_v2_8_config_sha256
-            ) ||
-            (
-                pre_v2_7_config_sha256 !== nothing &&
-                restart_state.config_sha256 == pre_v2_7_config_sha256
-            ) ||
-            (
-                pre_v2_6_config_sha256 !== nothing &&
-                restart_state.config_sha256 == pre_v2_6_config_sha256
-            )
-        if !config_matches
-            stored_profile = get(restart_input_summary, "effective_algorithm_profile", "")
-            current_profile = String(effective_algorithms.profile)
-            profile_mismatch = !isempty(stored_profile) && stored_profile != current_profile
-            return _failure_result(
-                INVALID_INPUT,
-                [
-                    WannierizationDiagnostic(
-                        profile_mismatch ? :RESTART_EFFECTIVE_PROFILE_MISMATCH :
-                        :RESTART_CONFIG_MISMATCH,
-                        :error,
-                        profile_mismatch ?
-                        "restart effective algorithm profile is incompatible with the explicit current configuration" :
-                        "restart numerical controls do not match";
-                        context = Dict(
-                            "stored_effective_algorithm_profile" =>
-                                isempty(stored_profile) ? "NOT_RECORDED" : stored_profile,
-                            "current_effective_algorithm_profile" => current_profile,
-                        ),
-                    ),
-                ],
-                input_summary,
-            )
-        end
-        if pre_v2_11_config_sha256 !== nothing &&
-           restart_state.config_sha256 == pre_v2_11_config_sha256
-            input_summary["restart_config_compatibility"] = "PRE_V2_11_IMPLICIT_COEFFICIENT_MAPPING"
-            push!(
-                diagnostics,
-                WannierizationDiagnostic(
-                    :RESTART_CONFIG_PRE_V2_11_COMPATIBILITY,
-                    :info,
-                    "schema-2.10 restart matched the explicit coefficient-mapping backend";
-                    context = Dict(
-                        "stored_config_sha256" => restart_state.config_sha256,
-                        "current_config_sha256" => config_sha256,
-                    ),
-                ),
-            )
-        elseif pre_v2_10_config_sha256 !== nothing &&
-               restart_state.config_sha256 == pre_v2_10_config_sha256
-            input_summary["restart_config_compatibility"] = "PRE_V2_10_U_PHASE_CHART_RESET"
-            push!(
-                diagnostics,
-                WannierizationDiagnostic(
-                    :RESTART_CONFIG_PRE_V2_10_COMPATIBILITY,
-                    :info,
-                    "schema-2.9 restart retained its accepted physical state and reset U optimizer history for the centered-residual phase chart";
-                    context = Dict(
-                        "stored_config_sha256" => restart_state.config_sha256,
-                        "current_config_sha256" => config_sha256,
-                    ),
-                ),
-            )
-        elseif pre_v2_9_config_sha256 !== nothing &&
-               restart_state.config_sha256 == pre_v2_9_config_sha256
-            input_summary["restart_config_compatibility"] = "PRE_V2_9_FULL_SCOPE_DEFAULT"
-            push!(
-                diagnostics,
-                WannierizationDiagnostic(
-                    :RESTART_CONFIG_PRE_V2_9_COMPATIBILITY,
-                    :info,
-                    "schema-2.8 restart matched the unchanged full-group constraint scope";
-                    context = Dict(
-                        "stored_config_sha256" => restart_state.config_sha256,
-                        "current_config_sha256" => config_sha256,
-                        "constraint_operation_scope" => "full",
-                    ),
-                ),
-            )
-        elseif pre_v2_8_config_sha256 !== nothing &&
-               restart_state.config_sha256 == pre_v2_8_config_sha256
-            input_summary["restart_config_compatibility"] = "PRE_V2_8_JOINT_UPDATE_CONTRACT_RESET"
-            push!(
-                diagnostics,
-                WannierizationDiagnostic(
-                    :LEGACY_JOINT_UPDATE_CONTRACT_RESET,
-                    :info,
-                    "pre-2.8 restart config matched after resetting moving-subspace optimizer history";
-                    context = Dict(
-                        "stored_config_sha256" => restart_state.config_sha256,
-                        "current_config_sha256" => config_sha256,
-                    ),
-                ),
-            )
-        elseif pre_v2_7_config_sha256 !== nothing &&
-               restart_state.config_sha256 == pre_v2_7_config_sha256
-            input_summary["restart_config_compatibility"] = "PRE_V2_7_LOCALIZATION_GRADIENT_CONTRACT_RESET"
-            push!(
-                diagnostics,
-                WannierizationDiagnostic(
-                    :RESTART_CONFIG_PRE_V2_7_COMPATIBILITY,
-                    :info,
-                    "pre-2.7 restart config matched after explicit localization-gradient history reset";
-                    context = Dict(
-                        "stored_config_sha256" => restart_state.config_sha256,
-                        "current_config_sha256" => config_sha256,
-                    ),
-                ),
-            )
-        elseif restart_state.config_sha256 != config_sha256
-            input_summary["restart_config_compatibility"] = "PRE_V2_6_DEFAULT_RCG_CONTROLS_AND_PRE_V2_7_GRADIENT_RESET"
-            push!(
-                diagnostics,
-                WannierizationDiagnostic(
-                    :RESTART_CONFIG_PRE_V2_6_COMPATIBILITY,
-                    :info,
-                    "pre-2.6 restart config matched after explicit default-RCG projection and localization-gradient history reset";
-                    context = Dict(
-                        "stored_config_sha256" => restart_state.config_sha256,
-                        "current_config_sha256" => config_sha256,
-                    ),
-                ),
-            )
-        end
-        restart_state.representation_sha256 == compatibility.representation_sha256 ||
-            return _failure_result(
-                INVALID_INPUT,
-                [
-                    WannierizationDiagnostic(
-                        :RESTART_REPRESENTATION_MISMATCH,
-                        :error,
-                        "restart representation digest does not match",
-                    ),
-                ],
-                input_summary,
-            )
         _restart_stencils_compatible(something(restart_state.stencil), stencil) ||
             return _failure_result(
                 INVALID_INPUT,
@@ -1132,49 +954,20 @@ function _validate_solver_restart(state::NamedTuple)
                     WannierizationDiagnostic(
                         :RESTART_STENCIL_MISMATCH,
                         :error,
-                        "restart full-3D stencil digest does not match",
+                        "restart full-3D stencil values do not match",
                     ),
                 ],
                 input_summary,
             )
-        if something(restart_state.stencil).digest != stencil.digest
-            input_summary["restart_stencil_compatibility"] = "CROSS_PLATFORM_ROUNDOFF_EQUIVALENT"
-            push!(
-                diagnostics,
-                WannierizationDiagnostic(
-                    :RESTART_STENCIL_CROSS_PLATFORM_COMPATIBILITY,
-                    :info,
-                    "restart stencil differs only by tightly bounded platform roundoff";
-                    context = Dict(
-                        "stored_stencil_sha256" => something(restart_state.stencil).digest,
-                        "current_stencil_sha256" => stencil.digest,
-                    ),
-                ),
+        # Configuration, representation, basis, overlaps and initializer were
+        # checked by complete definitions above. No content digest is required.
+        (
+            config.solver.stage_controls !== nothing ||
+            restart_state.iteration < Base.Checked.checked_add(
+                config.solver.stage_controls.dis_num_iter,
+                config.solver.stage_controls.num_iter,
             )
-        end
-        restart_state.projection_basis_sha256 == basis_sha256 || return _failure_result(
-            INVALID_INPUT,
-            [
-                WannierizationDiagnostic(
-                    :RESTART_PROJECTION_BASIS_MISMATCH,
-                    :error,
-                    "restart expanded projection-basis digest does not match",
-                ),
-            ],
-            input_summary,
-        )
-        restart_state.amn_sha256 == amn_sha256 || return _failure_result(
-            INVALID_INPUT,
-            [
-                WannierizationDiagnostic(
-                    :RESTART_AMN_MISMATCH,
-                    :error,
-                    "restart AMN digest does not match",
-                ),
-            ],
-            input_summary,
-        )
-        restart_state.iteration < config.solver.max_iterations || return _failure_result(
+        ) || return _failure_result(
             INVALID_INPUT,
             [
                 WannierizationDiagnostic(
@@ -1186,18 +979,21 @@ function _validate_solver_restart(state::NamedTuple)
             input_summary,
         )
     end
+    # A validated restart continues the same accepted initializer history.
+    # Preserve its recorded version verbatim; missing values remain missing.
+    _inherit_restart_initializer_version!(input_summary, restart_state, restart_input_summary)
     return (;
+        input_definition,
         amn,
-        amn_sha256,
+
         apply_symmetry,
-        basis_sha256,
+
         compatibility,
         config,
-        config_sha256,
+
         diagnostics,
         effective_algorithms,
         effective_compatibility_policy,
-        fixed_subspace,
         frozen_indices,
         frozen_masks,
         full_constraint_scope,

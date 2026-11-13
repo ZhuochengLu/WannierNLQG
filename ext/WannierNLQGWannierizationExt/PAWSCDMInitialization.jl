@@ -1,66 +1,19 @@
 const PAW_SCDM_INPUT_SCHEMA = "WannierNLQG.paw_scdm_input"
-const PAW_SCDM_INPUT_SCHEMA_VERSION = "1.0"
+const PAW_SCDM_INPUT_SCHEMA_VERSION = "2.0"
 
-# Bind the complete numerical payload independently of HDF5 byte layout.
-function _paw_scdm_payload_sha256(
-    frames,
-    projectors,
-    selected_grid_indices,
-    sampling_grid,
-    singular_values,
-    ranks,
-    conditions,
-    generalized_norm_residuals,
-    paw_s_orthogonality_residuals,
-    euclidean_orthogonality_residuals,
-    kpoints_fractional,
-    mp_grid,
-    spinor,
-    source_gauge_sha256,
-    strict_representation_sha256,
-    authoritative_hamiltonian,
-    authoritative_hamiltonian_sha256,
-    metric_sha256,
-    source_identity,
-)
-    buffer = IOBuffer()
-    for text in (
-        PAW_SCDM_INPUT_SCHEMA,
-        PAW_SCDM_INPUT_SCHEMA_VERSION,
-        join(sampling_grid, ","),
-        join(mp_grid, ","),
-        string(spinor),
-        source_gauge_sha256,
-        strict_representation_sha256,
-        authoritative_hamiltonian,
-        authoritative_hamiltonian_sha256,
-        metric_sha256,
+# Historical field names may carry complete values; absence is never equality.
+function _paw_scdm_authority_definition(values, key)
+    definition = get(values, key, nothing)
+    definition isa AbstractString && !isempty(definition) && definition != "MISSING" || throw(
+        ArgumentError(
+            "SCDM_INPUT_PRECONDITION: complete Hamiltonian authority definition required",
+        ),
     )
-        write(buffer, text, '\0')
-    end
-    for array in (
-        frames,
-        projectors,
-        selected_grid_indices,
-        singular_values,
-        ranks,
-        conditions,
-        generalized_norm_residuals,
-        paw_s_orthogonality_residuals,
-        euclidean_orthogonality_residuals,
-        kpoints_fractional,
-    )
-        write(buffer, string(eltype(array)), ':', join(size(array), ','), ':')
-        write(buffer, reinterpret(UInt8, vec(array)))
-    end
-    for key in sort!(collect(keys(source_identity)))
-        write(buffer, key, '=', source_identity[key], '\n')
-    end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return String(definition)
 end
 
 # Require the exact source identities needed to reproduce projector/Q overlaps.
-function _paw_scdm_source_identity(payload, gauge_sha256, representation_sha256)
+function _paw_scdm_source_identity(payload)
     native = payload.native
     metadata = native.source_metadata
     coefficient_normalization = get(metadata, "coefficient_normalization", "")
@@ -91,14 +44,10 @@ function _paw_scdm_source_identity(payload, gauge_sha256, representation_sha256)
     else
         throw(ArgumentError("SCDM_INPUT_PRECONDITION: unsupported PAW metric"))
     end
-    wfc_keys = filter(key -> occursin(r"^wfc[0-9]+\.hdf5$", key), keys(payload.input_sha256))
-    native.source_code == :qe &&
-        length(wfc_keys) != length(native.kpoints) &&
-        throw(
-            ArgumentError(
-                "SCDM_INPUT_PRECONDITION: WFC digest inventory does not cover every k point",
-            ),
-        )
+    native.source_definition === nothing &&
+        throw(ArgumentError("SCDM_INPUT_PRECONDITION: complete native source definition required"))
+    authority_definition =
+        _paw_scdm_authority_definition(payload.input_sha256, "AUTHORITATIVE_HAMILTONIAN_SHA256")
     return Dict(
         "source_code" => String(native.source_code),
         "coefficient_normalization" => coefficient_normalization,
@@ -108,14 +57,9 @@ function _paw_scdm_source_identity(payload, gauge_sha256, representation_sha256)
         "spin_components" => string(size(first(native.kpoints).coefficients, 3)),
         "spinor" => string(native.spinor),
         "metric_kind" => metric isa _QEStrictSewingMetric ? metric.metric_kind : "paw",
-        "metric_sha256" => _star_metric_sha256(metric),
-        "input_identity_sha256" => _star_input_identity_sha256(payload.input_sha256),
-        "source_gauge_sha256" => gauge_sha256,
-        "strict_representation_sha256" => representation_sha256,
         "authoritative_hamiltonian" =>
             get(payload.source_metadata, "authoritative_hamiltonian", "native_dft"),
-        "authoritative_hamiltonian_sha256" =>
-            get(payload.input_sha256, "AUTHORITATIVE_HAMILTONIAN_SHA256", "MISSING"),
+        "authoritative_hamiltonian_definition" => String(authority_definition),
         "projector_overlap_source" => "recomputed_from_completed_wfc_and_parsed_paw_metric",
         "augmentation_source" => "parsed_upf_or_potcar_q0_not_mmn_amn",
         "sampling_contract" => "pseudo_coordinate_columns_after_paw_s_lowdin_whitening",
@@ -160,13 +104,18 @@ function _paw_scdm_anchor_samples(point, lowdin, sampling_grid)
     nbands, _, nspin = size(coefficients)
     ngrid = prod(sampling_grid)
     samples = zeros(ComplexF64, nbands, ngrid * nspin)
+    # Keep the original normalized, out-of-place inverse transform. Only its
+    # planning and two scratch arrays are shared across the band/spin columns.
+    buffer = zeros(ComplexF64, sampling_grid)
+    values = similar(buffer)
+    inverse_plan = FFTW.plan_ifft(buffer; flags = FFTW.ESTIMATE)
     for spin in 1:nspin, band in 1:nbands
-        buffer = zeros(ComplexF64, sampling_grid)
+        fill!(buffer, 0)
         for grow in axes(point.g_vectors, 1)
             index = ntuple(axis -> mod(point.g_vectors[grow, axis], sampling_grid[axis]) + 1, 3)
             buffer[index...] = coefficients[band, grow, spin]
         end
-        values = FFTW.ifft(buffer)
+        mul!(values, inverse_plan, buffer)
         @views samples[band, ((spin - 1) * ngrid + 1):(spin * ngrid)] .= vec(values)
     end
     return samples
@@ -245,13 +194,21 @@ function _paw_scdm_write(filename, artifact::PAWSCDMInputArtifact)
             attributes["status"] = "PASS"
             attributes["metric"] = "paw_s_full_augmentation"
             attributes["sampling_contract"] = "pseudo_coordinate_columns_after_paw_s_lowdin_whitening"
-            attributes["payload_sha256"] = artifact.payload_sha256
-            attributes["source_gauge_sha256"] = artifact.source_gauge_sha256
-            attributes["strict_representation_sha256"] = artifact.strict_representation_sha256
+            attributes["content_authentication"] = "NOT_PERFORMED"
+            write_scientific_input_reference_hdf5(
+                handle,
+                "source_gauge_reference",
+                artifact.source_gauge_reference,
+            )
+            write_scientific_input_reference_hdf5(
+                handle,
+                "strict_representation_reference",
+                artifact.strict_representation_reference,
+            )
             attributes["authoritative_hamiltonian"] = artifact.authoritative_hamiltonian
-            attributes["authoritative_hamiltonian_sha256"] =
-                artifact.authoritative_hamiltonian_sha256
-            attributes["metric_sha256"] = artifact.metric_sha256
+            attributes["authoritative_hamiltonian_definition"] =
+                artifact.authoritative_hamiltonian_definition
+            attributes["gauge_frame_definition"] = artifact.gauge_frame_definition
             attributes["spinor"] = artifact.spinor
             handle["frames"] = artifact.frames
             handle["projectors"] = artifact.projectors
@@ -315,11 +272,14 @@ function _prepare_paw_scdm_input_artifact(
     isfile(gauge_hdf5) || throw(ArgumentError("SCDM_INPUT_PRECONDITION: gauge HDF5 does not exist"))
     isfile(representation_hdf5) ||
         throw(ArgumentError("SCDM_INPUT_PRECONDITION: representation HDF5 does not exist"))
-    gauge_sha256 = sha256_file(gauge_hdf5)
-    representation_sha256 = sha256_file(representation_hdf5)
+    gauge_reference = IO.scientific_source_collection_definition(Dict("GAUGE"=>abspath(gauge_hdf5)))
+    representation_reference = IO.scientific_source_collection_definition(
+        Dict("REPRESENTATION"=>abspath(representation_hdf5)),
+    )
     readback = _read_star_covariant_paw_gauge_hdf5(gauge_hdf5; construction_policy)
     payload = readback.payload
-    representation = read_band_representation_hdf5(representation_hdf5)
+    representation =
+        read_band_representation_hdf5(representation_hdf5; content_authentication = false)
     native = payload.native
     nbands = size(first(native.kpoints).coefficients, 1)
     nkpoints = length(native.kpoints)
@@ -337,22 +297,35 @@ function _prepare_paw_scdm_input_artifact(
     end
     maximum(abs, representation.kpoints_fractional - kpoints) <= 1.0e-10 ||
         throw(ArgumentError("SCDM_INPUT_PRECONDITION: k-point identity differs"))
-    get(representation.conventions, "wavefunction_gauge_hdf5_sha256", "MISSING") == gauge_sha256 ||
-        throw(ArgumentError("SCDM_INPUT_PRECONDITION: gauge digest differs"))
+    haskey(representation.input_definitions, "wavefunction_gauge") || throw(
+        ArgumentError("SCDM_INPUT_PRECONDITION: representation complete gauge reference required"),
+    )
+    IO.validate_scientific_input_definitions_equal(
+        gauge_reference,
+        representation.input_definitions["wavefunction_gauge"];
+        mismatch_error = "SCDM_INPUT_PRECONDITION: representation gauge source differs",
+    )
+    readback.band_frame_contract === nothing && throw(ArgumentError("SCDM_CURRENT_FRAME_REQUIRED"))
+    gauge_frame_definition = readback.band_frame_contract.contract_definition
+    get(representation.conventions, "wavefunction_gauge_definition", "MISSING") ==
+    gauge_frame_definition || throw(ArgumentError("SCDM_INPUT_PRECONDITION: gauge digest differs"))
     authority = get(payload.source_metadata, "authoritative_hamiltonian", "native_dft")
-    authority_sha256 = get(payload.input_sha256, "AUTHORITATIVE_HAMILTONIAN_SHA256", "MISSING")
+    authority_definition =
+        _paw_scdm_authority_definition(payload.input_sha256, "AUTHORITATIVE_HAMILTONIAN_SHA256")
+    representation_authority_definition = _paw_scdm_authority_definition(
+        representation.conventions,
+        "authoritative_hamiltonian_sha256",
+    )
     get(representation.conventions, "authoritative_hamiltonian", "MISSING") == authority ||
         throw(ArgumentError("SCDM_INPUT_PRECONDITION: Hamiltonian authority differs"))
-    get(representation.conventions, "authoritative_hamiltonian_sha256", "MISSING") ==
-    authority_sha256 || throw(ArgumentError("SCDM_INPUT_PRECONDITION: authority digest differs"))
+    representation_authority_definition == authority_definition ||
+        throw(ArgumentError("SCDM_INPUT_PRECONDITION: authority definition differs"))
     for key in intersect(keys(payload.input_sha256), keys(representation.input_sha256))
         payload.input_sha256[key] == representation.input_sha256[key] ||
             throw(ArgumentError("SCDM_INPUT_PRECONDITION: source digest differs for $(key)"))
     end
-    source_identity = _paw_scdm_source_identity(payload, gauge_sha256, representation_sha256)
+    source_identity = _paw_scdm_source_identity(payload)
     source_identity["construction_policy"] = String(construction_policy)
-    source_identity["gauge_quality_status"] = String(readback.status)
-    metric_sha256 = _star_metric_sha256(payload.metric)
     sampling_grid = _paw_scdm_sampling_grid(native)
     _, anchor_lowdin = _paw_scdm_lowdin(payload.metric, 1, native.kpoints[1])
     anchor_samples = _paw_scdm_anchor_samples(native.kpoints[1], anchor_lowdin, sampling_grid)
@@ -383,21 +356,7 @@ function _prepare_paw_scdm_input_artifact(
         overlap, lowdin = _paw_scdm_lowdin(payload.metric, kpoint, point)
         return (point, overlap, lowdin)
     end
-    contract = bytes2hex(
-        sha256(
-            join(
-                (
-                    "ordinary-paw-scdm-v1",
-                    string(VERSION),
-                    gauge_sha256,
-                    representation_sha256,
-                    string(num_wannier),
-                    sha256_file(@__FILE__),
-                ),
-                ":",
-            ),
-        ),
-    )
+    contract = "ordinary-paw-scdm-values/2"
     foreach_preparation_block(
         (k, inputs) -> _paw_scdm_frame_from_metric(inputs..., k, coordinates, selected_spin),
         load_metric,
@@ -405,27 +364,7 @@ function _prepare_paw_scdm_input_artifact(
         nkpoints;
         contract,
         label = "paw-scdm",
-    )
-    digest = _paw_scdm_payload_sha256(
-        frames,
-        projectors,
-        selected_grid_indices,
-        sampling_grid,
-        singular_values,
-        ranks,
-        conditions,
-        generalized,
-        paw_s_residuals,
-        euclidean_residuals,
-        kpoints,
-        native.mp_grid,
-        native.spinor,
-        gauge_sha256,
-        representation_sha256,
-        authority,
-        authority_sha256,
-        metric_sha256,
-        source_identity,
+        reuse_completed_blocks = false,
     )
     artifact = PAWSCDMInputArtifact(
         PAW_SCDM_INPUT_SCHEMA_VERSION,
@@ -442,16 +381,21 @@ function _prepare_paw_scdm_input_artifact(
         kpoints,
         native.mp_grid,
         native.spinor,
-        gauge_sha256,
-        representation_sha256,
+        gauge_reference,
+        representation_reference,
         authority,
         authority_sha256,
-        metric_sha256,
+        gauge_frame_definition,
         source_identity,
-        digest,
+        "NOT_PERFORMED",
+    )
+    IO.validate_scientific_source_collection(Dict("GAUGE"=>abspath(gauge_hdf5)), gauge_reference)
+    IO.validate_scientific_source_collection(
+        Dict("REPRESENTATION"=>abspath(representation_hdf5)),
+        representation_reference,
     )
     _paw_scdm_write(output_hdf5, artifact)
-    return read_paw_scdm_input_artifact(output_hdf5)
+    return artifact
 end
 
 # Read, structurally validate, and digest-check a PAW-S SCDM artifact.
@@ -495,13 +439,13 @@ function read_paw_scdm_input_artifact(filename::AbstractString)
             kpoints,
             Tuple(mp_values),
             Bool(read(attributes["spinor"])),
-            String(read(attributes["source_gauge_sha256"])),
-            String(read(attributes["strict_representation_sha256"])),
+            read_scientific_input_reference_hdf5(handle, "source_gauge_reference"),
+            read_scientific_input_reference_hdf5(handle, "strict_representation_reference"),
             String(read(attributes["authoritative_hamiltonian"])),
-            String(read(attributes["authoritative_hamiltonian_sha256"])),
-            String(read(attributes["metric_sha256"])),
+            String(read(attributes["authoritative_hamiltonian_definition"])),
+            String(read(attributes["gauge_frame_definition"])),
             source_identity,
-            String(read(attributes["payload_sha256"])),
+            String(read(attributes["content_authentication"])),
         )
         artifact
     end
@@ -519,28 +463,9 @@ function read_paw_scdm_input_artifact(filename::AbstractString)
         throw(ArgumentError("SCDM_INPUT_PRECONDITION: nonfinite SCDM payload"))
     all(==(num_wannier), artifact.ranks) ||
         throw(ArgumentError("SCDM_INPUT_PRECONDITION: SCDM payload is rank deficient"))
-    digest = _paw_scdm_payload_sha256(
-        artifact.frames,
-        artifact.projectors,
-        artifact.selected_grid_indices,
-        artifact.sampling_grid,
-        artifact.singular_values,
-        artifact.ranks,
-        artifact.conditions,
-        artifact.generalized_norm_residuals,
-        artifact.paw_s_orthogonality_residuals,
-        artifact.euclidean_orthogonality_residuals,
-        artifact.kpoints_fractional,
-        artifact.mp_grid,
-        artifact.spinor,
-        artifact.source_gauge_sha256,
-        artifact.strict_representation_sha256,
-        artifact.authoritative_hamiltonian,
-        artifact.authoritative_hamiltonian_sha256,
-        artifact.metric_sha256,
-        artifact.source_identity,
-    )
-    digest == artifact.payload_sha256 ||
-        throw(ArgumentError("SCDM_INPUT_PRECONDITION: SCDM payload digest differs"))
+    artifact.content_authentication == "NOT_PERFORMED" ||
+        throw(ArgumentError("SCDM_INPUT_PRECONDITION: content authentication must be explicit"))
+    startswith(artifact.gauge_frame_definition, "band-frame-contract-values/") ||
+        throw(ArgumentError("SCDM_INPUT_PRECONDITION: complete frame definition required"))
     return artifact
 end

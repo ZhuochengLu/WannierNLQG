@@ -7,100 +7,21 @@ const PROJECTION_MATERIAL_S = WannierNLQG.Symmetrization
 const PROJECTION_MATERIAL_EXT =
     first(PROJECTION_MATERIAL_W._load_wannierization_extension!()).ProjectionSearch
 
-function projection_materialization_fixture()
-    scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
-        trues(1, 1),
-        trues(1, 1),
-    )
-    contract = PROJECTION_MATERIAL_W.TargetSubspaceQualificationContract(
-        scope;
-        outer_min_ev = -2.0,
-        outer_max_ev = 2.0,
-        frozen_min_ev = -2.0,
-        frozen_max_ev = 0.0,
-        num_wannier = 1,
-    )
-    operation = WannierNLQG.SymmetryFoundation.SymmetryOperation(
-        Matrix{Int}(I, 3, 3),
-        zeros(3),
-        Matrix{Float64}(I, 3, 3),
-    )
-    representation = WannierNLQG.SymmetryFoundation.BandRepresentation(
-        "1.17",
-        :synthetic,
-        false,
-        Matrix{Float64}(I, 3, 3),
-        2.0pi .* Matrix{Float64}(I, 3, 3),
-        (1, 1, 1),
-        zeros(1, 3),
-        reshape([-1.0], 1, 1),
-        [operation],
-        ones(Int, 1, 1),
-        zeros(Int, 3, 1, 1),
-        ones(ComplexF64, 1, 1, 1, 1),
-        ones(Int, 1, 1),
-        [1],
-        [1],
-        [1];
-        conventions = Dict(
-            "target_subspace_contract_sha256" => contract.contract_sha256,
-            "outer_mask_sha256" => scope.outer_mask_sha256,
-            "frozen_mask_sha256" => scope.frozen_mask_sha256,
-        ),
-        input_sha256 = Dict("TARGET_SUBSPACE_CONTRACT_SHA256" => contract.contract_sha256),
-    )
-    spec = WannierNLQG.WannierProjection.ProjectionSpec(
-        selector = "X",
-        orbital_sets = "s",
-        positions = zeros(3, 1),
-    )
-    candidate = PROJECTION_MATERIAL_W.ProjectionCandidateSpec(
-        id = "X:s",
-        specs = [spec],
-        fixed_multiplicity = 1,
-        max_multiplicity = 1,
-    )
-    config = PROJECTION_MATERIAL_W.ProjectionRepresentationSearchConfig(
-        band_representation = representation,
-        target_subspace_contract = contract,
-        candidates = [candidate],
-    )
-    result = PROJECTION_MATERIAL_W.search_projection_representations(config)
-    result.complete || error("synthetic materialization search did not complete")
-    template = PROJECTION_MATERIAL_W.SymmetryAdaptedWannierizationConfig(
-        input = PROJECTION_MATERIAL_W.WannierizationInputConfig(
-            wannierization_mode = :symmetry_adapted,
-            win_file = "synthetic.win",
-            eig_file = "synthetic.eig",
-            mmn_file = "synthetic.mmn",
-            band_representation = representation,
-            num_wannier = 1,
-            outer_min_ev = -2.0,
-            outer_max_ev = 2.0,
-            frozen_min_ev = -2.0,
-            frozen_max_ev = 0.0,
-        ),
-        solver = PROJECTION_MATERIAL_W.WannierizationSolverConfig(),
-        checkpoint = PROJECTION_MATERIAL_W.WannierizationCheckpointConfig(),
-        runtime = PROJECTION_MATERIAL_W.WannierizationRuntimeConfig(),
-        output = PROJECTION_MATERIAL_W.WannierizationOutputConfig(),
-    )
-    return (; scope, contract, representation, result, template)
+if !isdefined(@__MODULE__, :projection_materialization_fixture)
+    include(joinpath(@__DIR__, "support", "ProjectionSearchFixtureSupport.jl"))
 end
 
 function projection_result_with_solution(result, solution)
     provisional = PROJECTION_MATERIAL_W.ProjectionRepresentationSearchResult(
         result.status,
         result.complete,
-        result.representation_sha256,
-        result.contract_sha256,
-        result.compatibility_info,
-        result.config_sha256,
-        "",
+        result.representation_definition,
+        result.contract_definition,
+        result.algorithm_info,
         result.spinor,
         result.num_wannier,
-        result.outer_mask_sha256,
-        result.frozen_mask_sha256,
+        result.outer_mask_definition,
+        result.frozen_mask_definition,
         result.candidates,
         result.radial_transform,
         result.visited_nodes,
@@ -110,7 +31,7 @@ function projection_result_with_solution(result, solution)
         [solution],
         result.diagnostics,
     )
-    return Base.invokelatest(PROJECTION_MATERIAL_EXT._projection_seal_search_result, provisional)
+    return provisional
 end
 
 function projection_result_with_validation(result, validation_status)
@@ -120,13 +41,6 @@ function projection_result_with_validation(result, validation_status)
     else
         Dict("frozen_to_target" => 1.0e-7, "target_to_outer" => 1.0e-7)
     end
-    validation_sha = Base.invokelatest(
-        PROJECTION_MATERIAL_EXT._projection_solution_validation_sha256,
-        original.candidate_ids,
-        original.coefficients,
-        validation_status,
-        residuals,
-    )
     solution = PROJECTION_MATERIAL_W.ProjectionRepresentationSolution(
         original.candidate_ids,
         original.coefficients,
@@ -136,7 +50,6 @@ function projection_result_with_validation(result, validation_status)
         original.signature_multiplicities,
         validation_status,
         residuals,
-        validation_sha,
     )
     return projection_result_with_solution(result, solution)
 end
@@ -171,15 +84,13 @@ end
     incomplete = PROJECTION_MATERIAL_W.ProjectionRepresentationSearchResult(
         PROJECTION_MATERIAL_W.PROJECTION_SEARCH_LIMIT_REACHED,
         false,
-        fixture.result.representation_sha256,
-        fixture.result.contract_sha256,
-        fixture.result.compatibility_info,
-        fixture.result.config_sha256,
-        fixture.result.payload_sha256,
+        fixture.result.representation_definition,
+        fixture.result.contract_definition,
+        fixture.result.algorithm_info,
         fixture.result.spinor,
         fixture.result.num_wannier,
-        fixture.result.outer_mask_sha256,
-        fixture.result.frozen_mask_sha256,
+        fixture.result.outer_mask_definition,
+        fixture.result.frozen_mask_definition,
         fixture.result.candidates,
         fixture.result.radial_transform,
         fixture.result.visited_nodes,
@@ -203,25 +114,21 @@ end
     original = only(fixture.result.solutions)
     invalid_solution = PROJECTION_MATERIAL_W.ProjectionRepresentationSolution(
         original.candidate_ids,
-        original.coefficients,
+        original.coefficients .+ 1,
         original.total_dimension,
         original.nonzero_candidate_types,
         original.total_block_multiplicity,
         original.signature_multiplicities,
         PROJECTION_MATERIAL_W.PROJECTION_VALIDATION_PASSED,
         original.embedding_residuals,
-        repeat("0", 64),
     )
     self_consistent_payload = projection_result_with_solution(fixture.result, invalid_solution)
-    @test self_consistent_payload.payload_sha256 == Base.invokelatest(
-        PROJECTION_MATERIAL_EXT._projection_search_payload_sha256,
-        self_consistent_payload,
-    )
+    @test !hasproperty(self_consistent_payload, :payload_sha256)
     @test_throws ArgumentError PROJECTION_MATERIAL_W.materialize_projection_basis(
         self_consistent_payload,
     )
 
-    mismatched_template = PROJECTION_MATERIAL_W.SymmetryAdaptedWannierizationConfig(
+    mismatched_template = PROJECTION_MATERIAL_W.WannierizationConfig(
         input = PROJECTION_MATERIAL_W.WannierizationInputConfig(
             wannierization_mode = :symmetry_adapted,
             win_file = "synthetic.win",

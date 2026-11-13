@@ -38,7 +38,7 @@ function build_config(;
                     fermi_energy = 0.0,
                     temperature = 0.0,
                 ),
-                numerics = OpticalNumerics(
+                numerics = Numerics(
                     broadening = 0.060,
                     broadening_type = "Gaussian",
                     transition_window_factor = 5.0,

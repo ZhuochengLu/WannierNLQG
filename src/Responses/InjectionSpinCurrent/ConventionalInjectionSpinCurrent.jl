@@ -250,3 +250,64 @@ function injection_spin_current_component(
     end
     return value
 end
+
+"""
+Compute one injection-spin component directly from prepared matrix data.
+
+Retain the Array6 kernel/component methods for full tensors and expert callers.
+This single-component consumer evaluates the same kernel expression and ordered
+pair sum without storing the intermediate tensor. Dense inactive mask entries
+still contribute the cleared complex zero when their weight is nonzero; do not
+skip those additions or regroup the prefactor, weight and complex product.
+"""
+function injection_spin_current_component(
+    data::KPointMatrixData,
+    occupation_differences::AbstractMatrix{Float64},
+    delta::AbstractMatrix{Float64},
+    prefactor,
+    tensor_indices::Vector{Int},
+    band_start::Int64,
+    band_end::Int64,
+    ;
+    active_pair_mask::Union{Nothing, AbstractMatrix{Bool}} = nothing,
+    active_pairs_nmajor::Union{Nothing, AbstractVector{NTuple{2, Int}}} = nothing,
+    active_pair_count::Int = -1,
+)
+    a, s, b, c = tensor_indices
+    value = COMPLEX_ZERO
+    if active_pairs_nmajor !== nothing
+        pair_count = _compact_injection_pair_count(active_pairs_nmajor, active_pair_count)
+        @inbounds for pair_index in 1:pair_count
+            n, m = active_pairs_nmajor[pair_index]
+            spin_velocity_diff =
+                data.spin_velocity.hamiltonian_gauge[m, m, a, s] -
+                data.spin_velocity.hamiltonian_gauge[n, n, a, s]
+            kernel =
+                spin_velocity_diff * data.berry_connection[n, m, c] * data.berry_connection[m, n, b]
+            weight = occupation_differences[n, m] * delta[n, m]
+            if weight != 0.0
+                value += prefactor * weight * kernel
+            end
+        end
+        return value
+    end
+    @inbounds for n in band_start:band_end
+        for m in band_start:band_end
+            kernel = COMPLEX_ZERO
+            if active_pair_mask === nothing || active_pair_mask[n, m]
+                spin_velocity_diff =
+                    data.spin_velocity.hamiltonian_gauge[m, m, a, s] -
+                    data.spin_velocity.hamiltonian_gauge[n, n, a, s]
+                kernel =
+                    spin_velocity_diff *
+                    data.berry_connection[n, m, c] *
+                    data.berry_connection[m, n, b]
+            end
+            weight = occupation_differences[n, m] * delta[n, m]
+            if weight != 0.0
+                value += prefactor * weight * kernel
+            end
+        end
+    end
+    return value
+end

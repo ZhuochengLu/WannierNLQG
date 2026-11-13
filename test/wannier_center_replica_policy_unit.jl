@@ -222,8 +222,10 @@ end
         tolerance = 1.0e-12,
         search_size = 2,
     )
-    @test result.mapping_sha256 ==
-          "09eaee299936eddc09cb25c292cc6ed92ba0731a847154350a83054f05ba9e42"
+    @test result.map.source_r_vectors==[0 1; 0 0; 0 0]
+    @test result.map.source_degeneracies==[1, 1]
+    @test result.map.images==reshape([[(0, 0, 0)], [(-1, 0, 0), (1, 0, 0)]], 1, 1, 2)
+    @test result.mapping_reference==result.map.mapping_reference
     materialized = result.operators[WCRP_SYM.REAL_SPACE_HAMILTONIAN]
     @test Set(
         Tuple(materialized.r_vectors[:, index]) for index in axes(materialized.r_vectors, 2)
@@ -284,7 +286,7 @@ end
     @test selected_distance ≈ brute_force_distance atol = 1.0e-12
 end
 
-@testset "diagnostic geometry survives Packed HDF5 schema 6" begin
+@testset "current mathematical model preserves center and replica geometry" begin
     extension = symmetrization_extension()
     lattice = Matrix{Float64}(I, 3, 3)
     r_vectors = zeros(Int, 3, 1)
@@ -320,9 +322,16 @@ end
         manifest = WannierNLQG.IO.read_real_space_operator_bundle_manifest(path)
         @test manifest.schema_version == WannierNLQG.IO.OPERATOR_BUNDLE_SCHEMA_VERSION
         @test manifest.wannier_center_policy == :keep_input
-        @test !manifest.production_eligible
         @test !manifest.minimum_distance_materialized
-        @test manifest.geometry_content_sha256 !== nothing
+        @test manifest.lattice == Matrix{Float64}(I, 3, 3)
+        @test manifest.r_vectors == zeros(Int, 3, 1)
+        @test manifest.degeneracies == [1]
+        @test manifest.wannier_centers_cartesian == [0.25 0.0 0.0]
+        @test manifest.wannier_centers_fractional == [0.25 0.0 0.0]
+        @test manifest.real_space_replica_policy == :input
+        @test manifest.mp_grid == (1, 1, 1)
+        @test manifest.wigner_seitz_tolerance == 1.0e-5
+        @test manifest.wigner_seitz_search_size == 3
     end
 end
 
@@ -457,7 +466,7 @@ end
     values=reshape(ComplexF64[2 + im, 4 - 2im], 1, 1, 2)
     backup=copy(values)
     components=Dict(:H=>Dict((Int8(0), Int8(0))=>values), :A=>Dict((Int8(1), Int8(0))=>values))
-    for normalization in (me.SerializedWannier90ReplicaValues(), me.PredividedReplicaValues())
+    for normalization in (me.RawReplicaValues(), me.PredividedReplicaValues())
         prepared=me.materialize_replica_components(components, degeneracies, map, normalization)
         expected=me.materialize_replica_component(values, degeneracies, map, normalization)
         @test prepared[:H][(0, 0)] == expected
@@ -469,6 +478,6 @@ end
         components,
         [1, 1],
         map,
-        me.SerializedWannier90ReplicaValues(),
+        me.RawReplicaValues(),
     )
 end

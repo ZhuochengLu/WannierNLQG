@@ -27,12 +27,16 @@ end
 
 # Expose compatibility matrix-property names through the shared k-point payload; read all other names as stored fields.
 function Base.getproperty(data::GeometricLoopMatrixData, name::Symbol)
-    if name === :hamiltonian_derivatives
+    if name === :inverse_energy_differences
+        return subspace_inverse_energy_differences(getfield(data, :common))
+    elseif name === :gauge_correction
+        return subspace_gauge_correction(getfield(data, :common))
+    elseif name === :hamiltonian_derivatives
         return getproperty(getfield(data, :common), :source_gauge_hamiltonian_derivatives)
-    elseif name === :berry_connection
-        return getproperty(getfield(data, :common), :source_gauge_berry_connection)
-    elseif name === :velocity_vertices
-        return getproperty(getfield(data, :common), :source_gauge_velocity_vertices)
+    elseif name === :berry_connection || name === :source_gauge_berry_connection
+        return subspace_connection(getfield(data, :common); source_gauge = true)
+    elseif name === :velocity_vertices || name === :source_gauge_velocity_vertices
+        return subspace_velocity_vertices(getfield(data, :common); source_gauge = true)
     elseif name === :spectrum ||
            name === :energy_differences ||
            name === :inverse_energy_differences ||
@@ -47,9 +51,9 @@ function Base.getproperty(data::GeometricLoopMatrixData, name::Symbol)
 end
 
 """
-Shared matrix workspace, optional offset cache, and a reduced Berry-connection plan for shifted Wilson points.
+Shared matrix workspace, optional offset cache, and a reduced raw-position plan for shifted Wilson points.
 
-The dimension-based constructor requests velocity vertices; constructors from an existing workspace preserve its convention and denominator controls.
+The dimension-based constructor requests raw h/A; constructors from an existing workspace preserve its convention and denominator controls.
 """
 mutable struct GeometricLoopMatrixWorkspace{W, B, P}
     matrix_elements::W
@@ -57,14 +61,15 @@ mutable struct GeometricLoopMatrixWorkspace{W, B, P}
     berry_plan::P
 end
 
-# Shared matrix workspace, optional offset cache, and a reduced Berry-connection plan for shifted Wilson points.
+# Shared matrix workspace, optional offset cache, and a reduced raw-position plan for shifted Wilson points.
 #
-# The dimension-based constructor requests velocity vertices; constructors from an existing workspace preserve its convention and denominator controls.
+# The dimension-based constructor requests raw h/A; constructors from an existing workspace preserve its convention and denominator controls.
 function GeometricLoopMatrixWorkspace(matrix_elements::MatrixElementWorkspace, batch)
     source_plan = matrix_elements.plan
     berry_plan = compile_matrix_plan(
         MatrixElementRequest(
-            BERRY_CONNECTION;
+            HAMILTONIAN_DERIVATIVES,
+            INTERNAL_CONNECTION;
             spatial_dimension = source_plan.spatial_dimension,
             denominator_regularization = source_plan.denominator_regularization,
             degeneracy_threshold = source_plan.degeneracy_threshold,
@@ -75,21 +80,25 @@ function GeometricLoopMatrixWorkspace(matrix_elements::MatrixElementWorkspace, b
     return GeometricLoopMatrixWorkspace(matrix_elements, batch, berry_plan)
 end
 
-# Shared matrix workspace, optional offset cache, and a reduced Berry-connection plan for shifted Wilson points.
+# Shared matrix workspace, optional offset cache, and a reduced raw-position plan for shifted Wilson points.
 #
-# The dimension-based constructor requests velocity vertices; constructors from an existing workspace preserve its convention and denominator controls.
+# The dimension-based constructor requests raw h/A; constructors from an existing workspace preserve its convention and denominator controls.
 GeometricLoopMatrixWorkspace(matrix_elements::MatrixElementWorkspace) =
     GeometricLoopMatrixWorkspace(matrix_elements, nothing)
 
-# Shared matrix workspace, optional offset cache, and a reduced Berry-connection plan for shifted Wilson points.
+# Shared matrix workspace, optional offset cache, and a reduced raw-position plan for shifted Wilson points.
 #
-# The dimension-based constructor requests velocity vertices; constructors from an existing workspace preserve its convention and denominator controls.
+# The dimension-based constructor requests raw h/A; constructors from an existing workspace preserve its convention and denominator controls.
 function GeometricLoopMatrixWorkspace(
     num_orbitals::Integer,
     num_r_vectors::Integer,
     spatial_dimension::Integer,
 )
-    request = MatrixElementRequest(VELOCITY_VERTICES; spatial_dimension = spatial_dimension)
+    request = MatrixElementRequest(
+        HAMILTONIAN_DERIVATIVES,
+        INTERNAL_CONNECTION;
+        spatial_dimension = spatial_dimension,
+    )
     plan = compile_matrix_plan(request)
     return GeometricLoopMatrixWorkspace(
         MatrixElementWorkspace(num_orbitals, num_r_vectors, plan),
@@ -116,13 +125,13 @@ end
 Compute a shifted Wilson-loop point with the minimum required capability set.
 
 The full response workspace can carry a larger bundled plan.  Wilson transport
-at a shifted point needs the eigensystem and Berry connection, but not the
+at a shifted point needs the eigensystem and raw h/A for cached bare r0, but not the
 central point's second derivatives or spin channels.
 """
 function compute_wilson_shifted!(
     data::GeometricLoopMatrixData,
     workspace::GeometricLoopMatrixWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     kpoint::AbstractVector{<:Real};
     denominator_regularization::Real,
     spatial_dimension::Integer = workspace.matrix_elements.plan.spatial_dimension,
@@ -165,7 +174,7 @@ Wrapper workspaces delegate to their shared interpolation workspace and retain s
 
 Prepare real space in place.
 """
-prepare_real_space!(workspace::GeometricLoopMatrixWorkspace, model::TightBindingModel) =
+prepare_real_space!(workspace::GeometricLoopMatrixWorkspace, model::AbstractResponseModel) =
     prepare_real_space!(workspace.matrix_elements, model)
 
 """
@@ -176,7 +185,7 @@ Compute the spectrum before dependent matrices and return the populated data; wr
 function compute_kpoint!(
     data::GeometricLoopMatrixData,
     workspace::GeometricLoopMatrixWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     kpoint::AbstractVector{<:Real};
     denominator_regularization::Real,
     spatial_dimension::Integer = workspace.matrix_elements.plan.spatial_dimension,
@@ -192,28 +201,32 @@ function compute_kpoint!(
     return data
 end
 
+"""Mark adjacent-gap response groups without altering spectra, operators or pair weights.
+
+Projector, Wilson and Geometric response entrypoints share this chain policy.
+The exact spectral partition and reconstruction guard are independent.
 """
-Mark degenerate groups in caller-owned state.
-"""
+function mark_geometric_response_groups!(
+    data::GeometricLoopMatrixData,
+    degeneracy_threshold::Float64,
+)
+    return _mark_response_degeneracy_groups!(data, degeneracy_threshold)
+end
+
+"""Mark Wilson transport groups using the shared adjacent-gap response policy."""
+function mark_wilson_response_groups!(data::GeometricLoopMatrixData, degeneracy_threshold::Float64)
+    return _mark_response_degeneracy_groups!(data, degeneracy_threshold)
+end
+
+"""Mark Geometric quantum-geometry response groups using the supplied threshold."""
 function mark_degenerate_groups!(data::GeometricLoopMatrixData, degeneracy_threshold::Float64)
-    band = 1
-    while band <= data.num_orbitals
-        group_start = band
-        while band < data.num_orbitals &&
-            (data.spectrum.energies[band + 1] - data.spectrum.energies[band]) < degeneracy_threshold
-            band += 1
-        end
-        group_stop = band
-        group_size = group_stop - group_start + 1
-        group_weight = 1.0 / group_size
-        for group_band in group_start:group_stop
-            data.degeneracy_weights[group_band] = group_weight
-            data.degeneracy_group_starts[group_band] = group_start
-            data.degeneracy_group_stops[group_band] = group_stop
-        end
-        band = group_stop + 1
-    end
-    return data
+    # Retain the original exact-spectral admissibility check independently.
+    # Its ranges do not choose or overwrite the response near-degeneracy groups.
+    spectral_subspace_blocks(
+        data.spectrum.energies;
+        gap_tolerance = data.common.spectral_gap_tolerance,
+    )
+    return _mark_response_degeneracy_groups!(data, degeneracy_threshold)
 end
 
 """
@@ -254,4 +267,328 @@ function degenerate_group_summary(data::GeometricLoopMatrixData)
         band = data.degeneracy_group_stops[band] + 1
     end
     return group_count, max_group_size
+end
+
+"""Worker-owned rectangular insertion scratch; all intermediate dimensions remain N.
+
+Only the selected external rows/columns are valid. Selections are rebuilt for each
+kernel, and derivatives are evaluated for each actual endpoint, never cached here.
+Capacity is allocated once at the full finite basis size, independent of activity.
+"""
+mutable struct ActiveVelocityInsertionWorkspace
+    valence_bands::Vector{Int}
+    conduction_bands::Vector{Int}
+    valence_active::BitVector
+    conduction_active::BitVector
+    buffers::Vector{Matrix{ComplexF64}}
+    nonzero_indices::Vector{Int}
+end
+
+"""Allocate worker-private active-band selectors and reusable velocity insertion buffers for the given orbital count."""
+function ActiveVelocityInsertionWorkspace(num_orbitals::Int)
+    valence = Int[]
+    conduction = Int[]
+    sizehint!(valence, num_orbitals)
+    sizehint!(conduction, num_orbitals)
+    return ActiveVelocityInsertionWorkspace(
+        valence,
+        conduction,
+        falses(num_orbitals),
+        falses(num_orbitals),
+        Matrix{ComplexF64}[],
+        zeros(Int, num_orbitals),
+    )
+end
+
+"""Reject active velocity insertions by default; model-specific methods must establish the fixed-basis contract."""
+supports_active_velocity_insertions(model::AbstractResponseModel, centers, dimension) = false
+
+# The declared fixed basis has raw A=0 and V=dH; no inferred position operator.
+function supports_active_velocity_insertions(model::AnalyticKModel, centers, dimension)
+    input = model.input
+    return dimension in (2, 3) &&
+           model.num_orbitals >= 64 &&
+           input.basis == :fixed_orthonormal &&
+           input.orbital_positions === nothing &&
+           !haskey(input.operators, :position) &&
+           !haskey(input.operators, :position_derivative) &&
+           input.derivatives[1] !== nothing &&
+           all(iszero, centers)
+end
+
+"""Evaluate the analytic Hamiltonian first derivative at the data point in physical reciprocal coordinates, using the model diagnostics."""
+function active_velocity_gradient(data::KPointMatrixData, model::AnalyticKModel)
+    physical_kpoint = transpose(reciprocal_lattice(model.lattice)) * data.kpoint
+    return analytic_hamiltonian_derivative(
+        model.input,
+        physical_kpoint,
+        1;
+        diagnostics = model.evaluation_diagnostics,
+    )
+end
+
+# Retain the established scalar source rotation order for selected velocity rows
+# or columns. The first factor retains all N rows and columns so its finiteness
+# and zero-factor decisions are identical to the complete reference transform.
+function selected_source_velocity!(
+    output,
+    gradient,
+    spectrum,
+    temporary,
+    indices,
+    select_rows,
+    gradient_buffer,
+    nonzero_indices,
+)
+    n = size(output, 1)
+    copyto!(gradient_buffer, gradient)
+    source_gauge_first_product!(
+        temporary,
+        spectrum.source_eigenvectors_adjoint,
+        gradient_buffer,
+        nonzero_indices,
+    )
+    return fill_selected_source_velocity!(
+        output,
+        spectrum.source_eigenvectors,
+        temporary,
+        indices,
+        select_rows,
+    )
+end
+
+# The first source product is valid only for the current endpoint and direction.
+# A second selected-column write can extend the same velocity matrix without
+# clearing its already prepared rows; intersection entries retain identical sums.
+function fill_selected_source_velocity!(
+    output,
+    eigenvectors,
+    temporary,
+    indices,
+    select_rows;
+    clear_output = true,
+)
+    n = size(output, 1)
+    skip_zero = _source_gauge_zero_skipping_eligible(n, temporary, eigenvectors)
+    clear_output && fill!(output, COMPLEX_ZERO)
+    rows = select_rows ? indices : (1:n)
+    columns = select_rows ? (1:n) : indices
+    @inbounds for column in columns, row in rows
+        value = COMPLEX_ZERO
+        for intermediate in 1:n
+            right = eigenvectors[intermediate, column]
+            skip_zero && iszero(right) && continue
+            value += temporary[row, intermediate] * right
+        end
+        output[row, column] = value
+    end
+    return output
+end
+
+"""Overwrite the insertion with left_velocity*overlap followed by overlap*right_velocity in the original two-GEMM order."""
+function active_velocity_insertion_direction!(output, left_velocity, right_velocity, overlap)
+    mul!(output, left_velocity, overlap)
+    mul!(output, overlap, right_velocity, 1.0, 1.0)
+    return output
+end
+
+# Only selected output columns are valid for active insertions. Keep every row,
+# every intermediate band, and the two original ordered GEMMs. Fixed 64-column
+# panels preserve dense BLAS work; this is not a skinny source-gauge rotation.
+# Rebuild panels from the current sorted bands; no selection survives a call.
+function active_velocity_selected_columns!(output, left_velocity, right_velocity, overlap, indices)
+    n = size(output, 1)
+    if !_dense_column_panel_storage_eligible(
+        output,
+        indices,
+        left_velocity,
+        right_velocity,
+        overlap,
+    )
+        return active_velocity_insertion_direction!(output, left_velocity, right_velocity, overlap)
+    end
+    previous_band = 0
+    previous_panel = 0
+    columns = 0
+    for band in indices
+        if !(previous_band < band <= n)
+            return active_velocity_insertion_direction!(
+                output,
+                left_velocity,
+                right_velocity,
+                overlap,
+            )
+        end
+        first_column = 64 * div(band - 1, 64) + 1
+        if first_column != previous_panel
+            columns += min(64, n - first_column + 1)
+            previous_panel = first_column
+        end
+        previous_band = band
+    end
+    if 2 * columns > n ||
+       !all(isfinite, left_velocity) ||
+       !all(isfinite, right_velocity) ||
+       !all(isfinite, overlap)
+        return active_velocity_insertion_direction!(output, left_velocity, right_velocity, overlap)
+    end
+    previous_panel = 0
+    for band in indices
+        first_column = 64 * div(band - 1, 64) + 1
+        first_column == previous_panel && continue
+        previous_panel = first_column
+        columns = first_column:min(first_column + 63, n)
+        @views mul!(output[:, columns], left_velocity, overlap[:, columns])
+        @views mul!(output[:, columns], overlap, right_velocity[:, columns], 1.0, 1.0)
+    end
+    return output
+end
+
+"""Prepare selected external velocity rows/columns with all N intermediate bands.
+
+The established source-rotation summation order and full-size insertion GEMM
+intermediate dimension and product association are retained. Only selected output
+columns are written in fixed dense panels when eligible. Inactive velocity
+rows/columns are zero scratch, never a capability or a physical band truncation.
+Only output[left_indices,right_indices,directions] is valid. Both terms and the
+explicit reverse central insertion retain all finite bands and diagonal terms.
+"""
+function active_velocity_insertions!(
+    output,
+    left::KPointMatrixData,
+    right::KPointMatrixData,
+    left_indices,
+    right_indices,
+    directions,
+    left_gradient,
+    right_gradient,
+    scratch::ActiveVelocityInsertionWorkspace;
+    overlap = nothing,
+)
+    n = length(left.spectrum.energies)
+    if isempty(scratch.buffers)
+        append!(scratch.buffers, [zeros(ComplexF64, n, n) for _ in 1:5])
+    end
+    left_velocity, right_velocity, local_overlap, temporary, gradient_buffer = scratch.buffers
+    if overlap === nothing
+        mul!(
+            local_overlap,
+            left.spectrum.source_eigenvectors_adjoint,
+            right.spectrum.source_eigenvectors,
+        )
+        overlap = local_overlap
+    end
+    @views for direction in directions
+        selected_source_velocity!(
+            left_velocity,
+            left_gradient[:, :, direction],
+            left.spectrum,
+            temporary,
+            left_indices,
+            true,
+            gradient_buffer,
+            scratch.nonzero_indices,
+        )
+        selected_source_velocity!(
+            right_velocity,
+            right_gradient[:, :, direction],
+            right.spectrum,
+            temporary,
+            right_indices,
+            false,
+            gradient_buffer,
+            scratch.nonzero_indices,
+        )
+        active_velocity_selected_columns!(
+            output[:, :, direction],
+            left_velocity,
+            right_velocity,
+            overlap,
+            right_indices,
+        )
+    end
+    return output
+end
+
+"""Prepare both ordered central insertions with same-call endpoint factor reuse.
+
+Each endpoint/direction first factor U†dH is computed once. Complete required
+rows and columns use its original ordered sums, and both ordered overlaps and
+insertion products retain all rows and intermediate bands with selected output
+columns in eligible dense panels. No derivative,
+first factor, or selection is retained as valid across calls or k/q endpoints.
+"""
+function active_velocity_paired_insertions!(
+    forward_output,
+    reverse_output,
+    left::KPointMatrixData,
+    right::KPointMatrixData,
+    left_indices,
+    right_indices,
+    directions,
+    left_gradient,
+    right_gradient,
+    scratch::ActiveVelocityInsertionWorkspace,
+    reverse_overlap,
+)
+    n = length(left.spectrum.energies)
+    if isempty(scratch.buffers)
+        append!(scratch.buffers, [zeros(ComplexF64, n, n) for _ in 1:5])
+    end
+    left_velocity, right_velocity, forward_overlap, temporary, gradient_buffer = scratch.buffers
+    # Independent ordered overlaps, matching the stable preparation, not an adjoint shortcut.
+    mul!(
+        forward_overlap,
+        left.spectrum.source_eigenvectors_adjoint,
+        right.spectrum.source_eigenvectors,
+    )
+    mul!(
+        reverse_overlap,
+        right.spectrum.source_eigenvectors_adjoint,
+        left.spectrum.source_eigenvectors,
+    )
+    @views for direction in directions
+        for (velocity, gradient, data, indices) in (
+            (left_velocity, left_gradient, left, left_indices),
+            (right_velocity, right_gradient, right, right_indices),
+        )
+            copyto!(gradient_buffer, gradient[:, :, direction])
+            source_gauge_first_product!(
+                temporary,
+                data.spectrum.source_eigenvectors_adjoint,
+                gradient_buffer,
+                scratch.nonzero_indices,
+            )
+            fill_selected_source_velocity!(
+                velocity,
+                data.spectrum.source_eigenvectors,
+                temporary,
+                indices,
+                true,
+            )
+            fill_selected_source_velocity!(
+                velocity,
+                data.spectrum.source_eigenvectors,
+                temporary,
+                indices,
+                false;
+                clear_output = false,
+            )
+        end
+        active_velocity_selected_columns!(
+            forward_output[:, :, direction],
+            left_velocity,
+            right_velocity,
+            forward_overlap,
+            right_indices,
+        )
+        active_velocity_selected_columns!(
+            reverse_output[:, :, direction],
+            right_velocity,
+            left_velocity,
+            reverse_overlap,
+            left_indices,
+        )
+    end
+    return forward_output
 end

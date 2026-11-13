@@ -1,5 +1,5 @@
 const WANNIER_GAUGE_CHAIN_DIAGNOSTIC_SCHEMA = "WannierNLQG.wannier_gauge_chain_diagnostic"
-const WANNIER_GAUGE_CHAIN_DIAGNOSTIC_SCHEMA_VERSION = "1.0"
+const WANNIER_GAUGE_CHAIN_DIAGNOSTIC_SCHEMA_VERSION = "2.0"
 
 """Evaluate one R-space matrix field on arbitrary reduced k points."""
 function _gauge_chain_forward_fourier(
@@ -146,7 +146,7 @@ function _gauge_chain_write_tb_roundtrip(
     )
     return Dict(
         "basename" => basename(path),
-        "sha256" => sha256_file(path),
+        "content_authentication" => "NOT_PERFORMED",
         "in_process_numeric_roundtrip" => "PASS",
         "fresh_process_roundtrip" => "PENDING_SEPARATE_AUDIT",
         "roundtrip_tolerance" => string(tolerance),
@@ -157,7 +157,10 @@ function _gauge_chain_write_tb_roundtrip(
 end
 
 """Execute the versioned, read-only gauge-chain diagnosis."""
-function diagnose_wannier_gauge_chain(config::WannierGaugeChainDiagnosticConfig)
+function diagnose_wannier_gauge_chain(
+    config::WannierGaugeChainDiagnosticConfig;
+    reference_root = nothing,
+)
     inputs = Dict(
         "wannierization_checkpoint_hdf5" => config.wannierization_checkpoint_hdf5,
         "eig_file" => config.eig_file,
@@ -169,8 +172,9 @@ function diagnose_wannier_gauge_chain(config::WannierGaugeChainDiagnosticConfig)
     for (label, filename) in inputs
         isfile(filename) || throw(ArgumentError("$(label) does not exist: $(filename)"))
     end
-    input_sha256 = Dict(label => sha256_file(filename) for (label, filename) in inputs)
-    sawf = read_wannierization_checkpoint_hdf5(config.wannierization_checkpoint_hdf5)
+    input_locations = Dict(label => abspath(filename) for (label, filename) in inputs)
+    sawf =
+        read_wannierization_checkpoint_hdf5(config.wannierization_checkpoint_hdf5; reference_root)
     sawf.wannier_chk === nothing &&
         throw(ArgumentError("gauge-chain diagnosis requires checkpoint WannierCHK data"))
     sawf.restart_state === nothing &&
@@ -178,7 +182,10 @@ function diagnose_wannier_gauge_chain(config::WannierGaugeChainDiagnosticConfig)
     chk = something(sawf.wannier_chk)
     eig = IO.read_wannier_eig(config.eig_file)
     mmn = IO.read_wannier_mmn(config.mmn_file)
-    representation = read_band_representation_hdf5(config.band_representation_hdf5)
+    representation = read_band_representation_hdf5(
+        config.band_representation_hdf5;
+        content_authentication = false,
+    )
     (eig.num_bands, eig.num_kpts) ==
     (mmn.num_bands, mmn.num_kpts) ==
     (chk.num_bands, chk.num_kpts) ||
@@ -191,12 +198,23 @@ function diagnose_wannier_gauge_chain(config::WannierGaugeChainDiagnosticConfig)
         throw(ArgumentError("KPOINT_IDENTITY_MISMATCH: MP grids differ"))
     maximum(abs, chk.kpt_red - representation.kpoints_fractional; init = 0.0) <= 1.0e-10 ||
         throw(ArgumentError("KPOINT_IDENTITY_MISMATCH: ordered k points differ"))
-    for (key, filename) in (("EIG", config.eig_file), ("MMN", config.mmn_file))
-        expected = get(representation.input_sha256, key, "")
-        isempty(expected) ||
-            expected == sha256_file(filename) ||
-            throw(ArgumentError("INPUT_IDENTITY_MISMATCH: representation $(key) digest differs"))
+    definition = something(sawf.restart_state).input_definition
+    definition === nothing && throw(
+        ArgumentError(
+            "INPUT_DEFINITION_REQUIRED: gauge-chain diagnosis cannot adopt a legacy digest-only source association",
+        ),
+    )
+    # Preparation declares the requested constraints; the solver resolves the
+    # identity-group fast path only after loading the representation. Reproduce
+    # that one derived execution flag on this privately loaded object. All
+    # matrices and all other conventions still undergo the complete comparison.
+    if get(representation.conventions, "effective_wannierization_mode", "") == "symmetry_adapted" &&
+       get(representation.conventions, "symmetry_constraints_applied", "") == "true" &&
+       get(sawf.input_summary, "symmetry_constraints_applied", "") == "false" &&
+       WannierNLQG.SymmetryFoundation.is_identity_group_representation(representation)
+        representation.conventions["symmetry_constraints_applied"] = "false"
     end
+    validate_restart_scientific_inputs(definition, representation, mmn)
     # Reuse the sealed solver stencil: rebuilding here changes the discretized
     # objective and may incorrectly reapply a strict quality gate after solving.
     saved_stencil = something(sawf.restart_state).stencil
@@ -275,7 +293,9 @@ function diagnose_wannier_gauge_chain(config::WannierGaugeChainDiagnosticConfig)
         reference = IO.read_wannier_chk(something(config.reference_chk_file))
         (reference.num_bands, reference.num_kpts, reference.num_orbitals) ==
         (chk.num_bands, chk.num_kpts, chk.num_orbitals) || throw(
-            ArgumentError("REFERENCE_ACTIVE_BAND_IDENTITY_MISMATCH: W90 CHK dimensions differ"),
+            ArgumentError(
+                "REFERENCE_ACTIVE_BAND_IDENTITY_MISMATCH: reference CHK dimensions differ",
+            ),
         )
         reference.mp_grid == chk.mp_grid ||
             throw(ArgumentError("REFERENCE_KPOINT_IDENTITY_MISMATCH: MP grids differ"))
@@ -304,7 +324,6 @@ function diagnose_wannier_gauge_chain(config::WannierGaugeChainDiagnosticConfig)
         "construction_policy" => get(sawf.input_summary, "construction_policy", "strict"),
         "finite_difference_stencil_source" =>
             saved_stencil === nothing ? "legacy_reconstructed" : "checkpoint",
-        "finite_difference_stencil_sha256" => stencil.digest,
         "finite_difference_completeness_residual" => string(stencil.completeness_residual),
         "sawf_minimum_link_singular_value" => string(sawf_links.minimum_singular_value),
         "sawf_maximum_invariant_defect" => string(sawf_links.maximum_invariant_defect),
@@ -355,8 +374,9 @@ function diagnose_wannier_gauge_chain(config::WannierGaugeChainDiagnosticConfig)
             attributes["schema_version"] = WANNIER_GAUGE_CHAIN_DIAGNOSTIC_SCHEMA_VERSION
             attributes["status"] = String(status)
             attributes["qualification"] = "STANDARD"
-            input_group = HDF5.create_group(handle, "input_sha256")
-            write_string_dictionary(input_group, input_sha256)
+            attributes["content_authentication"] = "NOT_PERFORMED"
+            input_group = HDF5.create_group(handle, "input_locations")
+            write_string_dictionary(input_group, input_locations)
             summary_group = HDF5.create_group(handle, "summary")
             write_string_dictionary(summary_group, summary)
             sawf_group = HDF5.create_group(handle, "sawf")
@@ -411,9 +431,10 @@ function diagnose_wannier_gauge_chain(config::WannierGaugeChainDiagnosticConfig)
         "schema_version" => WANNIER_GAUGE_CHAIN_DIAGNOSTIC_SCHEMA_VERSION,
         "status" => String(status),
         "qualification" => "STANDARD",
-        "input_sha256" => input_sha256,
+        "input_locations" => input_locations,
+        "content_authentication" => "NOT_PERFORMED",
         "summary" => summary,
-        "hdf5_sha256" => sha256_file(hdf5_path),
+        "hdf5_path" => abspath(hdf5_path),
     )
     json_path = _atomic_gauge_chain_json(config.output_json, json_payload)
     return WannierGaugeChainDiagnosticResult(status, json_path, hdf5_path, summary, String[])

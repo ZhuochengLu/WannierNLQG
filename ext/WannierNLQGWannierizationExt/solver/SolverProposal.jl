@@ -1,13 +1,16 @@
 # Evaluate safeguarded Z/U proposals without committing a rejected trial.
-function _propose_solver_iteration(state::NamedTuple)
+function _propose_solver_iteration(
+    state::NamedTuple;
+    geometry::Union{Nothing, LocalizationGeometryWorkspace} = nothing,
+    dot_workspace::Union{Nothing, ReferenceDotWorkspace} = nothing,
+    accepted_evaluation::Union{Nothing, AcceptedReferenceEvaluationWorkspace} = nothing,
+)
     (;
         actual_u_mix_ratio,
         actual_z_mix_ratio,
-        amn_sha256,
-        anderson_residual_history,
-        anderson_z_history,
+
         apply_symmetry,
-        basis_sha256,
+
         best_polar_centers,
         best_polar_frames,
         best_polar_objective,
@@ -15,7 +18,7 @@ function _propose_solver_iteration(state::NamedTuple)
         centers,
         compatibility,
         config,
-        config_sha256,
+
         convergence_values,
         retained_disentanglement_nonconverged,
         diagnostics,
@@ -23,24 +26,11 @@ function _propose_solver_iteration(state::NamedTuple)
         effective_algorithms,
         effective_compatibility_policy,
         epoch,
-        fixed_complete,
-        fixed_mode,
-        fixed_source_qualified,
-        fixed_stability_count,
-        fixed_stationary,
-        fixed_stationary_count,
         frames,
         frozen_indices,
         full_constraint_scope,
         gradient_fallback_active,
         gradient_steps,
-        grassmann_actual_decrease_history,
-        grassmann_gradient_history,
-        grassmann_predicted_decrease_history,
-        grassmann_projector_change_history,
-        grassmann_radius_history,
-        grassmann_ratio_history,
-        grassmann_trust_radius,
         history,
         improvement_streak,
         included_bands,
@@ -92,23 +82,17 @@ function _propose_solver_iteration(state::NamedTuple)
         started_ns,
         stencil,
         tangent_plans,
-        trajectory_previous_frames,
-        trajectory_two_step_frames,
         two_stage_complete,
         u_active_orbit_count,
         u_branch_signature,
         u_cg_iteration,
         u_cg_restart_count,
         u_generalized_gradient_rms,
-        u_lbfgs_restart_count,
-        u_lbfgs_rho_history,
-        u_lbfgs_s_history,
-        u_lbfgs_y_history,
         u_stability_count,
         u_steps,
-        wannier90_reference_omega_i,
-        wannier90_reference_overlaps,
-        wannier90_reference_unitaries,
+        recursive_localization_omega_i,
+        recursive_localization_overlaps,
+        recursive_localization_unitaries,
         weights,
         z_previous,
         z_stability_count,
@@ -117,7 +101,6 @@ function _propose_solver_iteration(state::NamedTuple)
     iteration_phase = optimizer_phase
     irreducible = representation.irreducible_indices
     freeze_z =
-        fixed_mode ||
         (config.solver.acceleration.schedule == :two_stage && optimizer_phase == :localization)
     z_raw = if freeze_z
         deepcopy(something(z_previous))
@@ -131,8 +114,8 @@ function _propose_solver_iteration(state::NamedTuple)
             config.solver.parallel;
             full_bz = apply_symmetry,
             storage_backend = config.solver.acceleration.hot_storage_backend,
-            wannier90_reference = effective_algorithms.disentanglement ==
-                                  :smv_fletcher_reeves_two_stage,
+            recursive_localization = effective_algorithms.disentanglement ==
+                                     :smv_fletcher_reeves_two_stage,
         )
         apply_symmetry ? _reduce_full_star_hermitian_field(full_field, representation) : full_field
     end
@@ -144,8 +127,6 @@ function _propose_solver_iteration(state::NamedTuple)
     accepted_z = nothing
     accepted_merit = NaN
     accepted_reference = residual_reference
-    accepted_z_history = anderson_z_history
-    accepted_residual_history = anderson_residual_history
     accepted_anderson_used = false
     accepted_anderson_fallback = false
     accepted_anderson_reason = :NOT_APPLICABLE
@@ -154,11 +135,8 @@ function _propose_solver_iteration(state::NamedTuple)
     accepted_joint_transport_minimum_singular_value = NaN
     accepted_joint_transport_maximum_condition = NaN
     accepted_joint_reason = :NOT_APPLICABLE
-    joint_mode = config.solver.acceleration.schedule == :joint && !freeze_z
-    joint_base_omega_i = joint_mode ? _gauge_invariant_spread(frames, mmn, weights) : NaN
     proposal_z_mix_ratio = actual_z_mix_ratio
-    maximum_attempts =
-        joint_mode ? config.solver.acceleration.joint_z_backtracking_max_steps + 1 : 2
+    maximum_attempts = 2
     evaluate_z_candidate =
         proposed_z -> _outer_iteration_candidate(
             config,
@@ -177,38 +155,27 @@ function _propose_solver_iteration(state::NamedTuple)
             actual_u_mix_ratio,
             projector_covariance_tolerance,
             tangent_plans,
-            config.solver.localize && (
-                config.solver.acceleration.schedule in (:joint, :fixed_subspace) ||
-                optimizer_phase == :localization
-            ),
+            (state.effective_controls.objectives.num_iter > 0) &&
+            (optimizer_phase == :localization),
             effective_algorithms.localization,
+            geometry = geometry,
+            dot_workspace = dot_workspace,
+            accepted_evaluation = accepted_evaluation,
             fixed_stage_subspaces = freeze_z ? sealed_subspace_frames : nothing,
             fixed_stage_projectors = freeze_z ? sealed_subspace_projectors : nothing,
-            # A moving joint subspace is transported from the previous
-            # accepted frame by F0 = S*polar(S'*F_old) inside
-            # `_localization_sweeps`. Re-aligning it to raw AMN here would
-            # discard the accepted gauge and can make the first joint step
-            # rank deficient.
+            # Preserve the accepted fixed-stage gauge and transport protections.
             localization_reference_frames = nothing,
             spectrum_audit = spectrum_audit,
             iteration = iteration,
-            # RCG history is a tangent in a fixed subspace. Joint changes
-            # that subspace transactionally, so cross-subspace history is
-            # deliberately cleared until vector transport is qualified.
-            previous_u_gradient = joint_mode ? nothing : previous_u_gradient,
-            previous_u_direction = joint_mode ? nothing : previous_u_direction,
-            u_cg_iteration = joint_mode ? 0 : u_cg_iteration,
+            # Carry the FR history within its accepted fixed subspace.
+            previous_u_gradient = previous_u_gradient,
+            previous_u_direction = previous_u_direction,
+            u_cg_iteration = u_cg_iteration,
             u_cg_restart_count = u_cg_restart_count,
-            u_lbfgs_s_history = joint_mode ? Vector{Vector{Matrix{ComplexF64}}}() :
-                                u_lbfgs_s_history,
-            u_lbfgs_y_history = joint_mode ? Vector{Vector{Matrix{ComplexF64}}}() :
-                                u_lbfgs_y_history,
-            u_lbfgs_rho_history = joint_mode ? Float64[] : u_lbfgs_rho_history,
-            u_lbfgs_restart_count = u_lbfgs_restart_count,
-            u_branch_signature = joint_mode ? "" : u_branch_signature,
-            wannier90_reference_overlaps = joint_mode ? nothing : wannier90_reference_overlaps,
-            wannier90_reference_omega_i = joint_mode ? nothing : wannier90_reference_omega_i,
-            wannier90_reference_unitaries = joint_mode ? nothing : wannier90_reference_unitaries,
+            u_branch_signature = u_branch_signature,
+            recursive_localization_overlaps = recursive_localization_overlaps,
+            recursive_localization_omega_i = recursive_localization_omega_i,
+            recursive_localization_unitaries = recursive_localization_unitaries,
         )
     for attempt in 1:maximum_attempts
         linear_z =
@@ -217,214 +184,14 @@ function _propose_solver_iteration(state::NamedTuple)
         linear_z =
             !freeze_z && apply_symmetry && config.solver.symmetrize_z ?
             _symmetrize_hermitian_field(linear_z, representation) : linear_z
-        # The boundary gap exists solely to safeguard Anderson-Z.  It is
-        # not part of fixed/adaptive U acceptance and must not repeatedly
-        # diagonalize an unchanged Z field during two-stage localization.
-        z_boundary_gap =
-            !freeze_z && config.solver.acceleration.strategy == :anderson_z ?
-            _minimum_z_boundary_gap(
-                linear_z,
-                outer_indices,
-                irreducible,
-                num_wannier;
-                tolerance = config.solver.numerical_thresholds.hermitian_residual_rtol,
-                audit = spectrum_audit,
-            ) : NaN
         trial_z = linear_z
-        trial_z_history = anderson_z_history
-        trial_residual_history = anderson_residual_history
         anderson_used = false
         anderson_fallback = false
-        anderson_reason =
-            config.solver.acceleration.strategy == :anderson_z ? :BEFORE_START : :NOT_APPLICABLE
+        anderson_reason = freeze_z ? :FROZEN_SUBSPACE : :NOT_APPLICABLE
         anderson_context = Dict{String, String}()
-        proposal_evidence = nothing
-        allow_anderson, reset_anderson_history = _anderson_trial_policy(
-            config.solver.acceleration.strategy,
-            attempt,
-            iteration,
-            config.solver.acceleration.anderson_start_iteration,
-            z_previous !== nothing,
-            z_boundary_gap,
-            config.input.representation_tolerance,
-        )
-        if freeze_z
-            allow_anderson = false
-            reset_anderson_history = false
-            anderson_reason = :FROZEN_SUBSPACE
-        elseif attempt > 1 && config.solver.acceleration.strategy == :anderson_z
-            anderson_reason = :SAFE_LINEAR_RETRY
-        end
-        if reset_anderson_history
-            trial_z_history = zeros(Float64, 0, 0)
-            trial_residual_history = zeros(Float64, 0, 0)
-            anderson_fallback = true
-            anderson_reason = :BOUNDARY_GAP_RESET
-        elseif allow_anderson
-            proposal_evidence = _anderson_z_proposal(
-                z_raw,
-                something(z_previous),
-                linear_z,
-                outer_indices,
-                irreducible,
-                anderson_z_history,
-                anderson_residual_history,
-                config.solver.acceleration,
-            )
-            trial_z_history = proposal_evidence.z_history
-            trial_residual_history = proposal_evidence.residual_history
-            anderson_reason = proposal_evidence.reason
-            anderson_fallback = !proposal_evidence.available
-            trial_z = proposal_evidence.proposal
-            trial_z =
-                apply_symmetry && config.solver.symmetrize_z ?
-                _symmetrize_hermitian_field(trial_z, representation) : trial_z
-            anderson_context["coefficient_norm"] = string(proposal_evidence.coefficient_norm)
-            anderson_context["linear_z_residual"] = string(proposal_evidence.linear_residual)
-            anderson_context["anderson_z_residual"] = string(proposal_evidence.proposal_residual)
-        end
         candidate = evaluate_z_candidate(trial_z)
-        if candidate.success &&
-           effective_algorithms.disentanglement == :grassmann_trust_region &&
-           iteration_phase == :disentanglement &&
-           !freeze_z
-            trust_step = _grassmann_trust_region_step(
-                frames,
-                candidate.subspaces,
-                grassmann_trust_radius,
-                outer_indices,
-                frozen_indices,
-                num_wannier,
-                representation,
-                plan,
-                config,
-            )
-            trust_step.success || return _failure_result(
-                LOCALIZATION_FAILED,
-                [
-                    WannierizationDiagnostic(
-                        trust_step.code,
-                        :error,
-                        "Grassmann trust-region retraction failed";
-                        context = Dict("iteration" => string(iteration)),
-                    ),
-                ],
-                input_summary;
-                frames,
-                centers,
-                spreads,
-                history,
-                restart_state = latest_restart_state,
-                representation,
-                last_attempted_iteration = iteration,
-                initialization_report,
-            )
-            base_omega = _gauge_invariant_spread(frames, mmn, weights)
-            proposal_omega = _gauge_invariant_spread(candidate.subspaces, mmn, weights)
-            trial_omega = _gauge_invariant_spread(trust_step.frames, mmn, weights)
-            predicted_decrease =
-                max(eps(Float64), trust_step.alpha * max(0.0, base_omega - proposal_omega))
-            actual_decrease = base_omega - trial_omega
-            trust_ratio = actual_decrease / predicted_decrease
-            projector_change = _maximum_projector_step(frames, trust_step.frames)
-            push!(grassmann_predicted_decrease_history, predicted_decrease)
-            push!(grassmann_actual_decrease_history, actual_decrease)
-            push!(grassmann_ratio_history, trust_ratio)
-            push!(grassmann_radius_history, grassmann_trust_radius)
-            push!(grassmann_gradient_history, trust_step.maximum_angle)
-            push!(grassmann_projector_change_history, projector_change)
-            for (name, values) in (
-                ("grassmann_predicted_decrease_history", grassmann_predicted_decrease_history),
-                ("grassmann_actual_decrease_history", grassmann_actual_decrease_history),
-                ("grassmann_acceptance_ratio_history", grassmann_ratio_history),
-                ("grassmann_trust_radius_history", grassmann_radius_history),
-                ("grassmann_gradient_history", grassmann_gradient_history),
-                ("grassmann_projector_change_history", grassmann_projector_change_history),
-            )
-                input_summary[name] = join(string.(values), ",")
-            end
-            accepted_trust =
-                isfinite(trust_ratio) &&
-                actual_decrease >= 0.0 &&
-                trust_ratio >= config.solver.acceleration.trust_acceptance_threshold
-            if trust_ratio < config.solver.acceleration.trust_shrink_threshold
-                grassmann_trust_radius *= 0.25
-            elseif trust_ratio > config.solver.acceleration.trust_expand_threshold &&
-                   trust_step.alpha < 1.0
-                grassmann_trust_radius = min(
-                    config.solver.acceleration.trust_radius_maximum,
-                    2.0 * grassmann_trust_radius,
-                )
-            end
-            accepted_frames = accepted_trust ? trust_step.frames : frames
-            trust_candidate = _disentanglement_candidate(
-                config,
-                representation,
-                mmn,
-                plan,
-                weights,
-                frozen_indices,
-                accepted_frames,
-                centers,
-                spreads,
-                projector_covariance_tolerance,
-            )
-            candidate = merge(
-                trust_candidate,
-                (
-                    subspaces = accepted_frames,
-                    raw_amn_alignment_applied = false,
-                    raw_amn_alignment_minimum_singular_value = NaN,
-                    raw_amn_alignment_maximum_condition = NaN,
-                    raw_amn_alignment_projector_drift = NaN,
-                    raw_amn_alignment_completion_count = 0,
-                    localization_initial_frames = nothing,
-                ),
-            )
-            input_summary["grassmann_trust_last_acceptance"] =
-                accepted_trust ? "ACCEPTED" : "REJECTED"
-            input_summary["grassmann_trust_last_ratio"] = string(trust_ratio)
-            input_summary["grassmann_trust_current_radius"] = string(grassmann_trust_radius)
-        end
-        if proposal_evidence !== nothing && proposal_evidence.available
-            linear_candidate = evaluate_z_candidate(linear_z)
-            safeguard = _objective_aware_anderson_accepts(
-                linear_candidate,
-                candidate,
-                frames,
-                mmn,
-                weights,
-                proposal_evidence.linear_residual,
-                proposal_evidence.proposal_residual,
-                config.solver.acceleration,
-            )
-            for (name, value) in (
-                ("omega_linear", safeguard.omega_linear),
-                ("omega_anderson", safeguard.omega_anderson),
-                ("projector_linear", safeguard.projector_linear),
-                ("projector_anderson", safeguard.projector_anderson),
-            )
-                anderson_context[name] = string(value)
-            end
-            if safeguard.accepted
-                anderson_used = true
-                anderson_fallback = false
-                anderson_reason = safeguard.reason
-            else
-                candidate = linear_candidate
-                trial_z = linear_z
-                anderson_used = false
-                anderson_fallback = true
-                anderson_reason = safeguard.reason
-            end
-        end
         _record_hermitian_spectrum_audit!(input_summary, spectrum_audit)
         if !candidate.success
-            if joint_mode && attempt < maximum_attempts
-                rejected_steps += 1
-                proposal_z_mix_ratio *= config.solver.acceleration.joint_z_backtracking_factor
-                continue
-            end
             context = Dict("iteration" => string(iteration))
             for field in (
                 :kpoint,
@@ -553,8 +320,6 @@ function _propose_solver_iteration(state::NamedTuple)
                 rejected_steps,
                 residual_reference,
                 previous_merit,
-                anderson_z_history,
-                anderson_residual_history,
                 optimizer_phase,
                 z_stability_count,
                 u_stability_count,
@@ -589,19 +354,15 @@ function _propose_solver_iteration(state::NamedTuple)
                 last_cg_restart_reason,
                 last_anderson_reason,
                 LOCALIZATION_GRADIENT_CONTRACT,
-                u_branch_signature,
                 u_active_orbit_count,
                 u_generalized_gradient_rms,
-                _pack_u_tangent_history(u_lbfgs_s_history),
-                _pack_u_tangent_history(u_lbfgs_y_history),
-                u_lbfgs_rho_history,
-                u_lbfgs_restart_count,
                 last_u_optimizer_restart_reason,
-                wannier90_reference_overlaps === nothing ? zeros(ComplexF64, 0, 0, 0, 0) :
-                something(wannier90_reference_overlaps),
-                wannier90_reference_unitaries === nothing ? zeros(ComplexF64, 0, 0, 0) :
-                _pack_matrix_field(something(wannier90_reference_unitaries)),
-                something(wannier90_reference_omega_i, NaN),
+                recursive_localization_overlaps === nothing ? zeros(ComplexF64, 0, 0, 0, 0) :
+                something(recursive_localization_overlaps),
+                recursive_localization_unitaries === nothing ? zeros(ComplexF64, 0, 0, 0) :
+                _pack_matrix_field(something(recursive_localization_unitaries)),
+                something(recursive_localization_omega_i, NaN),
+                u_branch_signature,
             )
             failure_restart = WannierizationRestartState(
                 accepted_boundary.iteration,
@@ -613,11 +374,7 @@ function _propose_solver_iteration(state::NamedTuple)
                 copy(accepted_boundary.convergence_values),
                 copy(accepted_boundary.included_bands),
                 prior_elapsed + (time_ns() - started_ns) / 1.0e9,
-                accepted_boundary.config_sha256,
-                accepted_boundary.representation_sha256,
                 accepted_boundary.stencil,
-                accepted_boundary.projection_basis_sha256,
-                accepted_boundary.amn_sha256,
                 failure_optimizer,
                 accepted_boundary.fixed_subspace_projectors === nothing ? nothing :
                 copy(something(accepted_boundary.fixed_subspace_projectors)),
@@ -625,6 +382,7 @@ function _propose_solver_iteration(state::NamedTuple)
                 copy(something(accepted_boundary.fixed_subspace_frames)),
                 accepted_boundary.localization_initial_frames === nothing ? nothing :
                 copy(something(accepted_boundary.localization_initial_frames)),
+                accepted_boundary.input_definition,
             )
             return _failure_result(
                 status,
@@ -653,7 +411,10 @@ function _propose_solver_iteration(state::NamedTuple)
         spread_total = sum(candidate_spreads)
         candidate_value = vcat(vec(candidate_centers), candidate_spreads)
         candidate_convergence = vcat(convergence_values, [candidate_value])
-        recent = candidate_convergence[max(1, end - config.solver.convergence_window + 1):end]
+        recent = candidate_convergence[max(
+            1,
+            end - max(2, state.effective_controls.objectives.conv_window) + 1,
+        ):end]
         spread_std = maximum(
             _population_standard_deviation([value[index] for value in recent]) for
             index in eachindex(last(recent))
@@ -667,13 +428,15 @@ function _propose_solver_iteration(state::NamedTuple)
         residuals = (projector_residual, z_residual, candidate.u_residual, spread_std)
         trial_reference = ntuple(
             index ->
+                residuals[index] === nothing ? nothing :
+                residual_reference[index] !== nothing &&
                 isfinite(residual_reference[index]) &&
                 abs(residual_reference[index]) > eps(Float64) ? residual_reference[index] :
                 abs(residuals[index]) > eps(Float64) ? abs(residuals[index]) : NaN,
             4,
         )
         merit = maximum(
-            isfinite(trial_reference[index]) ?
+            trial_reference[index] !== nothing && isfinite(trial_reference[index]) ?
             abs(residuals[index]) / abs(trial_reference[index]) : 0.0 for index in 1:4
         )
         invariant_failure = _candidate_invariant_failure(
@@ -688,53 +451,15 @@ function _propose_solver_iteration(state::NamedTuple)
             apply_symmetry;
             construction_policy = config.input.construction_policy,
         )
-        candidate_omega_i = _gauge_invariant_spread(candidate_frames, mmn, weights)
-        omega_i_tolerance = max(
-            config.solver.acceleration.disentanglement_objective_tolerance,
-            64 * eps(Float64) * max(abs(joint_base_omega_i), abs(candidate_omega_i), 1.0),
-        )
-        joint_gauge_invariance_residual =
-            joint_mode ? abs(candidate_omega_i - candidate.transported_omega_i) : 0.0
-        joint_objective_failure =
-            if joint_mode && candidate_omega_i > joint_base_omega_i + omega_i_tolerance
-                (:JOINT_Z_OBJECTIVE_INCREASED, candidate_omega_i - joint_base_omega_i)
-            elseif joint_mode && joint_gauge_invariance_residual > omega_i_tolerance
-                (:JOINT_U_CHANGED_OMEGA_I, joint_gauge_invariance_residual)
-            else
-                nothing
-            end
-        joint_failure = invariant_failure === nothing ? joint_objective_failure : invariant_failure
-        if joint_mode && joint_failure !== nothing && attempt < maximum_attempts
-            rejected_steps += 1
-            proposal_z_mix_ratio *= config.solver.acceleration.joint_z_backtracking_factor
-            continue
-        end
-        action =
-            _acceleration_trial_action(config.solver.acceleration.strategy, attempt, joint_failure)
-        if action == :retry_safe_linear
-            rejected_steps += 1
-            actual_z_mix_ratio, actual_u_mix_ratio = _shrunken_acceleration_mixing(
-                actual_z_mix_ratio,
-                actual_u_mix_ratio,
-                config.solver.acceleration,
-            )
-            anderson_z_history =
-                invariant_failure === nothing ? anderson_z_history : zeros(Float64, 0, 0)
-            anderson_residual_history =
-                invariant_failure === nothing ? anderson_residual_history : zeros(Float64, 0, 0)
-            continue
-        elseif action == :typed_failure
+        joint_failure = invariant_failure
+        if joint_failure !== nothing
             code, residual = something(joint_failure)
             push!(
                 diagnostics,
                 WannierizationDiagnostic(
                     code,
                     :error,
-                    joint_mode ?
-                    "transactional joint step violated a hard invariant or Omega_I safeguard after Z backtracking" :
-                    config.solver.acceleration.strategy == :fixed ?
-                    "fixed step violated a hard solver invariant" :
-                    "accelerated step violated a hard invariant after one rollback";
+                    "fixed step violated a hard solver invariant";
                     context = Dict(
                         "iteration" => string(iteration),
                         "residual" => string(residual),
@@ -769,27 +494,24 @@ function _propose_solver_iteration(state::NamedTuple)
                 projector_residual = projector_residual,
                 wcc_step = wcc_step,
                 spread_step = spread_step,
-                z_boundary_gap = z_boundary_gap,
+                z_boundary_gap = NaN,
             ),
         )
         accepted_z = trial_z
         accepted_merit = merit
         accepted_reference = trial_reference
-        accepted_z_history = trial_z_history
-        accepted_residual_history = trial_residual_history
         accepted_anderson_used = anderson_used
         accepted_anderson_fallback = anderson_fallback
         accepted_anderson_reason = anderson_reason
         accepted_anderson_context = anderson_context
-        accepted_joint_z_backtracking_steps = joint_mode ? attempt - 1 : 0
+        accepted_joint_z_backtracking_steps = 0
         accepted_joint_transport_minimum_singular_value = candidate.transport_minimum_singular_value
         accepted_joint_transport_maximum_condition = candidate.transport_maximum_condition
-        accepted_joint_reason =
-            joint_mode ? (attempt == 1 ? :JOINT_ACCEPTED : :JOINT_ACCEPTED_AFTER_Z_BACKTRACKING) :
-            :NOT_APPLICABLE
+        accepted_joint_reason = :NOT_APPLICABLE
         break
     end
     return (;
+        effective_controls = state.effective_controls,
         accepted,
         accepted_anderson_context,
         accepted_anderson_fallback,
@@ -801,21 +523,19 @@ function _propose_solver_iteration(state::NamedTuple)
         accepted_joint_z_backtracking_steps,
         accepted_merit,
         accepted_reference,
-        accepted_residual_history,
         accepted_z,
-        accepted_z_history,
         actual_u_mix_ratio,
         actual_z_mix_ratio,
-        amn_sha256,
+
         apply_symmetry,
-        basis_sha256,
+
         best_polar_centers,
         best_polar_frames,
         best_polar_objective,
         best_polar_spreads,
         compatibility,
         config,
-        config_sha256,
+
         convergence_values,
         retained_disentanglement_nonconverged,
         diagnostics,
@@ -823,23 +543,10 @@ function _propose_solver_iteration(state::NamedTuple)
         effective_algorithms,
         effective_compatibility_policy,
         epoch,
-        fixed_complete,
-        fixed_mode,
-        fixed_source_qualified,
-        fixed_stability_count,
-        fixed_stationary,
-        fixed_stationary_count,
         frozen_indices,
         full_constraint_scope,
         gradient_fallback_active,
         gradient_steps,
-        grassmann_actual_decrease_history,
-        grassmann_gradient_history,
-        grassmann_predicted_decrease_history,
-        grassmann_projector_change_history,
-        grassmann_radius_history,
-        grassmann_ratio_history,
-        grassmann_trust_radius,
         history,
         improvement_streak,
         included_bands,
@@ -848,7 +555,6 @@ function _propose_solver_iteration(state::NamedTuple)
         irreducible,
         iteration,
         iteration_phase,
-        joint_mode,
         last_accepted_u_step_scale,
         latest_restart_state,
         localization_initial_frames,
@@ -886,14 +592,12 @@ function _propose_solver_iteration(state::NamedTuple)
         started_ns,
         stencil,
         tangent_plans,
-        trajectory_previous_frames,
-        trajectory_two_step_frames,
         two_stage_complete,
         u_stability_count,
         u_steps,
-        wannier90_reference_omega_i,
-        wannier90_reference_overlaps,
-        wannier90_reference_unitaries,
+        recursive_localization_omega_i,
+        recursive_localization_overlaps,
+        recursive_localization_unitaries,
         weights,
         z_residual,
         z_stability_count,

@@ -5,6 +5,13 @@ using ..Core
 using ..MatrixElements
 
 include("Shared/ResponseOccupations.jl")
+include("Shared/PhotonDragTransitionWeights.jl")
+include("Shared/PhotonDragDegenerateCurrentKernels.jl")
+export complete_photon_drag_injection_degenerate_blocks!
+export photon_drag_transition_denominator_weight, photon_drag_weighted_occupations!
+include("IntrinsicHall/IntrinsicHallCurvature.jl")
+include("IntrinsicHall/IntrinsicHallOccupations.jl")
+export intrinsic_hall_fermi_sea
 include("LinearTransport/LinearTransport.jl")
 using .LinearTransport: linear_transport_response
 include("LinearOpticalResponse/LinearOpticalResponse.jl")
@@ -25,7 +32,9 @@ include("Shared/ResponseSymmetry.jl")
 include("Shared/GeometricLoopCovariantKernels.jl")
 
 include("ShiftCurrent/ConventionalShiftCurrent.jl")
+include("ShiftCurrent/NonorthogonalShiftCurrent.jl")
 include("SecondHarmonicGeneration/SecondHarmonicKernels.jl")
+include("SecondHarmonicGeneration/SecondHarmonicSameRateLorentz.jl")
 include("ShiftCurrent/ProjectorShiftCurrent.jl")
 include("ShiftCurrent/GeometricLoopShiftCurrent.jl")
 include("Shared/LoopCurrentSharedKernels.jl")
@@ -40,6 +49,11 @@ include("PhotonDragInjectionCurrent/ConventionalPhotonDragInjectionCurrent.jl")
 
 include("QuantumGeometry/ConventionalQuantumGeometry.jl")
 include("QuantumGeometry/QuantumGeometryDerivatives.jl")
+include("QuantumGeometry/OrthogonalGeometryDerivatives.jl")
+include("QuantumGeometry/BerryMultipoleDC.jl")
+include("QuantumGeometry/BerryMultipoleTensorPlan.jl")
+include("QuantumGeometry/BerryMultipoleMoments.jl")
+include("QuantumGeometry/BerryMultipoleGeometry.jl")
 include("QuantumGeometry/ProjectorQuantumGeometry.jl")
 include("QuantumGeometry/GeometricLoopQuantumGeometry.jl")
 include("QuantumGeometry/WilsonLoopQuantumGeometry.jl")
@@ -162,5 +176,20 @@ export SECOND_HARMONIC_TERMS,
     zeeman_interband_berry_curvature_component,
     zeeman_interband_quantum_geometry_components,
     zeeman_interband_quantum_metric_component
+
+include("Shared/HarmonicFrequencyKernels.jl")
+include("Shared/HarmonicOccupationDerivatives.jl")
+include("ThirdHarmonicGeneration/ThirdHarmonicWorkspace.jl")
+include("ThirdHarmonicGeneration/ThirdHarmonicUnregrouped.jl")
+include("ThirdHarmonicGeneration/ThirdHarmonicRegrouped.jl")
+include("ThirdHarmonicGeneration/ThirdHarmonicKernels.jl")
+include("JerkCurrent/ConventionalJerkCurrent.jl")
+export ThirdHarmonicWorkspace,
+    third_harmonic_response!,
+    THIRD_HARMONIC_COMPONENTS,
+    THIRD_HARMONIC_UNREGROUPED_TERMS,
+    THIRD_HARMONIC_REGROUPED_TERMS,
+    JERK_CURRENT_COMPONENTS,
+    jerk_current_response!
 
 end

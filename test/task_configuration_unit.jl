@@ -42,7 +42,7 @@ function independent_optical_task(
             fermi_energy = fermi_energy,
             temperature = temperature,
         ),
-        numerics = OpticalNumerics(broadening = broadening),
+        numerics = Numerics(broadening = broadening),
     )
 end
 
@@ -63,8 +63,8 @@ end
         independent_optical_task("A"),
         independent_optical_task("a"),
     ])
-    @test_throws ArgumentError OpticalNumerics(photon_energies = [0.1])
-    @test_throws ArgumentError GeometryNumerics(broadening = 0.1)
+    @test_throws ArgumentError Numerics(photon_energies = [0.1])
+    @test_throws ArgumentError Numerics(unsupported_broadening = 0.1)
     @test :TaskConfig in names(WannierNLQG)
     @test :EffectiveTaskConfig ∉ names(WannierNLQG)
     @test :NormalizedTaskSpec ∉ names(WannierNLQG)
@@ -182,7 +182,7 @@ end
             quantity = "SC",
             method = "Conventional",
             physics = optical,
-            numerics = OpticalNumerics(finite_difference_step = 0.001),
+            numerics = Numerics(finite_difference_step = 0.001),
         ),
     )
     @test_throws ArgumentError compile_optical(
@@ -254,7 +254,7 @@ end
     )
     geometry_cfg = independent_test_config([task]; sampling = sampling)
     geometry_summary = TaskConfigurationRuntime.task_parameter_summary(geometry_cfg, task)
-    @test isempty(geometry_summary.physics)
+    @test geometry_summary.physics == (include_external = false,)
     @test keys(geometry_summary.numerics) == (:denominator_regularization,)
     @test geometry_summary.observable.bands.kind == "subspace"
     @test !haskey(geometry_summary.numerics, :broadening)
@@ -269,7 +269,7 @@ end
                     fermi_energy = 0,
                     temperature = 0,
                 ),
-                numerics = OpticalNumerics(degeneracy_threshold = 0.01),
+                numerics = Numerics(degeneracy_threshold = 0.01),
             ),
         ]),
     )
@@ -278,7 +278,7 @@ end
     catch err
         err
     end
-    @test occursin("docs/MIGRATION_1.0.0.md", sprint(showerror, migration_error))
+    @test occursin("docs/PUBLIC_API.md", sprint(showerror, migration_error))
 end
 @testset "response qualification result invariants and legacy constructor" begin
     diagnostic=ResponseQualificationResult(
@@ -327,7 +327,7 @@ end
         Dict{String, Any}(),
     )
     @test missing.execution_eligible
-    @test missing.qualification_status=="DIAGNOSTIC_ONLY"
+    @test missing.qualification_status=="COMPUTATION_READY"
     @test !missing.production_eligible
     conflict=try
         WannierNLQG.Runtime._finalize_response_qualification(
@@ -346,4 +346,66 @@ end
     @test conflict isa WannierNLQG.Runtime.ResponseQualificationError
     @test conflict.code=="RESPONSE_QUALIFICATION_CONFLICT"
     @test conflict.qualification.conflicting_contracts==["band_frame.hash"]
+end
+
+@testset "Geometric threshold defaults and explicit values reach the effective task" begin
+    make_task(numerics = Numerics()) = TaskSpec(
+        id = "threshold_effect",
+        quantity = "SC",
+        method = "Geometric_Loop",
+        physics = OpticalParameters(
+            photon_energies = [0.25],
+            fermi_energy = 0.0,
+            temperature = 0.0,
+        ),
+        numerics = numerics,
+    )
+    cfg = independent_test_config([make_task()])
+    @test only(TaskConfigurationRuntime.compile_task_configs(cfg)).degeneracy_threshold == 0.002
+    for threshold in (0.0, 0.0625, nextfloat(0.0625))
+        task = make_task(Numerics(degeneracy_threshold = threshold))
+        cfg = independent_test_config([task])
+        @test only(TaskConfigurationRuntime.compile_task_configs(cfg)).degeneracy_threshold ==
+              threshold
+        @test TaskConfigurationRuntime.task_parameter_summary(cfg, task).numerics.degeneracy_threshold ==
+              threshold
+    end
+    for invalid in (-1.0, Inf, NaN)
+        @test_throws ArgumentError TaskConfigurationRuntime.compile_task_configs(
+            independent_test_config([make_task(Numerics(degeneracy_threshold = invalid))]),
+        )
+    end
+end
+
+@testset "TaskSpec text boundary rejects symbols and registry enums" begin
+    parameters = IntrinsicHallParameters(fermi_energies = [0.13])
+    for method in ("conventional", "projector")
+        task = TaskSpec(
+            id = "ahc_" * method,
+            quantity = "intrinsic_ahc",
+            method = method,
+            physics = parameters,
+            observable = FullTensor(),
+        )
+        @test task.quantity == "intrinsic_ahc"
+        @test task.method == method
+        @test_throws TypeError TaskSpec(
+            id = "symbol_quantity",
+            quantity = :intrinsic_ahc,
+            method = method,
+            physics = parameters,
+        )
+        @test_throws TypeError TaskSpec(
+            id = "symbol_method",
+            quantity = "intrinsic_ahc",
+            method = Symbol(method),
+            physics = parameters,
+        )
+    end
+    @test_throws TypeError TaskSpec(
+        id = "enum_quantity",
+        quantity = TaskConfigurationRuntime.QUANTITY_INTRINSIC_AHC,
+        method = "conventional",
+        physics = parameters,
+    )
 end

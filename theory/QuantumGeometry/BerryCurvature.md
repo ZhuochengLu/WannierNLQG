@@ -1,67 +1,189 @@
 # Berry Curvature
 
-## 1. Definition and physical picture
+## 1. Definition and representation convention
 
-Berry curvature is the local holonomy associated with adiabatic parallel transport of Bloch states in momentum space. It acts as a magnetic field in momentum space and governs anomalous velocity, Hall responses, and the surface integral of the Berry phase.
-
-## 2. Core theoretical formulas
-
-For an isolated band, the Berry connection and curvature are
+Berry curvature is the antisymmetric geometry of parallel transport in
+momentum space. Cartesian indices $a,b$ refer to derivatives
+$\partial_a=\partial/\partial k_a$. Superscripts $(W)$ and $(H)$
+denote the Wannier and Hamiltonian eigenframes, following
+[Subspace position matrix elements](../SubspacePositionMatrixElements.md).
+The physical Wannier-frame connection and its Hamiltonian-frame form are
 
 $$
-A_n^{a}=i\langle u_n|\partial_a u_n\rangle,
+A^{a,(W)}=iW^\dagger\partial_aW,
 \qquad
-\Omega_n^{ab}=\partial_aA_n^{b}-\partial_bA_n^{a}.
+A^{a,(H)}=U^\dagger A^{a,(W)}U+iU^\dagger\partial_aU,
+\qquad
+H^{(W)}U=U\varepsilon.
 $$
 
-In a complete Hilbert space, the interband form is
+For an isolated band, the diagonal connection and its curvature are
+
+$$
+A_n^a=i\langle u_n|\partial_a u_n\rangle,
+\qquad
+\Omega_n^{ab}=\partial_aA_n^b-\partial_bA_n^a.
+$$
+
+The off-diagonal $r_{nm}^{a,(H)}=A_{nm}^{a,(H)}$ for $n\ne m$ is the
+physical interband position element. This sign convention gives
+
+$$
+Q_n^{ab}
+=\langle\partial_a u_n|
+(1-|u_n\rangle\langle u_n|)
+|\partial_bu_n\rangle,
+\qquad
+\Omega_n^{ab}=-2\operatorname{Im}Q_n^{ab}.
+$$
+
+## 2. Wannier-frame derivative overlap and ambient curvature
+
+The physical derivative overlap is distinct from curvature. With
+$P_W=WW^\dagger$ the full-Hilbert-space projector onto the retained
+Wannier window, define
+
+$$
+[F_{\partial}^{ab,(W)}]_{\alpha\beta}
+=\langle\partial_a u_\alpha^{(W)}
+|\partial_bu_\beta^{(W)}\rangle,
+\qquad
+K^{ab,(W)}=F_{\partial}^{ab,(W)}
+-A^{a,(W)}A^{b,(W)}.
+$$
+
+Equivalently,
+
+$$
+[K^{ab,(W)}]_{\alpha\beta}
+=\langle\partial_a u_\alpha^{(W)}
+|(1-P_W)|\partial_bu_\beta^{(W)}\rangle.
+$$
+
+The non-Abelian curvature of the Wannier-frame connection is
+
+$$
+\mathcal F^{ab,(W)}
+=\partial_aA^{b,(W)}-\partial_bA^{a,(W)}
+-i[A^{a,(W)},A^{b,(W)}]
+=i\bigl(K^{ab,(W)}-K^{ba,(W)}\bigr).
+$$
+
+This identity follows by differentiating
+$A^{a,(W)}=iW^\dagger\partial_aW$, canceling the mixed second
+derivatives, and separating the intermediate identity into $P_W$ and
+$1-P_W$. It makes clear why $F_{\partial}^{ab,(W)}$, the derivative
+overlap, is not itself $\mathcal F^{ab,(W)}$. The latter is the ambient
+curvature associated with the retained physical frame.
+
+In the Hamiltonian eigenframe the ambient curvature is
+
+$$
+\mathcal F^{ab,(H)}
+=U^\dagger\mathcal F^{ab,(W)}U.
+$$
+
+## 3. Complete band and target-subspace curvature
+
+The complete isolated-band curvature splits into a finite-window
+interband part and an ambient part:
 
 $$
 \Omega_n^{ab}
-=-2\mathrm{Im}\sum_{m\ne n}r_{nm}^{a}r_{mn}^{b}.
+=-2\operatorname{Im}\sum_{m\ne n}^{\text{Wannier window}}
+r_{nm}^{a,(H)}r_{mn}^{b,(H)}
++[\mathcal F^{ab,(H)}]_{nn}.
 $$
 
-For a target subspace $S$, the gauge-covariant expression is
+The sum without the ambient term equals the full result only when the
+retained basis is complete for the relevant derivatives. Let $S$ be a
+target subspace, $T$ its complement within the Wannier window, and
+$R^{(W)}=U_SU_S^\dagger$. The trace curvature of $S$ is
 
 $$
-\Omega_S^{ab}=\mathrm{Tr}_S F_{ab}^{S}
-=-2\mathrm{Im}
-\sum_{I\in S,J\notin S}r_{IJ}^{a}r_{JI}^{b}
-+\Omega_{S,\mathrm{ext}}^{ab}.
+\Omega_S^{ab}
+=\Omega_{S,\mathrm{internal}}^{ab}
++\Omega_{S,\mathrm{external}}^{ab},
 $$
 
-The term $\Omega_{S,\mathrm{ext}}$ is the non-Abelian curvature contribution of the finite basis itself; the Berry family in the release includes this term.
-
-## 3. Non-Abelian formulation
-
-For a multiband subspace,
+where
 
 $$
-F_{ab}^{S}=\partial_aA_b^{S}-\partial_bA_a^{S}-i[A_a^{S},A_b^{S}].
+\Omega_{S,\mathrm{internal}}^{ab}
+=-2\operatorname{Im}\operatorname{Tr}_S(X_a^\dagger X_b)
+=-2\operatorname{Im}\sum_{I\in S,\,J\in T}
+r_{IJ}^{a,(H)}r_{JI}^{b,(H)},
+\qquad
+X_a=(D_a^{(H)}R^{(H)})_{TS},
 $$
 
-Under a unitary transformation within the subspace, $F\to U^\dagger FU$, so $\mathrm{Tr}F$ is invariant. Intra-subspace transitions do not appear in the complementary-space sum; they only change the representation within the subspace.
+and
 
-## 4. Symbols, tensor indices, and normalization
+$$
+\Omega_{S,\mathrm{external}}^{ab}
+=\operatorname{Tr}[R^{(W)}\mathcal F^{ab,(W)}]
+=i\operatorname{Tr}
+\bigl[R^{(W)}(K^{ab,(W)}-K^{ba,(W)})\bigr].
+$$
 
-The labels $a,b$ denote the curvature-plane directions, and $\Omega^{ab}=-\Omega^{ba}$. The result for a target subspace is an ordinary sum or trace over $S$, with no division by $N_S$. A companion sum of isolated-band curvatures is likewise a sum, not an average.
+Because $K^{ba,(W)}=(K^{ab,(W)})^\dagger$, this ambient contribution
+is real and equals $-2\operatorname{Im}\operatorname{Tr}[R^{(W)}K^{ab,(W)}]$.
+The symmetric real contraction of the same $K$ supplies the external
+[quantum metric](QuantumMetric.md). The target trace has no division
+by its rank. Intra-subspace transitions are excluded, making the trace
+invariant under changes of basis within a complete isolated $S$.
 
-## 5. Key limits, symmetries, and relations
+For a multiband target, the non-Abelian subspace curvature matrix can
+be written using its own connection:
 
-- Time reversal gives $\Omega_n^{ab}(\mathbf k)=-\Omega_{\bar n}^{ab}(-\mathbf k)$, while inversion gives a same-sign mapping. When both are present, the curvature of a nondegenerate band vanishes pointwise.
-- For an isolated two-dimensional band, $C_n=(2\pi)^{-1}\int_{\mathrm{BZ}}\Omega_n^{xy}d^2k$ is the Chern number.
-- Berry curvature is the antisymmetric imaginary part of the quantum geometric tensor; its symmetric real part is the quantum metric.
+$$
+A_S^a
+=U_S^\dagger A^{a,(W)}U_S
++iU_S^\dagger\partial_aU_S.
+$$
 
-## 6. Formula provenance
+$$
+\mathcal F_S^{ab}
+=\partial_aA_S^b-\partial_bA_S^a-i[A_S^a,A_S^b],
+\qquad
+\Omega_S^{ab}=\operatorname{Tr}_S\mathcal F_S^{ab}.
+$$
 
-| Formula in this document | Original source and location | Convention conversion |
-| --- | --- | --- |
-| U(1) Berry curvature and phase | Berry (1984), equations defining the geometrical phase and curvature | Take the parameter space to be crystal momentum and use the connection $+i\langle u\vert\partial u\rangle$ |
-| Non-Abelian curvature | Wilczek–Zee (1984), non-Abelian connection construction | Trace over the selected band group to obtain a gauge-invariant scalar |
-| Interband-matrix-element form | Standard first-order perturbative expansion; Wang et al. (2006), AHC formulas | Standardize to $-2\mathrm{Im}r^ar^b$ and exclude transitions within the target group |
+Its matrix changes by conjugation under a unitary change of subspace
+frame; its trace is invariant. The ambient term is not the curvature
+of an arbitrary individual eigenvector inside an exact degeneracy.
 
-## 7. References
+## 4. Static geometry versus frequency-dependent response
 
-1. M. V. Berry, “Quantal phase factors accompanying adiabatic changes,” *Proc. R. Soc. Lond. A* **392**, 45–57 (1984). [DOI](https://doi.org/10.1098/rspa.1984.0023)
-2. F. Wilczek and A. Zee, “Appearance of Gauge Structure in Simple Dynamical Systems,” *Phys. Rev. Lett.* **52**, 2111–2114 (1984). [DOI](https://doi.org/10.1103/PhysRevLett.52.2111)
-3. X. Wang, J. R. Yates, I. Souza, and D. Vanderbilt, “Ab initio calculation of the anomalous Hall conductivity by Wannier interpolation,” *Phys. Rev. B* **74**, 195118 (2006). [DOI](https://doi.org/10.1103/PhysRevB.74.195118)
+The complete static curvature uses the antisymmetric imaginary part
+of the same geometric tensor whose real symmetric part is the metric.
+Neither static quantity stores the energies of all transitions omitted
+outside a finite window. Consequently, adding the ambient curvature
+does not reconstruct an arbitrary-frequency material response. The
+projected-position contact term and its relation to clean dc transport
+are derived in [linear transport](../LinearTransport.md). The exported
+frequency-dependent anomalous-Hall mechanism is specified separately
+in [linear optical response](../LinearOpticalResponse.md); at finite
+frequency or broadening it is not a pointwise static Berry curvature.
+
+## 5. Symmetry, normalization and references
+
+The curvature is antisymmetric in its Cartesian indices:
+
+$$
+\Omega_S^{ab}=-\Omega_S^{ba}.
+$$
+
+Time reversal maps an isolated band to its partner with opposite
+curvature at $-\mathbf k$; inversion maps it with the same sign.
+Where both symmetries constrain the same nondegenerate band, its
+curvature vanishes pointwise. A target subspace uses an ordinary
+trace rather than an average. The Berry-curvature dipole and
+quadrupole differentiate this complete static curvature.
+
+1. M. V. Berry, “Quantal phase factors accompanying adiabatic changes,”
+   *Proc. R. Soc. Lond. A* **392**, 45–57 (1984). [DOI](https://doi.org/10.1098/rspa.1984.0023)
+2. F. Wilczek and A. Zee, “Appearance of Gauge Structure in Simple Dynamical Systems,”
+   *Phys. Rev. Lett.* **52**, 2111–2114 (1984). [DOI](https://doi.org/10.1103/PhysRevLett.52.2111)
+3. X. Wang, J. R. Yates, I. Souza, and D. Vanderbilt, “Ab initio calculation of the anomalous Hall conductivity by Wannier interpolation,”
+   *Phys. Rev. B* **74**, 195118 (2006). [DOI](https://doi.org/10.1103/PhysRevB.74.195118)

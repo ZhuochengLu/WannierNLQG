@@ -207,7 +207,7 @@ function _response_symmetry_require_current_records(payload::AbstractDict)
     )
     for name in (
         "structure_magnetic_symmetry",
-        "wannier90_gauge",
+        "wannier_frame",
         "hamiltonian_covariance",
         "mmn_covariance",
         "integrand_covariance",
@@ -456,7 +456,7 @@ function read_response_symmetry_artifact(filename::AbstractString)
             )
             for gate_name in (
                 "structure_magnetic_symmetry",
-                "wannier90_gauge",
+                "wannier_frame",
                 "hamiltonian_covariance",
                 "mmn_covariance",
                 "integrand_covariance",

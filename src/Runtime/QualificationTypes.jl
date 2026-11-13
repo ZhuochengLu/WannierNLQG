@@ -2,7 +2,8 @@
 Machine-readable execution and production qualification for one completed response task.
 
 `execution_eligible` reports whether the structural and mathematical input contract was
-accepted. `qualification_status` is `PASS` or `DIAGNOSTIC_ONLY` for a completed run;
+accepted. `qualification_status` is `COMPUTATION_READY` for ordinary completed calculations;
+historical `PASS` and `DIAGNOSTIC_ONLY` records retain their producer meaning;
 `NOT_EVALUATED` is reserved for the legacy positional `RunResult` constructor. Missing
 evidence is retained in `unverified_contracts`; an explicit contradiction is retained in
 `conflicting_contracts` and prevents execution.
@@ -29,9 +30,12 @@ struct ResponseQualificationResult
         conflicting_contracts::Vector{String},
         input_qualification::Dict{String, Any},
     )
-        qualification_status in ("PASS", "DIAGNOSTIC_ONLY", "NOT_EVALUATED") || throw(
-            ArgumentError("invalid response qualification status $(repr(qualification_status))"),
-        )
+        qualification_status in ("COMPUTATION_READY", "PASS", "DIAGNOSTIC_ONLY", "NOT_EVALUATED") ||
+            throw(
+                ArgumentError(
+                    "invalid response qualification status $(repr(qualification_status))",
+                ),
+            )
         execution_eligible &&
             !isempty(conflicting_contracts) &&
             throw(ArgumentError("an execution-eligible qualification cannot contain conflicts"))
@@ -68,7 +72,7 @@ function ResponseQualificationResult(
     input_qualification::AbstractDict,
 )
     status = String(qualification_status)
-    status in ("PASS", "DIAGNOSTIC_ONLY", "NOT_EVALUATED") ||
+    status in ("COMPUTATION_READY", "PASS", "DIAGNOSTIC_ONLY", "NOT_EVALUATED") ||
         throw(ArgumentError("invalid response qualification status $(repr(status))"))
     conflicts = _qualification_strings(conflicting_contracts)
     execution_eligible &&
@@ -111,13 +115,21 @@ function aggregate_response_qualifications(results::AbstractVector{ResponseQuali
     execution_eligible = all(result -> result.execution_eligible, results)
     production_eligible = all(result -> result.production_eligible, results)
     qualification_status =
-        execution_eligible && all(result -> result.qualification_status == "PASS", results) ?
-        "PASS" : "DIAGNOSTIC_ONLY"
+        if execution_eligible &&
+           all(result -> result.qualification_status == "COMPUTATION_READY", results)
+            "COMPUTATION_READY"
+        elseif execution_eligible && all(result -> result.qualification_status == "PASS", results)
+            "PASS"
+        elseif all(result -> result.qualification_status == "NOT_EVALUATED", results)
+            "NOT_EVALUATED"
+        else
+            "DIAGNOSTIC_ONLY"
+        end
     return ResponseQualificationResult(
         execution_eligible,
         qualification_status,
         production_eligible,
-        any(result -> result.quality_review_recommended, results) || !production_eligible,
+        any(result -> result.quality_review_recommended, results),
         reduce(vcat, (result.reasons for result in results); init = String[]),
         reduce(vcat, (result.verified_contracts for result in results); init = String[]),
         reduce(vcat, (result.unverified_contracts for result in results); init = String[]),

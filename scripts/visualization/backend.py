@@ -7,13 +7,10 @@ from typing import Any
 
 import matplotlib
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm, Normalize, SymLogNorm, TwoSlopeNorm
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 
-from .band_adapters import displayed_energies, load_dataset, validate_shared_path
+from .band_adapters import displayed_energies, load_dataset, validate_shared_path, band_node_ticks
 from .band_comparison import (
     BandErrorAssessment,
     load_error_assessments,
@@ -36,6 +33,14 @@ from .kslice_parser import (
 )
 from .response_parser import load_response, select_part, validate_response_comparison
 from .style import apply_margins, apply_style, resolve_style, style_axes, tex_text
+
+
+def _load_renderer() -> None:
+    """Initialize plotting only after calculation-artifact validation succeeds."""
+    global plt, make_axes_locatable
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 DEFAULT_CURVES = [
@@ -94,28 +99,31 @@ def _band_figure(datasets: list[Any], config: dict[str, Any], style: dict[str, A
                 label = dataset.label
             elif fitted_indices is not None and band_index == min(fitted_indices):
                 label = dataset.label
-            axis.plot(
-                dataset.distance,
-                energies[:, band_index],
-                color=band_curve["color"],
-                linestyle=band_curve["linestyle"],
-                linewidth=float(band_curve["linewidth"]),
-                marker=band_curve.get("marker") or None,
-                markerfacecolor=band_curve.get("markerfacecolor", "none"),
-                markeredgecolor=band_curve.get("markeredgecolor") or band_curve["color"],
-                markersize=float(band_curve.get("markersize", 4.0)),
-                markevery=int(band_curve.get("markevery", 1)),
-                solid_capstyle="round",
-                label=label,
-                zorder=float(band_curve.get("zorder", 2 + dataset_index)),
-            )
+            branches = dataset.connected_branches or ((0, dataset.distance.size),)
+            for branch_index, (start, stop) in enumerate(branches):
+                axis.plot(
+                    dataset.distance[start:stop],
+                    energies[start:stop, band_index],
+                    color=band_curve["color"],
+                    linestyle=band_curve["linestyle"],
+                    linewidth=float(band_curve["linewidth"]),
+                    marker=band_curve.get("marker") or None,
+                    markerfacecolor=band_curve.get("markerfacecolor", "none"),
+                    markeredgecolor=band_curve.get("markeredgecolor") or band_curve["color"],
+                    markersize=float(band_curve.get("markersize", 4.0)),
+                    markevery=int(band_curve.get("markevery", 1)),
+                    solid_capstyle="round",
+                    label=label if branch_index == 0 else None,
+                    zorder=float(band_curve.get("zorder", 2 + dataset_index)),
+                )
     config["effective_curves"] = effective_curves
     reference = datasets[0]
-    for location in reference.node_distances:
+    tick_locations, tick_labels = band_node_ticks(reference)
+    for location in tick_locations:
         axis.axvline(location, color="#777777", linewidth=0.65, linestyle="-", zorder=0)
     axis.axhline(0.0, color="#404040", linewidth=0.85, linestyle="--", dashes=(4, 3), zorder=1)
-    axis.set_xticks(reference.node_distances)
-    axis.set_xticklabels([tex_text(label) for label in reference.node_labels])
+    axis.set_xticks(tick_locations)
+    axis.set_xticklabels([tex_text(label) for label in tick_labels])
     axis.set_xlim(float(reference.distance[0]), float(reference.distance[-1]))
     if config.get("energy_window") is not None:
         minimum, maximum = [float(value) for value in config["energy_window"]]
@@ -320,6 +328,7 @@ def render_band_config(config: dict[str, Any], entry_script: str | Path, validat
     style = resolve_style(config.get("style"))
     if validate_only:
         return []
+    _load_renderer()
     apply_style(style)
     figure = _band_figure([reference] + models, config, style)
     output = config.get("output", {})
@@ -740,6 +749,7 @@ def render_response_config(config: dict[str, Any], entry_script: str | Path, val
     config["effective_panel_labels"] = panel_labels
     if validate_only:
         return []
+    _load_renderer()
     apply_style(style)
     output = config.get("output", {})
     base_stem = Path(output["stem"]).resolve()
@@ -1185,10 +1195,11 @@ def render_kslice_config(config: dict[str, Any], entry_script: str | Path, valid
         )
         cartesian_record.update(
             {
-                "model_path": str(model_lattice.model_path),
-                "model_sha256": model_lattice.model_sha256,
+                "geometry_metadata_path": str(model_lattice.geometry_metadata_path),
+                "declared_model_file": metadata.model_file,
+                "model_identity": model_lattice.model_identity,
                 "model_input_mode": model_lattice.input_mode,
-                "packed_manifest": model_lattice.manifest_record,
+                "geometry_provenance": model_lattice.manifest_record,
             }
         )
     style = resolve_style(config.get("style"))
@@ -1198,6 +1209,7 @@ def render_kslice_config(config: dict[str, Any], entry_script: str | Path, valid
     ]
     if validate_only:
         return []
+    _load_renderer()
     apply_style(style)
     requested_columns = int(config.get("panel_columns", 3))
     if requested_columns <= 0:

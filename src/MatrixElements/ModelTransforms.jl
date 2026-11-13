@@ -1,5 +1,5 @@
 """Extract home-cell Wannier centers from the model position matrices."""
-function extract_wannier_centers(model::TightBindingModel)
+function extract_wannier_centers(model::AbstractResponseModel)
     wannier_centers = zeros(Float64, 3, model.num_orbitals)
     found_home_cell = false
     @inbounds for r_vector_index in 1:model.num_r_vectors

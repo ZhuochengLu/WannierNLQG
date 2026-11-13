@@ -40,7 +40,8 @@ mesh entry.
                          output_real_space_operator_bundle_file, ...)
 
 Configure deterministic group projection of the complete operator family implied
-by the explicitly supplied auxiliary input fields. WIN and TB are mandatory;
+by the explicitly supplied auxiliary input fields. TB is mandatory. Geometry is
+supplied either by owned structure/basis/grid values or the legacy WIN adapter;
 CHK/SPN selects spin, CHK/EIG/MMN selects derivatives, and providing all four
 selects the full inventory. Incomplete auxiliary combinations are rejected.
 Wannier-center and real-space replica policies are model-generation contracts;
@@ -48,8 +49,8 @@ they are stored in Packed HDF5 and are not runtime response switches.
 """
 Base.@kwdef struct SymmetrizationConfig
     # Store mandatory input and paired model-package output paths.
-    win_file::String
-    tb_file::String
+    win_file::Union{Nothing, String} = nothing
+    tb_file::Union{Nothing, String} = nothing
     output_tb_file::String
     output_real_space_operator_bundle_file::String
 
@@ -83,6 +84,11 @@ Base.@kwdef struct SymmetrizationConfig
     idempotence_tolerance::Float64 = 1.0e-9
     check_idempotence::Bool = true
     overwrite::Bool = false
+    structure::Union{Nothing, SymmetryFoundation.CrystalStructure} = nothing
+    projection_basis::Union{Nothing, WannierProjection.WannierProjectionBasis} = nothing
+    mp_grid::Union{Nothing, NTuple{3, Int}} = nothing
+    input_operator_bundle_file::Union{Nothing, String} = nothing
+    geometry_source_states::Vector{NamedTuple} = NamedTuple[]
 end
 
 """Durable outputs and validation evidence from one complete symmetrization run."""

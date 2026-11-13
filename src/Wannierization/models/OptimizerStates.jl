@@ -43,6 +43,138 @@ struct WannierizationIterationDiagnostics
     joint_acceptance_reason::Symbol
 end
 
+"""Ordinary single-sweep history contains no frame-distance field."""
+struct OrdinaryWannierizationIterationDiagnostics
+    omega_directional::Union{Nothing, NTuple{3, Float64}}
+    omega_total::Float64
+    projector_residual::Float64
+    z_residual::Float64
+    wcc_step_maximum::Float64
+    spread_step_maximum::Float64
+    little_group_residual::Float64
+    z_boundary_gap::Float64
+    z_mix_ratio::Float64
+    u_mix_ratio::Float64
+    u_inner_sweeps::Int
+    anderson_used::Bool
+    anderson_fallback::Bool
+    rejected_steps::Int
+    projected_gradient_rms::Float64
+    accepted_u_step_scale::Float64
+    localization_backtracking_steps::Int
+    localization_directional_derivative::Float64
+    fixed_projector_drift::Float64
+    localization_base_objective::Float64
+    localization_required_change::Float64
+    localization_actual_change::Float64
+    anderson_reason::Symbol
+    minimum_diagonal_phase_margin::Float64
+    minimum_phase_kpoint::Int
+    minimum_phase_neighbor::Int
+    minimum_phase_wannier::Int
+    cg_beta::Float64
+    cg_restarted::Bool
+    cg_restart_reason::Symbol
+    cg_descent_cosine::Float64
+    maximum_kstar_gradient_rms::Float64
+    maximum_kstar_gradient_index::Int
+    omega_i::Float64
+    delta_omega_i::Float64
+    z_stability_count::Int
+    joint_z_backtracking_steps::Int
+    joint_transport_minimum_singular_value::Float64
+    joint_transport_maximum_condition::Float64
+    joint_acceptance_reason::Symbol
+end
+
+# Route the ordinary solver to the record that has no distance property.
+function WannierizationIterationDiagnostics(
+    omega_directional,
+    omega_total,
+    projector_residual,
+    z_residual,
+    u_residual::Nothing,
+    wcc_step_maximum,
+    spread_step_maximum,
+    little_group_residual,
+    z_boundary_gap,
+    z_mix_ratio,
+    u_mix_ratio,
+    u_inner_sweeps,
+    anderson_used,
+    anderson_fallback,
+    rejected_steps,
+    projected_gradient_rms,
+    accepted_u_step_scale,
+    localization_backtracking_steps,
+    localization_directional_derivative,
+    fixed_projector_drift,
+    localization_base_objective,
+    localization_required_change,
+    localization_actual_change,
+    anderson_reason,
+    minimum_diagonal_phase_margin,
+    minimum_phase_kpoint,
+    minimum_phase_neighbor,
+    minimum_phase_wannier,
+    cg_beta,
+    cg_restarted,
+    cg_restart_reason,
+    cg_descent_cosine,
+    maximum_kstar_gradient_rms,
+    maximum_kstar_gradient_index,
+    omega_i,
+    delta_omega_i,
+    z_stability_count,
+    joint_z_backtracking_steps,
+    joint_transport_minimum_singular_value,
+    joint_transport_maximum_condition,
+    joint_acceptance_reason,
+)
+    return OrdinaryWannierizationIterationDiagnostics(
+        omega_directional,
+        omega_total,
+        projector_residual,
+        z_residual,
+        wcc_step_maximum,
+        spread_step_maximum,
+        little_group_residual,
+        z_boundary_gap,
+        z_mix_ratio,
+        u_mix_ratio,
+        u_inner_sweeps,
+        anderson_used,
+        anderson_fallback,
+        rejected_steps,
+        projected_gradient_rms,
+        accepted_u_step_scale,
+        localization_backtracking_steps,
+        localization_directional_derivative,
+        fixed_projector_drift,
+        localization_base_objective,
+        localization_required_change,
+        localization_actual_change,
+        anderson_reason,
+        minimum_diagonal_phase_margin,
+        minimum_phase_kpoint,
+        minimum_phase_neighbor,
+        minimum_phase_wannier,
+        cg_beta,
+        cg_restarted,
+        cg_restart_reason,
+        cg_descent_cosine,
+        maximum_kstar_gradient_rms,
+        maximum_kstar_gradient_index,
+        omega_i,
+        delta_omega_i,
+        z_stability_count,
+        joint_z_backtracking_steps,
+        joint_transport_minimum_singular_value,
+        joint_transport_maximum_condition,
+        joint_acceptance_reason,
+    )
+end
+
 # Preserve the schema-2.6/2.7 iteration constructor. Schema 2.8 appends the
 # qualified-Z and transactional-joint evidence without reinterpreting history.
 function WannierizationIterationDiagnostics(
@@ -86,7 +218,7 @@ function WannierizationIterationDiagnostics(
         Float64(omega_total),
         Float64(projector_residual),
         Float64(z_residual),
-        Float64(u_residual),
+        u_residual === nothing ? nothing : Float64(u_residual),
         Float64(wcc_step_maximum),
         Float64(spread_step_maximum),
         Float64(little_group_residual),
@@ -159,7 +291,7 @@ function WannierizationIterationDiagnostics(
         Float64(omega_total),
         Float64(projector_residual),
         Float64(z_residual),
-        Float64(u_residual),
+        u_residual === nothing ? nothing : Float64(u_residual),
         Float64(wcc_step_maximum),
         Float64(spread_step_maximum),
         Float64(little_group_residual),
@@ -219,7 +351,7 @@ function WannierizationIterationDiagnostics(
         Float64(omega_total),
         Float64(projector_residual),
         Float64(z_residual),
-        Float64(u_residual),
+        u_residual === nothing ? nothing : Float64(u_residual),
         Float64(wcc_step_maximum),
         Float64(spread_step_maximum),
         Float64(little_group_residual),
@@ -275,7 +407,7 @@ function WannierizationIterationDiagnostics(
         Float64(omega_total),
         Float64(projector_residual),
         Float64(z_residual),
-        Float64(u_residual),
+        u_residual === nothing ? nothing : Float64(u_residual),
         Float64(wcc_step_maximum),
         Float64(spread_step_maximum),
         Float64(little_group_residual),
@@ -332,10 +464,8 @@ struct WannierizationOptimizerState
     u_mix_ratio::Float64
     improvement_streak::Int
     rejected_steps::Int
-    residual_reference::NTuple{4, Float64}
+    residual_reference::Tuple{Float64, Float64, Union{Nothing, Float64}, Float64}
     previous_merit::Float64
-    anderson_z_history::Matrix{Float64}
-    anderson_residual_history::Matrix{Float64}
     phase::Symbol
     z_stability_count::Int
     u_stability_count::Int
@@ -370,24 +500,29 @@ struct WannierizationOptimizerState
     # Schema-2.10 chart and limited-memory state. Accepted physical frames and
     # Z/projector data remain independent from this resettable U-only history.
     u_phase_contract::String
-    u_active_orbit_sha256::String
     u_active_orbit_count::Int
     u_generalized_gradient_rms::Float64
-    u_lbfgs_s_history::Array{ComplexF64, 4}
-    u_lbfgs_y_history::Array{ComplexF64, 4}
-    u_lbfgs_rho_history::Vector{Float64}
-    u_lbfgs_restart_count::Int
     last_u_optimizer_restart_reason::Symbol
-    # Schema-2.22 exact Wannier90 recursive state. Empty arrays mean that the
+    # Schema-2.22 exact Wannier recursive state. Empty arrays mean that the
     # state belongs to a non-reference or legacy trajectory.
-    wannier90_reference_overlaps::Array{ComplexF64, 4}
-    wannier90_reference_unitaries::Array{ComplexF64, 3}
-    wannier90_reference_omega_i::Float64
+    recursive_localization_overlaps::Array{ComplexF64, 4}
+    recursive_localization_unitaries::Array{ComplexF64, 3}
+    recursive_localization_omega_i::Float64
+    u_active_orbit_definition::String
+end
+
+"""Retain raw historical optimizer data without inventing branch membership.
+
+Current trajectory producers pass the additional complete definition explicitly.
+An empty definition never proves equality for a retained RCG/L-BFGS history.
+"""
+function WannierizationOptimizerState(arguments::Vararg{Any, 45})
+    return WannierizationOptimizerState(arguments..., "")
 end
 
 # Preserve all pre-reference-state constructors and legacy readers. New exact
 # trajectories use the native 52-field constructor below.
-function WannierizationOptimizerState(arguments::Vararg{Any, 49})
+function WannierizationOptimizerState(arguments::Vararg{Any, 42})
     return WannierizationOptimizerState(
         arguments...,
         zeros(ComplexF64, 0, 0, 0, 0),
@@ -407,8 +542,6 @@ function WannierizationOptimizerState(
     rejected_steps,
     residual_reference,
     previous_merit,
-    anderson_z_history,
-    anderson_residual_history,
     phase,
     z_stability_count,
     u_stability_count,
@@ -447,10 +580,8 @@ function WannierizationOptimizerState(
         Float64(u_mix_ratio),
         Int(improvement_streak),
         Int(rejected_steps),
-        Tuple(Float64.(collect(residual_reference))),
+        map(value -> value === nothing ? nothing : Float64(value), Tuple(residual_reference)),
         Float64(previous_merit),
-        Matrix{Float64}(anderson_z_history),
-        Matrix{Float64}(anderson_residual_history),
         Symbol(phase),
         Int(z_stability_count),
         Int(u_stability_count),
@@ -483,13 +614,8 @@ function WannierizationOptimizerState(
         Symbol(last_cg_restart_reason),
         Symbol(last_anderson_reason),
         "mv_centered_residual_unwrapped_delta_v2",
-        "",
         0,
         NaN,
-        zeros(ComplexF64, 0, 0, 0, 0),
-        zeros(ComplexF64, 0, 0, 0, 0),
-        Float64[],
-        0,
         :EMPTY_HISTORY,
     )
 end
@@ -504,8 +630,6 @@ function WannierizationOptimizerState(
     rejected_steps,
     residual_reference,
     previous_merit,
-    anderson_z_history,
-    anderson_residual_history,
     phase,
     z_stability_count,
     u_stability_count,
@@ -537,10 +661,8 @@ function WannierizationOptimizerState(
         Float64(u_mix_ratio),
         Int(improvement_streak),
         Int(rejected_steps),
-        Tuple(Float64.(collect(residual_reference))),
+        map(value -> value === nothing ? nothing : Float64(value), Tuple(residual_reference)),
         Float64(previous_merit),
-        Matrix{Float64}(anderson_z_history),
-        Matrix{Float64}(anderson_residual_history),
         Symbol(phase),
         Int(z_stability_count),
         Int(u_stability_count),
@@ -585,8 +707,6 @@ function WannierizationOptimizerState(
     rejected_steps,
     residual_reference,
     previous_merit,
-    anderson_z_history,
-    anderson_residual_history,
     phase,
     z_stability_count,
     u_stability_count,
@@ -613,10 +733,8 @@ function WannierizationOptimizerState(
         Float64(u_mix_ratio),
         Int(improvement_streak),
         Int(rejected_steps),
-        Tuple(Float64.(collect(residual_reference))),
+        map(value -> value === nothing ? nothing : Float64(value), Tuple(residual_reference)),
         Float64(previous_merit),
-        Matrix{Float64}(anderson_z_history),
-        Matrix{Float64}(anderson_residual_history),
         Symbol(phase),
         Int(z_stability_count),
         Int(u_stability_count),
@@ -660,8 +778,6 @@ function WannierizationOptimizerState(
     rejected_steps,
     residual_reference,
     previous_merit,
-    anderson_z_history,
-    anderson_residual_history,
     phase,
     z_stability_count,
     u_stability_count,
@@ -682,10 +798,8 @@ function WannierizationOptimizerState(
         Float64(u_mix_ratio),
         Int(improvement_streak),
         Int(rejected_steps),
-        Tuple(Float64.(collect(residual_reference))),
+        map(value -> value === nothing ? nothing : Float64(value), Tuple(residual_reference)),
         Float64(previous_merit),
-        Matrix{Float64}(anderson_z_history),
-        Matrix{Float64}(anderson_residual_history),
         Symbol(phase),
         Int(z_stability_count),
         Int(u_stability_count),
@@ -730,8 +844,6 @@ function WannierizationOptimizerState(strategy, z_mix_ratio, u_mix_ratio)
         0,
         (NaN, NaN, NaN, NaN),
         NaN,
-        zeros(Float64, 0, 0),
-        zeros(Float64, 0, 0),
         :joint,
         0,
         0,
@@ -758,8 +870,6 @@ function WannierizationOptimizerState(
     rejected_steps,
     residual_reference,
     previous_merit,
-    anderson_z_history,
-    anderson_residual_history,
 )
     return WannierizationOptimizerState(
         Symbol(strategy),
@@ -767,10 +877,8 @@ function WannierizationOptimizerState(
         Float64(u_mix_ratio),
         Int(improvement_streak),
         Int(rejected_steps),
-        Tuple(Float64.(collect(residual_reference))),
+        map(value -> value === nothing ? nothing : Float64(value), Tuple(residual_reference)),
         Float64(previous_merit),
-        Matrix{Float64}(anderson_z_history),
-        Matrix{Float64}(anderson_residual_history),
         :joint,
         0,
         0,
@@ -787,6 +895,36 @@ function WannierizationOptimizerState(
     )
 end
 
+"""Complete current solver inputs; local reference names carry lifetime only.
+
+Configuration and basis definitions are small complete values. Operator and
+initializer values are private sequential references, compared in full before
+continuation and persisted as portable bytes rather than local paths.
+"""
+struct WannierizationRestartInputDefinition
+    configuration::String
+    projection_basis::String
+    representation::ScientificInputDefinition
+    overlaps::ScientificInputDefinition
+    initialization::ScientificInputDefinition
+    auxiliary_sources::Dict{String, ScientificInputDefinition}
+end
+# Preserve the older five-field restart definition with an empty auxiliary-source definition dictionary.
+WannierizationRestartInputDefinition(
+    configuration,
+    projection_basis,
+    representation,
+    overlaps,
+    initialization,
+) = WannierizationRestartInputDefinition(
+    configuration,
+    projection_basis,
+    representation,
+    overlaps,
+    initialization,
+    Dict{String, ScientificInputDefinition}(),
+)
+
 """Complete iterative state required to resume at the next joint Z/U iteration."""
 struct WannierizationRestartState
     iteration::Int
@@ -797,15 +935,51 @@ struct WannierizationRestartState
     convergence_values::Matrix{Float64}
     included_bands::BitMatrix
     elapsed_seconds::Float64
-    config_sha256::String
-    representation_sha256::String
     stencil::Union{Nothing, WannierizationFiniteDifferenceStencil}
-    projection_basis_sha256::String
-    amn_sha256::String
     optimizer_state::WannierizationOptimizerState
     fixed_subspace_projectors::Union{Nothing, Array{ComplexF64, 3}}
     fixed_subspace_frames::Union{Nothing, Array{ComplexF64, 3}}
     localization_initial_frames::Union{Nothing, Array{ComplexF64, 3}}
+    input_definition::Union{Nothing, WannierizationRestartInputDefinition}
+end
+
+"""Retain an explicitly unqualified raw accepted state without inventing inputs.
+
+Its fields remain inspectable/exportable; current continuation requires a
+complete input definition from the actual producer or explicit source-backed
+migration. This constructor does not grant restart qualification.
+"""
+function WannierizationRestartState(
+    iteration,
+    frames,
+    z_previous,
+    centers_cartesian,
+    spreads_angstrom2,
+    convergence_values,
+    included_bands,
+    elapsed_seconds,
+    stencil,
+    optimizer_state,
+    fixed_subspace_projectors,
+    fixed_subspace_frames,
+    localization_initial_frames,
+)
+    return WannierizationRestartState(
+        iteration,
+        frames,
+        z_previous,
+        centers_cartesian,
+        spreads_angstrom2,
+        convergence_values,
+        included_bands,
+        elapsed_seconds,
+        stencil,
+        optimizer_state,
+        fixed_subspace_projectors,
+        fixed_subspace_frames,
+        localization_initial_frames,
+        nothing,
+    )
 end
 
 # Preserve the schema-2.0--2.3 in-memory constructor. Such states contain no
@@ -819,11 +993,7 @@ function WannierizationRestartState(
     convergence_values,
     included_bands,
     elapsed_seconds,
-    config_sha256,
-    representation_sha256,
     stencil,
-    projection_basis_sha256,
-    amn_sha256,
     optimizer_state,
 )
     return WannierizationRestartState(
@@ -835,11 +1005,7 @@ function WannierizationRestartState(
         Matrix{Float64}(convergence_values),
         BitMatrix(included_bands),
         Float64(elapsed_seconds),
-        String(config_sha256),
-        String(representation_sha256),
         stencil,
-        String(projection_basis_sha256),
-        String(amn_sha256),
         optimizer_state,
         nothing,
         nothing,
@@ -903,8 +1069,6 @@ function WannierizationRestartState(
     convergence_values,
     included_bands,
     elapsed_seconds,
-    config_sha256,
-    representation_sha256,
 )
     return WannierizationRestartState(
         Int(iteration),
@@ -915,11 +1079,7 @@ function WannierizationRestartState(
         Matrix{Float64}(convergence_values),
         BitMatrix(included_bands),
         Float64(elapsed_seconds),
-        String(config_sha256),
-        String(representation_sha256),
         nothing,
-        "",
-        "",
         WannierizationOptimizerState(:fixed, 0.5, 1.0),
         nothing,
         nothing,

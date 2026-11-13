@@ -2,7 +2,10 @@ using SHA
 using WannierNLQG
 
 length(ARGS) == 1 || error("usage: QECoefficientSewingFreshReadProbe.jl REPRESENTATION_HDF5")
-representation = WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(abspath(only(ARGS)))
+representation = WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(
+    abspath(only(ARGS));
+    content_authentication = false,
+)
 representation.conventions["qe_metric_kind"] == "paw" ||
     error("fresh read lost QE PAW metric provenance")
 representation.conventions["physical_overlap_available"] == "false" ||

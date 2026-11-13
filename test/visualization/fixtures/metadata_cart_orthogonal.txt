@@ -7,8 +7,15 @@ method = conventional
 [Input]
 case_root = .
 model_file = orthogonal_tb.dat
-model_sha256 = 3a8ff6e7a42eb2a59e0685f68ae10f7b18c4baefdf4424593edbddc9430b3bc3
+model_identity = 3a8ff6e7a42eb2a59e0685f68ae10f7b18c4baefdf4424593edbddc9430b3bc3
 model_input_mode = legacy
+
+[Geometry]
+schema = wanniernlqg.model-geometry/1
+lattice_convention = row-lattice: R_cart = R_frac(row) * lattice; q_frac = lattice * q_cart / 2pi
+lattice_row.1_angstrom = (2.0, 0.0, 0.0)
+lattice_row.2_angstrom = (0.0, 3.0, 0.0)
+lattice_row.3_angstrom = (0.0, 0.0, 4.0)
 
 [Numerics]
 k_mesh = (2, 2)

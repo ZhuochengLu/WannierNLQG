@@ -199,46 +199,14 @@ function _build_representation_product_table(
     )
 end
 
-# Serialize only scientific representation content into one deterministic hash.
-function _representation_static_sha256(representation::BandRepresentation)
-    io = IOBuffer()
-    write(io, codeunits(String(representation.source_code)))
-    write(io, UInt8(representation.spinor))
-    for value in representation.mp_grid
-        write(io, Int64(value))
-    end
-    for array in (
-        representation.real_lattice,
-        representation.reciprocal_lattice,
-        representation.kpoints_fractional,
-        representation.energies_ev,
-        representation.kpoint_map,
-        representation.reciprocal_shifts,
-        representation.sewing_matrices,
-        representation.band_block_labels,
-        representation.irreducible_indices,
-        representation.full_to_irreducible,
-        representation.full_to_operation,
-    )
-        for dimension in size(array)
-            write(io, Int64(dimension))
-        end
-        write(io, vec(array))
-    end
-    for operation in representation.operations
-        write(io, vec(operation.rotation_fractional))
-        write(io, operation.translation_fractional)
-        write(io, vec(operation.rotation_cartesian))
-        write(io, UInt8(operation.antiunitary))
-    end
-    for key in sort!(collect(keys(representation.conventions)))
-        write(io, codeunits(key))
-        write(io, UInt8(0))
-        write(io, codeunits(representation.conventions[key]))
-        write(io, UInt8(0))
-    end
-    return bytes2hex(sha256(take!(io)))
-end
+# Full, length-delimited scientific values used by explicit search/materialization.
+# This is a retained input definition, not a digest or authenticity certificate.
+_representation_static_definition(representation::BandRepresentation) =
+    SymmetryFoundation.band_representation_input_definition(representation)
+
+# Delegate the actual Boolean mask definition to the owning SymmetryFoundation implementation.
+qualification_mask_definition(mask::AbstractMatrix{Bool}) =
+    SymmetryFoundation.qualification_mask_definition(mask)
 
 # Normalize optional index/bit masks to one BitVector per k-point.
 function _normalize_validation_masks(
@@ -368,6 +336,8 @@ function _validate_band_group_law(
     ;
     enforce_absolute_group_law::Bool = true,
 )
+    all(isfinite, representation.sewing_matrices) ||
+        throw(ArgumentError("NONFINITE_SEWING_BLOCK: required sewing data must be finite"))
     diagnostics = WannierizationDiagnostic[]
     operation_count = length(representation.operations)
     num_kpoints = size(representation.kpoint_map, 2)
@@ -441,6 +411,37 @@ function _validate_band_group_law(
                 operation_index,
                 source_kpoint,
             ]
+        )
+        # Rank is a discrete solvability contract, independent of the accuracy
+        # tolerance used to report nonunitarity. Match the existing raw-block
+        # diagnostics' numerical-rank threshold.
+        singular_values = svdvals(sewing)
+        all(isfinite, singular_values) ||
+            throw(ArgumentError("NONFINITE_SEWING_SPECTRUM: singular values must be finite"))
+        maximum_singular = maximum(singular_values)
+        minimum_singular = minimum(singular_values)
+        rank_threshold = max(size(sewing)...) * eps(Float64) * max(maximum_singular, 1.0)
+        numerical_rank = count(>(rank_threshold), singular_values)
+        required_rank = length(source_indices)
+        numerical_rank == required_rank || push!(
+            diagnostics,
+            _representation_diagnostic(
+                :SEWING_BLOCK_RANK_DEFICIENT,
+                :error,
+                "required sewing block has insufficient numerical rank";
+                context = Dict(
+                    "operation" => string(operation_index),
+                    "operation_key" =>
+                        _canonical_operation_key(representation.operations[operation_index]),
+                    "source_kpoint" => string(source_kpoint),
+                    "target_kpoint" => string(target_kpoint),
+                    "required_rank" => string(required_rank),
+                    "numerical_rank" => string(numerical_rank),
+                    "rank_threshold" => string(rank_threshold),
+                    "minimum_singular_value" => string(minimum_singular),
+                    "maximum_singular_value" => string(maximum_singular),
+                ),
+            ),
         )
         identity_matrix = Matrix{ComplexF64}(I, length(source_indices), length(source_indices))
         residual = max(

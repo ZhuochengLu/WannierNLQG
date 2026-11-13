@@ -1,18 +1,39 @@
 """
-    construct_symmetry_adapted_wannier_functions(config)
+    construct_wannier_functions(config)
 
-Build or read the native band representation, run the configured two-stage,
-joint, or fixed-subspace SAWF solver, and atomically persist requested HDF5/TB artifacts. The requested
+Build or read the native band representation, run the configured ordinary or
+symmetry-adapted solver, and atomically persist requested HDF5/TB artifacts. The requested
 checkpoint path is stable across terminal statuses; convergence and production
 eligibility remain explicit file metadata.
 """
-function construct_symmetry_adapted_wannier_functions(config::SymmetryAdaptedWannierizationConfig)
+function construct_wannier_functions(config::WannierizationConfig; run_record = nothing)
     # Symmetry-adapted solve needs this backend. Activate it before crossing the
     # existing latest-world call boundary, avoiding invalidation inside the solver.
     if config.input.wannierization_mode === :symmetry_adapted
         Base.require(Base.PkgId(Base.UUID("f761d5c5-86db-4880-b97f-9680a7cccfb5"), "Spglib"))
     end
-    return _call_wannierization_extension(:construct_symmetry_adapted_wannier_functions, config)
+    return _call_wannierization_extension(:construct_wannier_functions, config; run_record)
+end
+
+"""
+    construct_wannier_functions_with_native_inputs(config, reference)
+
+Start a new ordinary optimizer trajectory from a complete, source-validated native
+matrix input record. This is not a solver restart. The original native provider,
+PAW data, source definitions and initialization policy remain in force. All MPI
+ranks must enter this collective API with the same configuration and record.
+"""
+function construct_wannier_functions_with_native_inputs(
+    config::WannierizationConfig,
+    reference;
+    run_record = nothing,
+)
+    return _call_wannierization_extension(
+        :construct_wannier_functions_with_native_inputs,
+        config,
+        reference;
+        run_record,
+    )
 end
 
 """
@@ -22,7 +43,10 @@ Run the expert-only, read-only Z/U/Fourier diagnostic on a sealed checkpoint.
 The routine verifies all input identities before emitting versioned JSON/HDF5
 evidence. Its output is diagnostic and cannot promote a solver or TB result.
 """
-function diagnose_wannier_gauge_chain(config::WannierGaugeChainDiagnosticConfig)
+function diagnose_wannier_gauge_chain(
+    config::WannierGaugeChainDiagnosticConfig;
+    reference_root = nothing,
+)
     for (name, value) in (
         ("wannierization_checkpoint_hdf5", config.wannierization_checkpoint_hdf5),
         ("eig_file", config.eig_file),
@@ -41,7 +65,7 @@ function diagnose_wannier_gauge_chain(config::WannierGaugeChainDiagnosticConfig)
         throw(ArgumentError("tail_radius_angstrom must be finite and nonnegative"))
     config.roundtrip_tolerance > 0.0 && isfinite(config.roundtrip_tolerance) ||
         throw(ArgumentError("roundtrip_tolerance must be positive and finite"))
-    return _call_wannierization_extension(:diagnose_wannier_gauge_chain, config)
+    return _call_wannierization_extension(:diagnose_wannier_gauge_chain, config; reference_root)
 end
 
 """
@@ -89,7 +113,7 @@ end
 
 """Replace only `projection_basis` in a compatible immutable SAWF configuration."""
 function materialize_symmetry_adapted_wannierization_config(
-    template::SymmetryAdaptedWannierizationConfig,
+    template::WannierizationConfig,
     result::ProjectionRepresentationSearchResult;
     solution_index::Integer = 1,
 )
@@ -113,6 +137,11 @@ it fails closed rather than substituting a pseudo-only overlap. This routine
 does not read MMN or AMN data and never enters the SAWF solver.
 """
 function prepare_band_representation(config::BandRepresentationPreparationConfig)
+    # Activate the required symmetry backend before the latest-world dispatch,
+    # matching the symmetry-adapted solver's existing loading order.
+    if config.wannierization_mode === :symmetry_adapted
+        Base.require(Base.PkgId(Base.UUID("f761d5c5-86db-4880-b97f-9680a7cccfb5"), "Spglib"))
+    end
     return _call_wannierization_extension(:prepare_band_representation, config)
 end
 
@@ -195,6 +224,10 @@ function audit_paw_block_partitions(config::PAWBlockPartitionAuditConfig)
     issorted(config.fixed_gap_scan_ev) || throw(ArgumentError("fixed_gap_scan_ev must be sorted"))
     all(value -> isfinite(value) && value > 0.0, config.fixed_gap_scan_ev) ||
         throw(ArgumentError("fixed_gap_scan_ev values must be positive and finite"))
+    # Resolve the required symmetry backend through its public provenance API
+    # before entering the cached audit implementation. Dependency initialization
+    # stays inside this call without referencing another module's private loader.
+    SymmetryFoundation.symmetry_detection_backend_provenance()
     return _call_wannierization_extension(:audit_paw_block_partitions, config)
 end
 
@@ -204,7 +237,7 @@ end
 Generate physical native plane-wave projections in the public `WannierAMN`
 model. QE PAW/USPP sources require an augmentation-aware beta/Q backend and
 fail with `QE_AUGMENTATION_METRIC_REQUIRED` while that backend is unavailable;
-external `pw2wannier90` AMN data must instead enter through the typed matrix-
+external AMN data must instead enter through the typed matrix-
 element source. If `amn_file` is supplied, the formatted file is atomically
 published with a versioned provenance companion. The DFT source remains read-only.
 """
@@ -234,7 +267,7 @@ after generation for fail-closed numerical qualification.
 function generate_vasp_paw_matrix_elements(
     source::SymmetryFoundation.VASPWavefunctionSource,
     basis::WannierProjection.WannierProjectionBasis,
-    topology_mmn_file::AbstractString;
+    topology_mmn_file::Union{AbstractString, WannierNNKP};
     output_mmn_file::AbstractString,
     output_amn_file::AbstractString,
     provenance_hdf5::AbstractString,
@@ -261,7 +294,7 @@ end
 """
     generate_vasp_paw_spn(source; output_spn_file, provenance_hdf5, spin_channel, ...)
 
-Generate a Wannier90 SPN file from the same full-cutoff, unnormalized VASP
+Generate a Wannier SPN file from the same full-cutoff, unnormalized VASP
 WAVECAR and POTCAR projector/Q₀ data used by the augmentation-aware matrix
 backend. The output contains dimensionless Cartesian Pauli matrices in the
 selected native band gauge. Optional oracle SPN data is validation-only.
@@ -311,7 +344,7 @@ end
 
 Generate dimensionless Cartesian Pauli matrices from the native QE
 full-cutoff spinor coefficients plus PAW/USPP q=0 augmentation.  An optional
-pw2wannier90 SPN is an oracle only.
+An independent SPN file is an oracle only.
 """
 function generate_qe_paw_spn(
     source::SymmetryFoundation.QuantumEspressoWavefunctionSource,
@@ -355,7 +388,7 @@ but never exposes a physical-overlap result to SAWF.
 """
 function generate_qe_paw_matrix_elements(
     source::SymmetryFoundation.QuantumEspressoWavefunctionSource,
-    nnkp_file::AbstractString;
+    nnkp_input::Union{AbstractString, WannierNNKP};
     artifact_dir::AbstractString,
     oracle_mmn_file::Union{Nothing, AbstractString} = nothing,
     oracle_amn_file::Union{Nothing, AbstractString} = nothing,
@@ -365,7 +398,7 @@ function generate_qe_paw_matrix_elements(
     return _call_wannierization_extension(
         :generate_qe_paw_matrix_elements,
         source,
-        nnkp_file;
+        nnkp_input;
         artifact_dir,
         oracle_mmn_file,
         oracle_amn_file,
@@ -403,7 +436,7 @@ end
 """
     generate_wannier_uiu(config::WannierUIUGenerationConfig)
 
-Generate Wannier90 neighbor-neighbor direct overlaps from a native VASP or QE
+Generate Wannier neighbor-neighbor direct overlaps from a native VASP or QE
 wavefunction source using the complete PAW/USPP metric. The final uIu and its
 JSON provenance are published atomically only after same-source MMN, generalized
 normalization, diagonal-identity, exchange-Hermiticity, and readback gates pass.
@@ -437,48 +470,62 @@ separate roles, then seal their digests together with the target band frame and
 Hamiltonian authority. Pass the returned contract unchanged to uIu/uHu/sIu/sHu
 generation configs before starting the full-profile workflow.
 """
-function prepare_wannier_operator_target_contract(config::SymmetryAdaptedWannierizationConfig)
+function prepare_wannier_operator_target_contract(config::WannierizationConfig)
     return _call_wannierization_extension(:prepare_wannier_operator_target_contract, config)
 end
 
 """
-    prepare_exact_wannier_operator_bundle(config::ExactWannierOperatorBundleConfig)
+    prepare_full_uiu_derivative_operator_bundle(config::FullUIUDerivativeOperatorBundleConfig)
 
 Build an unsymmetrized schema-6 derivative-profile bundle from one sealed
 TB/CHK/EIG/MMN/uIu gauge chain. A qualified uIu provenance companion is
 mandatory; the historical MMN-product tensor is never substituted.
 """
-function prepare_exact_wannier_operator_bundle(config::ExactWannierOperatorBundleConfig)
-    return _call_wannierization_extension(:prepare_exact_wannier_operator_bundle, config)
+function prepare_full_uiu_derivative_operator_bundle(config::FullUIUDerivativeOperatorBundleConfig)
+    return _call_wannierization_extension(:prepare_full_uiu_derivative_operator_bundle, config)
 end
 
-"""Read one strict, versioned Wannierization checkpoint, including historical SAWF files."""
-function read_wannierization_checkpoint_hdf5(filename::AbstractString)
-    return _call_wannierization_extension(:read_wannierization_checkpoint_hdf5, filename)
+"""Read a current-format Wannierization checkpoint; historical wires require explicit migration."""
+function read_wannierization_checkpoint_hdf5(
+    filename::AbstractString;
+    expected_publication = nothing,
+    receipt_path = nothing,
+    reference_root = nothing,
+)
+    return _call_wannierization_extension(
+        :read_wannierization_checkpoint_hdf5,
+        filename;
+        expected_publication,
+        receipt_path,
+        reference_root,
+    )
+end
+
+"""Explicitly adopt a relocated current-format checkpoint after complete validation."""
+function adopt_wannierization_checkpoint_hdf5(
+    filename::AbstractString;
+    receipt_path = nothing,
+    reference_root = nothing,
+)
+    return _call_wannierization_extension(
+        :adopt_wannierization_checkpoint_hdf5,
+        filename;
+        receipt_path,
+        reference_root,
+    )
 end
 
 """Atomically write one Wannierization result to the exact requested checkpoint path."""
 function write_wannierization_checkpoint_hdf5(
     filename::AbstractString,
-    result::WannierizationResult,
-)
-    return _call_wannierization_extension(:write_wannierization_checkpoint_hdf5, filename, result)
-end
-
-"""Read a schema-1.0 fixed Bloch subspace for U-only localization."""
-function read_wannierization_fixed_subspace_hdf5(filename::AbstractString)
-    return _call_wannierization_extension(:read_wannierization_fixed_subspace_hdf5, filename)
-end
-
-"""Atomically write a schema-1.0 fixed Bloch subspace."""
-function write_wannierization_fixed_subspace_hdf5(
-    filename::AbstractString,
-    fixed_subspace::WannierizationFixedSubspace,
+    result::WannierizationResult;
+    reference_root = nothing,
 )
     return _call_wannierization_extension(
-        :write_wannierization_fixed_subspace_hdf5,
+        :write_wannierization_checkpoint_hdf5,
         filename,
-        fixed_subspace,
+        result;
+        reference_root,
     )
 end
 
@@ -584,11 +631,6 @@ end
 # Static private expert-test and script bridges. Implementations and numerical state
 # remain exclusively in WannierNLQGWannierizationExt; only reachable callers are retained.
 
-"""Forward `_acceleration_trial_action` to the active Wannierization extension."""
-function _acceleration_trial_action(arguments...; keywords...)
-    return _call_wannierization_extension(:_acceleration_trial_action, arguments...; keywords...)
-end
-
 """Forward `_accepted_unitary_displacement` to the active Wannierization extension."""
 function _accepted_unitary_displacement(arguments...; keywords...)
     return _call_wannierization_extension(
@@ -598,11 +640,6 @@ function _accepted_unitary_displacement(arguments...; keywords...)
     )
 end
 
-"""Forward `_adaptive_next_mixing` to the active Wannierization extension."""
-function _adaptive_next_mixing(arguments...; keywords...)
-    return _call_wannierization_extension(:_adaptive_next_mixing, arguments...; keywords...)
-end
-
 """Forward `_amn_target_qualification_metrics` to the active Wannierization extension."""
 function _amn_target_qualification_metrics(arguments...; keywords...)
     return _call_wannierization_extension(
@@ -610,16 +647,6 @@ function _amn_target_qualification_metrics(arguments...; keywords...)
         arguments...;
         keywords...,
     )
-end
-
-"""Forward `_anderson_trial_policy` to the active Wannierization extension."""
-function _anderson_trial_policy(arguments...; keywords...)
-    return _call_wannierization_extension(:_anderson_trial_policy, arguments...; keywords...)
-end
-
-"""Forward `_anderson_z_proposal` to the active Wannierization extension."""
-function _anderson_z_proposal(arguments...; keywords...)
-    return _call_wannierization_extension(:_anderson_z_proposal, arguments...; keywords...)
 end
 
 """Forward `_backtracking_step_scale` to the active Wannierization extension."""
@@ -715,11 +742,6 @@ function _complete_window_indices(arguments...; keywords...)
     return _call_wannierization_extension(:_complete_window_indices, arguments...; keywords...)
 end
 
-"""Forward `_complex_field_sha256` to the active Wannierization extension."""
-function _complex_field_sha256(arguments...; keywords...)
-    return _call_wannierization_extension(:_complex_field_sha256, arguments...; keywords...)
-end
-
 """Forward `_corepresentation_aware_maximum_subspace_result` to the active Wannierization extension."""
 function _corepresentation_aware_maximum_subspace_result(arguments...; keywords...)
     return _call_wannierization_extension(
@@ -788,15 +810,6 @@ end
 """Forward `_finite_difference_weights` to the active Wannierization extension."""
 function _finite_difference_weights(arguments...; keywords...)
     return _call_wannierization_extension(:_finite_difference_weights, arguments...; keywords...)
-end
-
-"""Forward `_fixed_subspace_initial_frames` to the active Wannierization extension."""
-function _fixed_subspace_initial_frames(arguments...; keywords...)
-    return _call_wannierization_extension(
-        :_fixed_subspace_initial_frames,
-        arguments...;
-        keywords...,
-    )
 end
 
 """Forward `_fixed_subspace_projector_drift_tolerance` to the active Wannierization extension."""
@@ -1031,15 +1044,6 @@ function _mv_spread_gradient(arguments...; keywords...)
     return _call_wannierization_extension(:_mv_spread_gradient, arguments...; keywords...)
 end
 
-"""Forward `_objective_aware_anderson_decision` to the active Wannierization extension."""
-function _objective_aware_anderson_decision(arguments...; keywords...)
-    return _call_wannierization_extension(
-        :_objective_aware_anderson_decision,
-        arguments...;
-        keywords...,
-    )
-end
-
 """Forward `_orthonormalize_columns` to the active Wannierization extension."""
 function _orthonormalize_columns(arguments...; keywords...)
     return _call_wannierization_extension(:_orthonormalize_columns, arguments...; keywords...)
@@ -1152,9 +1156,13 @@ function _repair_expanded_frozen_frame(arguments...; keywords...)
     return _call_wannierization_extension(:_repair_expanded_frozen_frame, arguments...; keywords...)
 end
 
-"""Forward `_representation_static_sha256` to the active Wannierization extension."""
-function _representation_static_sha256(arguments...; keywords...)
-    return _call_wannierization_extension(:_representation_static_sha256, arguments...; keywords...)
+"""Forward `_representation_static_definition` to the active Wannierization extension."""
+function _representation_static_definition(arguments...; keywords...)
+    return _call_wannierization_extension(
+        :_representation_static_definition,
+        arguments...;
+        keywords...,
+    )
 end
 
 """Forward `_representation_target_subspace_contract` to the active Wannierization extension."""
@@ -1171,38 +1179,6 @@ function _restart_config_repr(arguments...; keywords...)
     return _call_wannierization_extension(:_restart_config_repr, arguments...; keywords...)
 end
 
-"""Forward `_restart_config_sha256` to the active Wannierization extension."""
-function _restart_config_sha256(arguments...; keywords...)
-    return _call_wannierization_extension(:_restart_config_sha256, arguments...; keywords...)
-end
-
-"""Forward `_restart_config_sha256_pre_v2_11` to the active Wannierization extension."""
-function _restart_config_sha256_pre_v2_11(arguments...; keywords...)
-    return _call_wannierization_extension(
-        :_restart_config_sha256_pre_v2_11,
-        arguments...;
-        keywords...,
-    )
-end
-
-"""Forward `_restart_config_sha256_pre_v2_6` to the active Wannierization extension."""
-function _restart_config_sha256_pre_v2_6(arguments...; keywords...)
-    return _call_wannierization_extension(
-        :_restart_config_sha256_pre_v2_6,
-        arguments...;
-        keywords...,
-    )
-end
-
-"""Forward `_restart_config_sha256_pre_v2_7` to the active Wannierization extension."""
-function _restart_config_sha256_pre_v2_7(arguments...; keywords...)
-    return _call_wannierization_extension(
-        :_restart_config_sha256_pre_v2_7,
-        arguments...;
-        keywords...,
-    )
-end
-
 """Forward `_restart_matrix_field` to the active Wannierization extension."""
 function _restart_matrix_field(arguments...; keywords...)
     return _call_wannierization_extension(:_restart_matrix_field, arguments...; keywords...)
@@ -1215,11 +1191,6 @@ function _restore_expanded_frames_to_subspaces(arguments...; keywords...)
         arguments...;
         keywords...,
     )
-end
-
-"""Forward `_riemannian_lbfgs_direction` to the active Wannierization extension."""
-function _riemannian_lbfgs_direction(arguments...; keywords...)
-    return _call_wannierization_extension(:_riemannian_lbfgs_direction, arguments...; keywords...)
 end
 
 """Forward `_rotate_hermitian_field_entry` to the active Wannierization extension."""
@@ -1253,11 +1224,6 @@ end
 """Forward `_sha256_file` to the active Wannierization extension."""
 function _sha256_file(arguments...; keywords...)
     return _call_wannierization_extension(:sha256_file, arguments...; keywords...)
-end
-
-"""Forward `_shrunken_acceleration_mixing` to the active Wannierization extension."""
-function _shrunken_acceleration_mixing(arguments...; keywords...)
-    return _call_wannierization_extension(:_shrunken_acceleration_mixing, arguments...; keywords...)
 end
 
 """Forward `_solve_symmetry_adapted_wannierization` to the active Wannierization extension."""
@@ -1372,213 +1338,217 @@ function _validated_hermitian_spectrum(arguments...; keywords...)
     return _call_wannierization_extension(:_validated_hermitian_spectrum, arguments...; keywords...)
 end
 
-"""Forward `_wannier90_reference_amn_polar` to the active Wannierization extension."""
-function _wannier90_reference_amn_polar(arguments...; keywords...)
+"""Forward `_recursive_localization_amn_polar` to the active Wannierization extension."""
+function _recursive_localization_amn_polar(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_amn_polar,
+        :_recursive_localization_amn_polar,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_b_cartesian` to the active Wannierization extension."""
-function _wannier90_reference_b_cartesian(arguments...; keywords...)
+"""Forward `_recursive_localization_b_cartesian` to the active Wannierization extension."""
+function _recursive_localization_b_cartesian(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_b_cartesian,
+        :_recursive_localization_b_cartesian,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_complex_exponential` to the active Wannierization extension."""
-function _wannier90_reference_complex_exponential(arguments...; keywords...)
+"""Forward `_recursive_localization_complex_exponential` to the active Wannierization extension."""
+function _recursive_localization_complex_exponential(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_complex_exponential,
+        :_recursive_localization_complex_exponential,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_dis_project` to the active Wannierization extension."""
-function _wannier90_reference_dis_project(arguments...; keywords...)
+"""Forward `_recursive_localization_dis_project` to the active Wannierization extension."""
+function _recursive_localization_dis_project(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_dis_project,
+        :_recursive_localization_dis_project,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_edge_b_cartesian` to the active Wannierization extension."""
-function _wannier90_reference_edge_b_cartesian(arguments...; keywords...)
+"""Forward `_recursive_localization_edge_b_cartesian` to the active Wannierization extension."""
+function _recursive_localization_edge_b_cartesian(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_edge_b_cartesian,
+        :_recursive_localization_edge_b_cartesian,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_finite_difference_weights` to the active Wannierization extension."""
-function _wannier90_reference_finite_difference_weights(arguments...; keywords...)
+"""Forward `_recursive_localization_finite_difference_weights` to the active Wannierization extension."""
+function _recursive_localization_finite_difference_weights(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_finite_difference_weights,
+        :_recursive_localization_finite_difference_weights,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_gfortran_column_conjugate_product` to the active Wannierization extension."""
-function _wannier90_reference_gfortran_column_conjugate_product(arguments...; keywords...)
+"""Forward `_recursive_localization_ordered_column_conjugate_product` to the active Wannierization extension."""
+function _recursive_localization_ordered_column_conjugate_product(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_gfortran_column_conjugate_product,
+        :_recursive_localization_ordered_column_conjugate_product,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_gfortran_column_division` to the active Wannierization extension."""
-function _wannier90_reference_gfortran_column_division(arguments...; keywords...)
+"""Forward `_recursive_localization_ordered_column_division` to the active Wannierization extension."""
+function _recursive_localization_ordered_column_division(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_gfortran_column_division,
+        :_recursive_localization_ordered_column_division,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_gfortran_complex_product` to the active Wannierization extension."""
-function _wannier90_reference_gfortran_complex_product(arguments...; keywords...)
+"""Forward `_recursive_localization_ordered_complex_product` to the active Wannierization extension."""
+function _recursive_localization_ordered_complex_product(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_gfortran_complex_product,
+        :_recursive_localization_ordered_complex_product,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_gfortran_magnitude_squared` to the active Wannierization extension."""
-function _wannier90_reference_gfortran_magnitude_squared(arguments...; keywords...)
+"""Forward `_recursive_localization_ordered_magnitude_squared` to the active Wannierization extension."""
+function _recursive_localization_ordered_magnitude_squared(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_gfortran_magnitude_squared,
+        :_recursive_localization_ordered_magnitude_squared,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_gfortran_phase_column_product` to the active Wannierization extension."""
-function _wannier90_reference_gfortran_phase_column_product(arguments...; keywords...)
+"""Forward `_recursive_localization_ordered_phase_column_product` to the active Wannierization extension."""
+function _recursive_localization_ordered_phase_column_product(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_gfortran_phase_column_product,
+        :_recursive_localization_ordered_phase_column_product,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_gfortran_scalar_magnitude_squared` to the active Wannierization extension."""
-function _wannier90_reference_gfortran_scalar_magnitude_squared(arguments...; keywords...)
+"""Forward `_recursive_localization_ordered_scalar_magnitude_squared` to the active Wannierization extension."""
+function _recursive_localization_ordered_scalar_magnitude_squared(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_gfortran_scalar_magnitude_squared,
+        :_recursive_localization_ordered_scalar_magnitude_squared,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_gradient_center_accumulate` to the active Wannierization extension."""
-function _wannier90_reference_gradient_center_accumulate(arguments...; keywords...)
+"""Forward `_recursive_localization_gradient_center_accumulate` to the active Wannierization extension."""
+function _recursive_localization_gradient_center_accumulate(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_gradient_center_accumulate,
+        :_recursive_localization_gradient_center_accumulate,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_invariant_spread` to the active Wannierization extension."""
-function _wannier90_reference_invariant_spread(arguments...; keywords...)
+"""Forward `_recursive_localization_invariant_spread` to the active Wannierization extension."""
+function _recursive_localization_invariant_spread(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_invariant_spread,
+        :_recursive_localization_invariant_spread,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_maximum_subspace_result` to the active Wannierization extension."""
-function _wannier90_reference_maximum_subspace_result(arguments...; keywords...)
+"""Forward `_recursive_localization_maximum_subspace_result` to the active Wannierization extension."""
+function _recursive_localization_maximum_subspace_result(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_maximum_subspace_result,
+        :_recursive_localization_maximum_subspace_result,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_objective_center_accumulate` to the active Wannierization extension."""
-function _wannier90_reference_objective_center_accumulate(arguments...; keywords...)
+"""Forward `_recursive_localization_objective_center_accumulate` to the active Wannierization extension."""
+function _recursive_localization_objective_center_accumulate(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_objective_center_accumulate,
+        :_recursive_localization_objective_center_accumulate,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_omega_d_accumulate` to the active Wannierization extension."""
-function _wannier90_reference_omega_d_accumulate(arguments...; keywords...)
+"""Forward `_recursive_localization_omega_d_accumulate` to the active Wannierization extension."""
+function _recursive_localization_omega_d_accumulate(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_omega_d_accumulate,
+        :_recursive_localization_omega_d_accumulate,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_optimal_step` to the active Wannierization extension."""
-function _wannier90_reference_optimal_step(arguments...; keywords...)
+"""Forward `_recursive_localization_optimal_step` to the active Wannierization extension."""
+function _recursive_localization_optimal_step(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_optimal_step,
+        :_recursive_localization_optimal_step,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_phase` to the active Wannierization extension."""
-function _wannier90_reference_phase(arguments...; keywords...)
-    return _call_wannierization_extension(:_wannier90_reference_phase, arguments...; keywords...)
+"""Forward `_recursive_localization_phase` to the active Wannierization extension."""
+function _recursive_localization_phase(arguments...; keywords...)
+    return _call_wannierization_extension(:_recursive_localization_phase, arguments...; keywords...)
 end
 
-"""Forward `_wannier90_reference_search_direction` to the active Wannierization extension."""
-function _wannier90_reference_search_direction(arguments...; keywords...)
+"""Forward `_recursive_localization_search_direction` to the active Wannierization extension."""
+function _recursive_localization_search_direction(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_search_direction,
+        :_recursive_localization_search_direction,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_unitary_step` to the active Wannierization extension."""
-function _wannier90_reference_unitary_step(arguments...; keywords...)
+"""Forward `_recursive_localization_unitary_step` to the active Wannierization extension."""
+function _recursive_localization_unitary_step(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_unitary_step,
+        :_recursive_localization_unitary_step,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_weight_total` to the active Wannierization extension."""
-function _wannier90_reference_weight_total(arguments...; keywords...)
+"""Forward `_recursive_localization_weight_total` to the active Wannierization extension."""
+function _recursive_localization_weight_total(arguments...; keywords...)
     return _call_wannierization_extension(
-        :_wannier90_reference_weight_total,
+        :_recursive_localization_weight_total,
         arguments...;
         keywords...,
     )
 end
 
-"""Forward `_wannier90_reference_zdot` to the active Wannierization extension."""
-function _wannier90_reference_zdot(arguments...; keywords...)
-    return _call_wannierization_extension(:_wannier90_reference_zdot, arguments...; keywords...)
+"""Forward `_recursive_localization_zdot` to the active Wannierization extension."""
+function _recursive_localization_zdot(arguments...; keywords...)
+    return _call_wannierization_extension(:_recursive_localization_zdot, arguments...; keywords...)
 end
 
-"""Forward `_wannier90_reference_zgemm` to the active Wannierization extension."""
-function _wannier90_reference_zgemm(arguments...; keywords...)
-    return _call_wannierization_extension(:_wannier90_reference_zgemm, arguments...; keywords...)
+"""Forward `_recursive_localization_zgemm` to the active Wannierization extension."""
+function _recursive_localization_zgemm(arguments...; keywords...)
+    return _call_wannierization_extension(:_recursive_localization_zgemm, arguments...; keywords...)
 end
 
-"""Forward `_wannier90_reference_zhpevx` to the active Wannierization extension."""
-function _wannier90_reference_zhpevx(arguments...; keywords...)
-    return _call_wannierization_extension(:_wannier90_reference_zhpevx, arguments...; keywords...)
+"""Forward `_recursive_localization_zhpevx` to the active Wannierization extension."""
+function _recursive_localization_zhpevx(arguments...; keywords...)
+    return _call_wannierization_extension(
+        :_recursive_localization_zhpevx,
+        arguments...;
+        keywords...,
+    )
 end
 
 """Forward `_wannier_gauge_link_diagnostics` to the active Wannierization extension."""
@@ -1588,4 +1558,109 @@ function _wannier_gauge_link_diagnostics(arguments...; keywords...)
         arguments...;
         keywords...,
     )
+end
+
+"""Forward `_mv_branch_orbit_definition` through the declared internal test bridge."""
+function _mv_branch_orbit_definition(arguments...; keywords...)
+    return _call_wannierization_extension(:_mv_branch_orbit_definition, arguments...; keywords...)
+end
+
+"""Forward `_u_branch_definition` through the declared internal test bridge."""
+function _u_branch_definition(arguments...; keywords...)
+    return _call_wannierization_extension(:_u_branch_definition, arguments...; keywords...)
+end
+
+"""Forward `_validate_u_branch_definition` through the declared internal test bridge."""
+function _validate_u_branch_definition(arguments...; keywords...)
+    return _call_wannierization_extension(:_validate_u_branch_definition, arguments...; keywords...)
+end
+
+"""Forward `_write_restart_branch_definition_hdf5` through the declared internal test bridge."""
+function _write_restart_branch_definition_hdf5(arguments...; keywords...)
+    return _call_wannierization_extension(
+        :_write_restart_branch_definition_hdf5,
+        arguments...;
+        keywords...,
+    )
+end
+
+"""Forward `_read_restart_branch_definition_hdf5` through the declared internal test bridge."""
+function _read_restart_branch_definition_hdf5(arguments...; keywords...)
+    return _call_wannierization_extension(
+        :_read_restart_branch_definition_hdf5,
+        arguments...;
+        keywords...,
+    )
+end
+
+"""Forward `_restart_input_definition` through the declared internal test bridge."""
+function _restart_input_definition(arguments...; keywords...)
+    return _call_wannierization_extension(:_restart_input_definition, arguments...; keywords...)
+end
+
+"""Forward shared native publication through the internal test bridge."""
+function _publish_native_input_views(arguments...; keywords...)
+    return _call_wannierization_extension(:_publish_native_input_views, arguments...; keywords...)
+end
+
+"""Forward shared native adoption through the internal test bridge."""
+function _adopt_native_input_views(arguments...; keywords...)
+    return _call_wannierization_extension(:_adopt_native_input_views, arguments...; keywords...)
+end
+
+"""Forward the collective preparation phase through the internal test bridge."""
+function _native_input_reuse_phase(arguments...; keywords...)
+    return _call_wannierization_extension(:_native_input_reuse_phase, arguments...; keywords...)
+end
+
+"""Forward the shared backing lifetime check through the internal test bridge."""
+function _validate_native_input_view_lifetimes(arguments...; keywords...)
+    return _call_wannierization_extension(
+        :_validate_native_input_view_lifetimes,
+        arguments...;
+        keywords...,
+    )
+end
+
+"""Validate cold text-workflow options through the existing constructor validator; no solve or MPI initialization."""
+function validate_text_input_config(config::WannierizationConfig)
+    return _validate_wannierization_config(config)
+end
+
+"""Read actual QE point headers and physical-reader structure without coefficient decoding."""
+function native_qe_wannier_metadata(source::SymmetryFoundation.QuantumEspressoWavefunctionSource)
+    return _call_wannierization_extension(:native_qe_wannier_metadata, source)
+end
+
+"""Read source-bound VASP point/structure metadata without generating PAW matrices."""
+function native_vasp_wannier_metadata(source::SymmetryFoundation.VASPWavefunctionSource)
+    return _call_wannierization_extension(:native_vasp_wannier_metadata, source)
+end
+
+"""Copy grouped input leaves for the typed task frontend using the existing constructor.
+
+Unchanged leaves, constructor validation, and reference ownership are retained.
+This qualified integration port is not exported.
+"""
+function replace_wannierization_input(input::WannierizationInputConfig, replacements::NamedTuple)
+    return _replace_wannierization_group(input, replacements)
+end
+
+"""Copy declared configuration groups for application-owned transient output paths.
+
+Delegate to the original replacement implementation; numerical controls and all
+constructor checks remain unchanged. This qualified port is not exported.
+"""
+function reconfigure_wannierization(config::WannierizationConfig; keywords...)
+    return _replace_wannierization_config(config; keywords...)
+end
+
+"""Read the existing WIN mesh for external input-format migration without solving.
+
+The extension owns the parser; the activation order, latest-world dispatch,
+returned values, and parser errors are retained at this non-exported boundary.
+"""
+function read_wannierization_win_mesh(filename::AbstractString)
+    extension, _ = _load_wannierization_extension!()
+    return Base.invokelatest(extension.SolverCheckpoint._read_wannierization_win_mesh, filename)
 end

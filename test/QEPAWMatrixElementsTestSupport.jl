@@ -194,21 +194,27 @@ function copy_qe_paw_oracles(result, oracle_directory::AbstractString)
     return (mmn = mmn, amn = amn)
 end
 
-"""Bind oracle matrices to all authoritative QE/NNKP source hashes."""
-function write_qe_paw_oracle_provenance(
-    oracle_directory::AbstractString,
-    input_sha256::Dict{String, String},
-)
+"""Bind copied oracle matrices to their actual complete QE source and topology."""
+function write_qe_paw_oracle_provenance(oracle_directory::AbstractString, result)
+    parent = first(WannierNLQG.Wannierization._load_wannierization_extension!())
+    support = parent.PAWMatrixElements
+    definition = HDF5.h5open(result.artifacts["provenance_hdf5"], "r") do handle
+        Base.invokelatest(support.read_scientific_input_reference_hdf5, handle, "source_definition")
+    end
+    topology_definition = result.input_sha256["NNKP"]
     filename = joinpath(oracle_directory, "oracle_qe_paw.provenance.h5")
     HDF5.h5open(filename, "w") do handle
         attributes = HDF5.attributes(handle)
         attributes["schema"] = "WannierNLQG.qe_paw_oracle_provenance"
-        attributes["schema_version"] = "1.0"
-        hashes = HDF5.create_group(handle, "input_sha256")
-        for key in sort!(collect(keys(input_sha256)))
-            startswith(key, "ORACLE_") && continue
-            HDF5.attributes(hashes)[key] = input_sha256[key]
-        end
+        attributes["schema_version"] = "2.0"
+        attributes["content_authentication"] = "NOT_PERFORMED"
+        attributes["topology_definition"] = topology_definition
+        Base.invokelatest(
+            support.write_scientific_input_reference_hdf5,
+            handle,
+            "source_definition",
+            definition,
+        )
     end
     return filename
 end

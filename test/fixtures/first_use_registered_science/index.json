@@ -212,12 +212,6 @@
       "sha256": "cbe571526be3c07b02a9cabb395a367fa5103413d4db9c29b19860ed58c94c4e"
     },
     {
-      "id": "kslice__quantum_hermitian_connection__geometric_loop",
-      "ranks": 1,
-      "file": "r1_36.json",
-      "sha256": "a4b9dfebc6e5fc965fbab41fbd59447a4903b0cc016c83d426f3a164579e1bd4"
-    },
-    {
       "id": "kslice__quantum_hermitian_connection__projector",
       "ranks": 1,
       "file": "r1_37.json",
@@ -522,12 +516,6 @@
       "ranks": 12,
       "file": "r12_35.json",
       "sha256": "9539771de8a512fbdd5d87c141697d2728acb3a108619e7252452ee52c3a2340"
-    },
-    {
-      "id": "kslice__quantum_hermitian_connection__geometric_loop",
-      "ranks": 12,
-      "file": "r12_36.json",
-      "sha256": "42eff7920389209bd2eee3dd5b72155a27c659b73ad733e1fff7c5895a9c7935"
     },
     {
       "id": "kslice__quantum_hermitian_connection__projector",

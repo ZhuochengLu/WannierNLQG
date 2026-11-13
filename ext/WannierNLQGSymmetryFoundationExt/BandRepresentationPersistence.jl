@@ -1,3 +1,5 @@
+include("../shared/ScientificInputReferenceHDF5.jl")
+
 const BAND_REPRESENTATION_SCHEMA = "WannierNLQG.band_representation"
 const BAND_REPRESENTATION_SCHEMA_VERSION = "1.0"
 
@@ -12,6 +14,77 @@ const BAND_REPRESENTATION_READABLE_SCHEMA_VERSIONS = ("1.0",)
 const _BAND_LEGACY_AUTHORITY_KEYS =
     ("symmetrized_hamiltonian_candidate", "symmetrized_target_subspace_candidate")
 const _BAND_SUPPORTED_AUTHORITY_KEYS = ("native_dft", "symmetrized_dft_hamiltonian")
+
+# Recompute the persisted complete policy definition from its actual scalar
+# parameters. This is the same canonical value encoding as the gauge producer;
+# no content certificate is inferred or accepted here.
+function _band_validate_gauge_policy_values(conventions, gauge_metadata, kind)
+    policy_key = kind == :block ? "block_partition_policy" : "discrete_hamiltonian_correction"
+    policy = get(conventions, policy_key, "")
+    keys = if kind == :block && policy == "fixed_gap"
+        ("block_partition_policy", "block_partition_max_gap_ev")
+    elseif kind == :block && policy == "adaptive_evidence"
+        (
+            "block_partition_policy",
+            "block_partition_soft_gap_ev",
+            "block_partition_hard_edge_gap_ev",
+            "block_partition_hard_component_span_ev",
+            "block_partition_max_component_bands",
+            "block_partition_max_search_states",
+        )
+    elseif kind == :block && policy == "hamiltonian_weighted_far_band"
+        (
+            "block_partition_policy",
+            "block_partition_near_gap_ev",
+            "block_partition_hard_component_span_ev",
+            "block_partition_max_component_bands",
+            "far_pair_hamiltonian_residual_ev",
+            "far_operator_hamiltonian_residual_ev",
+            "far_source_column_l2_hamiltonian_residual_ev",
+            "far_normalized_frobenius_hamiltonian_residual_ev",
+            "cancellation_accumulation_absolute",
+            "cancellation_inverse_absolute",
+            "cancellation_orbit_absolute",
+            "cancellation_bigfloat_precision_bits",
+            "pre_gauge_far_cumulative_mode",
+            "post_gauge_hamiltonian_covariance_policy",
+        )
+    elseif kind == :correction && policy == "none"
+        ("discrete_hamiltonian_correction", "controlled_symmetrization_qualification_mode")
+    elseif kind == :correction && policy == "far_band_covariance_correction"
+        (
+            "discrete_hamiltonian_correction",
+            "controlled_symmetrization_method",
+            "controlled_symmetrization_sewing_mutation",
+            "controlled_symmetrization_qualification_mode",
+            "controlled_symmetrization_far_rotation_operator_threshold",
+            "controlled_symmetrization_far_rotation_normalized_frobenius_threshold",
+            "controlled_symmetrization_hamiltonian_correction_operator_ev_threshold",
+            "controlled_symmetrization_hamiltonian_correction_normalized_frobenius_ev_threshold",
+        )
+    else
+        throw(ArgumentError("unsupported current gauge policy: $(policy_key)=$(policy)"))
+    end
+    parameters=Dict{String, String}()
+    for key in keys
+        value=get(conventions, key, "")
+        isempty(value) &&
+            throw(ArgumentError("gauge policy is missing mathematical parameter $(key)"))
+        get(gauge_metadata, key, "") == value ||
+            throw(ArgumentError("gauge policy mathematical parameter differs: $(key)"))
+        parameters[key]=value
+    end
+    definition_key =
+        kind == :block ? "block_partition_policy_definition" :
+        "discrete_hamiltonian_correction_definition"
+    buffer=IOBuffer()
+    WannierNLQG.IO.write_native_definition_value(buffer, parameters)
+    actual=bytes2hex(take!(buffer))
+    get(conventions, definition_key, "") == actual &&
+    get(gauge_metadata, definition_key, "") == actual ||
+        throw(ArgumentError("gauge policy complete definition differs: $(definition_key)"))
+    return nothing
+end
 
 # Reject retired authority identities at every representation persistence boundary.
 function _band_validate_authority_key(authority::AbstractString)
@@ -41,23 +114,41 @@ function _band_validate_target_subspace_contract(conventions::Dict{String, Strin
     get(conventions, "parent_audit_policy", "") == "audit_only" || throw(
         ArgumentError("TARGET_SUBSPACE_CONTRACT_MISMATCH: parent_audit_policy must be audit_only"),
     )
-    contract_sha256 = get(conventions, "target_subspace_contract_sha256", "")
-    occursin(r"^[0-9a-f]{64}$", contract_sha256) || throw(
-        ArgumentError(
-            "TARGET_SUBSPACE_CONTRACT_MISMATCH: target_subspace_contract_sha256 is invalid",
-        ),
-    )
+    no_content_authentication =
+        get(conventions, "content_authentication", "SHA256") == "NOT_PERFORMED"
+    if no_content_authentication
+        definition = get(conventions, "target_subspace_contract_definition", "")
+        !isempty(definition) &&
+        iseven(length(definition)) &&
+        occursin(r"^[0-9a-f]+$", definition) || throw(
+            ArgumentError(
+                "TARGET_SUBSPACE_CONTRACT_MISMATCH: complete target definition is missing",
+            ),
+        )
+    else
+        contract_sha256 = get(conventions, "target_subspace_contract_sha256", "")
+        occursin(r"^[0-9a-f]{64}$", contract_sha256) ||
+            throw(ArgumentError("TARGET_SUBSPACE_CONTRACT_MISMATCH: target digest is invalid"))
+    end
     get(conventions, "target_leakage_semantics", "") == "physical_paw_s_leakage_weight_v1" || throw(
         ArgumentError(
             "UNSUPPORTED_LEGACY_TARGET_LEAKAGE_SEMANTICS: target representation lacks PAW-S weight semantics",
         ),
     )
-    formula_sha256 = get(conventions, "target_leakage_formula_sha256", "")
-    formula_sha256 == "bac0eb8b0df105c221d0e5a253be1890ac7933e51c776bf9aa760fb91362a3b7" || throw(
-        ArgumentError(
-            "TARGET_SUBSPACE_CONTRACT_MISMATCH: target leakage formula SHA-256 is unsupported",
-        ),
-    )
+    if no_content_authentication
+        expected =
+            "W_state=max_i(R' S R)_ii;W_reconstruction=lambda_max(R' S R);" *
+            "W_T_to_C=opnorm(B_CT,2)^2;W_C_to_T=opnorm(B_TC,2)^2;" *
+            "rows=target;columns=source"
+        get(conventions, "target_leakage_formula_definition", "") == expected || throw(
+            ArgumentError("TARGET_SUBSPACE_CONTRACT_MISMATCH: target leakage formula differs"),
+        )
+    else
+        get(conventions, "target_leakage_formula_sha256", "") ==
+        "bac0eb8b0df105c221d0e5a253be1890ac7933e51c776bf9aa760fb91362a3b7" || throw(
+            ArgumentError("TARGET_SUBSPACE_CONTRACT_MISMATCH: unsupported legacy formula identity"),
+        )
+    end
     threshold = tryparse(Float64, get(conventions, "target_leakage_threshold", ""))
     threshold !== nothing && isfinite(something(threshold)) && something(threshold) > 0.0 || throw(
         ArgumentError(
@@ -96,7 +187,7 @@ struct BandRepresentationValidation
     maximum_theta_residual::Float64
     oracle_excess_group_law_residuals::Union{Nothing, NTuple{4, Float64}}
     oracle_sha256::Union{Nothing, String}
-    representation_sha256::String
+    representation_sha256::Union{Nothing, String}
     diagnostics::Vector{String}
 end
 
@@ -202,7 +293,7 @@ end
 
 # Require the only public wire identity and the complete current layout. This
 # is shared by all three read entry points; historical 1.0 gets no special path.
-function _require_public_band_header(handle)
+function _require_public_band_header(handle; content_authentication::Bool = true)
     String(_required_band_attribute(handle, "schema")) == BAND_REPRESENTATION_SCHEMA ||
         throw(ArgumentError("HDF5 file is not a WannierNLQG band representation"))
     version = String(_required_band_attribute(handle, "schema_version"))
@@ -211,7 +302,7 @@ function _require_public_band_header(handle)
             "unsupported band-representation schema $(version); only public 1.0 is supported",
         ),
     )
-    for key in ("source_code", "spinor", "preparation_digest")
+    for key in ("source_code", "spinor")
         _required_band_attribute(handle, key)
     end
     for group in (
@@ -233,6 +324,13 @@ function _require_public_band_header(handle)
     )
         haskey(handle, group) ||
             throw(ArgumentError("public band representation is missing $(group)"))
+    end
+    if content_authentication
+        _required_band_attribute(handle, "preparation_digest")
+    else
+        String(_required_band_attribute(handle["compatibility"], "content_authentication")) ==
+        "NOT_PERFORMED" ||
+            throw(ArgumentError("BAND_REPRESENTATION_EXPLICIT_CONTENT_MIGRATION_REQUIRED"))
     end
     return version
 end
@@ -805,6 +903,7 @@ function _write_band_v14_preparation_metadata(
     handle,
     representation::BandRepresentation;
     inventory = nothing,
+    content_authentication::Bool = true,
     qualification_scope = nothing,
     qualification_outer_mask = nothing,
     qualification_frozen_mask = nothing,
@@ -828,8 +927,8 @@ function _write_band_v14_preparation_metadata(
     else
         _band_v14_construction_raw_diagnostics(raw_diagnostics, representation)
     end
-    outer_digest = qualification_mask_sha256(outer)
-    frozen_digest = qualification_mask_sha256(frozen)
+    outer_digest = content_authentication ? qualification_mask_sha256(outer) : nothing
+    frozen_digest = content_authentication ? qualification_mask_sha256(frozen) : nothing
     inventory_group = HDF5.create_group(handle, "inventory")
     inventory_attributes = HDF5.attributes(inventory_group)
     inventory_attributes["status"] = inventory === nothing ? "UNAVAILABLE" : "AVAILABLE"
@@ -844,8 +943,12 @@ function _write_band_v14_preparation_metadata(
     end
     scope_group = HDF5.create_group(handle, "qualification_scope")
     HDF5.attributes(scope_group)["diagnostic_status"] = "AVAILABLE"
-    HDF5.attributes(scope_group)["outer_mask_sha256"] = outer_digest
-    HDF5.attributes(scope_group)["frozen_mask_sha256"] = frozen_digest
+    HDF5.attributes(scope_group)["content_authentication"] =
+        content_authentication ? "SHA256" : "NOT_PERFORMED"
+    if content_authentication
+        HDF5.attributes(scope_group)["outer_mask_sha256"] = outer_digest
+        HDF5.attributes(scope_group)["frozen_mask_sha256"] = frozen_digest
+    end
     scope_group["outer_mask"] = Matrix{UInt8}(outer)
     scope_group["frozen_mask"] = Matrix{UInt8}(frozen)
     _write_band_axis_order(scope_group["outer_mask"], "band,kpoint")
@@ -889,15 +992,17 @@ function _write_band_v14_preparation_metadata(
     HDF5.attributes(policy)["requested"] = String(requested_policy)
     HDF5.attributes(policy)["effective"] = String(effective_policy)
     HDF5.attributes(policy)["symmetry_tolerance_status"] = String(symmetry_tolerance_status)
-    HDF5.attributes(handle)["preparation_digest"] = _band_preparation_metadata_digest(
-        inventory,
-        diagnostics,
-        outer_digest,
-        frozen_digest,
-        requested_policy,
-        effective_policy,
-        symmetry_tolerance_status,
-    )
+    if content_authentication
+        HDF5.attributes(handle)["preparation_digest"] = _band_preparation_metadata_digest(
+            inventory,
+            diagnostics,
+            outer_digest,
+            frozen_digest,
+            requested_policy,
+            effective_policy,
+            symmetry_tolerance_status,
+        )
+    end
     return nothing
 end
 
@@ -906,6 +1011,7 @@ function write_band_representation_hdf5(
     filename::AbstractString,
     representation::BandRepresentation;
     validation = nothing,
+    content_authentication::Bool = true,
     overwrite::Bool = false,
     inventory = nothing,
     qualification_scope = nothing,
@@ -933,6 +1039,38 @@ function write_band_representation_hdf5(
         qualification_outer_mask = scoped_outer_mask
         qualification_frozen_mask = scoped_frozen_mask
     end
+    # Validate the actual serialized masks before publishing a target artifact.
+    # Complete target definitions are mathematical values, not approval labels.
+    # Every reader constructs BandRepresentationQualificationScope, whose
+    # mathematical masks require frozen ⊆ outer even for a full-parent model.
+    # Reject before atomic overwrite instead of publishing unreadable data.
+    default_outer, default_frozen = _band_v14_masks(representation)
+    outer =
+        qualification_outer_mask === nothing ? default_outer : BitMatrix(qualification_outer_mask)
+    frozen =
+        qualification_frozen_mask === nothing ? default_frozen :
+        BitMatrix(qualification_frozen_mask)
+    size(outer) == size(representation.energies_ev) == size(frozen) || throw(
+        ArgumentError("TARGET_SUBSPACE_CONTRACT_MISMATCH: qualification-mask dimensions differ"),
+    )
+    all((.!frozen) .| outer) ||
+        throw(ArgumentError("TARGET_SUBSPACE_CONTRACT_MISMATCH: frozen mask escapes outer mask"))
+    qualification_outer_mask = outer
+    qualification_frozen_mask = frozen
+    if get(representation.conventions, "qualification_scope", "full_parent") == "target_subspace"
+        if !content_authentication
+            for (name, mask) in (("outer", outer), ("frozen", frozen))
+                actual = WannierNLQG.SymmetryFoundation.qualification_mask_definition(mask)
+                get(representation.conventions, "$(name)_mask_definition", "") == actual || throw(
+                    ArgumentError(
+                        "TARGET_SUBSPACE_CONTRACT_MISMATCH: $(name) mask actual values differ",
+                    ),
+                )
+            end
+        end
+        qualification_outer_mask = outer
+        qualification_frozen_mask = frozen
+    end
     output_filename = abspath(filename)
     split_band_residuals =
         validation !== nothing && hasproperty(validation, :band_group_law_residuals) ?
@@ -946,6 +1084,9 @@ function write_band_representation_hdf5(
     target_worst_cases =
         validation !== nothing && hasproperty(validation, :target_group_law_worst_cases) ?
         getproperty(validation, :target_group_law_worst_cases) : nothing
+    qualification_record =
+        validation !== nothing && hasproperty(validation, :qualification_record) ?
+        getproperty(validation, :qualification_record) : nothing
     if validation !== nothing && !(validation isa BandRepresentationValidation)
         if hasproperty(validation, :passed) && !Bool(getproperty(validation, :passed))
             root, extension = splitext(output_filename)
@@ -963,10 +1104,21 @@ function write_band_representation_hdf5(
             :maximum_reciprocal_shift_residual,
             :theta_squared_residual,
             :maximum_required_block_unitarity_residual,
-            :representation_sha256,
         )
         all(field -> hasproperty(validation, field), required) ||
             throw(ArgumentError("unsupported band-representation validation object"))
+        if content_authentication
+            hasproperty(validation, :representation_sha256) ||
+                throw(ArgumentError("validation has no content authentication binding"))
+        else
+            hasproperty(validation, :representation_definition) &&
+            getproperty(validation, :representation_definition) !== nothing &&
+            getproperty(validation, :representation_definition) ==
+            WannierNLQG.SymmetryFoundation.band_representation_input_definition(representation) ||
+                throw(
+                    ArgumentError("validation has no matching complete representation definition"),
+                )
+        end
         legacy_diagnostics =
             hasproperty(validation, :diagnostics) ?
             [sprint(show, diagnostic) for diagnostic in getproperty(validation, :diagnostics)] :
@@ -987,7 +1139,8 @@ function write_band_representation_hdf5(
             Float64(getproperty(validation, :theta_squared_residual)),
             oracle_excess === nothing ? nothing : Tuple(Float64.(collect(oracle_excess))),
             oracle_sha === nothing ? nothing : String(oracle_sha),
-            String(getproperty(validation, :representation_sha256)),
+            content_authentication ? String(getproperty(validation, :representation_sha256)) :
+            nothing,
             legacy_diagnostics,
         )
     end
@@ -998,7 +1151,8 @@ function write_band_representation_hdf5(
         endswith(root, ".incompatible") || (root *= ".incompatible")
         output_filename = root * (isempty(extension) ? ".h5" : extension)
     end
-    validation === nothing ||
+    !content_authentication ||
+        validation === nothing ||
         validation.representation_sha256 == _band_representation_sha256(representation) ||
         throw(ArgumentError("validation belongs to a different representation"))
     HDF5.enable_complex_support()
@@ -1102,6 +1256,13 @@ function write_band_representation_hdf5(
                 Dict(
                     key => value for (key, value) in representation.conventions if
                     startswith(key, "block_partition_") ||
+                        startswith(key, "far_") ||
+                        startswith(key, "cancellation_") ||
+                        startswith(key, "discrete_hamiltonian_correction_") ||
+                        key in (
+                            "pre_gauge_far_cumulative_mode",
+                            "post_gauge_hamiltonian_covariance_policy",
+                        ) ||
                         startswith(key, "controlled_symmetrization_") ||
                         startswith(key, "energy_shift_") ||
                         key in (
@@ -1117,8 +1278,10 @@ function write_band_representation_hdf5(
                             "target_authority",
                             "parent_audit_policy",
                             "target_subspace_contract_sha256",
+                            "target_subspace_contract_definition",
                             "target_leakage_semantics",
                             "target_leakage_formula_sha256",
+                            "target_leakage_formula_definition",
                             "target_leakage_threshold",
                             "target_anchor",
                             "target_complement_completion",
@@ -1149,6 +1312,18 @@ function write_band_representation_hdf5(
                 HDF5.create_group(handle, "input_sha256"),
                 representation.input_sha256,
             )
+            if !isempty(representation.input_definitions)
+                references=HDF5.create_group(handle, "complete_input_references")
+                for key in sort!(collect(keys(representation.input_definitions)))
+                    occursin(r"^[A-Za-z0-9_-]+$", key) ||
+                        throw(ArgumentError("INVALID_SOURCE_REFERENCE_KEY"))
+                    write_scientific_input_reference_hdf5(
+                        references,
+                        key,
+                        representation.input_definitions[key],
+                    )
+                end
+            end
             products = HDF5.create_group(handle, "products")
             HDF5.attributes(products)["identity_operation"] = table.identity_index
             HDF5.attributes(products)["theta_operation"] = something(table.theta_index, 0)
@@ -1184,8 +1359,12 @@ function write_band_representation_hdf5(
             compatibility_attributes["supported_contract"] = true
             compatibility_attributes["tolerance"] =
                 validation === nothing ? NaN : validation.absolute_tolerance
-            compatibility_attributes["representation_sha256"] =
-                _band_representation_sha256(representation)
+            if content_authentication
+                compatibility_attributes["representation_sha256"] =
+                    _band_representation_sha256(representation)
+            end
+            compatibility_attributes["content_authentication"] =
+                content_authentication ? "SHA256" : "NOT_PERFORMED"
             compatibility_attributes["metadata_origin"] = "computed_native_julia"
             compatibility_attributes["validation_profile"] = "empirical"
             compatibility_attributes["maximum_required_block_unitarity_residual"] =
@@ -1195,9 +1374,13 @@ function write_band_representation_hdf5(
                 compatibility_attributes["physical_representation_status"] = "NOT_RUN"
                 compatibility_attributes["physical_representation_reason"] = "nontrivial physical band sewing overlaps are unavailable; WIN target actions alone do not supply them"
             end
-            compatibility_attributes["qualification_sha256"] =
-                validation === nothing || validation.oracle_sha256 === nothing ? "" :
-                something(validation.oracle_sha256)
+            if content_authentication
+                compatibility_attributes["qualification_sha256"] =
+                    validation === nothing || validation.oracle_sha256 === nothing ? "" :
+                    something(validation.oracle_sha256)
+            elseif qualification_record !== nothing
+                compatibility["qualification_record_json"] = JSON3.write(qualification_record)
+            end
             compatibility_attributes["maximum_reciprocal_shift_residual"] =
                 validation === nothing ? NaN : validation.maximum_reciprocal_shift_residual
             compatibility_attributes["theta_squared_residual"] =
@@ -1249,6 +1432,7 @@ function write_band_representation_hdf5(
                 handle,
                 representation;
                 inventory,
+                content_authentication,
                 qualification_outer_mask,
                 qualification_frozen_mask,
                 raw_diagnostics,
@@ -1264,17 +1448,22 @@ function write_band_representation_hdf5(
             environment_attributes["hdf5_jl_version"] = string(Base.pkgversion(HDF5))
             environment_attributes["threads"] = Threads.nthreads()
         end
-        checked = read_band_representation_hdf5(temporary)
-        read_band_representation_preparation_hdf5(temporary, checked)
+        if content_authentication
+            checked = read_band_representation_hdf5(temporary)
+            read_band_representation_preparation_hdf5(temporary, checked)
+        end
     end
 end
 
 """Read and validate a strict shared band-representation HDF5 artifact."""
-function read_band_representation_hdf5(filename::AbstractString)
+function read_band_representation_hdf5(
+    filename::AbstractString;
+    content_authentication::Bool = true,
+)
     isfile(filename) || throw(ArgumentError("band representation does not exist: $(filename)"))
     HDF5.enable_complex_support()
     return HDF5.h5open(filename, "r") do handle
-        version = _require_public_band_header(handle)
+        version = _require_public_band_header(handle; content_authentication)
         geometry = handle["geometry"]
         begin
             _require_band_axis_order(geometry["real_lattice"], "cartesian_vector,xyz")
@@ -1325,6 +1514,15 @@ function read_band_representation_hdf5(filename::AbstractString)
             read(handle["stars/full_to_operation"]);
             conventions,
             input_sha256 = _read_band_string_dictionary(handle["input_sha256"]),
+            input_definitions = haskey(handle, "complete_input_references") ?
+                                Dict(
+                String(
+                    key,
+                )=>read_scientific_input_reference_hdf5(
+                    handle["complete_input_references"],
+                    String(key),
+                ) for key in keys(handle["complete_input_references"])
+            ) : Dict{String, WannierNLQG.IO.ScientificInputDefinition}(),
         )
         _band_validate_public_representation_contract(representation)
         begin
@@ -1359,10 +1557,13 @@ function read_band_representation_hdf5(filename::AbstractString)
             stored_spin = permutedims(read(products["spin_action"]), (2, 1, 3))
             maximum(abs, stored_spin - derived.spin_actions) <= 1.0e-7 ||
                 throw(ArgumentError("spin actions contradict operation metadata"))
-            stored_digest =
-                String(_required_band_attribute(handle["compatibility"], "representation_sha256"))
-            stored_digest == _band_representation_sha256(representation) ||
-                throw(ArgumentError("band-representation SHA-256 mismatch"))
+            if content_authentication
+                stored_digest = String(
+                    _required_band_attribute(handle["compatibility"], "representation_sha256"),
+                )
+                stored_digest == _band_representation_sha256(representation) ||
+                    throw(ArgumentError("band-representation SHA-256 mismatch"))
+            end
             begin
                 compatibility = handle["compatibility"]
                 _require_band_axis_order(
@@ -1398,7 +1599,7 @@ function read_band_representation_hdf5(filename::AbstractString)
                 haskey(handle, required_group) ||
                     throw(ArgumentError("schema-$(version) artifact is missing $(required_group)"))
             end
-            _required_band_attribute(handle, "preparation_digest")
+            content_authentication && _required_band_attribute(handle, "preparation_digest")
         end
         begin
             haskey(handle, "sewing_backend") ||
@@ -1432,8 +1633,17 @@ function read_band_representation_hdf5(filename::AbstractString)
                     throw(ArgumentError("modern artifact is missing block_partition_policy"))
                 get(gauge_metadata, "block_partition_policy", "") == recorded_policy ||
                     throw(ArgumentError("block partition metadata contradicts conventions"))
-                haskey(representation.input_sha256, "BLOCK_PARTITION_POLICY_SHA256") ||
-                    throw(ArgumentError("modern artifact is missing block-policy input identity"))
+                if content_authentication
+                    haskey(representation.input_sha256, "BLOCK_PARTITION_POLICY_SHA256") || throw(
+                        ArgumentError("modern artifact is missing block-policy input identity"),
+                    )
+                else
+                    _band_validate_gauge_policy_values(
+                        representation.conventions,
+                        gauge_metadata,
+                        :block,
+                    )
+                end
                 begin
                     recorded_correction =
                         get(representation.conventions, "discrete_hamiltonian_correction", "")
@@ -1446,19 +1656,30 @@ function read_band_representation_hdf5(filename::AbstractString)
                     recorded_correction || throw(
                         ArgumentError("Hamiltonian correction metadata contradicts conventions"),
                     )
-                    haskey(representation.input_sha256, "DISCRETE_HAMILTONIAN_CORRECTION_SHA256") ||
-                        throw(
+                    if content_authentication
+                        haskey(
+                            representation.input_sha256,
+                            "DISCRETE_HAMILTONIAN_CORRECTION_SHA256",
+                        ) || throw(
                             ArgumentError(
                                 "schema-1.0 artifact is missing correction input identity",
                             ),
                         )
+                    else
+                        _band_validate_gauge_policy_values(
+                            representation.conventions,
+                            gauge_metadata,
+                            :correction,
+                        )
+                    end
                     diagnostic =
                         get(representation.conventions, "quality_review_recommended", "false")
                     production = get(representation.conventions, "production_eligible", "true")
                     get(gauge_metadata, "quality_review_recommended", "") == diagnostic || throw(
                         ArgumentError("diagnostic qualification metadata contradicts conventions"),
                     )
-                    diagnostic == "true" &&
+                    content_authentication &&
+                        diagnostic == "true" &&
                         production != "false" &&
                         throw(
                             ArgumentError("STANDARD representation cannot be production eligible"),
@@ -1474,7 +1695,10 @@ function read_band_representation_hdf5(filename::AbstractString)
                     "target_authority",
                     "parent_audit_policy",
                     "target_leakage_semantics",
-                    "target_leakage_formula_sha256",
+                    (
+                        content_authentication ? "target_leakage_formula_sha256" :
+                        "target_leakage_formula_definition"
+                    ),
                     "target_leakage_threshold",
                 )
                     value = get(representation.conventions, key, "")
@@ -1485,14 +1709,18 @@ function read_band_representation_hdf5(filename::AbstractString)
                         ),
                     )
                 end
-                if haskey(representation.conventions, "target_subspace_contract_sha256")
-                    get(gauge_metadata, "target_subspace_contract_sha256", "") ==
-                    representation.conventions["target_subspace_contract_sha256"] || throw(
-                        ArgumentError(
-                            "TARGET_SUBSPACE_CONTRACT_MISMATCH: schema-1.0 target_subspace_contract_sha256 metadata differs",
-                        ),
+                contract_key =
+                    content_authentication ? "target_subspace_contract_sha256" :
+                    "target_subspace_contract_definition"
+                haskey(representation.conventions, contract_key) || throw(
+                    ArgumentError(
+                        "TARGET_SUBSPACE_CONTRACT_MISMATCH: missing target identity values",
+                    ),
+                )
+                get(gauge_metadata, contract_key, "") == representation.conventions[contract_key] ||
+                    throw(
+                        ArgumentError("TARGET_SUBSPACE_CONTRACT_MISMATCH: target metadata differs"),
                     )
-                end
                 _band_validate_target_subspace_contract(representation.conventions)
                 scope_group = handle["qualification_scope"]
                 _require_band_axis_order(scope_group["outer_mask"], "band,kpoint")
@@ -1509,22 +1737,39 @@ function read_band_representation_hdf5(filename::AbstractString)
                         "TARGET_SUBSPACE_CONTRACT_MISMATCH: frozen mask escapes outer mask",
                     ),
                 )
-                for (name, mask) in (("outer", outer_mask), ("frozen", frozen_mask))
-                    stored = String(_required_band_attribute(scope_group, "$(name)_mask_sha256"))
-                    stored == qualification_mask_sha256(mask) ||
-                        throw(ArgumentError("schema-1.0 $(name)-mask SHA-256 mismatch"))
+                if content_authentication
+                    for (name, mask) in (("outer", outer_mask), ("frozen", frozen_mask))
+                        stored =
+                            String(_required_band_attribute(scope_group, "$(name)_mask_sha256"))
+                        stored == qualification_mask_sha256(mask) ||
+                            throw(ArgumentError("schema-1.0 $(name)-mask SHA-256 mismatch"))
+                    end
+                else
+                    for (name, mask) in (("outer", outer_mask), ("frozen", frozen_mask))
+                        actual = WannierNLQG.SymmetryFoundation.qualification_mask_definition(mask)
+                        get(representation.conventions, "$(name)_mask_definition", "") == actual ||
+                            throw(
+                                ArgumentError(
+                                    "TARGET_SUBSPACE_CONTRACT_MISMATCH: $(name) mask actual values differ",
+                                ),
+                            )
+                    end
                 end
             end
         end
-        _read_band_representation_preparation_handle(handle, representation)
+        _read_band_representation_preparation_handle(handle, representation; content_authentication)
         return representation
     end
 end
 
 # Reconstruct and verify complete preparation metadata on an already open file.
 # The main reader uses this helper; it never calls a public auxiliary reader.
-function _read_band_representation_preparation_handle(handle, representation::BandRepresentation)
-    _require_public_band_header(handle)
+function _read_band_representation_preparation_handle(
+    handle,
+    representation::BandRepresentation;
+    content_authentication::Bool = true,
+)
+    _require_public_band_header(handle; content_authentication)
     _band_validate_public_representation_contract(representation)
     inventory_group = handle["inventory"]
     inventory_status = String(_required_band_attribute(inventory_group, "status"))
@@ -1550,17 +1795,23 @@ function _read_band_representation_preparation_handle(handle, representation::Ba
     qualification_scope = BandRepresentationQualificationScope(
         Bool.(read(scope_group["outer_mask"])),
         Bool.(read(scope_group["frozen_mask"]));
-        outer_mask_sha256 = String(_required_band_attribute(scope_group, "outer_mask_sha256")),
-        frozen_mask_sha256 = String(_required_band_attribute(scope_group, "frozen_mask_sha256")),
+        content_authentication,
+        outer_mask_sha256 = content_authentication ?
+                            String(_required_band_attribute(scope_group, "outer_mask_sha256")) :
+                            nothing,
+        frozen_mask_sha256 = content_authentication ?
+                             String(_required_band_attribute(scope_group, "frozen_mask_sha256")) : nothing,
         diagnostic_status = Symbol(
             String(_required_band_attribute(scope_group, "diagnostic_status")),
         ),
     )
-    qualification_scope.outer_mask_sha256 ==
-    qualification_mask_sha256(qualification_scope.outer_mask) ||
+    !content_authentication ||
+        qualification_scope.outer_mask_sha256 ==
+        qualification_mask_sha256(qualification_scope.outer_mask) ||
         throw(ArgumentError("schema-1.4 outer-mask SHA-256 mismatch"))
-    qualification_scope.frozen_mask_sha256 ==
-    qualification_mask_sha256(qualification_scope.frozen_mask) ||
+    !content_authentication ||
+        qualification_scope.frozen_mask_sha256 ==
+        qualification_mask_sha256(qualification_scope.frozen_mask) ||
         throw(ArgumentError("schema-1.4 frozen-mask SHA-256 mismatch"))
 
     raw_group = handle["raw_diagnostics"]
@@ -1613,18 +1864,21 @@ function _read_band_representation_preparation_handle(handle, representation::Ba
     effective_policy = Symbol(String(_required_band_attribute(policy_group, "effective")))
     tolerance_status =
         Symbol(String(_required_band_attribute(policy_group, "symmetry_tolerance_status")))
-    stored_digest = String(_required_band_attribute(handle, "preparation_digest"))
-    derived_digest = _band_preparation_metadata_digest(
-        inventory,
-        raw_diagnostics,
-        qualification_scope.outer_mask_sha256,
-        qualification_scope.frozen_mask_sha256,
-        requested_policy,
-        effective_policy,
-        tolerance_status,
-    )
-    stored_digest == derived_digest ||
-        throw(ArgumentError("schema-1.4 preparation digest mismatch"))
+    stored_digest = nothing
+    if content_authentication
+        stored_digest = String(_required_band_attribute(handle, "preparation_digest"))
+        derived_digest = _band_preparation_metadata_digest(
+            inventory,
+            raw_diagnostics,
+            qualification_scope.outer_mask_sha256,
+            qualification_scope.frozen_mask_sha256,
+            requested_policy,
+            effective_policy,
+            tolerance_status,
+        )
+        stored_digest == derived_digest ||
+            throw(ArgumentError("schema-1.4 preparation digest mismatch"))
+    end
     return (
         inventory,
         raw_diagnostics,
@@ -1639,30 +1893,61 @@ end
 """Recover complete public schema-1.0 representation-preparation metadata."""
 function read_band_representation_preparation_hdf5(
     filename::AbstractString,
-    representation::BandRepresentation,
+    representation::BandRepresentation;
+    content_authentication::Bool = true,
 )
-    read_band_representation_hdf5(filename)
+    read_band_representation_hdf5(filename; content_authentication)
     return HDF5.h5open(filename, "r") do handle
-        _read_band_representation_preparation_handle(handle, representation)
+        _read_band_representation_preparation_handle(handle, representation; content_authentication)
     end
 end
 
 # Read public schema-1.0 qualification evidence for expert workflow preflight.
-function _read_band_representation_qualification_hdf5(filename::AbstractString)
-    # Validate the complete public payload before exposing any qualification evidence.
-    read_band_representation_hdf5(filename)
+function _read_band_representation_qualification_hdf5(
+    filename::AbstractString;
+    content_authentication::Bool = true,
+)
+    representation = read_band_representation_hdf5(filename; content_authentication)
     return HDF5.h5open(filename, "r") do handle
-        _require_public_band_header(handle)
+        _require_public_band_header(handle; content_authentication)
         compatibility = handle["compatibility"]
         profile = Symbol(String(_required_band_attribute(compatibility, "validation_profile")))
-        qualification = String(_required_band_attribute(compatibility, "qualification_sha256"))
         excess = Float64.(read(compatibility["oracle_excess_group_law_residual"]))
+        length(excess) == 4 || throw(ArgumentError("qualification residual count must be four"))
         all(isfinite, excess) || return nothing
-        isempty(qualification) && return nothing
+        residuals = Tuple(excess)
+        if content_authentication
+            qualification = String(_required_band_attribute(compatibility, "qualification_sha256"))
+            isempty(qualification) && return nothing
+            return (
+                validation_profile = profile,
+                qualification_sha256 = qualification,
+                oracle_excess_group_law_residuals = residuals,
+            )
+        end
+        # A legacy digest alone is not actual oracle evidence. Do not upgrade it to PASS.
+        haskey(compatibility, "qualification_record_json") || return nothing
+        data = JSON3.read(String(read(compatibility["qualification_record_json"])))
+        all(
+            key -> haskey(data, key),
+            (:representation_definition, :oracle_definition, :oracle_excess_group_law_residuals),
+        ) || throw(ArgumentError("incomplete actual qualification record"))
+        String(data.representation_definition) ==
+        WannierNLQG.SymmetryFoundation.band_representation_input_definition(representation) ||
+            throw(ArgumentError("qualification record representation mismatch"))
+        Tuple(Float64.(data.oracle_excess_group_law_residuals)) == residuals ||
+            throw(ArgumentError("qualification record residual mismatch"))
+        isempty(String(data.oracle_definition)) &&
+            throw(ArgumentError("qualification record lacks actual oracle definition"))
+        record = (
+            representation_definition = String(data.representation_definition),
+            oracle_definition = String(data.oracle_definition),
+            oracle_excess_group_law_residuals = residuals,
+        )
         return (
             validation_profile = profile,
-            qualification_sha256 = qualification,
-            oracle_excess_group_law_residuals = (excess[1], excess[2], excess[3], excess[4]),
+            qualification_record = record,
+            oracle_excess_group_law_residuals = residuals,
         )
     end
 end
@@ -1740,6 +2025,7 @@ function _complete_vasp_public_representation(representation::BandRepresentation
         representation.full_to_operation;
         conventions,
         input_sha256 = representation.input_sha256,
+        input_definitions = representation.input_definitions,
     )
 end
 

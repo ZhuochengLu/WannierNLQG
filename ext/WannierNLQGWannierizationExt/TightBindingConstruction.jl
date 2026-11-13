@@ -116,31 +116,36 @@ function _pair_wigner_seitz_support(
     chk::WannierCHK;
     wigner_seitz_tolerance::Float64,
     search_size::Int,
+    retain_pair_images::Bool = false,
 )
     centers_fractional = chk.wannier_centers_cart * inv(chk.real_lattice)
     digits = ceil(Int, -log10(wigner_seitz_tolerance)) + 1
     images = Set{NTuple{3, Int}}()
+    pair_images =
+        retain_pair_images ? Dict{Tuple{Int, Int, NTuple{3, Int}}, Vector{NTuple{3, Int}}}() :
+        nothing
+    residues = chk.num_orbitals > 0 ? _mp_residue_vectors(chk.mp_grid) : nothing
     for left in 1:chk.num_orbitals, right in 1:chk.num_orbitals
         center_shift =
             round.(-centers_fractional[left, :] .+ centers_fractional[right, :]; digits = digits)
-        for residue_column in eachcol(_mp_residue_vectors(chk.mp_grid))
+        for residue_column in eachcol(something(residues))
             residue = Tuple(residue_column)
-            union!(
-                images,
-                nearest_wigner_seitz_images(
-                    residue,
-                    center_shift,
-                    chk.real_lattice,
-                    chk.mp_grid;
-                    tolerance = wigner_seitz_tolerance,
-                    search_size = search_size,
-                ),
+            selected_images = nearest_wigner_seitz_images(
+                residue,
+                center_shift,
+                chk.real_lattice,
+                chk.mp_grid;
+                tolerance = wigner_seitz_tolerance,
+                search_size = search_size,
             )
+            union!(images, selected_images)
+            pair_images === nothing || (pair_images[(left, right, residue)] = selected_images)
         end
     end
     ordered_images = sort!(collect(images))
     isempty(ordered_images) && error("center-aware Wigner-Seitz support is empty")
-    return reshape(reduce(hcat, collect(image) for image in ordered_images), 3, :)
+    r_vectors = reshape(reduce(hcat, collect(image) for image in ordered_images), 3, :)
+    return retain_pair_images ? (r_vectors, pair_images) : r_vectors
 end
 
 # Reuse the Symmetrization extension's center-aware transform for a q-last
@@ -153,35 +158,54 @@ function _inverse_pair_wigner_seitz_fourier(
     search_size::Int,
     audit::Union{Nothing, AbstractDict} = nothing,
     label::AbstractString = "SAWF operator",
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 ) where {N}
-    r_vectors = _pair_wigner_seitz_support(
+    transform = _pair_wigner_seitz_inverse_transform(
+        chk;
+        wigner_seitz_tolerance,
+        search_size,
+        audit,
+        construction_policy,
+    )
+    return transform(values, label)
+end
+
+# Own one geometry plan for one CHK/configuration during this export only.
+# The returned transform reads the plan and allocates each operator's output.
+function _pair_wigner_seitz_inverse_transform(
+    chk::WannierCHK;
+    wigner_seitz_tolerance::Float64,
+    search_size::Int,
+    audit::Union{Nothing, AbstractDict} = nothing,
+    construction_policy::Symbol = :standard,
+)
+    validate_ordinary_construction_policy(construction_policy)
+    r_vectors, pair_images = _pair_wigner_seitz_support(
         chk;
         wigner_seitz_tolerance = wigner_seitz_tolerance,
         search_size = search_size,
+        retain_pair_images = true,
     )
-    plan = WannierPairWignerSeitzTransformPlan(
+    plan = WannierNLQG.MatrixElements.wannier_pair_wigner_seitz_plan_from_images(
         chk,
         r_vectors;
         wigner_seitz_tolerance = wigner_seitz_tolerance,
         search_size = search_size,
-        image_policy = :minimum_distance,
+        precomputed_images = pair_images,
     )
-    output = wannier_q_to_pair_wigner_seitz(
-        values,
-        chk,
-        plan;
-        support_tolerance = 0.0,
-        label = "SAWF operator",
-    )
-    roundtrip_error = unit_degeneracy_roundtrip_error(values, output, chk, plan)
-    isfinite(roundtrip_error) || error("FATAL_INTEGRITY: nonfinite Wigner-Seitz roundtrip")
-    (construction_policy == :standard || roundtrip_error <= 1.0e-10) || error(
-        "center-aware Wigner-Seitz $(label) transform round-trip error " *
-        "$(roundtrip_error) exceeds 1.0e-10",
-    )
-    audit === nothing || (audit[String(label)] = roundtrip_error)
-    return r_vectors, output
+    return function (values, label::AbstractString)
+        output = wannier_q_to_pair_wigner_seitz(
+            values,
+            chk,
+            plan;
+            support_tolerance = 0.0,
+            label = "SAWF operator",
+        )
+        roundtrip_error = unit_degeneracy_roundtrip_error(values, output, chk, plan)
+        isfinite(roundtrip_error) || error("FATAL_INTEGRITY: nonfinite Wigner-Seitz roundtrip")
+        audit === nothing || (audit[String(label)] = roundtrip_error)
+        return r_vectors, output
+    end
 end
 
 """
@@ -192,8 +216,7 @@ By default the builder reuses the Symmetrization extension's center-aware
 minimum-distance Wigner-Seitz transform. `real_space_replica_policy=:mp_grid`
 retains the complete noncentered MP residue grid for exact grid diagnostics.
 The finite-difference position matrix is projected onto
-`A(R) = A(-R)'` after the real-space transform, matching WannierBerri's
-`set_R_mat(..., Hermitian=true)` construction. This is the physical
+`A(R) = A(-R)'` after the real-space transform. This is the physical
 Hermiticity closure of the position operator, not a space-group projection.
 Finite-difference overlaps first receive the Convention-I right-center phase;
 the home-cell diagonal is then set to the exact checkpoint centers to serialize
@@ -209,8 +232,9 @@ function build_wannier_tight_binding_model(
     wigner_seitz_tolerance::Float64 = 1.0e-5,
     wigner_seitz_search_size::Int = 3,
     construction_diagnostics::Union{Nothing, AbstractDict} = nothing,
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
+    validate_ordinary_construction_policy(construction_policy)
     result.wannier_chk === nothing &&
         throw(ArgumentError("tight-binding construction requires a result with WannierCHK data"))
     result.status != IN_PROGRESS_CHECKPOINT ||
@@ -260,14 +284,12 @@ function build_wannier_tight_binding_model(
     transform = if real_space_replica_policy == :mp_grid
         (values, _label) -> _inverse_mp_fourier(values, chk)
     else
-        (values, label) -> _inverse_pair_wigner_seitz_fourier(
-            values,
+        _pair_wigner_seitz_inverse_transform(
             chk;
             wigner_seitz_tolerance = wigner_seitz_tolerance,
             search_size = wigner_seitz_search_size,
             audit = transform_audit,
             construction_policy,
-            label,
         )
     end
     r_vectors, hamiltonian_r = transform(hamiltonian_q, "hamiltonian")
@@ -289,7 +311,6 @@ function build_wannier_tight_binding_model(
         construction_diagnostics["position_fourier_roundtrip_residual"] =
             get(transform_audit, "position", NaN)
         construction_diagnostics["authoritative_hamiltonian"] = band_hamiltonian.authority
-        construction_diagnostics["authoritative_band_hamiltonian_digest"] = band_hamiltonian.digest
         construction_diagnostics["authoritative_band_hamiltonian_algorithm_version"] =
             band_hamiltonian.algorithm_version
     end

@@ -217,6 +217,26 @@ end
     @test !isempty(root_module_usage_violations("value = WannierNLQG.IO.read_model(path)\n"))
     @test !isempty(root_module_usage_violations("value = identity(WannierNLQG)\n"))
 
+    declared_io = ("WannierNLQG.IO",)
+    @test isempty(
+        root_module_usage_violations(
+            "value = WannierNLQG.IO.read_model(path)\n";
+            allowed_module_paths = declared_io,
+        ),
+    )
+    for source in (
+        "value = WannierNLQG.Core.other(path)\n",
+        "value = WannierNLQG.IOExtra.other(path)\n",
+        "value = WannierNLQG.IO.read_model(WannierNLQG)\n",
+        "value = WannierNLQG.other(path)\n",
+    )
+        @test !isempty(root_module_usage_violations(source; allowed_module_paths = declared_io))
+    end
+    @test_throws ArgumentError root_module_usage_violations(
+        "";
+        allowed_module_paths = ("WannierNLQG",),
+    )
+
     guard = "WannierNLQG.FIRST_USE_TRACE_COMPATIBLE"
     guarded_include = "if $guard\n    include(\"coverage.jl\")\nend\n"
     @test !isempty(root_module_usage_violations(guarded_include))
@@ -234,17 +254,13 @@ end
     leaves = (:win_file, :outer_min_ev)
     @test isempty(
         typed_sawf_flat_config_reads(
-            Dict(
-                "grouped.jl" => "f(config::W.SymmetryAdaptedWannierizationConfig) = config.input.win_file\n",
-            ),
+            Dict("grouped.jl" => "f(config::W.WannierizationConfig) = config.input.win_file\n"),
             leaves,
         ),
     )
     @test !isempty(
         typed_sawf_flat_config_reads(
-            Dict(
-                "qualified.jl" => "f(config::W.SymmetryAdaptedWannierizationConfig) = config.win_file\n",
-            ),
+            Dict("qualified.jl" => "f(config::W.WannierizationConfig) = config.win_file\n"),
             leaves,
         ),
     )
@@ -252,7 +268,7 @@ end
         typed_sawf_flat_config_reads(
             Dict(
                 "alias.jl" =>
-                    "const SAWConfig = W.SymmetryAdaptedWannierizationConfig\n" *
+                    "const SAWConfig = W.WannierizationConfig\n" *
                     "function f(config::SAWConfig)\n local_config = config\n local_config.outer_min_ev\n end\n",
             ),
             leaves,
@@ -260,9 +276,7 @@ end
     )
     @test !isempty(
         typed_sawf_flat_config_reads(
-            Dict(
-                "constructed.jl" => "config = W.SymmetryAdaptedWannierizationConfig()\nconfig.win_file\n",
-            ),
+            Dict("constructed.jl" => "config = W.WannierizationConfig()\nconfig.win_file\n"),
             leaves,
         ),
     )
@@ -575,4 +589,109 @@ end
     @test !isempty(check(Dict(path => "value = SymmetryFoundation.var\"#3#4\"()\n")))
     @test !isempty(check(Dict(path => "import WannierNLQG.SymmetryFoundation: var\"#3#4\"\n")))
     @test !isempty(check(Dict(path => replace(literal, "#3#4" => "#5#6"))))
+end
+
+@testset "intact import syntax preserves pairs and adjoints" begin
+    source = """
+    module Owner
+    import HDF5
+    const metadata = Dict("key" => "import Pretend")
+    const transpose = vector'
+    # using CommentOnly
+    import ..Sibling: value
+    using LinearAlgebra
+    end
+    """
+    expected = Dict(
+        "HDF5" => (module_binding = true, symbols = String[]),
+        "Sibling" => (module_binding = false, symbols = ["value"]),
+        "LinearAlgebra" => (module_binding = true, symbols = String[]),
+    )
+    @test direct_import_records(source) == expected
+    @test direct_using_providers(source) == ["LinearAlgebra"]
+    @test isempty(direct_import_records("\"import Pretend\"\n# import CommentOnly\n"))
+    @test isempty(direct_using_providers("\"using Pretend\"\n# using CommentOnly\n"))
+    @test_throws ArgumentError direct_import_records("module Incomplete\nimport HDF5\n")
+    @test_throws ArgumentError direct_using_providers("module Incomplete\nusing HDF5\n")
+end
+
+@testset "independent boundary errors are reported together" begin
+    sources=Dict(
+        "src/Runtime/BoundaryProbe.jl"=>"Wannierization._hidden(x)\nSymmetryFoundation._hidden(x)\nSpglib.get_dataset(x)\nstruct LegacyBandRepresentation\nvalue::Int\nend\n",
+    )
+    errors=independent_architecture_boundary_violations(
+        sources,
+        sources,
+        Set([:win_file]),
+        Set(["test/expected_negative.jl: ordinary_default.win_file"]),
+    )
+    for category in (
+        "typed SAWF top-level leaf reads",
+        "Spglib ownership violations remain",
+        "shared-layer private references remain",
+        "production module-private cross-owner references remain",
+        "semantic duplicate types remain",
+    )
+        @test any(message->startswith(message, category*": "), errors)
+    end
+    @test isempty(
+        independent_architecture_boundary_violations(
+            Dict{String, String}(),
+            Dict{String, String}(),
+            Set{Symbol}(),
+            Set{String}(),
+        ),
+    )
+end
+
+@testset "Julia AST and mixed-language lexical boundaries stay separate" begin
+    mixed=Dict(
+        "scripts/python_probe.py"=>"import json\nvalue = {'enabled': True}\nSymmetryFoundation._hidden(value)\n",
+        "src/Runtime/JuliaProbe.jl"=>"value = SymmetryFoundation.hidden(x)\n",
+    )
+    selected=julia_boundary_source_inventory(mixed)
+    @test Set(keys(selected))==Set(["src/Runtime/JuliaProbe.jl"])
+    public=Dict("SymmetryFoundation"=>Symbol[], "WannierProjection"=>Symbol[])
+    integration=Dict("SymmetryFoundation"=>Symbol[], "WannierProjection"=>Symbol[])
+    violations=shared_boundary_reference_violations(selected, public, integration)
+    @test any(
+        message->occursin("SymmetryFoundation.hidden is neither public nor allowlisted", message),
+        violations,
+    )
+    @test any(
+        message->occursin("scripts/python_probe.py", message),
+        private_shared_boundary_violations(mixed),
+    )
+    malformed=Dict("src/Runtime/Invalid.jl"=>"function broken(\n")
+    @test_throws ArgumentError shared_boundary_reference_violations(
+        julia_boundary_source_inventory(malformed),
+        public,
+        integration,
+    )
+    @test_throws ArgumentError direct_import_records(mixed["scripts/python_probe.py"])
+end
+
+@testset "test imports require direct Pkg.test dependencies" begin
+    sources = Dict(
+        "first.jl" => "using Test, LinearAlgebra\nimport ESKernel\n",
+        "second.jl" => "import MissingProvider: value\nusing ..LocalFixture\nusing Base.Threads\n",
+        "literals.jl" => "# import CommentOnly\n\"import StringOnly\"\nraw\"\"\"import PythonOnly\"\"\"\n",
+    )
+    errors = test_dependency_violations(sources, ["Test", "LinearAlgebra"])
+    @test errors == [
+        "first.jl imports undeclared test dependency ESKernel",
+        "second.jl imports undeclared test dependency MissingProvider",
+    ]
+    @test isempty(
+        test_dependency_violations(
+            sources,
+            ["Test", "LinearAlgebra", "ESKernel", "MissingProvider"],
+        ),
+    )
+    @test test_dependency_violations(Dict("alias.jl" => "import ESKernel as Kernel\n"), String[]) ==
+          ["alias.jl imports undeclared test dependency ESKernel"]
+    @test_throws ArgumentError test_dependency_violations(
+        Dict("bad.jl" => "module Incomplete\n"),
+        String[],
+    )
 end

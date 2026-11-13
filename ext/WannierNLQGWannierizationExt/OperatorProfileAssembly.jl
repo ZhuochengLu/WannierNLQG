@@ -1,17 +1,17 @@
-const WANNIER_OPERATOR_PROFILE_ASSEMBLY_ALGORITHM_VERSION = "schema-6.3-pair-wigner-seitz-spin-galerkin-risk-audited-profile-v5-source-neighbor-order"
+const WANNIER_OPERATOR_PROFILE_ASSEMBLY_ALGORITHM_VERSION = "schema-6.4-pair-wigner-seitz-spin-canonical-finite-difference"
 const PROFILE_PAIR_WIGNER_SEITZ_SUPPORT_TOLERANCE = 1.0e-12
 const PROFILE_PAIR_WIGNER_SEITZ_ROUNDTRIP_TOLERANCE = 1.0e-8
 const PROFILE_PAIR_WIGNER_SEITZ_TRANSFORM_ALGORITHM = "PAIR_DEPENDENT_WIGNER_SEITZ_Q_TO_R"
 const PROFILE_PAIR_WIGNER_SEITZ_STORAGE_POLICY = "PAIR_DEPENDENT_MINIMUM_DISTANCE_UNIT_DEGENERACY"
 
 const OPERATOR_QUALIFICATION_SCHEMA = "wanniernlqg.operator-qualification"
-const OPERATOR_QUALIFICATION_SCHEMA_VERSION = "1.3"
-const FINAL_SUBSPACE_PROJECTOR_DIGEST_QUANTIZATION = 1.0e-12
-const FINAL_SUBSPACE_PROJECTOR_DIGEST_ALGORITHM = "P=V*V_dagger;Hermitian-average;round(real,imag)/1e-12-to-Int64;column-major;kpoint-order"
-
+const OPERATOR_QUALIFICATION_SCHEMA_VERSION = "1.5"
 """Resolve the operator selection declared by one Wannierization output configuration."""
-_resolved_operator_selection(config) =
-    IO.resolve_operator_selection(config.output.profile, config.output.operator_tasks)
+_resolved_operator_selection(config) = IO.resolve_operator_selection(
+    config.output.profile,
+    config.output.operator_tasks;
+    content_authentication = false,
+)
 
 # Return true when the resolved selection needs one upstream source artifact.
 _operator_selection_needs_source(selection, source::Symbol) =
@@ -49,11 +49,9 @@ end
 # Build the explicit no-SPN attestation used by selections without a spin source.
 function _not_applicable_spn_attestation()
     return (
-        spn_sha256 = "NOT_APPLICABLE",
-        provenance_sha256 = "NOT_APPLICABLE",
         source_band_gauge = "NOT_APPLICABLE",
         qualification_target_band_gauge = "NOT_APPLICABLE",
-        gauge_artifact_sha256 = "NOT_APPLICABLE",
+        gauge_definition = "NOT_APPLICABLE",
         input_sha256 = Dict{String, String}(),
     )
 end
@@ -67,9 +65,9 @@ function _not_applicable_profile_frame_contract()
         "legacy" => false,
         "source_band_gauge" => "final_wannier_gauge",
         "target_band_gauge" => "final_wannier_gauge",
-        "transform_sha256" => "NOT_APPLICABLE",
-        "contract_sha256" => "NOT_APPLICABLE",
-        "gauge_artifact_sha256" => "NOT_APPLICABLE",
+        "transform_definition" => "NOT_APPLICABLE",
+        "contract_definition" => "NOT_APPLICABLE",
+        "gauge_definition" => "NOT_APPLICABLE",
         "metric_kind" => "NOT_APPLICABLE",
         "physical_isometry_maximum" => NaN,
         "physical_isometry_tolerance" => NaN,
@@ -81,8 +79,6 @@ function _not_applicable_profile_frame_contract()
     )
 end
 
-const _PROFILE_COMMON_SOURCE_EXCLUSIONS = Set(("ORACLE_MMN",))
-
 """Normalize a String- or Symbol-keyed frame-contract summary."""
 function _profile_frame_contract_dictionary(raw)
     raw isa AbstractDict ||
@@ -91,96 +87,15 @@ function _profile_frame_contract_dictionary(raw)
     return Dict{String, Any}(String(key) => value for (key, value) in pairs(raw))
 end
 
-"""Append a deterministic typed representation of qualification metadata."""
-function _profile_qualification_digest_value!(buffer::Base.IO, value)
-    if value isa AbstractDict || value isa NamedTuple
-        write(buffer, UInt8('D'))
-        for key in sort!(String.(collect(keys(value))))
-            source_key = value isa NamedTuple ? Symbol(key) : key
-            value isa AbstractDict && !haskey(value, source_key) && (source_key = Symbol(key))
-            _profile_qualification_digest_value!(buffer, key)
-            _profile_qualification_digest_value!(buffer, value[source_key])
-        end
-    elseif value isa AbstractArray
-        write(buffer, UInt8('A'), Int64(ndims(value)))
-        foreach(dimension -> write(buffer, Int64(dimension)), size(value))
-        foreach(entry -> _profile_qualification_digest_value!(buffer, entry), value)
-    elseif value isa Bool
-        write(buffer, UInt8('B'), UInt8(value))
-    elseif value isa Integer
-        write(buffer, UInt8('I'), string(value), '\0')
-    elseif value isa AbstractFloat
-        write(buffer, UInt8('F'), bitstring(Float64(value)), '\0')
-    elseif value isa Symbol || value isa AbstractString
-        bytes = codeunits(String(value))
-        write(buffer, UInt8('S'), Int64(length(bytes)), bytes)
-    elseif value === nothing
-        write(buffer, UInt8('N'))
-    else
-        throw(ArgumentError("unsupported profile-qualification value type $(typeof(value))"))
-    end
-    return nothing
-end
-
-"""Digest one per-operator qualification record without its self-seal field."""
-function _profile_qualification_record_sha256(record)
-    payload = Dict{String, Any}(
-        String(key) => value for (key, value) in pairs(record) if String(key) != "payload_sha256"
-    )
-    buffer = IOBuffer()
-    _profile_qualification_digest_value!(buffer, payload)
-    return bytes2hex(SHA.sha256(take!(buffer)))
-end
-
-"""Normalize one generator input-hash map for strict source-chain comparisons."""
-function _profile_input_hashes(raw, label::AbstractString)
+"""Normalize one generator complete-input definition map for strict source-chain comparisons."""
+function _profile_input_definitions(raw, label::AbstractString)
     raw isa AbstractDict ||
         raw isa JSON3.Object ||
-        throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(label) input hashes are missing"))
+        throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(label) input definitions are missing"))
     hashes = Dict{String, String}(String(key) => String(value) for (key, value) in pairs(raw))
     isempty(hashes) &&
-        throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(label) input hashes are empty"))
+        throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(label) input definitions are empty"))
     return hashes
-end
-
-"""Require every non-special reference source hash in a generated sidecar."""
-function _validate_profile_common_source_hashes(reference, candidate, label::AbstractString)
-    required = sort!(collect(setdiff(keys(reference), _PROFILE_COMMON_SOURCE_EXCLUSIONS)))
-    isempty(required) && throw(
-        ArgumentError("OPERATOR_PROVENANCE_MISMATCH: uIu has no common physical-source hashes"),
-    )
-    for key in required
-        get(candidate, key, "MISSING") == reference[key] || throw(
-            ArgumentError(
-                "OPERATOR_PROVENANCE_MISMATCH: $(label) common source hash $(key) differs",
-            ),
-        )
-    end
-    return nothing
-end
-
-"""Bind a spin-H sidecar to the exact SPN artifact, provenance, and shared source."""
-function _validate_profile_spn_source_hashes(
-    candidate,
-    spn_input_sha256,
-    spn_sha256::AbstractString,
-    spn_provenance_sha256::AbstractString,
-    label::AbstractString,
-)
-    get(candidate, "SPN", "MISSING") == spn_sha256 ||
-        throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(label) SPN hash differs"))
-    get(candidate, "SPN_PROVENANCE", "MISSING") == spn_provenance_sha256 ||
-        throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(label) SPN provenance hash differs"))
-    required = sort!(collect(keys(spn_input_sha256)))
-    isempty(required) && throw(
-        ArgumentError("OPERATOR_PROVENANCE_MISMATCH: SPN provenance has no physical-source hashes"),
-    )
-    for key in required
-        get(candidate, key, "MISSING") == spn_input_sha256[key] || throw(
-            ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(label) SPN source hash $(key) differs"),
-        )
-    end
-    return nothing
 end
 
 """Return the maximum element difference for two identically supported operators."""
@@ -202,45 +117,21 @@ function _profile_normalize_metadata(value)
     return value
 end
 
-"""Hash the final subspace projectors after documented gauge-invariant quantization."""
-function _profile_final_subspace_projector_digest(chk)
+"""Check the final-subspace isometry without constructing a reporting fingerprint."""
+function _profile_final_subspace_isometry(chk)
     v_matrix = chk.v_matrix
     size(v_matrix) == (chk.num_bands, chk.num_orbitals, chk.num_kpts) ||
         throw(ArgumentError("FINAL_SUBSPACE_PROJECTOR_DIMENSION_MISMATCH"))
     all(isfinite, v_matrix) || throw(ArgumentError("FINAL_SUBSPACE_PROJECTOR_NONFINITE"))
-    buffer = IOBuffer()
-    write(
-        buffer,
-        "WannierNLQG.final_subspace_projector/1.0\n",
-        FINAL_SUBSPACE_PROJECTOR_DIGEST_ALGORITHM,
-        '\n',
-    )
-    write(buffer, reinterpret(UInt8, Int64[chk.num_bands, chk.num_orbitals, chk.num_kpts]))
-    write(buffer, reinterpret(UInt8, [FINAL_SUBSPACE_PROJECTOR_DIGEST_QUANTIZATION]))
     identity_wannier = Matrix{ComplexF64}(I, chk.num_orbitals, chk.num_orbitals)
     isometry_maximum = 0.0
     for kpoint in 1:chk.num_kpts
         gauge = @view v_matrix[:, :, kpoint]
         gram = gauge' * gauge
         isometry_maximum = max(isometry_maximum, maximum(abs, gram .- identity_wannier; init = 0.0))
-        projector = gauge * gauge'
-        projector .= (projector .+ projector') ./ 2
-        all(isfinite, projector) || throw(ArgumentError("FINAL_SUBSPACE_PROJECTOR_NONFINITE"))
-        for value in projector
-            real_quantized =
-                round(Int64, real(value) / FINAL_SUBSPACE_PROJECTOR_DIGEST_QUANTIZATION)
-            imaginary_quantized =
-                round(Int64, imag(value) / FINAL_SUBSPACE_PROJECTOR_DIGEST_QUANTIZATION)
-            write(buffer, reinterpret(UInt8, [real_quantized, imaginary_quantized]))
-        end
     end
     isfinite(isometry_maximum) || throw(ArgumentError("FINAL_SUBSPACE_PROJECTOR_NONFINITE"))
-    return (
-        sha256 = bytes2hex(SHA.sha256(take!(buffer))),
-        quantization = FINAL_SUBSPACE_PROJECTOR_DIGEST_QUANTIZATION,
-        algorithm = FINAL_SUBSPACE_PROJECTOR_DIGEST_ALGORITHM,
-        isometry_maximum,
-    )
+    return isometry_maximum
 end
 
 """
@@ -264,7 +155,7 @@ function _profile_final_projector_leakage_audit(chk, mmn, diagnostic_reference::
         throw(ArgumentError("FINAL_PROJECTOR_MMN_TOPOLOGY_MISMATCH"))
     all(isfinite, chk.v_matrix) && all(isfinite, mmn.data) ||
         throw(ArgumentError("FINAL_PROJECTOR_INPUT_NONFINITE"))
-    projector = _profile_final_subspace_projector_digest(chk)
+    projector_isometry = _profile_final_subspace_isometry(chk)
     leakage_values = Float64[]
     leakage_maximum = -Inf
     negative_defect_maximum = 0.0
@@ -328,10 +219,8 @@ function _profile_final_projector_leakage_audit(chk, mmn, diagnostic_reference::
         "parent_band_dimension" => chk.num_bands,
         "directed_link_count" => chk.num_kpts * mmn.num_neighbors,
         "endpoint_count" => length(leakage_values),
-        "final_subspace_projector_sha256" => projector.sha256,
-        "projector_digest_algorithm" => projector.algorithm,
-        "projector_digest_quantization" => projector.quantization,
-        "projector_isometry_maximum" => projector.isometry_maximum,
+        "content_authentication" => "NOT_PERFORMED",
+        "projector_isometry_maximum" => projector_isometry,
         "leakage_maximum" => leakage_maximum,
         "leakage_p95" => leakage_p95,
         "leakage_rms" => leakage_rms,
@@ -407,10 +296,6 @@ function _profile_finite_band_galerkin_family(
         throw(ArgumentError("FINITE_BAND_FINAL_CANCELLATION_INVENTORY_MISMATCH"))
     for operator in ("uHu", "sIu", "sHu")
         source = normalized_sources[operator]
-        Bool(source["source_generation_qualified"]) ||
-            throw(ArgumentError("FINITE_BAND_SOURCE_GENERATION_NOT_QUALIFIED: $(operator)"))
-        Bool(source["artifact_published"]) ||
-            throw(ArgumentError("FINITE_BAND_SOURCE_ARTIFACT_NOT_PUBLISHED: $(operator)"))
         String(source["qualification_stage"]) == "SOURCE_OPERATOR_GENERATION" ||
             throw(ArgumentError("FINITE_BAND_SOURCE_QUALIFICATION_STAGE_MISMATCH: $(operator)"))
         String(source["actual_operator_error_status"]) ==
@@ -452,7 +337,7 @@ end
 function _qualify_spin_family!(
     operators,
     model,
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     symmetry_plan,
     spn_attestation,
     authority::AuthoritativeBandHamiltonian,
@@ -465,7 +350,6 @@ function _qualify_spin_family!(
     operator_target_contract = nothing,
     source_neighbor_order_contract = nothing,
 )
-    standard_construction = config.input.construction_policy == :standard
     selection = _resolved_operator_selection(config)
     inventory = collect(IO.resolved_operator_inventory(selection))
     complete_family = _operator_selection_is_complete_family(selection)
@@ -491,22 +375,15 @@ function _qualify_spin_family!(
     for (name, residual) in pair_roundtrip
         isfinite(residual) ||
             throw(ArgumentError("SPIN_FAMILY_PAIR_WIGNER_SEITZ_ROUNDTRIP_NONFINITE: $(name)"))
-        (
-            config.input.construction_policy == :standard ||
-            residual <= PROFILE_PAIR_WIGNER_SEITZ_ROUNDTRIP_TOLERANCE
-        ) || throw(ArgumentError("SPIN_FAMILY_PAIR_WIGNER_SEITZ_ROUNDTRIP_FAILED: $(name)"))
     end
     delivery_roundtrip =
         delivery_roundtrip_residuals isa AbstractDict ?
         Dict{String, Float64}(
             String(key) => Float64(value) for (key, value) in pairs(delivery_roundtrip_residuals)
         ) : Dict{String, Float64}()
-    target_contract_sha256 =
+    target_contract_definition =
         operator_target_contract === nothing ? "LEGACY_NOT_RECORDED" :
-        operator_target_contract.contract_sha256
-    final_projector_sha256 =
-        final_projector_galerkin_audit isa AbstractDict ?
-        String(final_projector_galerkin_audit["final_subspace_projector_sha256"]) : "NOT_APPLICABLE"
+        operator_target_contract.definition
     route =
         symmetry_plan === nothing ? "ordinary" :
         config.input.authoritative_hamiltonian isa NativeDFTHamiltonian ? "native_sawf" :
@@ -526,8 +403,8 @@ function _qualify_spin_family!(
         REAL_SPACE_SPIN_TIMES_HAMILTONIAN,
         REAL_SPACE_SPIN_TIMES_HAMILTONIAN_POSITION,
     ))
-    authority_contract_sha256 =
-        star_authoritative_hamiltonian_sha256(config.input.authoritative_hamiltonian)
+    authority_contract_definition =
+        star_authoritative_hamiltonian_definition(config.input.authoritative_hamiltonian)
     for kind in inventory
         serialized = operators[kind]
         is_spin = kind in spin_kinds
@@ -598,38 +475,37 @@ function _qualify_spin_family!(
             elseif is_spin
                 spn_attestation
             else
-                payload_sha256 = _authoritative_array_sha256(serialized.data)
                 (
-                    provenance_sha256 = payload_sha256,
-                    artifact_sha256 = payload_sha256,
                     source_band_gauge = "final_wannier_gauge",
                     target_band_gauge = "final_wannier_gauge",
-                    gauge_artifact_sha256 = "NOT_APPLICABLE",
-                    rotation_sha256 = "NOT_APPLICABLE",
+                    gauge_definition = "NOT_APPLICABLE",
+                    transform_definition = "NOT_APPLICABLE",
                     frame_contract = _not_applicable_profile_frame_contract(),
-                    input_sha256 = Dict("OPERATOR_PAYLOAD" => payload_sha256),
+                    input_sha256 = Dict{String, String}(),
                     authoritative_hamiltonian = requires_hamiltonian ? authority.authority :
                                                 "NOT_APPLICABLE",
-                    authoritative_hamiltonian_digest = requires_hamiltonian ? authority.digest :
-                                                       "NOT_APPLICABLE",
-                    authoritative_hamiltonian_input_sha256 = requires_hamiltonian ?
-                                                             copy(authority.input_sha256) :
-                                                             Dict{String, String}(),
+                    authoritative_hamiltonian_definition = requires_hamiltonian ?
+                                                           authority.definition : "NOT_APPLICABLE",
+                    authoritative_hamiltonian_input_definitions = requires_hamiltonian ?
+                                                                  copy(
+                        authority.input_definitions,
+                    ) : Dict{String, String}(),
                 )
             end
-        authority_input_sha256 = Dict{String, String}(source.authoritative_hamiltonian_input_sha256)
+        authority_input_sha256 =
+            Dict{String, String}(source.authoritative_hamiltonian_input_definitions)
         if requires_hamiltonian
             recorded_contract = get(
                 authority_input_sha256,
-                "AUTHORITATIVE_HAMILTONIAN_SHA256",
-                authority_contract_sha256,
+                "AUTHORITATIVE_HAMILTONIAN_DEFINITION",
+                authority_contract_definition,
             )
-            recorded_contract == authority_contract_sha256 || throw(
+            recorded_contract == authority_contract_definition || throw(
                 ArgumentError(
                     "HAMILTONIAN_REFERENCE_MISMATCH: operator qualification authority contract differs from the configured authority",
                 ),
             )
-            authority_input_sha256["AUTHORITATIVE_HAMILTONIAN_SHA256"] = authority_contract_sha256
+            pop!(authority_input_sha256, "AUTHORITATIVE_HAMILTONIAN_DEFINITION", nothing)
         end
         frame_contract = _profile_frame_contract_dictionary(source.frame_contract)
         generation_source_band_gauge = String(source.source_band_gauge)
@@ -642,22 +518,11 @@ function _qualify_spin_family!(
             throw(ArgumentError("OPERATOR_DELIVERY_ROUNDTRIP_NONFINITE: $(name)"))
         complete_family &&
             delivery_residual > PROFILE_PAIR_WIGNER_SEITZ_ROUNDTRIP_TOLERANCE &&
-            throw(ArgumentError("OPERATOR_DELIVERY_ROUNDTRIP_FAILED: $(name)"))
-        delivery_payload_sha256 = _authoritative_array_sha256(operators[kind].data)
-        delivery_transform_sha256 = bytes2hex(
-            SHA.sha256(
-                join(
-                    (
-                        String(source.rotation_sha256),
-                        final_projector_sha256,
-                        delivery_payload_sha256,
-                        target_contract_sha256,
-                        name,
-                    ),
-                    '\n',
+            throw(
+                ArgumentError(
+                    "OPERATOR_DELIVERY_ROUNDTRIP_FAILED: $(name); residual=$(delivery_residual), tolerance=$(PROFILE_PAIR_WIGNER_SEITZ_ROUNDTRIP_TOLERANCE)",
                 ),
-            ),
-        )
+            )
         source_risk =
             hasproperty(source, :finite_band_risk_audit) ?
             _profile_normalize_metadata(source.finite_band_risk_audit) :
@@ -665,32 +530,28 @@ function _qualify_spin_family!(
         record = Dict{String, Any}(
             "source_status" => "PASS",
             "gauge_status" => "PASS",
-            "source_provenance_sha256" => String(source.provenance_sha256),
-            "source_artifact_sha256" => String(source.artifact_sha256),
             "source_band_gauge" => String(source.source_band_gauge),
             "target_band_gauge" => delivery_target_band_gauge,
             "generation_source_band_gauge" => generation_source_band_gauge,
             "generation_target_band_gauge" => generation_target_band_gauge,
             "delivery_target_band_gauge" => delivery_target_band_gauge,
-            "delivery_transform_sha256" => delivery_transform_sha256,
-            "delivery_payload_sha256" => delivery_payload_sha256,
             "delivery_roundtrip_residual" => delivery_residual,
             "delivery_roundtrip_tolerance" => PROFILE_PAIR_WIGNER_SEITZ_ROUNDTRIP_TOLERANCE,
             "delivery_roundtrip_status" =>
                 delivery_residual <= PROFILE_PAIR_WIGNER_SEITZ_ROUNDTRIP_TOLERANCE ? "PASS" :
                 "NUMERICAL_WARNING",
-            "operator_target_contract_sha256" => target_contract_sha256,
-            "gauge_artifact_sha256" => String(source.gauge_artifact_sha256),
-            "band_gauge_rotation_sha256" => String(source.rotation_sha256),
-            "band_gauge_rotation_semantics" => "legacy_alias_of_band_frame_transform_sha256",
-            "band_frame_transform_sha256" => String(frame_contract["transform_sha256"]),
-            "band_frame_contract_sha256" => String(frame_contract["contract_sha256"]),
+            "operator_target_contract_definition" => target_contract_definition,
+            "gauge_definition" => String(source.gauge_definition),
+            "band_frame_transform_definition" => String(frame_contract["transform_definition"]),
+            "band_frame_contract_definition" => String(frame_contract["contract_definition"]),
             "band_frame_contract" => frame_contract,
-            "source_input_sha256" => Dict{String, String}(source.input_sha256),
+            "source_input_definitions" => Dict{String, String}(source.input_sha256),
             "authoritative_hamiltonian" => String(source.authoritative_hamiltonian),
-            "authoritative_hamiltonian_digest" =>
-                String(source.authoritative_hamiltonian_digest),
-            "authoritative_hamiltonian_input_sha256" => authority_input_sha256,
+            "authoritative_hamiltonian_definition" =>
+                String(source.authoritative_hamiltonian_definition),
+            "authoritative_hamiltonian_input_definitions" => authority_input_sha256,
+            "authoritative_hamiltonian_policy_definition" =>
+                requires_hamiltonian ? authority_contract_definition : "NOT_APPLICABLE",
             "symmetry_projection" => projection_status,
             "covariance_before" => covariance_before,
             "covariance_after" => covariance_after,
@@ -728,28 +589,22 @@ function _qualify_spin_family!(
             )
             evidence = Dict{String, Any}(
                 "algorithm" => STREAMED_NEIGHBOR_ORDER_ALGORITHM,
-                "source_to_internal_sha256" =>
-                    source_neighbor_order_contract["source_to_internal_sha256"],
+                "source_to_internal_definition" =>
+                    source_neighbor_order_contract["source_to_internal_definition"],
                 "operator_kind" => name,
                 "status" => "REBUILT_SOURCE_TO_INTERNAL",
             )
-            for field in (
-                "source_artifact_sha256",
-                "source_input_sha256",
-                "operator_target_contract_sha256",
-                "delivery_payload_sha256",
-            )
+            for field in ("source_input_definitions", "operator_target_contract_definition")
                 evidence[field] = deepcopy(record[field])
             end
-            data = operators[kind].data
-            component_hashes =
+            component_references =
                 serialized.spec.cartesian_rank == 1 ?
-                [_authoritative_array_sha256(@view(data[:, :, a, :])) for a in 1:3] :
-                [_authoritative_array_sha256(@view(data[:, :, a, b, :])) for a in 1:3 for b in 1:3]
-            evidence["delivery_component_sha256"] = join(component_hashes, ",")
+                [IO.operator_component_reference(kind, (a, 0)) for a in 1:3] :
+                [IO.operator_component_reference(kind, (a, b)) for a in 1:3 for b in 1:3]
+            evidence["delivery_component_reference"] = join(component_references, ",")
             record["source_neighbor_order_contract"] = evidence
         end
-        record["payload_sha256"] = _profile_qualification_record_sha256(record)
+        record["content_authentication"] = "NOT_PERFORMED"
         records[name] = record
     end
     isempty(requested_spin) && (family_pass = false)
@@ -762,8 +617,12 @@ function _qualify_spin_family!(
         "schema" => OPERATOR_QUALIFICATION_SCHEMA,
         "schema_version" => OPERATOR_QUALIFICATION_SCHEMA_VERSION,
         "construction_policy" => String(config.input.construction_policy),
-        "model_qualification" => standard_construction ? "STANDARD" : "PASS",
-        "quality_review_recommended" => standard_construction,
+        "model_qualification" => "COMPUTATION_READY",
+        "quality_review_recommended" =>
+            (!isempty(requested_spin) && !family_pass) || any(
+                value -> value > PROFILE_PAIR_WIGNER_SEITZ_ROUNDTRIP_TOLERANCE,
+                values(pair_roundtrip),
+            ),
         "production_eligible" => false,
         "operators" => records,
         "families" => Dict(
@@ -817,7 +676,7 @@ const _PROFILE_OPERATOR_SOURCE_SYMBOLS =
     Dict(:uIu => :uiu, :uHu => :uhu, :sIu => :siu, :sHu => :shu)
 
 # Return the configured input path for one generated operator artifact.
-function _profile_operator_input_path(config::SymmetryAdaptedWannierizationConfig, operator::Symbol)
+function _profile_operator_input_path(config::WannierizationConfig, operator::Symbol)
     operator === :uIu && return config.output.uiu_file
     operator === :uHu && return config.output.uhu_file
     operator === :sIu && return config.output.siu_file
@@ -835,10 +694,7 @@ function _profile_operator_input_label(operator::Symbol)
 end
 
 # Return the configured provenance-sidecar path for one generated operator artifact.
-function _profile_operator_sidecar_path(
-    config::SymmetryAdaptedWannierizationConfig,
-    operator::Symbol,
-)
+function _profile_operator_sidecar_path(config::WannierizationConfig, operator::Symbol)
     operator === :uIu && return config.output.uiu_provenance_json
     operator === :uHu && return config.output.uhu_provenance_json
     operator === :sIu && return config.output.siu_provenance_json
@@ -856,7 +712,7 @@ function _profile_operator_sidecar_label(operator::Symbol)
 end
 
 # Resolve only the generated-operator inputs demanded by one resolved source set.
-function _profile_operator_paths(config::SymmetryAdaptedWannierizationConfig, source_set)
+function _profile_operator_paths(config::WannierizationConfig, source_set)
     requested = Symbol[
         operator for operator in (:uIu, :uHu, :sIu, :sHu) if
         _PROFILE_OPERATOR_SOURCE_SYMBOLS[operator] in source_set
@@ -880,7 +736,7 @@ end
 function _profile_operator_header(
     operator::Symbol,
     path::AbstractString,
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
 )
     formatted = config.output.operator_files_formatted
     operator === :uIu && return IO.read_wannier_uiu_header(path; formatted = formatted)
@@ -888,6 +744,15 @@ function _profile_operator_header(
     operator === :sIu && return IO.read_wannier_siu_header(path; formatted = formatted)
     operator === :sHu && return IO.read_wannier_shu_header(path; formatted = formatted)
     throw(ArgumentError("UNSUPPORTED_PROFILE_OPERATOR: $(operator)"))
+end
+
+"""Load the retained physical-source values needed for cross-operator equality."""
+function _profile_native_source_reference(payload; reference_root = nothing)
+    String(payload.content_authentication)=="NOT_PERFORMED" ||
+        throw(ArgumentError("OPERATOR_EXPLICIT_SOURCE_MIGRATION_REQUIRED"))
+    HDF5.h5open(String(payload.references_hdf5), "r") do h
+        read_scientific_input_reference_hdf5(h, "native_source_reference"; reference_root)
+    end
 end
 
 """Validate one source-generator sidecar without treating leakage audits as error bounds."""
@@ -898,26 +763,23 @@ function _qualified_hamiltonian_operator_sidecar(
     authority::AuthoritativeBandHamiltonian,
     tolerance::Float64,
     gauge_contract,
-    spn_provenance_sha256::AbstractString,
-    uiu_input_sha256,
-    spn_input_sha256,
-    spn_sha256::AbstractString,
+    spn_record,
+    common_source_reference;
+    reference_root = nothing,
 )
     payload = JSON3.read(read(path, String))
     String(payload.schema) == WANNIER_HAMILTONIAN_OPERATOR_GENERATION_SCHEMA ||
         throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(operator) provenance schema differs"))
-    String(payload.schema_version) in ("1.0", "1.1", "1.3") ||
+    String(payload.schema_version) == WANNIER_HAMILTONIAN_OPERATOR_GENERATION_SCHEMA_VERSION ||
         throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(operator) provenance version differs"))
+    (
+        hasproperty(payload, :band_gauge_rotation_sha256) ||
+        hasproperty(payload, :band_gauge_rotation_semantics)
+    ) && throw(ArgumentError("OPERATOR_LEGACY_ROTATION_FIELDS_REQUIRE_MIGRATION"))
     Symbol(String(payload.operator)) == operator ||
         throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: expected $(operator) provenance"))
     String(payload.qualification_stage) == "SOURCE_OPERATOR_GENERATION" || throw(
         ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(operator) qualification stage differs"),
-    )
-    Bool(payload.source_generation_qualified) && Bool(payload.passed) || throw(
-        ArgumentError("SOURCE_OPERATOR_GENERATION_FAILED: $(operator) generator is not qualified"),
-    )
-    Bool(payload.artifact_published) && String(payload.status) == "PASS" || throw(
-        ArgumentError("SOURCE_OPERATOR_ARTIFACT_NOT_PUBLISHED: $(operator) output is unavailable"),
     )
     diagnostic_reference = Float64(payload.diagnostic_reference)
     isfinite(diagnostic_reference) && diagnostic_reference > 0.0 || throw(
@@ -938,9 +800,13 @@ function _qualified_hamiltonian_operator_sidecar(
     )
     String(payload.nbands_convergence_status) == "NOT_ESTABLISHED" ||
         throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(operator) NBANDS status differs"))
-    String(payload.output_sha256) == sha256_file(output_file) ||
-        throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(operator) output hash differs"))
-    String(payload.authoritative_hamiltonian_digest) == authority.digest ||
+    IO.validate_scientific_input_definitions_equal(
+        common_source_reference,
+        _profile_native_source_reference(payload; reference_root);
+        mismatch_error = "OPERATOR_PHYSICAL_SOURCE_MISMATCH",
+    )
+    isfile(output_file) || throw(ArgumentError("OPERATOR_OUTPUT_MISSING"))
+    String(payload.authoritative_hamiltonian_definition) == authority.definition ||
         throw(ArgumentError("HAMILTONIAN_REFERENCE_MISMATCH: $(operator) authority digest differs"))
     String(payload.authoritative_hamiltonian) == authority.authority ||
         throw(ArgumentError("HAMILTONIAN_REFERENCE_MISMATCH: $(operator) authority label differs"))
@@ -948,26 +814,31 @@ function _qualified_hamiltonian_operator_sidecar(
         throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(operator) source gauge differs"))
     String(payload.target_band_gauge) == gauge_contract.target_band_gauge ||
         throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(operator) target gauge differs"))
-    String(payload.band_frame_transform_sha256) == gauge_contract.transform_sha256 ||
+    String(payload.band_frame_transform_definition) == gauge_contract.transform_definition ||
         throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(operator) frame digest differs"))
-    String(payload.band_frame_contract_sha256) == gauge_contract.contract_sha256 ||
+    String(payload.band_frame_contract_definition) == gauge_contract.contract_definition ||
         throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(operator) frame contract differs"))
-    String(payload.gauge_artifact_sha256) ==
-    something(gauge_contract.gauge_artifact_sha256, "NOT_APPLICABLE") ||
+    String(payload.gauge_definition) ==
+    something(gauge_contract.gauge_definition, "NOT_APPLICABLE") ||
         throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(operator) gauge artifact differs"))
-    expected_spn_digest =
-        operator in (:sIu, :sHu) ? String(spn_provenance_sha256) : "NOT_APPLICABLE"
-    String(payload.spn_provenance_sha256) == expected_spn_digest ||
-        throw(ArgumentError("OPERATOR_PROVENANCE_MISMATCH: $(operator) SPN provenance differs"))
-    input_sha256 = _profile_input_hashes(payload.input_sha256, String(operator))
-    _validate_profile_common_source_hashes(uiu_input_sha256, input_sha256, String(operator))
-    operator in (:sIu, :sHu) && _validate_profile_spn_source_hashes(
-        input_sha256,
-        spn_input_sha256,
-        spn_sha256,
-        spn_provenance_sha256,
-        String(operator),
-    )
+    input_sha256 = _profile_input_definitions(payload.input_definitions, String(operator))
+    if operator in (:sIu, :sHu)
+        spn_record === nothing && throw(ArgumentError("OPERATOR_SPN_REFERENCE_REQUIRED"))
+        String(payload.spn_contract_definition)==spn_record.contract_definition ||
+            throw(ArgumentError("OPERATOR_SPN_CONTRACT_MISMATCH"))
+        HDF5.h5open(String(payload.references_hdf5), "r") do h
+            IO.validate_scientific_input_definitions_equal(
+                spn_record.spn_reference,
+                read_scientific_input_reference_hdf5(h, "spn_reference"; reference_root);
+                mismatch_error = "OPERATOR_SPN_VALUES_MISMATCH",
+            )
+        end
+        IO.validate_scientific_input_definitions_equal(
+            common_source_reference,
+            spn_record.source_reference;
+            mismatch_error = "OPERATOR_SPN_PHYSICAL_SOURCE_MISMATCH",
+        )
+    end
     block_audit = _profile_normalize_metadata(payload.galerkin_block_audit)
     cancellation_audit = _profile_normalize_metadata(payload.galerkin_cancellation_audit)
     String(block_audit["status"]) == "RECORDED" ||
@@ -1005,8 +876,12 @@ function _qualified_hamiltonian_operator_sidecar(
     end
     risk_audit = Dict{String, Any}(
         "qualification_stage" => String(payload.qualification_stage),
-        "source_generation_qualified" => Bool(payload.source_generation_qualified),
-        "artifact_published" => Bool(payload.artifact_published),
+        # Historical permission labels do not authorize imported operators.
+        # Preserve absence as false in this diagnostic record; mathematical
+        # source/frame/dimension and finite audit checks above remain mandatory.
+        "source_generation_qualified" =>
+            Bool(get(payload, :source_generation_qualified, false)),
+        "artifact_published" => isfile(output_file),
         "diagnostic_reference" => diagnostic_reference,
         "diagnostic_reference_status" => diagnostic_reference_status,
         "diagnostic_reference_policy" => String(payload.diagnostic_reference_policy),
@@ -1046,14 +921,10 @@ end
 
 """Accept finite Standard uIu warnings without relabeling their numerical qualification."""
 function _uiu_sidecar_quality_available(payload, construction_policy::Symbol)
-    Bool(payload.passed) && Bool(payload.physical_overlap_available) && return true
-    construction_policy == :standard || return false
-    get(payload, :construction_policy, "") == "standard" &&
-    get(payload, :status, "") == "EXPORTED_WITH_WARNING" &&
-    !Bool(payload.passed) &&
-    Bool(payload.physical_overlap_available) &&
-    get(payload, :production_eligible, true) === false || return false
-    "UIU_GENERATION_NUMERICAL_WARNING" in get(payload, :diagnostics, []) || return false
+    validate_ordinary_construction_policy(construction_policy)
+    # Data availability and finite residuals are concrete requirements. PASS,
+    # COMPUTATION_READY or warning labels are not substitutes for them.
+    get(payload, :physical_overlap_available, false)===true || return false
     fields = (
         :generalized_normalization_max_absolute,
         :radial_q_max_absolute,
@@ -1081,55 +952,97 @@ function _uiu_sidecar_quality_available(payload, construction_policy::Symbol)
     )
 end
 
+"""Detach the fields later emitted in the operator bundle from large JSON buffers.
+
+All sidecar validation happens before this conversion. The frame contract is
+copied independently so a JSON3 view cannot retain the complete source file.
+"""
+function _profile_detach_sidecar(payload; uiu::Bool = false)
+    frame = JSON3.read(JSON3.write(payload.band_frame_contract))
+    common = (
+        source_band_gauge = String(payload.source_band_gauge),
+        target_band_gauge = String(payload.target_band_gauge),
+        gauge_definition = String(payload.gauge_definition),
+        band_frame_transform_definition = String(payload.band_frame_transform_definition),
+        band_frame_contract = frame,
+        algorithm_version = String(payload.algorithm_version),
+    )
+    return uiu ?
+           merge(
+        common,
+        (
+            passed = Bool(payload.passed),
+            status = String(get(payload, :status, Bool(payload.passed) ? "PASS" : "FAILED_GATE")),
+        ),
+    ) : common
+end
+
 """Validate a uIu sidecar and its same-source MMN oracle binding."""
 function _qualified_uiu_sidecar(
     path::AbstractString,
     uiu_file::AbstractString,
     mmn_file::AbstractString,
     gauge_contract;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
+    reference_root = nothing,
 )
     payload = JSON3.read(read(path, String))
     String(payload.schema) == WANNIER_UIU_GENERATION_SCHEMA || throw(
         ArgumentError("PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: uIu provenance schema differs"),
     )
-    String(payload.schema_version) in ("1.0", "1.1", "1.2") || throw(
+    String(payload.schema_version) == WANNIER_UIU_GENERATION_SCHEMA_VERSION || throw(
         ArgumentError("PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: uIu provenance version differs"),
     )
+    (
+        hasproperty(payload, :band_gauge_rotation_sha256) ||
+        hasproperty(payload, :band_gauge_rotation_semantics)
+    ) && throw(ArgumentError("UIU_LEGACY_ROTATION_FIELDS_REQUIRE_MIGRATION"))
     _uiu_sidecar_quality_available(payload, construction_policy) ||
         throw(ArgumentError("PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: uIu qualification failed"))
-    String(payload.output_sha256) == sha256_file(uiu_file) ||
-        throw(ArgumentError("PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: uIu output hash differs"))
-    hashes = Dict{String, String}(
-        String(key) => String(value) for (key, value) in pairs(payload.input_sha256)
-    )
-    get(hashes, "ORACLE_MMN", "MISSING") == sha256_file(mmn_file) ||
-        throw(ArgumentError("PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: uIu MMN oracle differs"))
+    String(get(payload, :content_authentication, "")) == "NOT_PERFORMED" ||
+        throw(ArgumentError("UIU_EXPLICIT_MIGRATION_REQUIRED"))
+    HDF5.h5open(String(payload.references_hdf5), "r") do handle
+        haskey(handle, "oracle_mmn_reference") ||
+            throw(ArgumentError("UIU_COMPLETE_ORACLE_REFERENCE_REQUIRED"))
+        IO.validate_scientific_source_collection(
+            Dict("MMN"=>abspath(mmn_file)),
+            read_scientific_input_reference_hdf5(handle, "oracle_mmn_reference"; reference_root),
+        )
+    end
+    header=IO.read_wannier_uiu_header(uiu_file)
+    (header.num_bands, header.num_kpts, header.num_neighbors) ==
+    (Int(payload.num_bands), Int(payload.num_kpts), Int(payload.num_neighbors)) ||
+        throw(ArgumentError("UIU_PROVENANCE_DIMENSION_MISMATCH"))
     String(payload.source_band_gauge) == gauge_contract.source_band_gauge ||
         throw(ArgumentError("PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: uIu source gauge differs"))
     String(payload.target_band_gauge) == gauge_contract.target_band_gauge ||
         throw(ArgumentError("PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: uIu target gauge differs"))
-    String(payload.band_frame_transform_sha256) == gauge_contract.transform_sha256 ||
+    String(payload.band_frame_transform_definition) == gauge_contract.transform_definition ||
         throw(ArgumentError("PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: uIu frame differs"))
-    String(payload.band_frame_contract_sha256) == gauge_contract.contract_sha256 || throw(
+    String(payload.band_frame_contract_definition) == gauge_contract.contract_definition || throw(
         ArgumentError("PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: uIu frame contract differs"),
     )
-    String(payload.gauge_artifact_sha256) ==
-    something(gauge_contract.gauge_artifact_sha256, "NOT_APPLICABLE") ||
+    String(payload.gauge_definition) ==
+    something(gauge_contract.gauge_definition, "NOT_APPLICABLE") ||
         throw(ArgumentError("PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: uIu artifact differs"))
     return payload
 end
 
-"""Validate and hash each physical MMN path once across its target roles."""
+"""Validate each MMN topology and retain one bounded complete reference per physical file."""
 function _operator_mmn_file_identities(
     mmn::WannierMMN,
     oracle_path::AbstractString,
     solver_path::AbstractString;
     topology_reader = IO.read_wannier_mmn_topology,
-    file_hasher = sha256_file,
+    reference_builder = path -> begin
+        source_files = Dict("MMN" => path)
+        reference_root = get(ENV, "WANNIERNLQG_VASP_SOURCE_REFERENCE_ROOT", "")
+        isempty(reference_root) ? IO.scientific_source_collection_definition(source_files) :
+        IO.scientific_source_collection_definition(source_files; reference_root = reference_root)
+    end,
 )
     expected_dimensions = (mmn.num_bands, mmn.num_kpts, mmn.num_neighbors)
-    identities = Dict{String, String}()
+    identities = Dict{String, IO.ScientificInputDefinition}()
     for (role, path) in (("operator oracle", oracle_path), ("solver", solver_path))
         canonical_path = realpath(path)
         haskey(identities, canonical_path) && continue
@@ -1139,24 +1052,25 @@ function _operator_mmn_file_identities(
         topology.neighbors == mmn.neighbors &&
         topology.reciprocal_shifts == mmn.reciprocal_shifts ||
             throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: $(role) MMN topology differs"))
-        identities[canonical_path] = file_hasher(canonical_path)
+        identities[canonical_path] = reference_builder(canonical_path)
     end
     return identities
 end
 
 """Derive the target scope from the same EIG and window contract used by the solver."""
-function _operator_qualification_scope(config::SymmetryAdaptedWannierizationConfig, eig::WannierEIG)
+function _operator_qualification_scope(config::WannierizationConfig, eig::WannierEIG)
     labels = canonical_band_block_labels(eig.data, config.input.degeneracy_tolerance_ev)
     outer_masks, frozen_masks = window_masks_from_energies(config, eig.data, labels)
     return BandRepresentationQualificationScope(
         BitMatrix(hcat(outer_masks...)),
-        BitMatrix(hcat(frozen_masks...)),
+        BitMatrix(hcat(frozen_masks...));
+        content_authentication = false,
     )
 end
 
 """Create the one typed target shared by raw operators, solver MMN, and export."""
 function _wannier_operator_target_contract(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     eig::WannierEIG,
     mmn::WannierMMN,
     operator_oracle_mmn_file::AbstractString,
@@ -1190,11 +1104,11 @@ function _wannier_operator_target_contract(
         identities[realpath(solver_path)],
         gauge_contract.source_band_gauge,
         gauge_contract.target_band_gauge,
-        gauge_contract.transform_sha256,
-        gauge_contract.contract_sha256,
-        something(gauge_contract.gauge_artifact_sha256, "NOT_APPLICABLE"),
+        gauge_contract.transform_definition,
+        gauge_contract.contract_definition,
+        something(gauge_contract.gauge_definition, "NOT_APPLICABLE"),
         authority.authority,
-        authority.digest,
+        authority.definition,
         mmn.num_bands,
         mmn.num_kpts,
         mmn.num_neighbors,
@@ -1206,7 +1120,7 @@ end
 
 """Revalidate a target against live artifacts and the realized solver objects."""
 function _validate_wannier_operator_target_contract(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     eig::WannierEIG,
     mmn::WannierMMN,
     target::WannierOperatorTargetContract,
@@ -1219,24 +1133,25 @@ function _validate_wannier_operator_target_contract(
         target.operator_oracle_mmn_file,
         target.solver_mmn_file,
     )
-    expected.contract_sha256 == target.contract_sha256 ||
+    expected.definition == target.definition ||
         throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: live target contract differs"))
     return nothing
 end
 
 """Require a generated sidecar to attest the exact workflow target contract."""
 function _require_operator_target_contract_hash(input_sha256, label, target)
-    get(input_sha256, "OPERATOR_TARGET_CONTRACT", "MISSING") == target.contract_sha256 ||
+    get(input_sha256, "OPERATOR_TARGET_CONTRACT", "MISSING") == target.definition ||
         throw(ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: $(label) sidecar target differs"))
     return nothing
 end
 
 """Validate every static operator-source identity before entering the SAWF solver."""
 function _preflight_wannierization_operator_profile(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     eig::WannierEIG,
     mmn::WannierMMN,
-    target_contract::Union{Nothing, WannierOperatorTargetContract} = nothing,
+    target_contract::Union{Nothing, WannierOperatorTargetContract} = nothing;
+    native_source_files = nothing,
 )
     selection = _resolved_operator_selection(config)
     source_set = Set{Symbol}(IO.resolved_source_inventory(selection))
@@ -1260,9 +1175,9 @@ function _preflight_wannierization_operator_profile(
     summary = Dict{String, String}(
         "status" => "PASS",
         "profile" => String(IO.resolved_operator_profile(selection)),
-        "band_frame_contract_sha256" => gauge_contract.contract_sha256,
+        "band_frame_contract_definition" => gauge_contract.contract_definition,
         "authoritative_hamiltonian" => authority.authority,
-        "authoritative_hamiltonian_digest" => authority.digest,
+        "authoritative_hamiltonian_definition" => authority.definition,
     )
     spn_attestation = nothing
     if needs_spn
@@ -1275,12 +1190,11 @@ function _preflight_wannierization_operator_profile(
             expected_num_bands = mmn.num_bands,
             expected_num_kpoints = mmn.num_kpts,
             target_authority = config.input.authoritative_hamiltonian,
-            gauge_artifact_sha256 = gauge_contract.gauge_artifact_sha256,
-            band_frame_transform_sha256 = gauge_contract.transform_sha256,
-            band_frame_contract_sha256 = gauge_contract.contract_sha256,
+            gauge_definition = gauge_contract.gauge_definition,
+            band_frame_transform_definition = gauge_contract.transform_definition,
+            band_frame_contract_definition = gauge_contract.contract_definition,
         )
-        summary["spn_sha256"] = String(spn_attestation.spn_sha256)
-        summary["spn_provenance_sha256"] = String(spn_attestation.provenance_sha256)
+        summary["spn_content_authentication"] = "NOT_PERFORMED"
     end
     _record_operator_selection_summary!(summary, selection)
     needs_generated || return summary
@@ -1290,10 +1204,8 @@ function _preflight_wannierization_operator_profile(
     target = something(target_contract)
     _validate_wannier_operator_target_contract(config, eig, mmn, target)
     summary["operator_oracle_mmn_file"] = target.operator_oracle_mmn_file
-    summary["operator_oracle_mmn_sha256"] = target.operator_oracle_mmn_sha256
     summary["solver_mmn_file"] = target.solver_mmn_file
-    summary["solver_mmn_sha256"] = target.solver_mmn_sha256
-    summary["operator_target_contract_sha256"] = target.contract_sha256
+    summary["operator_target_contract_definition"] = target.definition
 
     requested_operators = Symbol[
         operator for operator in (:uIu, :uHu, :sIu, :sHu) if
@@ -1323,6 +1235,7 @@ function _preflight_wannierization_operator_profile(
         )
     end
     uiu_input_sha256 = nothing
+    uiu_source_reference = nothing
     if :uIu in requested_operators
         uiu_provenance = _qualified_uiu_sidecar(
             sidecars[:uIu],
@@ -1330,15 +1243,28 @@ function _preflight_wannierization_operator_profile(
             target.operator_oracle_mmn_file,
             gauge_contract;
             construction_policy = config.input.construction_policy,
+            reference_root = config.checkpoint.reference_root,
         )
-        uiu_input_sha256 = _profile_input_hashes(uiu_provenance.input_sha256, "uIu")
+        uiu_input_sha256 = _profile_input_definitions(uiu_provenance.input_definitions, "uIu")
+        uiu_source_reference = _profile_native_source_reference(
+            uiu_provenance;
+            reference_root = config.checkpoint.reference_root,
+        )
+        native_source_files === nothing ||
+            IO.validate_scientific_source_collection(native_source_files, uiu_source_reference)
         _require_operator_target_contract_hash(uiu_input_sha256, "uIu", target)
+        # The complete source definition and inputs above are detached. Do not
+        # retain a potentially multi-GiB JSON view while validating the next
+        # operator; its original bytes remain in the protected source snapshot.
+        uiu_provenance = nothing
+        GC.gc(true)
     end
     spn_input_sha256 =
-        needs_spn ? _profile_input_hashes(spn_attestation.input_sha256, "SPN provenance") : nothing
-    spn_provenance_sha256 = needs_spn ? spn_attestation.provenance_sha256 : "NOT_APPLICABLE"
-    spn_artifact_sha256 = needs_spn ? spn_attestation.spn_sha256 : "NOT_APPLICABLE"
-    common_reference = uiu_input_sha256 !== nothing ? uiu_input_sha256 : spn_input_sha256
+        needs_spn ? _profile_input_definitions(spn_attestation.input_sha256, "SPN provenance") :
+        nothing
+    common_reference =
+        uiu_source_reference !== nothing ? uiu_source_reference :
+        (needs_spn ? spn_attestation.source_reference : nothing)
     for operator in (:uHu, :sIu, :sHu)
         operator in requested_operators || continue
         common_reference === nothing && throw(
@@ -1353,68 +1279,243 @@ function _preflight_wannierization_operator_profile(
             authority,
             config.output.operator_closure_tolerance,
             gauge_contract,
-            spn_provenance_sha256,
-            common_reference,
-            spn_input_sha256,
-            spn_artifact_sha256,
+            needs_spn ? spn_attestation : nothing,
+            common_reference;
+            reference_root = config.checkpoint.reference_root,
         )
         _require_operator_target_contract_hash(input_sha256, String(operator), target)
+        GC.gc(true)
     end
     for operator in requested_operators
         label = lowercase(String(operator))
-        summary["$(label)_sha256"] = sha256_file(paths[operator])
-        summary["$(label)_provenance_sha256"] = sha256_file(sidecars[operator])
+        summary["$(label)_content_authentication"] = "NOT_PERFORMED"
     end
     return summary
 end
 
-"""Reject operator or SPN artifacts changed after the pre-solver checkpoint snapshot."""
-function _validate_operator_profile_preflight_snapshot(result, config)
-    selection = _resolved_operator_selection(config)
-    needs_spn = _operator_selection_needs_source(selection, :spn)
-    needs_generated = _operator_selection_requires_generated_operators(selection)
-    needs_spn || needs_generated || return nothing
-    prefix = "operator_profile_preflight_"
-    source_set = Set{Symbol}(IO.resolved_source_inventory(selection))
-    artifacts = Dict{String, Tuple{String, String}}()
+"""Read both complete operators and reject nonfinite or changing files."""
+function _scan_completed_operator_pair(uiu_file, uhu_file, mmn, formatted)
+    for (path, reader) in
+        ((uiu_file, IO.foreach_wannier_uiu_block), (uhu_file, IO.foreach_wannier_uhu_block))
+        path === nothing && throw(ArgumentError("COMPLETED_OPERATOR_PATH_REQUIRED"))
+        before = IO.scientific_file_state(path)
+        reader(
+            path;
+            formatted,
+            expected_num_bands = mmn.num_bands,
+            expected_num_kpts = mmn.num_kpts,
+            expected_num_neighbors = mmn.num_neighbors,
+        ) do block, args...
+            all(isfinite, block) || throw(ArgumentError("COMPLETED_OPERATOR_NONFINITE"))
+        end
+        IO.validate_scientific_source_state(before; declared_path = path)
+    end
+    return nothing
+end
+
+"""Validate existing uIu/uHu against the live source and read every finite block."""
+function _validate_completed_operator_pair(
+    config,
+    eig,
+    mmn,
+    target,
+    native_source_files;
+    reuse_spn::Bool = false,
+)
+    sidecars = (config.output.uiu_provenance_json, config.output.uhu_provenance_json)
+    all(path -> path !== nothing, sidecars) ||
+        throw(ArgumentError("COMPLETED_OPERATOR_PROVENANCE_REQUIRED"))
+    states = map(IO.scientific_file_state, sidecars)
+    selection_config = replace_wannierization_config(
+        config;
+        output = (;
+            profile = nothing,
+            operator_tasks = (OperatorTask(quantity = :orbital_magnetization),),
+        ),
+    )
+    _preflight_wannierization_operator_profile(
+        selection_config,
+        eig,
+        mmn,
+        target;
+        native_source_files,
+    )
+    _scan_completed_operator_pair(
+        config.output.uiu_file,
+        config.output.uhu_file,
+        mmn,
+        config.output.operator_files_formatted,
+    )
+    if reuse_spn
+        spin_path = _required_profile_file(config.output.spn_file, "spn_file")
+        provenance_path =
+            _required_profile_file(config.output.spn_provenance_file, "spn_provenance_file")
+        spin_state = IO.scientific_file_state(spin_path)
+        provenance_state = IO.scientific_file_state(provenance_path)
+        gauge = generation_band_gauge_contract(
+            config.input.source,
+            config.input.authoritative_hamiltonian,
+            config.input.wavefunction_gauge_hdf5,
+            mmn.num_bands,
+            mmn.num_kpts;
+            construction_policy = config.input.construction_policy,
+        )
+        attestation = read_and_validate_spn_provenance(
+            provenance_path,
+            spin_path;
+            expected_num_bands = mmn.num_bands,
+            expected_num_kpoints = mmn.num_kpts,
+            target_authority = config.input.authoritative_hamiltonian,
+            gauge_definition = gauge.gauge_definition,
+            band_frame_transform_definition = gauge.transform_definition,
+            band_frame_contract_definition = gauge.contract_definition,
+        )
+        IO.validate_scientific_source_collection(native_source_files, attestation.source_reference)
+        definitions = _profile_input_definitions(attestation.input_sha256, "SPN provenance")
+        # VASP SPN is generated for this target. The existing QE generator
+        # publishes source-wide SPN without a target; if it does record one,
+        # it must match as well.
+        if attestation.source_code == :vasp || haskey(definitions, "OPERATOR_TARGET_CONTRACT")
+            _require_operator_target_contract_hash(definitions, "SPN", target)
+        end
+        IO.validate_scientific_source_state(spin_state; declared_path = spin_path)
+        IO.validate_scientific_source_state(provenance_state; declared_path = provenance_path)
+    end
+    for (path, state) in zip(sidecars, states)
+        IO.validate_scientific_source_state(state; declared_path = path)
+    end
+    return nothing
+end
+
+"""Validate a complete published operator set before posthoc reuse."""
+function _validate_completed_operator_set(config, eig, mmn, target, native_source_files)
+    sidecars = (
+        config.output.spn_provenance_file,
+        config.output.uiu_provenance_json,
+        config.output.uhu_provenance_json,
+        config.output.siu_provenance_json,
+        config.output.shu_provenance_json,
+    )
+    all(path -> path !== nothing, sidecars) ||
+        throw(ArgumentError("COMPLETED_OPERATOR_PROVENANCE_REQUIRED"))
+    states = map(IO.scientific_file_state, sidecars)
+    summary =
+        _preflight_wannierization_operator_profile(config, eig, mmn, target; native_source_files)
+    _scan_completed_operator_pair(
+        config.output.uiu_file,
+        config.output.uhu_file,
+        mmn,
+        config.output.operator_files_formatted,
+    )
+    for (path, reader) in (
+        (config.output.siu_file, IO.foreach_wannier_siu_block),
+        (config.output.shu_file, IO.foreach_wannier_shu_block),
+    )
+        path === nothing && throw(ArgumentError("COMPLETED_OPERATOR_PATH_REQUIRED"))
+        before = IO.scientific_file_state(path)
+        reader(
+            path;
+            formatted = config.output.operator_files_formatted,
+            expected_num_bands = mmn.num_bands,
+            expected_num_kpts = mmn.num_kpts,
+            expected_num_neighbors = mmn.num_neighbors,
+        ) do block, args...
+            all(isfinite, block) || throw(ArgumentError("COMPLETED_OPERATOR_NONFINITE"))
+        end
+        IO.validate_scientific_source_state(before; declared_path = path)
+    end
+    for (path, state) in zip(sidecars, states)
+        IO.validate_scientific_source_state(state; declared_path = path)
+    end
+    return summary
+end
+
+"""Resolve declared operator inputs without decoding their sidecars."""
+function _operator_profile_declared_source_files(config)
+    selection=_resolved_operator_selection(config)
+    sources=Set{Symbol}(IO.resolved_source_inventory(selection))
+    files=Dict{String, String}()
     for operator in (:uIu, :uHu, :sIu, :sHu)
-        source = _PROFILE_OPERATOR_SOURCE_SYMBOLS[operator]
-        source in source_set || continue
-        artifacts[String(source)] = (
-            _required_profile_file(
-                _profile_operator_input_path(config, operator),
-                _profile_operator_input_label(operator),
-            ),
-            _required_profile_file(
-                _profile_operator_sidecar_path(config, operator),
-                _profile_operator_sidecar_label(operator),
-            ),
+        _PROFILE_OPERATOR_SOURCE_SYMBOLS[operator] in sources || continue
+        name=String(operator)
+        files[name]=_required_profile_file(
+            _profile_operator_input_path(config, operator),
+            _profile_operator_input_label(operator),
+        )
+        files[name * ":provenance"]=_required_profile_file(
+            _profile_operator_sidecar_path(config, operator),
+            _profile_operator_sidecar_label(operator),
         )
     end
-    for (label, (operator_file, sidecar_file)) in artifacts
-        expected_operator = get(result.input_summary, prefix * label * "_sha256", "MISSING")
-        expected_sidecar =
-            get(result.input_summary, prefix * label * "_provenance_sha256", "MISSING")
-        sha256_file(operator_file) == expected_operator ||
-            throw(ArgumentError("OPERATOR_PROFILE_TOCTOU_MISMATCH: $(label) artifact changed"))
-        sha256_file(sidecar_file) == expected_sidecar ||
-            throw(ArgumentError("OPERATOR_PROFILE_TOCTOU_MISMATCH: $(label) sidecar changed"))
-        payload = JSON3.read(read(sidecar_file, String))
-        String(payload.output_sha256) == expected_operator || throw(
-            ArgumentError(
-                "OPERATOR_PROFILE_TOCTOU_MISMATCH: $(label) sidecar output binding differs",
-            ),
+    if _operator_selection_needs_source(selection, :spn)
+        files["SPN"]=_required_profile_file(config.output.spn_file, "spn_file")
+        files["SPN:provenance"]=_required_profile_file(
+            config.output.spn_provenance_file,
+            "spn_provenance_file",
         )
     end
-    needs_spn || return nothing
-    spn_file = _required_profile_file(config.output.spn_file, "spn_file")
-    spn_provenance_file =
-        _required_profile_file(config.output.spn_provenance_file, "spn_provenance_file")
-    sha256_file(spn_file) == get(result.input_summary, prefix * "spn_sha256", "MISSING") ||
-        throw(ArgumentError("OPERATOR_PROFILE_TOCTOU_MISMATCH: SPN artifact changed"))
-    sha256_file(spn_provenance_file) ==
-    get(result.input_summary, prefix * "spn_provenance_sha256", "MISSING") ||
-        throw(ArgumentError("OPERATOR_PROFILE_TOCTOU_MISMATCH: SPN provenance changed"))
+    return files
+end
+
+"""Collect operator inputs, sidecars, and the references declared in each sidecar."""
+function operator_profile_source_files(config; observe_sidecar_lifetimes::Bool = false)
+    files = _operator_profile_declared_source_files(config)
+    sidecar_states =
+        observe_sidecar_lifetimes ?
+        Dict(
+            name => IO.scientific_file_state(realpath(path)) for
+            (name, path) in files if endswith(name, ":provenance")
+        ) : nothing
+    for (name, path) in collect(files)
+        endswith(name, ":provenance") || continue
+        if endswith(lowercase(path), ".json")
+            payload=JSON3.read(read(path, String))
+            hasproperty(payload, :references_hdf5) && (
+                files[name * ":references"]=_required_profile_file(
+                    String(payload.references_hdf5),
+                    "source references",
+                )
+            )
+            # Do not keep the previous large JSON backing alive while the next
+            # sidecar is read. Every file is still parsed and compared in full.
+            payload = nothing
+            GC.gc(true)
+        end
+    end
+    if observe_sidecar_lifetimes
+        for (name, state) in sidecar_states
+            IO.validate_scientific_source_state(state; declared_path = files[name])
+        end
+        return (; files, sidecar_states)
+    end
+    return files
+end
+
+"""Compare consumed operator inputs with the complete accepted input snapshot."""
+function _validate_operator_profile_preflight_snapshot(result, config; resolved_sources = nothing)
+    files = if resolved_sources === nothing
+        operator_profile_source_files(config)
+    else
+        # Only reuse an already-resolved map if the active config still names
+        # exactly its declared artifacts. The complete labelled bytes, including
+        # sidecars and their references, are compared to the snapshot below.
+        declared = _operator_profile_declared_source_files(config)
+        declared_names = Set(keys(declared))
+        resolved_names = Set(k for k in keys(resolved_sources) if !endswith(k, ":references"))
+        declared_names == resolved_names ||
+            throw(ArgumentError("OPERATOR_PROFILE_DECLARED_PATH_MISMATCH"))
+        all(get(resolved_sources, k, nothing) == v for (k, v) in declared) ||
+            throw(ArgumentError("OPERATOR_PROFILE_DECLARED_PATH_MISMATCH"))
+        resolved_sources
+    end
+    isempty(files) && return nothing
+    state=result.restart_state
+    state===nothing && throw(ArgumentError("OPERATOR_PROFILE_ACCEPTED_INPUTS_REQUIRED"))
+    definition=state.input_definition
+    definition===nothing && throw(ArgumentError("OPERATOR_PROFILE_ACCEPTED_INPUTS_REQUIRED"))
+    reference=get(definition.auxiliary_sources, "operator_profile_sources", nothing)
+    reference===nothing && throw(ArgumentError("OPERATOR_PROFILE_COMPLETE_SNAPSHOT_REQUIRED"))
+    IO.validate_scientific_source_collection(files, reference)
     return nothing
 end
 
@@ -1428,6 +1529,84 @@ function _profile_transform_plan(chk, model)
     )
 end
 
+"""Reconstruct the delivered Convention-II position at native q points, in Angstrom.
+
+Use the same final H/r model consumed downstream, including its Hermitian closure
+and exact home-cell centers. No raw finite-difference or checkpoint data is changed.
+"""
+function _profile_delivered_position_q(model, chk)
+    output = zeros(ComplexF64, chk.num_orbitals, chk.num_orbitals, 3, chk.num_kpts)
+    for kpoint in 1:chk.num_kpts, index in 1:model.num_r_vectors
+        phase =
+            cis(2pi * dot(@view(chk.kpt_red[kpoint, :]), @view(model.r_vectors[:, index]))) /
+            model.r_degeneracies[index]
+        @views output[:, :, :, kpoint] .+= phase .* model.position_r[:, :, :, index]
+    end
+    return output
+end
+
+"""Project the authoritative Hamiltonian into the accepted Wannier frame, in eV."""
+function _profile_delivered_hamiltonian_q(chk, authority)
+    output = zeros(ComplexF64, chk.num_orbitals, chk.num_orbitals, chk.num_kpts)
+    for kpoint in 1:chk.num_kpts
+        gauge = @view chk.v_matrix[:, :, kpoint]
+        @views output[:, :, kpoint] .= gauge' * authority.matrices_ev[:, :, kpoint] * gauge
+    end
+    return output
+end
+
+"""Convert centered B to the uncentered periodic moment B + H*tau once, in eV Angstrom."""
+function _profile_uncenter_connection_q!(connection, hamiltonian, centers)
+    for kpoint in axes(connection, 4),
+        axis in 1:3,
+        column in axes(connection, 2),
+        row in axes(connection, 1)
+
+        connection[row, column, axis, kpoint] +=
+            hamiltonian[row, column, kpoint] * centers[column, axis]
+    end
+    return connection
+end
+
+"""Convert centered F to uncentered <partial_a u|partial_b u>, in squared Angstrom.
+
+The supplied A is already the delivered uncentered position. Therefore the affine
+term is A_a' tau_b + tau_a A_b - tau_a tau_b, not a second center subtraction.
+"""
+function _profile_uncenter_derivative_q!(tensor, position, centers)
+    for kpoint in axes(tensor, 5),
+        beta in 1:3,
+        alpha in 1:3,
+        column in axes(tensor, 2),
+        row in axes(tensor, 1)
+
+        tensor[row, column, alpha, beta, kpoint] +=
+            conj(position[column, row, alpha, kpoint]) * centers[column, beta] +
+            centers[row, alpha] * position[row, column, beta, kpoint] -
+            (row == column ? centers[row, alpha] * centers[column, beta] : 0.0)
+    end
+    return tensor
+end
+
+"""Convert centered C to uncentered <partial_a u|H|partial_b u>, in eV Angstrom squared.
+
+B must have received its single uncentering conversion before this contraction.
+"""
+function _profile_uncenter_weighted_tensor_q!(tensor, connection, hamiltonian, centers)
+    for kpoint in axes(tensor, 5),
+        beta in 1:3,
+        alpha in 1:3,
+        column in axes(tensor, 2),
+        row in axes(tensor, 1)
+
+        tensor[row, column, alpha, beta, kpoint] +=
+            conj(connection[column, row, alpha, kpoint]) * centers[column, beta] +
+            centers[row, alpha] * connection[row, column, beta, kpoint] -
+            centers[row, alpha] * hamiltonian[row, column, kpoint] * centers[column, beta]
+    end
+    return tensor
+end
+
 """Transform one profile operator from q space onto the qualified R support."""
 function _profile_q_to_r(values_q, chk, plan, label)
     values_r =
@@ -1438,13 +1617,14 @@ function _profile_q_to_r(values_q, chk, plan, label)
 end
 
 """Transform one spin-family q operator with the profile's pair-dependent WS plan."""
-function _profile_spin_q_to_r(values_q, chk, plan, label; construction_policy::Symbol = :strict)
+function _profile_spin_q_to_r(values_q, chk, plan, label; construction_policy::Symbol = :standard)
+    validate_ordinary_construction_policy(construction_policy)
     transform = PairWignerSeitzSpinQToRTransform(
         chk,
         plan,
         PROFILE_PAIR_WIGNER_SEITZ_SUPPORT_TOLERANCE,
         PROFILE_PAIR_WIGNER_SEITZ_ROUNDTRIP_TOLERANCE,
-        construction_policy != :standard,
+        false,
     )
     result = transform_pair_wigner_seitz_spin_q_to_r(transform, values_q, label)
     isfinite(result.diagnostics.max_roundtrip_error) ||
@@ -1569,7 +1749,21 @@ function _spin_and_spin_hamiltonian_q(spn, chk, authority; needs_hamiltonian::Bo
     return spin, spin_hamiltonian
 end
 
-"""Contract an sIu/sHu link file into a spin-position-like q-space tensor."""
+"""Build the periodic spin-position moment using the canonical link difference.
+
+For each Cartesian component a and Pauli component s, return
+`i sum_b w_b b_a [W_k' O_s(k,b) W_{k+b} - O_s^W(k)]`.
+The source link is sIu or sHu; output order is (row, column, a, s, k),
+in Angstrom or eV Angstrom. No BZ or SI normalization is applied.
+
+This is the finite-step spin-moment convention used by the direct spin Hall
+reference. Applying the full fractional-center phase and then adding O*tau is
+another discretization, and changes SR/SHR even in the identical accepted frame.
+Do not import that position-connection improvement into this moment. Integer
+cell changes require transforming the already assembled moment and its central
+operator together; raw re-differencing in another frame is not exactly covariant
+at finite step size. This routine does not claim that separate covariance test.
+"""
 function _spin_link_position_q(
     reader,
     path,
@@ -1600,20 +1794,23 @@ function _spin_link_position_q(
         ib = something(stencil_neighbor)
         target = stencil.neighbors[ib, kpoint]
         wannier = (@view chk.v_matrix[:, :, kpoint])' * direct * (@view chk.v_matrix[:, :, target])
-        wannier .-= @view central_q[:, :, spin_axis, kpoint]
         displacement = @view stencil.displacement_cartesian[ib, :]
+        wannier .-= @view central_q[:, :, spin_axis, kpoint]
         for cartesian in 1:3
             coefficient = 1.0im * stencil.weights[ib] * displacement[cartesian]
             @views output[:, :, cartesian, spin_axis, kpoint] .+= coefficient .* wannier
             absolute_sums[cartesian, spin_axis, kpoint] += abs(coefficient) * norm(wannier)
         end
     end
-    return (output, _profile_final_combination_cancellation_audit(output, absolute_sums, label))
+    cancellation_audit = _profile_final_combination_cancellation_audit(output, absolute_sums, label)
+    cancellation_audit["frame"] = "canonical_periodic_link_finite_difference"
+    cancellation_audit["home_cell_covariance"] = "REQUIRES_POST_ASSEMBLY_AFFINE_TRANSPORT"
+    return output, cancellation_audit
 end
 
 """Return symmetry specifications for all eleven schema-6 profile operators."""
 function _operator_profile_specs()
-    specs = _exact_bundle_operator_specs()
+    specs = _full_uiu_bundle_operator_specs()
     specs[REAL_SPACE_SPIN] = RealSpaceOperatorSymmetrySpec(REAL_SPACE_SPIN, 1, 1, -1)
     specs[REAL_SPACE_SPIN_TIMES_HAMILTONIAN] =
         RealSpaceOperatorSymmetrySpec(REAL_SPACE_SPIN_TIMES_HAMILTONIAN, 1, 1, -1)
@@ -1628,15 +1825,10 @@ end
 function _profile_authority_provenance(authority, config)
     return Dict{String, Any}(
         "authoritative_hamiltonian" => authority.authority,
-        "authoritative_hamiltonian_digest" => authority.digest,
-        "authoritative_hamiltonian_input_sha256" => merge(
-            authority.input_sha256,
-            Dict(
-                "AUTHORITATIVE_HAMILTONIAN_SHA256" => star_authoritative_hamiltonian_sha256(
-                    config.input.authoritative_hamiltonian,
-                ),
-            ),
-        ),
+        "authoritative_hamiltonian_definition" => authority.definition,
+        "authoritative_hamiltonian_input_definitions" => copy(authority.input_definitions),
+        "authoritative_hamiltonian_policy_definition" =>
+            star_authoritative_hamiltonian_definition(config.input.authoritative_hamiltonian),
     )
 end
 
@@ -1645,7 +1837,7 @@ function _assemble_wannierization_operator_profile(
     model,
     prepared,
     mmn,
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     authority::AuthoritativeBandHamiltonian,
     operator_symmetry_plan = nothing;
     target_contract::Union{Nothing, WannierOperatorTargetContract} = nothing,
@@ -1694,10 +1886,11 @@ function _assemble_wannierization_operator_profile(
             chk.num_bands,
             chk.num_kpts,
             mmn.num_neighbors;
-            authoritative_hamiltonian_digest = authority.digest,
+            authoritative_hamiltonian_definition = authority.definition,
         )
-        target.solver_mmn_sha256 == sha256_file(target.solver_mmn_file) || throw(
-            ArgumentError("OPERATOR_TARGET_CONTRACT_MISMATCH: solver MMN changed before export"),
+        IO.validate_scientific_source_collection(
+            Dict("MMN"=>target.solver_mmn_file),
+            target.solver_mmn_reference,
         )
     end
     spn_attestation =
@@ -1708,9 +1901,9 @@ function _assemble_wannierization_operator_profile(
             expected_num_bands = chk.num_bands,
             expected_num_kpoints = chk.num_kpts,
             target_authority = config.input.authoritative_hamiltonian,
-            gauge_artifact_sha256 = gauge_contract.gauge_artifact_sha256,
-            band_frame_transform_sha256 = gauge_contract.transform_sha256,
-            band_frame_contract_sha256 = gauge_contract.contract_sha256,
+            gauge_definition = gauge_contract.gauge_definition,
+            band_frame_transform_definition = gauge_contract.transform_definition,
+            band_frame_contract_definition = gauge_contract.contract_definition,
         ) : nothing
     return _assemble_wannierization_operator_profile_from_qualified_sources(
         model,
@@ -1738,7 +1931,7 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
     model,
     prepared,
     mmn,
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     authority::AuthoritativeBandHamiltonian,
     operator_symmetry_plan,
     gauge_contract,
@@ -1759,17 +1952,13 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
         merge(
             spn_attestation,
             (
-                rotation_sha256 = gauge_contract.transform_sha256,
+                transform_definition = gauge_contract.transform_definition,
                 frame_contract = band_frame_contract_summary(gauge_contract),
-                gauge_artifact_sha256 = something(
-                    gauge_contract.gauge_artifact_sha256,
-                    "NOT_APPLICABLE",
-                ),
+                gauge_definition = something(gauge_contract.gauge_definition, "NOT_APPLICABLE"),
                 target_band_gauge = gauge_contract.target_band_gauge,
-                artifact_sha256 = spn_attestation.spn_sha256,
                 authoritative_hamiltonian = "NOT_APPLICABLE",
-                authoritative_hamiltonian_digest = "NOT_APPLICABLE",
-                authoritative_hamiltonian_input_sha256 = Dict{String, String}(),
+                authoritative_hamiltonian_definition = "NOT_APPLICABLE",
+                authoritative_hamiltonian_input_definitions = Dict{String, String}(),
             ),
         ) : nothing
     plan = _profile_transform_plan(chk, model)
@@ -1784,7 +1973,7 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
             throw(ArgumentError("SPN_PROVENANCE_MISMATCH: SPN topology differs from checkpoint"))
         spn_data = similar(spn_native.data)
         for kpoint in 1:chk.num_kpts, axis in 1:3
-            @views spn_data[:, :, axis, kpoint] .= rotate_generation_single(
+            @views spn_data[:, :, axis, kpoint] .= transform_generation_single(
                 spn_native.data[:, :, axis, kpoint],
                 gauge_contract,
                 kpoint,
@@ -1811,24 +2000,20 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
     provenance = Dict{String, Any}(
         "operator_profile_assembly_algorithm_version" =>
             WANNIER_OPERATOR_PROFILE_ASSEMBLY_ALGORITHM_VERSION,
-        "SPN_sha256" => needs_spn ? sha256_file(spn_file) : "NOT_APPLICABLE",
-        "SPN_provenance_sha256" =>
-            needs_spn ? String(spn_attestation.provenance_sha256) : "NOT_APPLICABLE",
+        "content_authentication" => "NOT_PERFORMED",
         "SPN_source_band_gauge" =>
             needs_spn ? String(spn_attestation.source_band_gauge) : "NOT_APPLICABLE",
         "SPN_target_band_gauge" =>
             needs_spn ? String(spn_attestation.qualification_target_band_gauge) : "NOT_APPLICABLE",
-        "SPN_band_frame_transform_sha256" => String(gauge_contract.transform_sha256),
-        "SPN_band_frame_contract_sha256" => String(gauge_contract.contract_sha256),
-        "SPN_band_gauge_rotation_sha256" => String(gauge_contract.transform_sha256),
-        "SPN_band_gauge_rotation_semantics" => "legacy_alias_of_band_frame_transform_sha256",
-        "SPN_gauge_artifact_sha256" =>
-            needs_spn ? String(spn_attestation.gauge_artifact_sha256) : "NOT_APPLICABLE",
+        "SPN_band_frame_transform_definition" => String(gauge_contract.transform_definition),
+        "SPN_band_frame_contract_definition" => String(gauge_contract.contract_definition),
+        "SPN_gauge_definition" =>
+            needs_spn ? String(spn_attestation.gauge_definition) : "NOT_APPLICABLE",
         "band_frame_contract" => band_frame_contract_summary(gauge_contract),
         "native_hamiltonian_gauge_covariance_residual_ev" =>
             native_hamiltonian_gauge_covariance_residual,
         "authoritative_hamiltonian" => authority.authority,
-        "authoritative_hamiltonian_digest" => authority.digest,
+        "authoritative_hamiltonian_definition" => authority.definition,
         "pair_wigner_seitz_transform_algorithm" =>
             PROFILE_PAIR_WIGNER_SEITZ_TRANSFORM_ALGORITHM,
         "pair_wigner_seitz_roundtrip_policy" => PROFILE_PAIR_WIGNER_SEITZ_STORAGE_POLICY,
@@ -1856,6 +2041,15 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
         (:uiu in source_set || :uhu in source_set) ?
         _streamed_neighbor_order_contract(stencil, chk.num_kpts) : nothing
     centers = _tb_centers(model)
+    # Profile storage and all three orbital completion terms use uncentered
+    # periodic moments. Raw q constructors stay centered; convert only here.
+    provenance["derivative_frame"] = "uncentered_periodic_wannier"
+    provenance["operator_moment_frame_conversion"] = "centered-q-to-uncentered-q-once-v1"
+    provenance["spin_link_moment_convention"] = "canonical-periodic-link-finite-difference-v1"
+    provenance["spin_link_home_cell_covariance"] = "post-assembly-transport-required-not-revalidated"
+    hamiltonian_q =
+        REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION in inventory || :uhu in source_set ?
+        _profile_delivered_hamiltonian_q(chk, authority) : nothing
     paths, sidecars = _profile_operator_paths(config, source_set)
     complete_family = _operator_selection_is_complete_family(selection)
     requires_target_contract &&
@@ -1865,12 +2059,11 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
         )
     target = requires_target_contract ? something(target_contract) : nothing
     if requires_target_contract
-        provenance["operator_target_contract_sha256"] = target.contract_sha256
-        provenance["operator_oracle_mmn_sha256"] = target.operator_oracle_mmn_sha256
-        provenance["solver_mmn_sha256"] = target.solver_mmn_sha256
+        provenance["operator_target_contract_definition"] = target.definition
     end
     uiu_provenance = nothing
     uiu_input_sha256 = nothing
+    uiu_source_reference = nothing
     if :uiu in source_set
         uiu_provenance = _qualified_uiu_sidecar(
             sidecars[:uIu],
@@ -1878,19 +2071,33 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
             target.operator_oracle_mmn_file,
             gauge_contract;
             construction_policy = config.input.construction_policy,
+            reference_root = config.checkpoint.reference_root,
         )
-        uiu_input_sha256 = _profile_input_hashes(uiu_provenance.input_sha256, "uIu")
+        uiu_input_sha256 = _profile_input_definitions(uiu_provenance.input_definitions, "uIu")
+        uiu_source_reference = _profile_native_source_reference(
+            uiu_provenance;
+            reference_root = config.checkpoint.reference_root,
+        )
         _require_operator_target_contract_hash(uiu_input_sha256, "uIu", target)
-        provenance["uIu_input_sha256"] = copy(uiu_input_sha256)
-        provenance["derivative_overlap_source"] = "wannier90_uIu"
+        provenance["uIu_input_definitions"] = copy(uiu_input_sha256)
+        provenance["derivative_overlap_source"] = "neighbor_pair_overlap"
         provenance["derivative_overlap_completeness"] = "full_hilbert_space"
-        provenance["derivative_overlap_source_sha256"] = String(uiu_provenance.output_sha256)
+        provenance["derivative_overlap_content_authentication"] = "NOT_PERFORMED"
         provenance["derivative_overlap_algorithm_version"] =
             IO.FULL_DERIVATIVE_OVERLAP_ALGORITHM_VERSION
+        # A warning carries the original complete payload in the published
+        # record. Otherwise retain only fields actually used by publication.
+        if Bool(uiu_provenance.passed)
+            uiu_provenance = _profile_detach_sidecar(uiu_provenance; uiu = true)
+            GC.gc(false)
+        end
     end
     spn_input_sha256 =
-        needs_spn ? _profile_input_hashes(spn_attestation.input_sha256, "SPN provenance") : nothing
-    common_reference = uiu_input_sha256 !== nothing ? uiu_input_sha256 : spn_input_sha256
+        needs_spn ? _profile_input_definitions(spn_attestation.input_sha256, "SPN provenance") :
+        nothing
+    common_reference =
+        uiu_source_reference !== nothing ? uiu_source_reference :
+        (needs_spn ? spn_attestation.source_reference : nothing)
     finite_band_source_risk_audit = Dict{String, Any}()
     hamiltonian_sidecars = Dict{Symbol, Any}()
     hamiltonian_input_sha256 = Dict{Symbol, Dict{String, String}}()
@@ -1908,17 +2115,18 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
             authority,
             config.output.operator_closure_tolerance,
             gauge_contract,
-            needs_spn ? String(spn_attestation.provenance_sha256) : "NOT_APPLICABLE",
-            common_reference,
-            spn_input_sha256,
-            needs_spn ? String(spn_attestation.spn_sha256) : "NOT_APPLICABLE",
+            needs_spn ? spn_attestation : nothing,
+            common_reference;
+            reference_root = config.checkpoint.reference_root,
         )
-        hamiltonian_sidecars[operator] = payload
+        hamiltonian_sidecars[operator] = _profile_detach_sidecar(payload)
         hamiltonian_input_sha256[operator] = input_sha256
         _require_operator_target_contract_hash(input_sha256, String(operator), target)
         finite_band_source_risk_audit[String(operator)] = risk_audit
         provenance["$(operator)_generation_algorithm_version"] = String(payload.algorithm_version)
-        provenance["$(operator)_input_sha256"] = copy(input_sha256)
+        provenance["$(operator)_input_definitions"] = copy(input_sha256)
+        payload = nothing
+        GC.gc(false)
     end
     final_projector_galerkin_audit =
         complete_family ?
@@ -1930,27 +2138,37 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
     axial_r = nothing
     symmetric_r = nothing
     if :uiu in source_set
-        full_derivative_q = _construct_exact_full_derivative_overlap_tensor_q(
+        full_derivative_q = _construct_full_uiu_derivative_overlap_tensor_q(
             chk,
             stencil,
             centers,
             paths[:uIu];
             formatted = config.output.operator_files_formatted,
         )
+        _profile_uncenter_derivative_q!(
+            full_derivative_q,
+            _profile_delivered_position_q(model, chk),
+            centers,
+        )
         full_derivative_r, full_derivative_roundtrip =
             _profile_q_to_r(full_derivative_q, chk, plan, "derivative_overlap_tensor")
         axial_r, symmetric_r = derive_axial_and_symmetric_derivative_overlaps(full_derivative_r)
     end
     weighted_connection_r = nothing
+    weighted_connection_q = nothing
     weighted_connection_roundtrip = NaN
-    if REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION in inventory
+    if REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION in inventory || :uhu in source_set
         weighted_connection_q =
             _authoritative_hamiltonian_weighted_connection_q(chk, mmn, stencil, centers, authority)
+        _profile_uncenter_connection_q!(weighted_connection_q, hamiltonian_q, centers)
+    end
+    if REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION in inventory
         weighted_connection_r, weighted_connection_roundtrip =
             _profile_q_to_r(weighted_connection_q, chk, plan, "hamiltonian_weighted_connection")
     end
     weighted_axial_r = nothing
     weighted_tensor_roundtrip = NaN
+    weighted_axial_roundtrip = NaN
     uhu_cancellation_audit = nothing
     if :uhu in source_set
         weighted_tensor_q, uhu_cancellation_audit = _authoritative_weighted_tensor_q(
@@ -1960,6 +2178,12 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
             paths[:uHu];
             formatted = config.output.operator_files_formatted,
         )
+        _profile_uncenter_weighted_tensor_q!(
+            weighted_tensor_q,
+            weighted_connection_q,
+            hamiltonian_q,
+            centers,
+        )
         weighted_tensor_r, weighted_tensor_roundtrip = _profile_q_to_r(
             weighted_tensor_q,
             chk,
@@ -1968,6 +2192,12 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
         )
         weighted_axial_r, _ = derive_axial_and_symmetric_derivative_overlaps(weighted_tensor_r)
         weighted_axial_r = hermitianize_real_space_pairs(weighted_axial_r, model.r_vectors)
+        # Qualify the three components actually delivered, after their existing
+        # Hermitian closure. The full nine-component C tensor is not exported.
+        weighted_axial_q, _ = derive_axial_and_symmetric_derivative_overlaps(weighted_tensor_q)
+        weighted_axial_roundtrip =
+            unit_degeneracy_roundtrip_error(weighted_axial_q, weighted_axial_r, chk, plan)
+        provenance["undelivered_weighted_tensor_roundtrip_residual"] = weighted_tensor_roundtrip
     end
     spin_hamiltonian_r = nothing
     spin_hamiltonian_roundtrip = NaN
@@ -2058,10 +2288,6 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
         )
         operators[kind] = RealSpaceOperator(specs[kind], model.r_vectors, array)
     end
-    for (operator, path) in paths
-        provenance["$(operator)_sha256"] = sha256_file(path)
-        provenance["$(operator)_provenance_sha256"] = sha256_file(sidecars[operator])
-    end
     provenance["finite_band_risk_audit"] = deepcopy(finite_band_source_risk_audit)
     provenance["final_projector_galerkin_audit"] = deepcopy(final_projector_galerkin_audit)
     provenance["finite_band_diagnostic_reference"] = config.output.operator_closure_tolerance
@@ -2101,7 +2327,7 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
     :uhu in source_set && (
         delivery_roundtrip_residuals[real_space_operator_name(
             REAL_SPACE_HAMILTONIAN_WEIGHTED_AXIAL_DERIVATIVE_OVERLAP,
-        )] = weighted_tensor_roundtrip
+        )] = weighted_axial_roundtrip
     )
     provenance["operator_delivery_roundtrip_residuals"] = deepcopy(delivery_roundtrip_residuals)
     if :uiu in source_set
@@ -2117,20 +2343,15 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
     spn_source =
         needs_spn ?
         (
-            provenance_sha256 = spn_attestation.provenance_sha256,
-            artifact_sha256 = spn_attestation.spn_sha256,
             source_band_gauge = gauge_contract.source_band_gauge,
             target_band_gauge = gauge_contract.target_band_gauge,
-            gauge_artifact_sha256 = something(
-                gauge_contract.gauge_artifact_sha256,
-                "NOT_APPLICABLE",
-            ),
-            rotation_sha256 = gauge_contract.transform_sha256,
+            gauge_definition = something(gauge_contract.gauge_definition, "NOT_APPLICABLE"),
+            transform_definition = gauge_contract.transform_definition,
             frame_contract = band_frame_contract_summary(gauge_contract),
             input_sha256 = spn_input_sha256,
             authoritative_hamiltonian = "NOT_APPLICABLE",
-            authoritative_hamiltonian_digest = "NOT_APPLICABLE",
-            authoritative_hamiltonian_input_sha256 = Dict{String, String}(),
+            authoritative_hamiltonian_definition = "NOT_APPLICABLE",
+            authoritative_hamiltonian_input_definitions = Dict{String, String}(),
         ) : nothing
     function sidecar_source(operator::Symbol, kind::RealSpaceOperatorKind)
         payload = hamiltonian_sidecars[operator]
@@ -2140,41 +2361,37 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
             REAL_SPACE_SPIN_TIMES_HAMILTONIAN_POSITION,
         )
         return (
-            provenance_sha256 = sha256_file(sidecars[operator]),
-            artifact_sha256 = sha256_file(paths[operator]),
             source_band_gauge = String(payload.source_band_gauge),
             target_band_gauge = String(payload.target_band_gauge),
-            gauge_artifact_sha256 = String(payload.gauge_artifact_sha256),
-            rotation_sha256 = String(payload.band_frame_transform_sha256),
+            gauge_definition = String(payload.gauge_definition),
+            transform_definition = String(payload.band_frame_transform_definition),
             frame_contract = Dict{String, Any}(
                 String(key) => value for (key, value) in pairs(payload.band_frame_contract)
             ),
             input_sha256 = hamiltonian_input_sha256[operator],
             authoritative_hamiltonian = requires_hamiltonian ? authority.authority :
                                         "NOT_APPLICABLE",
-            authoritative_hamiltonian_digest = requires_hamiltonian ? authority.digest :
-                                               "NOT_APPLICABLE",
-            authoritative_hamiltonian_input_sha256 = requires_hamiltonian ?
-                                                     copy(authority.input_sha256) :
-                                                     Dict{String, String}(),
+            authoritative_hamiltonian_definition = requires_hamiltonian ? authority.definition :
+                                                   "NOT_APPLICABLE",
+            authoritative_hamiltonian_input_definitions = requires_hamiltonian ?
+                                                          copy(authority.input_definitions) :
+                                                          Dict{String, String}(),
             finite_band_risk_audit = finite_band_source_risk_audit[String(operator)],
         )
     end
     function uiu_source(kind::RealSpaceOperatorKind)
         return (
-            provenance_sha256 = sha256_file(sidecars[:uIu]),
-            artifact_sha256 = sha256_file(paths[:uIu]),
             source_band_gauge = String(uiu_provenance.source_band_gauge),
             target_band_gauge = String(uiu_provenance.target_band_gauge),
-            gauge_artifact_sha256 = String(uiu_provenance.gauge_artifact_sha256),
-            rotation_sha256 = String(uiu_provenance.band_frame_transform_sha256),
+            gauge_definition = String(uiu_provenance.gauge_definition),
+            transform_definition = String(uiu_provenance.band_frame_transform_definition),
             frame_contract = Dict{String, Any}(
                 String(key) => value for (key, value) in pairs(uiu_provenance.band_frame_contract)
             ),
             input_sha256 = uiu_input_sha256,
             authoritative_hamiltonian = "NOT_APPLICABLE",
-            authoritative_hamiltonian_digest = "NOT_APPLICABLE",
-            authoritative_hamiltonian_input_sha256 = Dict{String, String}(),
+            authoritative_hamiltonian_definition = "NOT_APPLICABLE",
+            authoritative_hamiltonian_input_definitions = Dict{String, String}(),
         )
     end
     spin_hamiltonian_source =
@@ -2183,32 +2400,24 @@ function _assemble_wannierization_operator_profile_from_qualified_sources(
             spn_source,
             (
                 authoritative_hamiltonian = authority.authority,
-                authoritative_hamiltonian_digest = authority.digest,
-                authoritative_hamiltonian_input_sha256 = copy(authority.input_sha256),
+                authoritative_hamiltonian_definition = authority.definition,
+                authoritative_hamiltonian_input_definitions = copy(authority.input_definitions),
             ),
         ) : nothing
     function weighted_connection_source()
         return (
-            provenance_sha256 = target.solver_mmn_sha256,
-            artifact_sha256 = _authoritative_array_sha256(
-                operators[REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION].data,
-            ),
             source_band_gauge = gauge_contract.source_band_gauge,
             target_band_gauge = gauge_contract.target_band_gauge,
-            gauge_artifact_sha256 = something(
-                gauge_contract.gauge_artifact_sha256,
-                "NOT_APPLICABLE",
-            ),
-            rotation_sha256 = gauge_contract.transform_sha256,
+            gauge_definition = something(gauge_contract.gauge_definition, "NOT_APPLICABLE"),
+            transform_definition = gauge_contract.transform_definition,
             frame_contract = band_frame_contract_summary(gauge_contract),
             input_sha256 = Dict(
-                "MMN" => target.solver_mmn_sha256,
-                "OPERATOR_TARGET_CONTRACT" => target.contract_sha256,
-                "AUTHORITATIVE_HAMILTONIAN" => authority.digest,
+                "OPERATOR_TARGET_CONTRACT" => target.definition,
+                "AUTHORITATIVE_HAMILTONIAN" => authority.definition,
             ),
             authoritative_hamiltonian = authority.authority,
-            authoritative_hamiltonian_digest = authority.digest,
-            authoritative_hamiltonian_input_sha256 = copy(authority.input_sha256),
+            authoritative_hamiltonian_definition = authority.definition,
+            authoritative_hamiltonian_input_definitions = copy(authority.input_definitions),
         )
     end
     operator_sources = Dict{String, Any}()

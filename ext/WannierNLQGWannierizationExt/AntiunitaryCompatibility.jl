@@ -296,14 +296,15 @@ function _antiunitary_projector_covariance_residual(
     return maximum_residual, maximum_context
 end
 
-# Require even selected-projector rank at every pure-time-reversal invariant k-point.
+# Kramers even-rank restriction applies only to spinors (Theta^2=-I).
+# Scalar antiunitary covariance is still checked by the caller.
 function _validate_selected_kramers_ranks(
     projectors_or_frames,
     representation::BandRepresentation,
     theta_index::Union{Nothing, Int},
     tolerance::Float64,
 )
-    theta_index === nothing && return WannierizationDiagnostic[]
+    (theta_index === nothing || !representation.spinor) && return WannierizationDiagnostic[]
     diagnostics = WannierizationDiagnostic[]
     for kpoint in eachindex(projectors_or_frames)
         representation.kpoint_map[theta_index, kpoint] == kpoint || continue
@@ -350,7 +351,10 @@ function _validate_kramers_masks(
         residual = maximum(abs, sewing * conj(source_projector) * sewing' - target_projector)
         maximum_residual = max(maximum_residual, residual)
         counts_match = count(masks[source_kpoint]) == count(masks[target_kpoint])
-        trim_even = target_kpoint != source_kpoint || iseven(count(masks[source_kpoint]))
+        trim_even =
+            !representation.spinor ||
+            target_kpoint != source_kpoint ||
+            iseven(count(masks[source_kpoint]))
         if (enforce_covariance_residual && residual > tolerance) || !counts_match || !trim_even
             push!(
                 diagnostics,
@@ -628,8 +632,10 @@ function validate_band_representation_compatibility(
     validation_profile::Symbol = representation.source_code in (:vasp, :qe) ? :empirical :
                                  :analytic,
     oracle_excess_group_law_residuals = nothing,
-    qualification_sha256::Union{Nothing, AbstractString} = nothing,
+    qualification_record::Union{Nothing, NamedTuple} = nothing,
 )
+    all(isfinite, representation.sewing_matrices) ||
+        throw(ArgumentError("NONFINITE_SEWING_BLOCK: required sewing data must be finite"))
     tolerance_value = Float64(tolerance)
     isfinite(tolerance_value) && tolerance_value > 0.0 ||
         throw(ArgumentError("compatibility tolerance must be positive and finite"))
@@ -644,10 +650,28 @@ function validate_band_representation_compatibility(
     excess_residuals =
         excess_values === nothing ? nothing :
         (excess_values[1], excess_values[2], excess_values[3], excess_values[4])
-    qualification = qualification_sha256 === nothing ? nothing : String(qualification_sha256)
-    qualification === nothing ||
-        length(qualification) == 64 ||
-        throw(ArgumentError("qualification_sha256 must be a 64-character SHA-256"))
+    qualification = qualification_record === nothing ? nothing : deepcopy(qualification_record)
+    if qualification !== nothing
+        all(
+            key -> haskey(qualification, key),
+            (:representation_definition, :oracle_definition, :oracle_excess_group_law_residuals),
+        ) || throw(
+            ArgumentError(
+                "qualification record requires complete candidate/oracle definitions and residuals",
+            ),
+        )
+        qualification.representation_definition ==
+        _representation_static_definition(representation) ||
+            throw(ArgumentError("qualification record belongs to a different representation"))
+        qualification.oracle_definition isa AbstractString &&
+        !isempty(qualification.oracle_definition) ||
+            throw(ArgumentError("qualification record lacks the actual oracle definition"))
+        recorded_excess = Tuple(Float64.(qualification.oracle_excess_group_law_residuals))
+        length(recorded_excess) == 4 && all(isfinite, recorded_excess) ||
+            throw(ArgumentError("qualification record has invalid oracle residuals"))
+        excess_residuals !== nothing && isequal(recorded_excess, excess_residuals) ||
+            throw(ArgumentError("qualification record residuals differ from the supplied values"))
+    end
     diagnostics = WannierizationDiagnostic[]
     product_table = try
         _build_representation_product_table(
@@ -765,7 +789,7 @@ function validate_band_representation_compatibility(
                             "combination" => GROUP_LAW_COMBINATION_LABELS[combination],
                             "maximum_error" => excess_residuals[combination],
                             "tolerance" => tolerance_value,
-                            "qualification_sha256" => qualification,
+                            "qualification_record" => "ACTUAL_DEFINITIONS_PRESENT",
                             "oracle_role" => "reference_diagnostic",
                         ),
                     ),
@@ -837,15 +861,6 @@ function validate_band_representation_compatibility(
         )
         append!(diagnostics, rank_diagnostics)
     end
-    representation_sha256 = _representation_static_sha256(representation)
-    diagnostics = [
-        WannierizationDiagnostic(
-            diagnostic.code,
-            diagnostic.severity,
-            diagnostic.message;
-            context = merge(diagnostic.context, Dict("input_sha256" => representation_sha256)),
-        ) for diagnostic in diagnostics
-    ]
     gate_definition_status = GATE_VALID
     assessment_status = if supported_contract && !_has_representation_error(diagnostics)
         REPRESENTATION_COMPATIBLE
@@ -867,7 +882,6 @@ function validate_band_representation_compatibility(
         maximum_shift_residual,
         theta_squared_residual,
         maximum_kramers_residual,
-        representation_sha256,
         diagnostics,
         metadata_origin,
         gate_definition_status,
@@ -876,5 +890,6 @@ function validate_band_representation_compatibility(
         excess_residuals,
         qualification,
         validation_profile,
+        _representation_static_definition(representation),
     )
 end

@@ -2,6 +2,48 @@ using Test
 using JSON3
 using MPI
 
+include(joinpath(@__DIR__, "support", "ParallelReferenceSupport.jl"))
+using .ParallelReferenceSupport
+
+# Exercise both named column orders without loading a solver or a child process.
+@testset "Frozen source manifest column and content contract" begin
+    mktempdir() do directory
+        leaf = joinpath(directory, "probe.jl")
+        write(leaf, "fixture\n")
+        digest = ParallelReferenceSupport.file_digest(leaf)
+        bytes = filesize(leaf)
+        manifest = joinpath(directory, "SOURCE_MANIFEST.tsv")
+        for text in (
+            "path\ttype\tbytes\tsha256\nprobe.jl\tfile\t$(bytes)\t$(digest)\n",
+            "type\tbytes\tsha256\tpath\nfile\t$(bytes)\t$(digest)\tprobe.jl\n",
+        )
+            write(manifest, text)
+            @test ParallelReferenceSupport.validate_reference_source_manifest(directory) == manifest
+        end
+        header = "path\ttype\tbytes\tsha256\n"
+        row = "probe.jl\tfile\t$(bytes)\t$(digest)\n"
+        for invalid in (
+            "path\ttype\tbytes\n",
+            header,
+            header * row * row,
+            header * "../probe.jl\tfile\t$(bytes)\t$(digest)\n",
+            header * "probe.jl\tsymlink\t$(bytes)\t$(digest)\n",
+            header * "probe.jl\tfile\t$(bytes + 1)\t$(digest)\n",
+            header * "probe.jl\tfile\t$(bytes)\t$(repeat("0", 64))\n",
+        )
+            write(manifest, invalid)
+            @test_throws ErrorException ParallelReferenceSupport.validate_reference_source_manifest(
+                directory,
+            )
+        end
+        write(manifest, header * row)
+        write(leaf, "changed\n")
+        @test_throws ErrorException ParallelReferenceSupport.validate_reference_source_manifest(
+            directory,
+        )
+    end
+end
+
 # Launch the real public API with deterministic BLAS and no MPI opt-in in the parent driver.
 function per_task_parallel_command(directory; threads, ranks = nothing)
     probe = joinpath(@__DIR__, "support", "per_task_parallel_runner.jl")
@@ -52,9 +94,27 @@ end
             mkpath(output_root)
             command =
                 per_task_parallel_command(output_root; threads = case.threads, ranks = case.ranks)
-            log = read(command, String)
+            log, numerical = if case.label == "threads1"
+                ParallelReferenceSupport.serial_reference(
+                    dirname(@__DIR__),
+                    joinpath(@__DIR__, "support", "per_task_parallel_runner.jl"),
+                    output_root,
+                    command;
+                    mpi_consumer = isdefined(@__MODULE__, :RUN_MPI_TESTS) && RUN_MPI_TESTS,
+                )
+            else
+                started = time()
+                log = read(command, String)
+                println(
+                    "[parallel-case:complete] label=",
+                    case.label,
+                    " elapsed_s=",
+                    time() - started,
+                )
+                log, JSON3.read(read(joinpath(output_root, "numerical.json"), String))
+            end
             @test occursin("PER_TASK_PARALLEL_PROBE_PASS", log)
-            records[case.label] = JSON3.read(read(joinpath(output_root, "numerical.json"), String))
+            records[case.label] = numerical
             @test length(records[case.label]) >= 8
         end
         for case in cases[2:end]

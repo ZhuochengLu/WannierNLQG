@@ -1,3 +1,6 @@
+if !isdefined(@__MODULE__, :QEPAWMatrixElementsTestSupport)
+    include(joinpath(@__DIR__, "QEPAWMatrixElementsTestSupport.jl"))
+end
 isdefined(@__MODULE__, :standard_export_fixture) ||
     include(joinpath(@__DIR__, "WannierStandardExportTestSupport.jl"))
 
@@ -17,10 +20,10 @@ isdefined(@__MODULE__, :standard_export_fixture) ||
         @test only(restored.history).diagnostics.accepted_u_step_scale == 0.25
         @test only(restored.history).diagnostics.localization_backtracking_steps == 3
         HDF5.h5open(checkpoint, "r") do handle
-            @test String(read(HDF5.attributes(handle)["schema_version"])) == "1.2"
+            @test String(read(HDF5.attributes(handle)["schema_version"])) == "3.0"
             @test String(read(HDF5.attributes(handle)["wavefunction_gauge_backend"])) ==
                   "native_eigenstate"
-            @test String(read(HDF5.attributes(handle)["wavefunction_gauge_hdf5_sha256"])) ==
+            @test String(read(HDF5.attributes(handle)["wavefunction_gauge_definition"])) ==
                   "NOT_APPLICABLE"
             @test String(read(HDF5.attributes(handle)["authoritative_hamiltonian"])) == "native_dft"
             @test !Bool(read(HDF5.attributes(handle)["global_production_eligible"]))
@@ -48,13 +51,16 @@ isdefined(@__MODULE__, :standard_export_fixture) ||
         symmetrized_summary["qualification_scope"] = "target_subspace"
         symmetrized_summary["target_authority"] = "outer_window"
         symmetrized_summary["parent_audit_policy"] = "audit_only"
-        symmetrized_summary["disentanglement_outer_mask_sha256"] = repeat("1", 64)
-        symmetrized_summary["disentanglement_frozen_mask_sha256"] = repeat("2", 64)
-        symmetrized_summary["target_subspace_contract_sha256"] = repeat("3", 64)
+        symmetrized_summary["disentanglement_outer_mask_definition"] =
+            standard_export_target_contract(fixture).qualification_scope.outer_mask_definition
+        symmetrized_summary["disentanglement_frozen_mask_definition"] =
+            standard_export_target_contract(fixture).qualification_scope.frozen_mask_definition
+        symmetrized_summary["target_subspace_contract_definition"] =
+            standard_export_target_contract(fixture).contract_definition
         symmetrized_summary["target_leakage_semantics"] =
             EXPORT_WANNIERIZATION.TB_TARGET_LEAKAGE_WEIGHT_SEMANTICS
-        symmetrized_summary["target_leakage_formula_sha256"] =
-            EXPORT_WANNIERIZATION.TB_TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256
+        symmetrized_summary["target_leakage_formula_definition"] =
+            EXPORT_WANNIERIZATION.TB_TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION
         symmetrized_summary["target_leakage_threshold"] = "5.0e-6"
         symmetrized_summary["target_anchor"] = "completed_symmetrized_target"
         symmetrized_summary["target_complement_completion"] = "frozen_target_complement"
@@ -90,6 +96,8 @@ isdefined(@__MODULE__, :standard_export_fixture) ||
         @test symmetrized_restored.input_summary["target_leakage_threshold"] == "5.0e-6"
         target_tampered = joinpath(directory, "symmetrized-target-tampered.wannierization.h5")
         cp(symmetrized_checkpoint, target_tampered)
+        chmod(target_tampered, 0o600)
+        EXPORT_WANNIERIZATION.adopt_wannierization_checkpoint_hdf5(target_tampered)
         HDF5.h5open(target_tampered, "r+") do handle
             HDF5.delete_attribute(handle, "qualification_scope")
             HDF5.attributes(handle)["qualification_scope"] = "full_parent"
@@ -97,9 +105,14 @@ isdefined(@__MODULE__, :standard_export_fixture) ||
         @test_throws ArgumentError EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(
             target_tampered,
         )
+        @test_throws ArgumentError EXPORT_WANNIERIZATION.adopt_wannierization_checkpoint_hdf5(
+            target_tampered,
+        )
         symmetrized_tampered =
             joinpath(directory, "symmetrized-hamiltonian-tampered.wannierization.h5")
         cp(symmetrized_checkpoint, symmetrized_tampered)
+        chmod(symmetrized_tampered, 0o600)
+        EXPORT_WANNIERIZATION.adopt_wannierization_checkpoint_hdf5(symmetrized_tampered)
         HDF5.h5open(symmetrized_tampered, "r+") do handle
             HDF5.delete_attribute(handle, "authoritative_hamiltonian")
             HDF5.attributes(handle)["authoritative_hamiltonian"] = "native_dft"
@@ -107,9 +120,14 @@ isdefined(@__MODULE__, :standard_export_fixture) ||
         @test_throws ArgumentError EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(
             symmetrized_tampered,
         )
+        @test_throws ArgumentError EXPORT_WANNIERIZATION.adopt_wannierization_checkpoint_hdf5(
+            symmetrized_tampered,
+        )
 
         tampered = joinpath(directory, "tampered.wannierization.h5")
         cp(checkpoint, tampered)
+        chmod(tampered, 0o600)
+        EXPORT_WANNIERIZATION.adopt_wannierization_checkpoint_hdf5(tampered)
         HDF5.h5open(tampered, "r+") do handle
             values = read(handle["initialization/residuals"])
             values[1, 1] = 2.0
@@ -211,7 +229,7 @@ end
         output_config = EXPORT_WANNIERIZATION._replace_wannierization_config(
             fixture.config;
             checkpoint = (checkpoint_hdf5 = joinpath(directory, "diagnostic.wannierization.h5"),),
-            output = (write_wannier90_tb = true, tb_output_formats = (:packed_hdf5, :wannier90_tb)),
+            output = (write_model_tb = true, tb_output_formats = (:packed_hdf5, :model_tb)),
         )
         paths = Base.invokelatest(
             extension._wannierization_output_paths,
@@ -233,7 +251,7 @@ end
         end
         @test export_error === nothing
         @test isfile(paths.packed)
-        @test isfile(paths.wannier90)
+        @test isfile(paths.wannier)
         bundle = EXPORT_IO.read_real_space_operator_bundle(paths.packed)
         @test bundle.manifest.profile == :hamiltonian_position
         @test all(isfinite, bundle.operators[WannierNLQG.Core.REAL_SPACE_HAMILTONIAN].data)
@@ -316,7 +334,7 @@ end
         output_config = EXPORT_WANNIERIZATION._replace_wannierization_config(
             fixture.config;
             checkpoint = (checkpoint_hdf5 = joinpath(directory, "line-search.wannierization.h5"),),
-            output = (write_wannier90_tb = true, tb_output_formats = (:packed_hdf5, :wannier90_tb)),
+            output = (write_model_tb = true, tb_output_formats = (:packed_hdf5, :model_tb)),
         )
         paths = Base.invokelatest(
             extension._wannierization_output_paths,
@@ -350,13 +368,16 @@ end
                 "qualification_scope" => "target_subspace",
                 "target_authority" => "outer_window",
                 "parent_audit_policy" => "audit_only",
-                "disentanglement_outer_mask_sha256" => repeat("1", 64),
-                "disentanglement_frozen_mask_sha256" => repeat("2", 64),
-                "target_subspace_contract_sha256" => repeat("3", 64),
+                "disentanglement_outer_mask_definition" =>
+                    standard_export_target_contract(fixture).qualification_scope.outer_mask_definition,
+                "disentanglement_frozen_mask_definition" =>
+                    standard_export_target_contract(fixture).qualification_scope.frozen_mask_definition,
+                "target_subspace_contract_definition" =>
+                    standard_export_target_contract(fixture).contract_definition,
                 "target_leakage_semantics" =>
                     EXPORT_WANNIERIZATION.TB_TARGET_LEAKAGE_WEIGHT_SEMANTICS,
-                "target_leakage_formula_sha256" =>
-                    EXPORT_WANNIERIZATION.TB_TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256,
+                "target_leakage_formula_definition" =>
+                    EXPORT_WANNIERIZATION.TB_TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION,
                 "target_leakage_threshold" => "5.0e-6",
                 "target_anchor" => "completed_symmetrized_target",
                 "target_complement_completion" => "frozen_target_orthogonal_complement",
@@ -386,7 +407,7 @@ end
             checkpoint = (
                 checkpoint_hdf5 = joinpath(directory, "symmetrized-line-search.wannierization.h5"),
             ),
-            output = (write_wannier90_tb = true, tb_output_formats = (:packed_hdf5, :wannier90_tb)),
+            output = (write_model_tb = true, tb_output_formats = (:packed_hdf5, :model_tb)),
         )
         symmetrized_paths = Base.invokelatest(
             extension._wannierization_output_paths,
@@ -416,7 +437,11 @@ end
             1.0e-10;
             input_summary = symmetrized_summary,
         )
-        @test unavailable.schema_version == "1.7"
+        # Final-TB diagnostic records use 2.0; the separate checkpoint wire uses 1.7.
+        @test unavailable.schema_version == "2.0"
+        @test length(unavailable.metrics) == 8
+        @test all(metric -> metric.status == "NOT_RUN", unavailable.metrics)
+        @test all(metric -> metric.value === nothing, unavailable.metrics)
         @test unavailable.overall == "NOT_RUN"
         @test unavailable.authoritative_hamiltonian == "symmetrized_dft_hamiltonian"
         @test unavailable.qualification_scope == "target_subspace"
@@ -600,7 +625,8 @@ end
     foreign_gate =
         Base.invokelatest(extension._accepted_state_tb_export_gate, foreign_error, fixture.config)
     @test !foreign_gate.allowed
-    @test foreign_gate.reason == "HARD_ERROR_PRESENT"
+    @test foreign_gate.classification == "UNAVAILABLE"
+    @test foreign_gate.reason == "HARD_ERROR_PRESENT: FROZEN_MASK_IDENTITY_MISMATCH"
 end
 
 @testset "scoped restart initializer mismatch" begin
@@ -652,15 +678,10 @@ end
     acceleration_values = NamedTuple{acceleration_names}(
         Tuple(getfield(restart_config.solver.acceleration, name) for name in acceleration_names),
     )
-    reference_acceleration = EXPORT_WANNIERIZATION.WannierizationAccelerationConfig(;
-        merge(
-            acceleration_values,
-            (
-                disentanglement_algorithm = :smv_fletcher_reeves_two_stage,
-                localization_algorithm = :smv_fletcher_reeves_two_stage,
-            ),
-        )...,
-    )
+    # The current solver has one fixed SMV/FR implementation; preserve all
+    # active acceleration settings without reintroducing removed selectors.
+    reference_acceleration =
+        EXPORT_WANNIERIZATION.WannierizationAccelerationConfig(; acceleration_values...)
     reference_config = EXPORT_WANNIERIZATION._replace_wannierization_config(
         fixture.config;
         input = (amn_file = nothing,),
@@ -669,7 +690,7 @@ end
             acceleration = reference_acceleration,
             initialization_backend = EXPORT_WANNIERIZATION.AMNExactFrozenInitialization(),
         ),
-        checkpoint = (restart_hdf5 = "w90-reference.wannierization.h5",),
+        checkpoint = (restart_hdf5 = "localization-reference.wannierization.h5",),
     )
     reference_result = EXPORT_WANNIERIZATION.WannierizationResult(
         fixture.result.status,
@@ -680,7 +701,7 @@ end
         fixture.result.diagnostics,
         merge(
             fixture.result.input_summary,
-            Dict("initializer_algorithm_version" => "wannier90-4.0.1-dis_project-dis_proj_froz-v1"),
+            Dict("initializer_algorithm_version" => "wannier-4.0.1-dis_project-dis_proj_froz-v1"),
         ),
         fixture.result.wannier_chk,
         nothing,
@@ -693,12 +714,34 @@ end
         [BitVector([true, false]), BitVector([true, false])],
         reference_result,
     ) === nothing
-    @test_throws ArgumentError Base.invokelatest(
+    # The default and explicit reference backend are now both AMNExactFrozen.
+    @test restart_config.solver.initialization_backend isa
+          EXPORT_WANNIERIZATION.AMNExactFrozenInitialization
+    @test Base.invokelatest(
         extension._validate_restart_initializer_algorithm,
         restart_config,
         [BitVector([true, false]), BitVector([true, false])],
         reference_result,
+    ) === nothing
+    # Exercise a genuinely different initializer without running PAW-SCDM.
+    different_backend_config = EXPORT_WANNIERIZATION._replace_wannierization_config(
+        restart_config;
+        solver = (initialization_backend = EXPORT_WANNIERIZATION.PAWSCDMInitialization(),),
     )
+    backend_error = try
+        Base.invokelatest(
+            extension._validate_restart_initializer_algorithm,
+            different_backend_config,
+            [BitVector([true, false]), BitVector([true, false])],
+            reference_result,
+        )
+        nothing
+    catch exception
+        exception
+    end
+    @test backend_error isa ArgumentError
+    @test backend_error isa ArgumentError &&
+          occursin("RESTART_INITIALIZER_ALGORITHM_MISMATCH", sprint(showerror, backend_error))
 end
 
 @testset "restart checkpoint identity is checked before native preparation" begin
@@ -772,28 +815,69 @@ end
         amn = zeros(ComplexF64, 2, 1, 2)
         amn[1, 1, :] .= 1
         EXPORT_IO.write_wannier_amn(amn_file, EXPORT_IO.WannierAMN(2, 2, 1, amn))
-        hashes = Dict("EIG" => hashfile(eig), "WIN" => hashfile(win))
-        HDF5.h5open(representation, "w") do handle
-            attrs = HDF5.attributes(HDF5.create_group(handle, "input_sha256"))
-            for (key, value) in hashes
-                attrs[key] = value
+        # This unit injects numerical matrices to test acceptance ownership;
+        # it does not certify their derivation from a PAW electronic model.
+        # Source files are real small QE fixture bytes, never digest stand-ins.
+        native_fixture = QEPAWMatrixElementsTestSupport.write_qe_paw_fixture(
+            joinpath(directory, "native-input");
+            num_kpoints = 2,
+        )
+        source = WannierNLQG.SymmetryFoundation.QuantumEspressoWavefunctionSource(
+            native_fixture.save_directory;
+            include_time_reversal = false,
+        )
+        # Complete the ordinary identity-mode contract from this actual config.
+        # This prepares metadata, not a PAW derivation or qualification claim.
+        prepared_representation = Base.invokelatest(
+            workflow._representation_with_mode_contract,
+            fixture.representation,
+            fixture.config,
+        )
+        public_representation = Base.invokelatest(
+            workflow._completed_public_band_representation,
+            prepared_representation,
+        )
+        for (key, expected) in (
+            ("requested_wannierization_mode", "ordinary"),
+            ("effective_wannierization_mode", "ordinary"),
+            ("representation_source", "identity"),
+            ("symmetry_constraints_applied", "false"),
+        )
+            @test public_representation.conventions[key] == expected
+        end
+        for field in (
+            :source_code,
+            :spinor,
+            :real_lattice,
+            :reciprocal_lattice,
+            :mp_grid,
+            :kpoints_fractional,
+            :energies_ev,
+            :kpoint_map,
+            :reciprocal_shifts,
+            :sewing_matrices,
+            :band_block_labels,
+            :irreducible_indices,
+            :full_to_irreducible,
+            :full_to_operation,
+        )
+            @test getfield(public_representation, field) == getfield(fixture.representation, field)
+        end
+        @test length(public_representation.operations) == 1
+        for (actual, expected) in
+            zip(public_representation.operations, fixture.representation.operations)
+            for field in fieldnames(typeof(expected))
+                @test getfield(actual, field) == getfield(expected, field)
             end
         end
-        hashes["MMN"] = hashfile(mmn_file)
-        input_digest = bytes2hex(
-            SHA.sha256(
-                join(
-                    [string(key, Char(0), hashes[key]) for key in sort!(collect(keys(hashes)))],
-                    Char(10),
-                ),
-            ),
+        WannierNLQG.SymmetryFoundation.write_band_representation_hdf5(
+            representation,
+            public_representation;
+            content_authentication = false,
         )
         HDF5.h5open(provenance, "w") do handle
-            attrs = HDF5.attributes(handle)
-            attrs["passed"] = true
-            attrs["qualification_mode"] = "standard"
-            attrs["gauge_hdf5_sha256"] = hashfile(gauge)
-            attrs["nnkp_sha256"] = hashfile(nnkp)
+            HDF5.attributes(handle)["schema"] = "wn.test.injected-cache-matrix-fixture/1"
+            HDF5.attributes(handle)["fixture_scope"] = "ownership_only_not_PAW_qualification"
         end
         configured = EXPORT_WANNIERIZATION.SymmetryCompletedQEPAWMatrices(
             nnkp,
@@ -804,6 +888,7 @@ end
             fixture.config;
             input = (
                 matrix_elements = configured,
+                source = source,
                 eig_file = eig,
                 win_file = win,
                 band_representation_hdf5 = representation,
@@ -812,20 +897,26 @@ end
             solver = (initialization = :restart,),
             checkpoint = (restart_hdf5 = joinpath(directory, "not-reread.h5"),),
         )
+        injected = (
+            mmn = fixture.mmn,
+            amn = amn,
+            mmn_file = mmn_file,
+            amn_file = amn_file,
+            raw_amn_file = amn_file,
+            source_kind = "injected_cache_unit",
+            paw_result = nothing,
+            gauge_provenance_file = provenance,
+        )
+        captured = workflow._resolve_wannier_matrix_elements(
+            config,
+            fixture.basis;
+            generator = (args...) -> injected,
+        )
         summary = merge(
             fixture.result.input_summary,
             Dict(
-                "projection_basis_sha256" =>
-                    EXPORT_WANNIERIZATION._projection_basis_sha256(fixture.basis),
-                "authoritative_hamiltonian_sha256" =>
-                    parent.PAWMatrixElements.star_authoritative_hamiltonian_sha256(
-                        config.input.authoritative_hamiltonian,
-                    ),
-                "input_sha256" => input_digest,
-                "amn_sha256" => hashfile(amn_file),
-                "matrix_element_gauge_sha256" => hashfile(gauge),
-                "num_bands" => "2",
-                "num_kpoints" => "2",
+                "native_matrix_acceptance_json" =>
+                    String(JSON3.write(captured.accepted_matrix_reference)),
             ),
         )
         accepted = parent.WannierizationInternalSupport.updated_wannierization_result(
@@ -841,7 +932,7 @@ end
         @test resolved.mmn.data == fixture.mmn.data
         @test resolved.amn == amn
         @test resolved.raw_amn_file == amn_file
-        @test resolved.gauge_sha256 == hashfile(gauge)
+        @test resolved.accepted_matrix_reference["content_authentication"] == "NOT_PERFORMED"
         @test resolved.gauge_provenance_file == provenance
         @test !isfile(config.checkpoint.restart_hdf5)
         for execution in (
@@ -852,12 +943,17 @@ end
                 config;
                 input = (preparation_execution = execution,),
             )
-            @test workflow._resolve_wannier_matrix_elements(
+            # Preserve the actual 1110 authority: a complete accepted record
+            # precedes preparation hints; those hints do not alter its inputs.
+            retained = workflow._resolve_wannier_matrix_elements(
                 forced,
                 fixture.basis;
                 accepted_result = accepted,
-                generator = (args...) -> :explicit_recompute,
-            ) === :explicit_recompute
+                generator = (args...) -> error("ACCEPTED_REFERENCE_PRECEDENCE_CHANGED"),
+            )
+            @test retained.mmn.data == fixture.mmn.data
+            @test retained.amn == amn
+            @test retained.accepted_matrix_reference == captured.accepted_matrix_reference
         end
 
         write(amn_file, read(amn_file, String) * "\n")
@@ -920,7 +1016,7 @@ end
     @test eligibility.execution_eligible
     @test eligibility.export_eligible
     @test !eligibility.production_eligible
-    @test eligibility.qualification_status == "DIAGNOSTIC_ONLY"
+    @test eligibility.qualification_status == "COMPUTATION_READY"
     @test eligibility.quality_review_recommended
     @test !eligibility.strictly_converged_z_seal
     @test eligibility.reasons == String[]
@@ -1009,51 +1105,199 @@ end
         )
         EXPORT_WANNIERIZATION.write_wannierization_checkpoint_hdf5(checkpoint, persisted)
         restored = EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(checkpoint)
-        @test restored.input_summary["checkpoint_schema_version"] == "1.2"
-        @test restored.input_summary["restart_eligible"] == "true"
+        @test restored.input_summary["checkpoint_schema_version"] == "3.0"
+        @test restored.input_summary["restart_eligible"] == "false"
+        @test restored.input_summary["restart_input_definition_status"] == "NOT_RECORDED"
         for key in EXPORT_WANNIERIZATION.WANNIERIZATION_ELIGIBILITY_SUMMARY_KEYS
             @test restored.input_summary[key] ==
                   EXPORT_WANNIERIZATION.wannierization_eligibility_summary(eligibility)[key]
         end
         HDF5.h5open(checkpoint, "r") do handle
             attributes = HDF5.attributes(handle)
-            @test String(read(attributes["schema_version"])) == "1.2"
+            @test String(read(attributes["schema_version"])) == "3.0"
             @test !haskey(attributes, "qualified_z_seal")
             for key in EXPORT_WANNIERIZATION.WANNIERIZATION_ELIGIBILITY_SUMMARY_KEYS
                 @test String(read(attributes[key])) == restored.input_summary[key]
             end
-            @test String(read(attributes["checkpoint_sha256"])) ==
-                  Base.invokelatest(solver._wannierization_checkpoint_sha256_v2_29, restored)
+            @test !haskey(attributes, "checkpoint_sha256")
+            @test String(read(attributes["publication_identity"])) ==
+                  restored.input_summary["checkpoint_publication_identity"]
         end
     end
 end
 
-@testset "wire 1.1 checkpoints remain readable after the 1.2 wire upgrade" begin
+@testset "Current wire rejects old checkpoints without implicit conversion" begin
     fixture_root = joinpath(@__DIR__, "fixtures", "schema_compatibility")
     legacy = joinpath(fixture_root, "checkpoint_1_1.h5")
     @test isfile(legacy)
-    restored = EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(legacy)
-    @test restored.input_summary["checkpoint_schema_version"] == "1.1"
-    @test restored.input_summary["restart_eligible"] == "true"
-    @test restored.status == EXPORT_WANNIERIZATION.MAX_ITERATIONS
-    # Wire 1.1 predates the typed block; the reader must not fabricate it.
-    @test !haskey(restored.input_summary, "wannierization_eligibility_execution_eligible")
+    @test_throws ArgumentError EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(legacy)
+    @test_throws ArgumentError EXPORT_WANNIERIZATION.adopt_wannierization_checkpoint_hdf5(legacy)
+    # The retained artifact and archived readers retain the actual old contract.
     HDF5.h5open(legacy, "r") do handle
         attributes = HDF5.attributes(handle)
         @test String(read(attributes["schema_version"])) == "1.1"
         @test haskey(attributes, "qualified_z_seal")
         @test !haskey(attributes, "wannierization_eligibility_execution_eligible")
     end
-    # Relabeling the same numerical payload as 1.2 must fail the digest binding.
     mktempdir() do directory
-        relabeled = joinpath(directory, "relabeled-1.2.wannierization.h5")
+        relabeled = joinpath(directory, "relabeled-1.4.wannierization.h5")
         cp(legacy, relabeled)
+        chmod(relabeled, 0o600)
         HDF5.h5open(relabeled, "r+") do handle
             HDF5.delete_attribute(handle, "schema_version")
-            HDF5.attributes(handle)["schema_version"] = "1.2"
+            HDF5.attributes(handle)["schema_version"] = "1.4"
         end
-        @test_throws ArgumentError EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(
+        @test_throws ArgumentError EXPORT_WANNIERIZATION.adopt_wannierization_checkpoint_hdf5(
             relabeled,
         )
     end
 end
+
+@testset "Checkpoint read binds its local publication, not copied-file equality" begin
+    fixture = standard_export_fixture()
+    mktempdir() do directory
+        checkpoint = joinpath(directory, "observed.wannierization.h5")
+        EXPORT_WANNIERIZATION.write_wannierization_checkpoint_hdf5(checkpoint, fixture.result)
+        publication = EXPORT_IO.scientific_file_record(EXPORT_IO.scientific_file_state(checkpoint))
+        original = EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(
+            checkpoint;
+            expected_publication = publication,
+        )
+        @test isequal(original.v_matrix, fixture.result.v_matrix)
+        @test isequal(original.spreads_angstrom2, fixture.result.spreads_angstrom2)
+        link = joinpath(directory, "linked.h5")
+        symlink(checkpoint, link)
+        linked = EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(
+            link;
+            expected_publication = publication,
+        )
+        @test isequal(linked.v_matrix, original.v_matrix)
+
+        copied = joinpath(directory, "copied.h5")
+        cp(checkpoint, copied)
+        @test_throws ArgumentError EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(
+            copied;
+            expected_publication = publication,
+        )
+        @test_throws ArgumentError EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(copied)
+        adopted = EXPORT_WANNIERIZATION.adopt_wannierization_checkpoint_hdf5(copied)
+        @test isequal(adopted.v_matrix, original.v_matrix)
+
+        # A valid writer may replace a checkpoint with identical numerical data.
+        # The old local observation must still reject that new publication.
+        EXPORT_WANNIERIZATION.write_wannierization_checkpoint_hdf5(checkpoint, fixture.result)
+        @test_throws ArgumentError EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(
+            checkpoint;
+            expected_publication = publication,
+        )
+        current = EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(checkpoint)
+        @test isequal(current.v_matrix, original.v_matrix)
+        @test current.input_summary["checkpoint_publication_identity"] !=
+              original.input_summary["checkpoint_publication_identity"]
+        solver = first(EXPORT_WANNIERIZATION._load_wannierization_extension!()).SolverCheckpoint
+        first_definition, second_definition = IOBuffer(), IOBuffer()
+        solver.write_checkpoint_definition(first_definition, original)
+        solver.write_checkpoint_definition(second_definition, current)
+        @test take!(first_definition) == take!(second_definition)
+        GC.gc()
+        @test isequal(
+            EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(checkpoint).v_matrix,
+            original.v_matrix,
+        )
+        # A read-only packaged/current-format asset can use a private receipt.
+        private_copy = joinpath(directory, "read-only-copy.h5")
+        cp(checkpoint, private_copy)
+        chmod(private_copy, 0o444)
+        private_receipt = joinpath(directory, "private", "fixture.commit.toml")
+        relocated = EXPORT_WANNIERIZATION.adopt_wannierization_checkpoint_hdf5(
+            private_copy;
+            receipt_path = private_receipt,
+        )
+        @test isequal(relocated.v_matrix, current.v_matrix)
+        @test !isfile(private_copy * ".commit.toml")
+        @test isequal(
+            EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(
+                private_copy;
+                receipt_path = private_receipt,
+            ).v_matrix,
+            current.v_matrix,
+        )
+
+        @test_throws ArgumentError EXPORT_WANNIERIZATION.read_wannierization_checkpoint_hdf5(
+            joinpath(directory, "absent.h5"),
+        )
+    end
+end
+
+isdefined(@__MODULE__, :test_operator_bundle_geometry) ||
+    include(joinpath(@__DIR__, "OperatorBundleTestSupport.jl"))
+
+@testset "Terminal model is independent of checkpoint qualification records" begin
+    fixture=standard_export_fixture()
+    model=EXPORT_WANNIERIZATION.build_wannier_tight_binding_model(
+        fixture.result,
+        fixture.eig,
+        fixture.mmn;
+        real_space_replica_policy = :mp_grid,
+    )
+    C=WannierNLQG.Core
+    operators=Dict(
+        C.REAL_SPACE_HAMILTONIAN=>C.RealSpaceOperator(
+            C.RealSpaceOperatorSymmetrySpec(C.REAL_SPACE_HAMILTONIAN, 0, 1, 1),
+            model.r_vectors,
+            model.hamiltonian_r,
+        ),
+        C.REAL_SPACE_POSITION=>C.RealSpaceOperator(
+            C.RealSpaceOperatorSymmetrySpec(C.REAL_SPACE_POSITION, 1, -1, 1),
+            model.r_vectors,
+            model.position_r,
+        ),
+    )
+    mktempdir() do directory
+        path=joinpath(directory, "model.h5")
+        EXPORT_IO.write_real_space_operator_bundle(
+            path,
+            model.lattice,
+            model.r_degeneracies,
+            operators;
+            profile = :hamiltonian_position,
+            geometry = test_operator_bundle_geometry(
+                model.lattice,
+                model.r_degeneracies,
+                operators,
+            ),
+            eligibility = Dict(
+                "checkpoint_publication_identity"=>"unavailable checkpoint",
+                "physics_qualification"=>"PHYSICS_HOLD",
+            ),
+        )
+        actual=EXPORT_IO.read_real_space_operator_bundle(path)
+        @test actual.operators[C.REAL_SPACE_HAMILTONIAN].data==model.hamiltonian_r
+        @test actual.operators[C.REAL_SPACE_POSITION].data==model.position_r
+        HDF5.h5open(path, "r") do h
+            @test !haskey(HDF5.attributes(h), "checkpoint_publication_identity")
+            @test !haskey(h, "diagnostics")
+        end
+    end
+end
+
+isdefined(@__MODULE__, :CheckpointReceiptRecoverySupport) ||
+    include(joinpath(@__DIR__, "CheckpointReceiptRecoveryTestSupport.jl"))
+@testset "Completed accepted HDF survives a receipt-stage failure" begin
+    mktempdir() do directory
+        failed = CheckpointReceiptRecoverySupport.produce_failure(directory)
+        @test failed["payload_persisted"]
+        @test failed["strict_reader_rejects_unpublished"]
+        @test failed["failure_stage"] == failed["earliest_restart_stage"] == "publication"
+        recovered = CheckpointReceiptRecoverySupport.recover_publication(directory)
+        @test recovered["definition_equal"]
+        @test all(
+            row -> row["bytes_equal"] && row["maximum_absolute_error"] == 0,
+            recovered["arrays"],
+        )
+        @test !failed["solver_executed"] && !recovered["solver_executed"]
+        @test recovered["restart_stage"] == "publication"
+    end
+end
+
+include("AcceptedStepReportChecks.jl")

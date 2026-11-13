@@ -1,8 +1,6 @@
 module PortableFixturePayload
-using JSON3, SHA, Serialization
-include(joinpath(@__DIR__, "PortableFixturePathIO_v1.jl"))
-using .PortableFixturePathIO
-export verify_payload, load_arguments, argument_mapping
+using JSON3, SHA
+export verify_payload, argument_mapping
 function safe_relative(root, relative)
     text = String(relative)
     isabspath(text) && error("FIXTURE_ABSOLUTE_PATH_FORBIDDEN")
@@ -65,19 +63,5 @@ function argument_mapping(manifest, root, output_root)
         mapping[String(token)] = target
     end
     return mapping
-end
-function load_arguments(root, id, output_root; verify = true)
-    manifest =
-        verify ? verify_payload(root) :
-        JSON3.read(read(safe_relative(root, "manifest.json"), String))
-    selected = filter(x -> String(x.id) == id, manifest.arguments)
-    length(selected) == 1 || error("FIXTURE_ARGUMENT_ID_MISSING")
-    record = only(selected)
-    file = safe_relative(root, String(record.file))
-    bytes2hex(open(sha256, file)) == record.sha256 || error("FIXTURE_ARGUMENTS_SHA_MISMATCH")
-    mapping = argument_mapping(manifest, root, output_root)
-    return open(file, "r") do stream
-        deserialize(FixturePathIO(stream, mapping))
-    end
 end
 end

@@ -62,7 +62,7 @@ end
 function _match_magnetic_atoms(
     source_species::Vector{String},
     source_positions::Matrix{Float64},
-    input::WannierWinData;
+    input::Union{WannierWinData, CrystalStructure};
     tolerance::Float64,
 )
     length(source_species) == length(input.species) ||
@@ -96,7 +96,7 @@ degrees. No self-consistent k mesh is parsed, generated, or returned.
 """
 function read_qe_magnetic_moments(
     filename::AbstractString,
-    input::WannierWinData;
+    input::Union{WannierWinData, CrystalStructure};
     collinear_axis_cartesian = nothing,
     tolerance::Float64 = 1.0e-7,
 )
@@ -309,7 +309,7 @@ mapping contract.
 """
 function read_vasp_magnetic_moments(
     filename::AbstractString,
-    input::WannierWinData;
+    input::Union{WannierWinData, CrystalStructure};
     collinear_axis_cartesian = nothing,
 )
     return _read_vasp_incar_magnetic_state(
@@ -320,7 +320,7 @@ function read_vasp_magnetic_moments(
 end
 
 """Validate an explicit `3 x num_atoms` Cartesian moment matrix."""
-function read_config_magnetic_moments(value, input::WannierWinData)
+function read_config_magnetic_moments(value, input::Union{WannierWinData, CrystalStructure})
     moments = Matrix{Float64}(value)
     size(moments) == (3, length(input.species)) ||
         throw(ArgumentError("moments_cartesian must have size (3, num_atoms)"))

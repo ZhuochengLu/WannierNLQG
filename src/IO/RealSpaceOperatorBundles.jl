@@ -1,6 +1,6 @@
 const OPERATOR_BUNDLE_SCHEMA = "wanniernlqg.real-space-operators"
-const OPERATOR_BUNDLE_SCHEMA_VERSION = "1.1"
-const FULL_DERIVATIVE_OVERLAP_ALGORITHM_VERSION = "wannier90-get_FF_R-v1"
+const OPERATOR_BUNDLE_SCHEMA_VERSION = "3.0"
+const FULL_DERIVATIVE_OVERLAP_ALGORITHM_VERSION = "neighbor-pair-overlap-fourier/1"
 const OPERATOR_BUNDLE_EXTENSION_NAME = :WannierNLQGOperatorBundleExt
 const OPERATOR_BUNDLE_EXTENSION_LOCK = ReentrantLock()
 
@@ -28,7 +28,24 @@ struct OperatorBundleIndexEntry
     offset_elements::UInt64
     length_elements::UInt64
     logical_shape::NTuple{3, Int}
-    component_sha256::String
+    component_reference::String
+end
+
+"""Name a component inside one bundle publication, without inspecting its values.
+
+The bundle's publication identity supplies the lifetime. Kind and Cartesian
+indices identify an index row; this reference never proves numerical equality.
+"""
+function operator_component_reference(kind::RealSpaceOperatorKind, indices)
+    length(indices)==2 || throw(ArgumentError("InvalidOperatorComponentReference"))
+    return string(
+        "wanniernlqg.operator-component/1:",
+        UInt8(kind),
+        ':',
+        Int(indices[1]),
+        ':',
+        Int(indices[2]),
+    )
 end
 
 """Validated small metadata needed before loading a packed operator payload."""
@@ -42,8 +59,8 @@ struct OperatorBundleManifest
     degeneracies::Vector{Int}
     entries::Vector{OperatorBundleIndexEntry}
     payload_length::Int
-    paired_tb_sha256::Union{Nothing, String}
-    scientific_content_sha256::String
+    paired_tb_source_bytes::Union{Nothing, Int}
+    publication_identity::String
     schema_version::String
     wannier_centers_cartesian::Union{Nothing, Matrix{Float64}}
     wannier_centers_fractional::Union{Nothing, Matrix{Float64}}
@@ -56,8 +73,8 @@ struct OperatorBundleManifest
     mp_grid::Union{Nothing, NTuple{3, Int}}
     wigner_seitz_tolerance::Union{Nothing, Float64}
     wigner_seitz_search_size::Union{Nothing, Int}
-    replica_mapping_sha256::Union{Nothing, String}
-    geometry_content_sha256::Union{Nothing, String}
+    replica_mapping_reference::Union{Nothing, String}
+    geometry_metadata_definition_hex::Union{Nothing, String}
     wannierization_status::Union{Nothing, String}
     solver_status::Union{Nothing, String}
     solver_convergence::Union{Nothing, String}
@@ -77,6 +94,7 @@ struct OperatorBundleManifest
     convergence_metric::Union{Nothing, Float64}
     convergence_tolerance::Union{Nothing, Float64}
     checkpoint_sha256::Union{Nothing, String}
+    checkpoint_publication_identity::Union{Nothing, String}
     input_sha256::Union{Nothing, String}
     spread_metric::Union{Nothing, String}
     amn_sha256::Union{Nothing, String}
@@ -138,7 +156,7 @@ struct OperatorBundleManifest
     derivative_overlap_source_sha256::Union{Nothing, String}
     derivative_overlap_algorithm_version::String
     operator_qualification::Dict{String, Any}
-    operator_qualification_sha256::String
+    operator_qualification_sha256::Union{Nothing, String}
     spin_family_qualification::String
     spin_family_qualification_reason::String
     spin_family_production_eligible::Bool
@@ -321,13 +339,18 @@ end
 """Return semantic matrix capabilities provided by an exact inventory."""
 function available_matrix_capabilities(inventory)
     kinds = Set(canonical_operator_inventory(inventory))
-    capabilities = String["hamiltonian", "position"]
+    capabilities = String[]
+    REAL_SPACE_HAMILTONIAN in kinds && push!(capabilities, "hamiltonian")
+    REAL_SPACE_POSITION in kinds && push!(capabilities, "position")
     REAL_SPACE_SPIN in kinds && push!(capabilities, "spin")
-    all(kind -> kind in kinds, OPERATOR_PROFILE_INVENTORIES[:derivative][3:end]) &&
+    all(kind -> kind in kinds, OPERATOR_PROFILE_INVENTORIES[:derivative]) &&
         push!(capabilities, "derivative")
     all(
         kind -> kind in kinds,
         (
+            REAL_SPACE_HAMILTONIAN,
+            REAL_SPACE_POSITION,
+            REAL_SPACE_SPIN,
             REAL_SPACE_SPIN_TIMES_HAMILTONIAN,
             REAL_SPACE_SPIN_TIMES_POSITION,
             REAL_SPACE_SPIN_TIMES_HAMILTONIAN_POSITION,
@@ -418,7 +441,11 @@ task-derived inventory.  Exactly one must be supplied.  Task-derived selections 
 re-derived from the shared `Core` requirement registry, so the Wannierization
 generation path and the Runtime consumption path cannot disagree about a task.
 """
-function resolve_operator_selection(profile::Union{Nothing, Symbol}, operator_tasks = ())
+function resolve_operator_selection(
+    profile::Union{Nothing, Symbol},
+    operator_tasks = ();
+    content_authentication::Bool = true,
+)
     tasks = Tuple(operator_tasks)
     if profile !== nothing
         isempty(tasks) || throw(
@@ -460,7 +487,7 @@ function resolve_operator_selection(profile::Union{Nothing, Symbol}, operator_ta
             "profile=nothing requires at least one OperatorTask",
         ),
     )
-    resolution = resolve_operator_requirements(tasks)
+    resolution = resolve_operator_requirements(tasks; content_authentication)
     inventory = collect(resolution.required_operators)
     # A task-derived selection always stores the `:task_derived` label, even when its
     # inventory happens to coincide with a fixed profile.  The persisted profile is a
@@ -491,7 +518,8 @@ function validate_task_derived_operator_selection(
     inventory,
     sources,
     selection_sha256,
-    registry_version,
+    registry_version;
+    content_authentication::Bool = false,
 )
     tokens = String[String(token) for token in requested_tasks]
     isempty(tokens) && throw(
@@ -504,7 +532,7 @@ function validate_task_derived_operator_selection(
         ),
     )
     resolution = try
-        resolve_operator_requirements(operator_tasks_from_tokens(tokens))
+        resolve_operator_requirements(operator_tasks_from_tokens(tokens); content_authentication)
     catch error
         error isa Union{OperatorSelectionError, ArgumentError} || rethrow()
         throw(ArgumentError("TASK_DERIVED_OPERATOR_SELECTION_INVALID: $(sprint(showerror, error))"))
@@ -533,12 +561,17 @@ function validate_task_derived_operator_selection(
             "inventory $(join(String.(expected_sources), ", "))",
         ),
     )
-    String(selection_sha256) == resolution.selection_sha256 || throw(
-        ArgumentError(
-            "TASK_DERIVED_OPERATOR_SELECTION_INVALID: stored operator selection SHA-256 " *
-            "differs from the re-derived digest",
-        ),
-    )
+    if content_authentication
+        String(selection_sha256) == resolution.selection_sha256 || throw(
+            ArgumentError("TASK_DERIVED_OPERATOR_SELECTION_INVALID: selection digest differs"),
+        )
+    else
+        selection_sha256 === nothing || throw(
+            ArgumentError(
+                "TASK_DERIVED_OPERATOR_SELECTION_INVALID: unauthenticated selection has a digest",
+            ),
+        )
+    end
     return resolution
 end
 
@@ -549,14 +582,15 @@ end
 
 # Load the HDF5-only model-package extension on first expert I/O use.
 function _load_operator_bundle_extension!()
-    extension = _active_operator_bundle_extension()
-    extension === nothing || return extension, false
     lock(OPERATOR_BUNDLE_EXTENSION_LOCK)
     try
         extension = _active_operator_bundle_extension()
+        extension === nothing || return extension, false
         if extension === nothing
-            Base.eval(@__MODULE__, :(import HDF5))
-            Base.eval(@__MODULE__, :(import JSON3))
+            # Require dependencies without adding bindings to the closed IO
+            # module while a caller's extension image is being generated.
+            Base.require(Base.PkgId(Base.UUID("f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"), "HDF5"))
+            Base.require(Base.PkgId(Base.UUID("0f8b85d8-7281-11e9-16c2-39a750bddbf1"), "JSON3"))
             extension = _active_operator_bundle_extension()
             extension === nothing && error(
                 "WannierNLQG operator-bundle extension did not activate after loading HDF5 and JSON3",
@@ -576,11 +610,10 @@ function _call_operator_bundle_extension(function_name::Symbol, arguments...; ke
 end
 
 """
-Write one strict Packed HDF5 model bundle with explicit provenance.
+Write the current mathematical model atomically with an explicit physical inventory.
 
-`profile` selects a fixed complete inventory. Pass `profile = nothing` together with a
-non-empty `operator_tasks` tuple to persist a task-derived selection whose resolved
-inventory, source closure, per-task closure, and selection digest are re-derived on read.
+The file contains operators, support, geometry, units and interpretation definitions.
+Qualification evidence and content hashes are not persisted in this format.
 """
 function write_real_space_operator_bundle(
     filename::AbstractString,
@@ -590,7 +623,11 @@ function write_real_space_operator_bundle(
     profile = infer_operator_profile(keys(operators)),
     operator_tasks = (),
     overwrite::Bool = false,
-    paired_tb_sha256::Union{Nothing, AbstractString} = nothing,
+    content_authentication::Bool = false,
+    paired_tb_file::Union{Nothing, AbstractString} = nothing,
+    paired_tb_expected_state = nothing,
+    paired_tb_writer = nothing,
+    return_receipt::Bool = false,
     provenance = Dict{String, Any}(),
     symmetry = Dict{String, Any}(),
     geometry,
@@ -606,7 +643,11 @@ function write_real_space_operator_bundle(
         profile = profile === nothing ? nothing : Symbol(profile),
         operator_tasks,
         overwrite,
-        paired_tb_sha256,
+        content_authentication,
+        paired_tb_file,
+        paired_tb_expected_state,
+        paired_tb_writer,
+        return_receipt,
         provenance,
         symmetry,
         geometry,
@@ -616,34 +657,40 @@ function write_real_space_operator_bundle(
 end
 
 """
-Read and strictly validate bundle metadata without loading the large payload.
+Read current mathematical metadata and index extents without scanning numerical payload.
 
-When present, the versioned construction-evidence contract and all duplicated
-policy, original gate records and qualification flags are always verified.
-Supported historical files without this contract retain their original digest
-rules; their free diagnostic metadata receives no new integrity guarantee.
+Old schemas require the separately invoked migration tool; no qualification file is read.
 """
-function read_real_space_operator_bundle_manifest(filename::AbstractString)
-    return _call_operator_bundle_extension(:read_real_space_operator_bundle_manifest, filename)
+function read_real_space_operator_bundle_manifest(filename::AbstractString; receipt_path = nothing)
+    return _call_operator_bundle_extension(
+        :read_real_space_operator_bundle_manifest,
+        filename;
+        receipt_path,
+    )
 end
 
 """
 Read and reconstruct every operator in a compatible Packed HDF5 bundle.
 
-`verify_digests=false` skips numerical component hashes only. Scientific metadata
-and any construction-evidence seal remain mandatory checks.
+Current-format reads always validate publication and complete metadata/domain rules.
+The retired checksum-specific `verify_digests` keyword is not a current interface.
 """
-function read_real_space_operator_bundle(filename::AbstractString; verify_digests::Bool = true)
-    return _call_operator_bundle_extension(
-        :read_real_space_operator_bundle,
-        filename;
-        verify_digests,
-    )
+function read_real_space_operator_bundle(filename::AbstractString; receipt_path = nothing)
+    return _call_operator_bundle_extension(:read_real_space_operator_bundle, filename; receipt_path)
 end
 
 """Map the sole packed payload when compatible, otherwise return a buffered copy."""
-function read_operator_bundle_payload(filename::AbstractString; prefer_mmap::Bool = true)
-    return _call_operator_bundle_extension(:read_operator_bundle_payload, filename; prefer_mmap)
+function read_operator_bundle_payload(
+    filename::AbstractString;
+    prefer_mmap::Bool = true,
+    receipt_path = nothing,
+)
+    return _call_operator_bundle_extension(
+        :read_operator_bundle_payload,
+        filename;
+        prefer_mmap,
+        receipt_path,
+    )
 end
 
 """Load only requested component ranges, preserving component-contiguous views."""
@@ -651,11 +698,74 @@ function read_operator_bundle_components(
     filename::AbstractString,
     requested_components::AbstractDict;
     prefer_mmap::Bool = true,
+    receipt_path = nothing,
 )
     return _call_operator_bundle_extension(
         :read_operator_bundle_components,
         filename,
         requested_components;
         prefer_mmap,
+        receipt_path,
     )
+end
+
+"""Compare a declared original paired TB against every stored source byte.
+
+This is strict original-source matching, including encoded order/comments. It
+must not compare transformed final operators to an untransformed input model.
+"""
+function validate_packed_paired_tb(
+    bundle::AbstractString,
+    filename::AbstractString;
+    receipt_path = nothing,
+)
+    return _call_operator_bundle_extension(
+        :validate_packed_paired_tb,
+        bundle,
+        filename;
+        receipt_path,
+    )
+end
+
+"""Validate the current mathematical manifest without writing a receipt.
+
+This does not convert legacy schemas or upgrade historical science qualification.
+"""
+function adopt_real_space_operator_bundle(filename::AbstractString; receipt_path = nothing)
+    return _call_operator_bundle_extension(
+        :adopt_real_space_operator_bundle,
+        filename;
+        receipt_path,
+    )
+end
+
+"""
+Internal HDF5 extension port preserving attribute read semantics while avoiding
+fixed-string length as a Julia type parameter. The caller retains ownership of
+an already opened attribute; this reader closes only its temporary handles.
+The already imported backend is explicit so sibling extensions can precompile
+independently while IO remains free of eager HDF5 loading.
+"""
+function read_hdf5_attribute_value(attribute, hdf5::Module)
+    datatype = hdf5.datatype(attribute)
+    try
+        if hdf5.API.h5t_get_class(datatype) != hdf5.API.H5T_STRING ||
+           hdf5.API.h5t_is_variable_str(datatype)
+            return read(attribute)
+        end
+        space = hdf5.dataspace(attribute)
+        try
+            hdf5.API.h5s_get_simple_extent_type(space) == hdf5.API.H5S_SCALAR ||
+                return read(attribute)
+        finally
+            close(space)
+        end
+        buffer = Vector{UInt8}(undef, sizeof(datatype))
+        # Passing the Julia array to the installed locked wrapper roots its buffer
+        # for the native call. The identical file/memory datatype needs no coercion.
+        hdf5.read_attribute(attribute, datatype, buffer)
+        return hdf5.unpad(String(buffer), hdf5.API.h5t_get_strpad(datatype))
+    finally
+        close(datatype)
+    end
 end

@@ -1,11 +1,13 @@
 using Test
 using MPI
+isdefined(@__MODULE__, :FullMPIRankProfile) ||
+    include(joinpath(@__DIR__, "support", "FullMPIRankProfile.jl"))
 
-@testset "Wannierization contiguous raw-Z MPI 1/2/4/8/16 determinism" begin
+@testset "Wannierization contiguous raw-Z MPI profile determinism" begin
     probe = joinpath(@__DIR__, "WannierizationRawZMpiProbe.jl")
     launcher = MPI.mpiexec()
     digests = String[]
-    for ranks in (1, 2, 4, 8, 16)
+    for ranks in FullMPIRankProfile.wannierization_ranks()
         command = addenv(
             `$(launcher) -n $(ranks) $(Base.julia_cmd()) --compiled-modules=no --startup-file=no --threads=1 --project=$(dirname(@__DIR__)) $(probe)`,
             "OMP_NUM_THREADS" => "1",

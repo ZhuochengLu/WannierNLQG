@@ -96,11 +96,27 @@ end
         @test isempty(intersect(shard_sets[left], shard_sets[right]))
     end
     @test length(CITestPlan.MPI_GATE_NAMES) == 3
-    @test length(CITestPlan.MPI_TEST_FILES) == 7
+    @test length(CITestPlan.MPI_TEST_FILES) == 11
+    @test CITestPlan.MPI_TEST_FILES == (
+        "linear_orbital_parallel_unit.jl",
+        "third_order_parallel_unit.jl",
+        "mdrs_runtime_mpi_unit.jl",
+        "wannierization_raw_z_mpi_unit.jl",
+        "wannierization_u_localization_mpi_unit.jl",
+        "wannierization_workflow_mpi_unit.jl",
+        "per_task_parallel_unit.jl",
+        "band_structure_unit.jl",
+        "nonorthogonal_adaptive_mpi_unit.jl",
+        "parallelogram_region_mpi_unit.jl",
+        "parallelepiped_region_mpi_unit.jl",
+    )
     @test intersect(Set(CITestPlan.MPI_TEST_FILES), Set(CITestPlan.FAST_TEST_FILES)) ==
           Set(["band_structure_unit.jl"])
-    @test intersect(Set(CITestPlan.MPI_TEST_FILES), Set(CITestPlan.FULL_ONLY_TEST_FILES)) ==
-          Set(["per_task_parallel_unit.jl", "linear_orbital_parallel_unit.jl"])
+    @test intersect(Set(CITestPlan.MPI_TEST_FILES), Set(CITestPlan.FULL_ONLY_TEST_FILES)) == Set([
+        "per_task_parallel_unit.jl",
+        "linear_orbital_parallel_unit.jl",
+        "third_order_parallel_unit.jl",
+    ])
     @test Set(CITestPlan.full_shard_auxiliary_files("scientific-contracts")) ==
           Set(["band_structure_unit.jl", "mpi_runtime_compiled_modules_full_unit.jl"])
 end
@@ -242,5 +258,13 @@ isdefined(@__MODULE__, :ReadinessGateRunner) ||
         second_times = parse.(Int, split(strip(read(serial[2].log_path, String))))
         @test all(record -> record.exit_code == 0, serial)
         @test first_times[2] <= second_times[1]
+    end
+end
+
+@testset "CI explicit serial GC worker budget" begin
+    if get(ENV, "WANNIERNLQG_TEST_SCHEDULER_ACTIVE", "0") == "1"
+        @test get(ENV, "JULIA_NUM_GC_THREADS", "") == "1,0"
+        @test Threads.ngcthreads() == 1
+        @test Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) == 0
     end
 end

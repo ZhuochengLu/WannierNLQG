@@ -2,10 +2,12 @@ using WannierNLQG
 
 const ROOT = normpath(joinpath(@__DIR__, ".."))
 const EXAMPLE_ROOT = joinpath(ROOT, "examples", "tasks")
-const EXPECTED_TASK_COUNT = 52
+const EXPECTED_TASK_COUNT = 63
 const CURRENT_QUANTITIES = Set((
     :shift_current,
     :second_harmonic_generation,
+    :jerk_current,
+    :third_harmonic_generation,
     :photon_drag_shift_current,
     :injection_current,
     :injection_spin_current,
@@ -43,7 +45,8 @@ function include_example(path::AbstractString, index::Int)
     Core.eval(example_module, :(include(path::AbstractString) = Base.include(@__MODULE__, path)))
     Base.include(example_module, path)
     isdefined(example_module, :build_config) || error("$(path) does not define build_config()")
-    config = Base.invokelatest(getfield(example_module, :build_config))
+    builder = Base.invokelatest(getfield, example_module, :build_config)
+    config = Base.invokelatest(builder)
     return example_module, config
 end
 
@@ -59,13 +62,15 @@ function audit_guides(definitions)
         "KPath",
         "OpticalParameters",
         "SHGParameters",
-        "SHGNumerics",
+        "Numerics",
         "FiniteQOpticalParameters",
         "GeometryParameters",
+        "IntrinsicHallParameters",
+        "BerryMultipoleParameters",
         "BandParameters",
-        "OpticalNumerics",
-        "GeometryNumerics",
-        "BandNumerics",
+        "Numerics",
+        "Numerics",
+        "Numerics",
         "ExecutionOptions",
         "OutputOptions",
         "FullTensor",
@@ -138,7 +143,14 @@ function audit_examples(definitions)
                 all(==(101), config.sampling.kpoints_per_segment),
                 "ordinary Band preset changed",
             )
-        elseif quantity in (:linear_transport, :linear_optical_response, :orbital_magnetization)
+        elseif quantity in (
+            :linear_transport,
+            :linear_optical_response,
+            :orbital_magnetization,
+            :intrinsic_ahc,
+            :berry_curvature_dipole_conductivity,
+            :berry_curvature_quadrupole_conductivity,
+        )
             audit_check(config.sampling.spatial_dimension == 3, "spectral example must be 3D")
             expected_mesh = calculation == :integral ? (8, 8, 8) : (24, 24)
             audit_check(
@@ -148,9 +160,15 @@ function audit_examples(definitions)
             expected_physics =
                 quantity == :linear_transport ? WannierNLQG.LinearTransportParameters :
                 quantity == :linear_optical_response ? WannierNLQG.LinearOpticalResponseParameters :
-                WannierNLQG.OrbitalMagnetizationParameters
+                quantity == :orbital_magnetization ? WannierNLQG.OrbitalMagnetizationParameters :
+                quantity == :intrinsic_ahc ? WannierNLQG.IntrinsicHallParameters :
+                WannierNLQG.BerryMultipoleParameters
             audit_check(task.physics isa expected_physics, "spectral parameter type mismatch")
-            audit_check(task.physics.temperature == 300.0, "spectral temperature must be explicit")
+            expected_temperature = quantity == :intrinsic_ahc ? 0.0 : 300.0
+            audit_check(
+                task.physics.temperature == expected_temperature,
+                "spectral example temperature differs from its task-specific preset",
+            )
             audit_check(
                 isnothing(config.model.real_space_operator_bundle_file),
                 "closed model must not imply material completion",
@@ -196,8 +214,9 @@ function audit_examples(definitions)
                     "optical energy preset length changed",
                 )
                 audit_check(
-                    calculation == :integral ? first(energies) == 0.0 && last(energies) == 4.0 :
-                    only(energies) == 1.0,
+                    calculation == :integral ?
+                    first(energies) == (quantity==:jerk_current ? 0.02 : 0.0) &&
+                        last(energies) == 4.0 : only(energies) == 1.0,
                     "optical energy preset values changed",
                 )
             else
@@ -242,7 +261,7 @@ function main()
     audit_check(length(definitions) == EXPECTED_TASK_COUNT, "task registry count changed")
     audit_guides(definitions)
     audit_examples(definitions)
-    println("USER_GUIDE_EXAMPLE_AUDIT_OK tasks=52 integral=16 kslice=35 kpath=1 grouped_api=true")
+    println("USER_GUIDE_EXAMPLE_AUDIT_OK tasks=63 integral=22 kslice=40 kpath=1 grouped_api=true")
     return nothing
 end
 

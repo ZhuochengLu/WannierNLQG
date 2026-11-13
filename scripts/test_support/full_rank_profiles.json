@@ -1,0 +1,114 @@
+{
+  "schema": "wanniernlqg.full-mpi-profiles/1",
+  "profiles": {
+    "legacy16": {
+      "rank_plan": {
+        "wannierization": [
+          1,
+          2,
+          4,
+          8,
+          16
+        ],
+        "adaptive": [
+          1,
+          16
+        ],
+        "other_maximum_ranks": 3,
+        "native_definition": [
+          1,
+          2,
+          3
+        ],
+        "checkpoint_definition": [
+          1,
+          2,
+          3
+        ]
+      },
+      "untested_scope": {
+        "rank_scales": [],
+        "normal_empty_owner_boundaries": []
+      }
+    },
+    "air3": {
+      "rank_plan": {
+        "wannierization": [
+          1,
+          2,
+          3
+        ],
+        "adaptive": [
+          1,
+          2,
+          3
+        ],
+        "affine": [
+          1,
+          2,
+          3
+        ],
+        "other_maximum_ranks": 3,
+        "u_empty_owner_fixture": "empty-owner-1d",
+        "native_definition": [
+          1,
+          2,
+          3
+        ],
+        "checkpoint_definition": [
+          1,
+          2,
+          3
+        ]
+      },
+      "untested_scope": {
+        "rank_scales": [
+          4,
+          8,
+          11,
+          12,
+          16
+        ],
+        "normal_empty_owner_boundaries": [
+          "U-localization original 12-edge fixture at16ranks",
+          "adaptive original15-node rule at16ranks"
+        ]
+      }
+    },
+    "bounded11": {
+      "rank_plan": {
+        "wannierization": [
+          1,
+          2,
+          4,
+          8,
+          11
+        ],
+        "adaptive": [
+          1,
+          11
+        ],
+        "other_maximum_ranks": 3,
+        "native_definition": [
+          1,
+          2,
+          3
+        ],
+        "checkpoint_definition": [
+          1,
+          2,
+          3
+        ]
+      },
+      "untested_scope": {
+        "rank_scales": [
+          16
+        ],
+        "normal_empty_owner_boundaries": [
+          "U-localization original 12-edge fixture at16ranks",
+          "adaptive original15-node rule at16ranks"
+        ]
+      }
+    }
+  }
+}

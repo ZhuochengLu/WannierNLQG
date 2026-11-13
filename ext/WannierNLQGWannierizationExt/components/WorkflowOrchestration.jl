@@ -1,5 +1,7 @@
 module WorkflowOrchestration
 
+import WannierNLQG.Core: validate_ordinary_construction_policy
+
 import HDF5
 import JSON3
 import LinearAlgebra: I, svdvals
@@ -39,14 +41,14 @@ import ..WannierizationInternalSupport:
     REPRESENTATION_UNDETERMINED,
     REPRESENTATION_VALIDATION_UNDETERMINED,
     RepresentationCompatibilityReport,
-    ExternalWannier90Matrices,
+    ExternalOverlapProjectionMatrices,
     FarBandCovarianceCorrection,
     NativeQEPAWMatrices,
     NativeEigenstateGauge,
     NativeVASPPAWMatrices,
     PAWGaugeThresholds,
     PAWSCDMInitialization,
-    SymmetryAdaptedWannierizationConfig,
+    WannierizationConfig,
     StarCovariantPAWGauge,
     SymmetryCompletedQEPAWMatrices,
     SymmetrizedDFTHamiltonian,
@@ -74,13 +76,14 @@ import ..WannierizationInternalSupport:
     band_sewing_backend_key,
     discrete_hamiltonian_correction_key,
     wavefunction_gauge_backend_key,
-    projection_basis_sha256,
+    projection_basis_definition,
     replace_wannierization_config
 import ..RepresentationPreparation:
+    construction_compatibility_quality_failure,
     build_band_representation,
     configured_num_wannier,
-    constraint_scoped_fixed_subspace,
     constraint_scoped_representation,
+    select_detected_operations,
     effective_wannierization_algorithms,
     effective_wannierization_mode,
     generate_amn,
@@ -93,18 +96,19 @@ import ..RepresentationPreparation:
     validate_band_representation_compatibility,
     validate_wannierization_config
 import ..PAWMatrixElements:
+    _star_hamiltonian_correction_metadata,
     with_spn_provenance_reuse,
     native_preparation_source_files,
     preparation_implementation_paths,
-    TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256,
+    TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION,
     TARGET_LEAKAGE_WEIGHT_SEMANTICS,
     generate_vasp_paw_matrix_elements_impl,
     paw_metric_passes,
     read_augmentation_aware_native_source,
     read_star_covariant_paw_gauge_hdf5,
     star_authoritative_hamiltonian_metadata,
-    star_authoritative_hamiltonian_sha256,
-    star_hamiltonian_correction_sha256,
+    star_authoritative_hamiltonian_definition,
+    star_hamiltonian_correction_definition,
     star_rotate_parent_amn,
     star_rotate_parent_mmn,
     star_transform_sewing_gauge,
@@ -114,35 +118,30 @@ import ..PAWMatrixElements:
     read_paw_scdm_input_artifact
 import ..SolverCheckpoint:
     checkpoint_stopping_reason,
+    agree_terminal_checkpoint_definition,
+    agree_scientific_definition_stream,
     finite_difference_weights,
     identity_band_representation,
     identity_wannier_plan,
     no_symmetry_compatibility_contract,
-    restart_config_sha256,
     solve_symmetry_adapted_wannierization,
     validate_no_symmetry_identity_representation,
-    wannierization_checkpoint_sha256,
-    wannierization_checkpoint_sha256_v1_2,
-    wannierization_checkpoint_sha256_v2_2,
-    wannierization_checkpoint_sha256_v2_21,
-    wannierization_checkpoint_sha256_v2_22,
-    wannierization_checkpoint_sha256_v2_3,
-    wannierization_checkpoint_sha256_v2_4,
-    wannierization_checkpoint_sha256_v2_6,
     wannierization_production_eligible,
     wannierization_scoped_production_eligible,
     wannierization_result_is_finite,
     read_wannierization_checkpoint_hdf5,
-    read_wannierization_fixed_subspace_hdf5,
     write_wannierization_checkpoint_hdf5
 import ..OperatorExport:
     atomic_checkpoint_copy,
-    bind_packed_checkpoint_sha256!,
+    bind_packed_checkpoint_publication!,
     accepted_state_tb_export_allowed,
     accepted_state_tb_export_gate,
     export_wannierization_tb,
     open_wannierization_log,
     preflight_wannierization_operator_profile,
+    validate_completed_operator_pair,
+    validate_completed_operator_set,
+    operator_profile_source_files,
     wannier_operator_target_contract,
     wannierization_observer,
     tb_symmetry_incomplete,
@@ -153,15 +152,22 @@ import ..OperatorExport:
     qualify_exported_wannierization_tb,
     operator_output_requires_target_contract
 
+include("../NativeOperatorOutputGeneration.jl")
 include("../WannierizationWorkflow.jl")
 
 const WORKFLOW_ORCHESTRATION_INTEGRATION_API = (
-    :construct_symmetry_adapted_wannier_functions,
+    :construct_wannier_functions,
+    :construct_wannier_functions_with_native_inputs,
     :prepare_band_representation,
     :prepare_wannier_operator_target_contract,
 )
 
-const WORKFLOW_ORCHESTRATION_TEST_API = ()
+const WORKFLOW_ORCHESTRATION_TEST_API = (
+    :_publish_native_input_views,
+    :_adopt_native_input_views,
+    :_native_input_reuse_phase,
+    :_validate_native_input_view_lifetimes,
+)
 
 for name in WORKFLOW_ORCHESTRATION_INTEGRATION_API
     @eval export $name

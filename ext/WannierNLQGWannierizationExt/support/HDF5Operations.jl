@@ -1,3 +1,5 @@
+import WannierNLQG.IO: atomic_file_replace
+
 """Replace one file only after a complete temporary HDF5 close."""
 function atomic_hdf5_write(writer::Function, filename::AbstractString)
     path = abspath(filename)
@@ -7,7 +9,7 @@ function atomic_hdf5_write(writer::Function, filename::AbstractString)
     completed = false
     try
         writer(temporary)
-        mv(temporary, path; force = true)
+        atomic_file_replace(temporary, path)
         completed = true
     finally
         !completed && isfile(temporary) && rm(temporary; force = true)
@@ -27,7 +29,7 @@ end
 function read_string_dictionary(parent)
     output = Dict{String, String}()
     for key in keys(HDF5.attributes(parent))
-        output[String(key)] = String(read(HDF5.attributes(parent)[key]))
+        output[String(key)] = String(required_attribute(parent, String(key)))
     end
     return output
 end
@@ -48,9 +50,16 @@ end
 function required_attribute(parent, name::AbstractString)
     haskey(HDF5.attributes(parent), name) ||
         throw(ArgumentError("HDF5 object is missing attribute $(name)"))
-    return read(HDF5.attributes(parent)[name])
+    attribute = HDF5.attributes(parent)[name]
+    try
+        return WannierNLQG.IO.read_hdf5_attribute_value(attribute, HDF5)
+    finally
+        close(attribute)
+    end
 end
 
 """Reject retired authority identities before any persisted upgrade path."""
 validate_persisted_authority_key(authority::AbstractString) =
     SymmetryFoundation.validate_authoritative_hamiltonian_key(authority)
+
+include("../../shared/ScientificInputReferenceHDF5.jl")

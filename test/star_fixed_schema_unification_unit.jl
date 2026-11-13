@@ -1,3 +1,6 @@
+if !isdefined(@__MODULE__, :CurrentScientificValues)
+    include(joinpath(@__DIR__, "support/CurrentScientificValues.jl"))
+end
 using HDF5
 using LinearAlgebra
 using SHA
@@ -26,7 +29,7 @@ using .QEPAWMatrixElementsTestSupport
         filename = joinpath(directory, "public-star.h5")
         prepared = wf.prepare_symmetry_covariant_wavefunctions(
             wf.SymmetryCovariantWavefunctionPreparationConfig(
-                construction_policy = :strict,
+                construction_policy = :standard,
                 source = source,
                 wavefunction_gauge_backend = wf.StarCovariantPAWGauge(
                     buffer_policy = wf.ClosureDrivenBandBuffer(max_extra_bands = 0),
@@ -35,89 +38,113 @@ using .QEPAWMatrixElementsTestSupport
                 target_band_count = 1,
             ),
         )
-        @test prepared.status == :PASS
-        restored = Base.invokelatest(paw._read_star_covariant_paw_gauge_hdf5, filename; source)
-        @test restored.schema_version == "1.0"
+        @test prepared.status == :STANDARD
+        filename = something(prepared.output_hdf5)
+        restored = Base.invokelatest(
+            paw._read_star_covariant_paw_gauge_hdf5,
+            filename;
+            source,
+            require_pass = false,
+        )
+        @test restored.schema_version == "2.0"
+        @testset "S1 independent plane-wave projector" begin
+            # Independent synthetic source: one scalar band, one G=0 coefficient
+            # equal to 1+0im in X.UPF norm-conserving metric, Gamma kpoint.
+            # The star frame may differ by phase, so test the physical projector and
+            # norm rather than asserting an arbitrary writer-generated phase.
+            @test length(restored.payload.native.kpoints) == 1
+            coefficients = restored.payload.native.kpoints[1].coefficients
+            # NativeWavefunctionModels: axes are band,G,spin; this scalar
+            # one-band G=0 fixture has one spin component, not a 3D adjoint.
+            @test size(coefficients) == (1, 1, 1)
+            scalar_coefficients = @view coefficients[:, :, 1]
+            @test scalar_coefficients == ones(ComplexF64, 1, 1)
+            @test scalar_coefficients * scalar_coefficients' == ones(ComplexF64, 1, 1)
+            @test all(isfinite, restored.payload.native.kpoints[1].coefficients)
+            @test restored.payload.rotations[:, :, 1]' * restored.payload.rotations[:, :, 1] ≈
+                  ones(ComplexF64, 1, 1) atol=1e-12 rtol=0
+        end
         @test restored.band_frame_contract !== nothing
         @test keys(restored) ==
               (:payload, :status, :root_cause, :diagnostics, :schema_version, :band_frame_contract)
         HDF5.h5open(filename, "r") do handle
             attributes = HDF5.attributes(handle)
-            @test String(read(attributes["schema_version"])) == "1.0"
-            @test String(read(attributes["payload_sha256"])) ==
-                  Base.invokelatest(paw._star_payload_sha256, restored.payload)
+            @test String(HDF5.read_attribute(attributes.parent, "schema_version")) == "2.0"
+            @test !haskey(attributes, "payload_sha256")
+            @test String(HDF5.read_attribute(attributes.parent, "content_authentication")) ==
+                  "NOT_PERFORMED"
         end
         # A current capsule with a removed companion marker must not use the historical reader.
-        for field in ("band_frame_contract_schema", "band_frame_replay_maximum")
+        for field in (
+            "band_frame_contract_schema",
+            "band_frame_replay_maximum",
+            "band_frame_contract_definition",
+        )
             tampered = joinpath(directory, "missing-$(field).h5")
             cp(filename, tampered)
+            chmod(tampered, 0o600)
             HDF5.h5open(tampered, "r+") do handle
+                @test haskey(HDF5.attributes(handle), field)
                 HDF5.delete_attribute(handle, field)
+                @test !haskey(HDF5.attributes(handle), field)
             end
-            @test_throws ArgumentError Base.invokelatest(
-                paw._read_star_covariant_paw_gauge_hdf5,
-                tampered;
-                source,
-            )
+            @testset "S2 missing frame attribute $(field)" begin
+                failure = try
+                    Base.invokelatest(
+                        paw._read_star_covariant_paw_gauge_hdf5,
+                        tampered;
+                        source,
+                        require_pass = false,
+                    )
+                    nothing
+                catch exception
+                    exception
+                end
+                @test failure isa ArgumentError
+                @test occursin(
+                    "PAW_GAUGE_ARTIFACT_TAMPERED: $(field) differs from stored complete definition",
+                    sprint(showerror, failure),
+                )
+            end
         end
         downgraded = joinpath(directory, "legacy-digest-on-current.h5")
         cp(filename, downgraded)
+        chmod(downgraded, 0o600)
         HDF5.h5open(downgraded, "r+") do handle
-            HDF5.delete_attribute(handle, "payload_sha256")
-            HDF5.attributes(handle)["payload_sha256"] = Base.invokelatest(
-                paw._star_payload_sha256,
-                restored.payload;
-                schema_version = "1.0",
-                contract_version = "1.0",
-            )
+            # Test obsolete certification independently of missing frame data.
+            @test haskey(HDF5.attributes(handle), "band_frame_contract_definition")
+            @test !haskey(HDF5.attributes(handle), "payload_sha256")
+            HDF5.attributes(handle)["payload_sha256"] = repeat("0", 64)
+            @test String(HDF5.read_attribute(handle, "payload_sha256")) == repeat("0", 64)
         end
-        @test_throws ArgumentError Base.invokelatest(
-            paw._read_star_covariant_paw_gauge_hdf5,
-            downgraded;
-            source,
-        )
-        for old_version in ("1.10", "1.11")
-            historical = joinpath(directory, "historical-$(old_version).h5")
-            Base.invokelatest(
+        @testset "S3 obsolete certificate alone" begin
+            failure = try
+                Base.invokelatest(
+                    paw._read_star_covariant_paw_gauge_hdf5,
+                    downgraded;
+                    source,
+                    require_pass = false,
+                )
+                nothing
+            catch exception
+                exception
+            end
+            @test failure isa ArgumentError
+            @test occursin("STAR_GAUGE_OBSOLETE_CONTENT_CERTIFICATE", sprint(showerror, failure))
+        end
+        # Current writers do not fabricate archived hash-era wire formats.
+        for version in ("1.0", "1.10", "1.11")
+            path = joinpath(directory, "unsupported-$(version).h5")
+            @test_throws ArgumentError Base.invokelatest(
                 paw._write_star_covariant_paw_gauge_hdf5,
-                historical,
-                deepcopy(restored.payload);
+                path,
+                restored.payload;
                 status = :PASS,
                 root_cause = restored.root_cause,
-                schema_version = old_version,
+                schema_version = version,
             )
-            old = Base.invokelatest(paw._read_star_covariant_paw_gauge_hdf5, historical; source)
-            @test old.schema_version == old_version
-            @test (old.band_frame_contract !== nothing) == (old_version == "1.11")
-            @test old.payload.rotations == restored.payload.rotations
-            @test old.payload.native.kpoints[1].coefficients ==
-                  restored.payload.native.kpoints[1].coefficients
+            @test !isfile(path)
         end
-        legacy_payload = deepcopy(restored.payload)
-        for key in collect(keys(legacy_payload.source_metadata))
-            startswith(key, "band_frame_") && delete!(legacy_payload.source_metadata, key)
-        end
-        for key in collect(keys(legacy_payload.input_sha256))
-            startswith(key, "BAND_FRAME_") && delete!(legacy_payload.input_sha256, key)
-        end
-        historical = joinpath(directory, "historical-1.0.h5")
-        Base.invokelatest(
-            paw._write_star_covariant_paw_gauge_hdf5,
-            historical,
-            legacy_payload;
-            status = :PASS,
-            root_cause = restored.root_cause,
-            schema_version = "1.0",
-            contract_version = "1.0",
-        )
-        old = Base.invokelatest(paw._read_star_covariant_paw_gauge_hdf5, historical; source)
-        @test old.schema_version == "1.0"
-        @test old.band_frame_contract === nothing
-        @test old.payload.rotations == restored.payload.rotations
-        @test old.payload.native.kpoints[1].coefficients ==
-              restored.payload.native.kpoints[1].coefficients
-
-        # Frozen baseline-writer fixtures have their own byte-sealed synthetic source.
         history_root = joinpath(@__DIR__, "fixtures", "schema_compatibility", "star_and_fixed")
         for line in eachline(joinpath(history_root, "SHA256SUMS"))
             expected, relative = split(line; limit = 2)
@@ -128,55 +155,19 @@ using .QEPAWMatrixElementsTestSupport
             band_range = 1:1,
             include_time_reversal = false,
         )
-        for (version, basename) in (("1.0", "star_gauge_1_0.h5"), ("1.11", "star_gauge_1_11.h5"))
-            historical_read = Base.invokelatest(
-                paw._read_star_covariant_paw_gauge_hdf5,
-                joinpath(history_root, basename);
-                source = historical_source,
-            )
-            @test historical_read.schema_version == version
-            @test (historical_read.band_frame_contract !== nothing) == (version == "1.11")
-            @test historical_read.payload.rotations == restored.payload.rotations
-            @test historical_read.payload.native.kpoints[1].coefficients ==
-                  restored.payload.native.kpoints[1].coefficients
-            generation_contract = Base.invokelatest(
-                paw._generation_band_gauge_contract,
-                historical_source,
-                wf.NativeDFTHamiltonian(),
-                joinpath(history_root, basename),
-                1,
-                1,
-            )
-            @test generation_contract.legacy == (version == "1.0")
-            @test generation_contract.status == (version == "1.0" ? "LEGACY_IDENTITY_ONLY" : "PASS")
-            @test (generation_contract.rotations === nothing) == (version == "1.0")
-            # A byte-matched legacy artifact remains ineligible for formal operator closure.
-            # The valid topology ensures the failure is the frame qualification gate.
-            topology = (
-                num_bands = 1,
-                num_kpts = 1,
-                num_neighbors = 1,
-                neighbors = ones(Int, 1, 1),
-                reciprocal_shifts = zeros(Int, 3, 1, 1),
-                source_sha256 = repeat("a", 64),
-            )
-            operator_export = first(wf._load_wannierization_extension!()).OperatorExport
+        for basename in ("star_gauge_1_0.h5", "star_gauge_1_11.h5")
             failure = try
                 Base.invokelatest(
-                    operator_export._hamiltonian_operator_closure_scope,
-                    joinpath(history_root, basename),
-                    generation_contract,
-                    topology,
+                    paw._read_star_covariant_paw_gauge_hdf5,
+                    joinpath(history_root, basename);
+                    source = historical_source,
                 )
                 nothing
             catch exception
                 exception
             end
             @test failure isa ArgumentError
-            expected_gate =
-                version == "1.0" ? "CLOSURE_SCOPE_FRAME_CONTRACT_NOT_FORMALLY_QUALIFIED" :
-                "CLOSURE_QUALIFICATION_SCOPE_REQUIRED"
-            @test occursin(expected_gate, sprint(showerror, failure))
+            @test occursin("STAR_GAUGE_EXPLICIT_MIGRATION_REQUIRED", sprint(showerror, failure))
         end
 
         fixed = wf.WannierizationFixedSubspace(
@@ -187,37 +178,46 @@ using .QEPAWMatrixElementsTestSupport
             source_sha256 = Dict("fixture" => repeat("0", 64)),
             invariant_residuals = Dict("projector" => 0.0),
         )
-        fixed_file = joinpath(directory, "fixed.h5")
-        wf.write_wannierization_fixed_subspace_hdf5(fixed_file, fixed)
-        HDF5.h5open(fixed_file, "r") do handle
-            @test String(read(HDF5.attributes(handle)["schema"])) ==
-                  "wanniernlqg.wannierization-fixed-subspace"
-            @test String(read(HDF5.attributes(handle)["schema_version"])) == "2.0"
-        end
-        for version in ("1.0", "1.1")
-            path = joinpath(directory, "fixed-$(version).h5")
-            cp(fixed_file, path)
-            HDF5.h5open(path, "r+") do handle
-                HDF5.delete_attribute(handle, "schema_version")
-                HDF5.attributes(handle)["schema_version"] = version
-                version == "1.0" && HDF5.delete_attribute(handle, "z_u_stage_semantics")
-            end
-            readback = wf.read_wannierization_fixed_subspace_hdf5(path)
-            for field in fieldnames(typeof(fixed))
-                @test getfield(readback, field) == getfield(fixed, field)
-            end
-        end
+        # Standalone fixed-subspace public writer/reader facades were retired.
+        # The archived decoder remains in SolverCheckpoint; this test exercises
+        # that explicit legacy boundary without restoring ordinary public APIs.
+        @test !isdefined(wf, :write_wannierization_fixed_subspace_hdf5)
+        @test !isdefined(wf, :read_wannierization_fixed_subspace_hdf5)
+        solver = first(wf._load_wannierization_extension!()).SolverCheckpoint
         for basename in ("fixed_subspace_1_0.h5", "fixed_subspace_1_1.h5")
-            old_fixed = wf.read_wannierization_fixed_subspace_hdf5(joinpath(history_root, basename))
+            old_fixed = Base.invokelatest(
+                solver.read_wannierization_fixed_subspace_hdf5,
+                joinpath(history_root, basename),
+            )
+            @test old_fixed.projectors == reshape(ComplexF64[1, 0, 0, 0], 2, 2, 1)
+            @test old_fixed.frames == reshape(ComplexF64[1, 0], 2, 1, 1)
+            @test old_fixed.irreducible_indices == [1]
+            @test old_fixed.frozen_mask == reshape(Bool[true, false], 2, 1)
             for field in fieldnames(typeof(fixed))
                 @test getfield(old_fixed, field) == getfield(fixed, field)
             end
         end
-        HDF5.h5open(fixed_file, "r+") do handle
+        invalid_fixed = joinpath(directory, "invalid-fixed-semantics.h5")
+        cp(joinpath(history_root, "fixed_subspace_1_1.h5"), invalid_fixed)
+        chmod(invalid_fixed, 0o600)
+        HDF5.h5open(invalid_fixed, "r+") do handle
+            @test String(HDF5.read_attribute(handle, "schema_version")) == "1.1"
+            @test String(HDF5.read_attribute(handle, "z_u_stage_semantics")) ==
+                  "disentanglement_localization_decoupled_v1"
             HDF5.delete_attribute(handle, "z_u_stage_semantics")
             HDF5.attributes(handle)["z_u_stage_semantics"] = "invalid"
+            @test String(HDF5.read_attribute(handle, "z_u_stage_semantics")) == "invalid"
         end
-        @test_throws ArgumentError wf.read_wannierization_fixed_subspace_hdf5(fixed_file)
+        @testset "S8 archived fixed semantics rejection" begin
+            failure = try
+                Base.invokelatest(solver.read_wannierization_fixed_subspace_hdf5, invalid_fixed)
+                nothing
+            catch exception
+                exception
+            end
+            @test failure isa ArgumentError
+            @test occursin("fixed-subspace Z/U stage semantics differ", sprint(showerror, failure))
+        end
         diagnostics = joinpath(directory, "u-diagnostics.h5")
         wf.write_wannierization_u_convergence_diagnostics_hdf5(
             diagnostics,
@@ -226,10 +226,10 @@ using .QEPAWMatrixElementsTestSupport
             [1],
         )
         HDF5.h5open(diagnostics, "r") do handle
-            @test String(read(HDF5.attributes(handle)["schema"])) ==
+            @test String(HDF5.read_attribute(handle, "schema")) ==
                   "wanniernlqg.wannierization-u-convergence-diagnostics"
-            @test String(read(HDF5.attributes(handle)["schema_version"])) == "1.0"
-            @test Int(read(HDF5.attributes(handle)["record_count"])) == 0
+            @test String(HDF5.read_attribute(handle, "schema_version")) == "1.1"
+            @test Int(HDF5.read_attribute(handle, "record_count")) == 0
             @test haskey(handle, "iterations")
             HDF5.h5open(joinpath(history_root, "u_diagnostics_1_5.h5"), "r") do historical
                 @test keys(handle) == keys(historical)
@@ -237,8 +237,8 @@ using .QEPAWMatrixElementsTestSupport
                 for key in keys(HDF5.attributes(historical))
                     key in ("schema", "schema_version") && continue
                     @test isequal(
-                        read(HDF5.attributes(handle)[key]),
-                        read(HDF5.attributes(historical)[key]),
+                        HDF5.read_attribute(handle, key),
+                        HDF5.read_attribute(historical, key),
                     )
                 end
             end

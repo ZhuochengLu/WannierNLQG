@@ -164,13 +164,22 @@ function qualification_mask_sha256(mask::AbstractMatrix{Bool})
     return bytes2hex(SHA.sha256(take!(buffer)))
 end
 
+"""Complete mask values and dimensions; this is not a content fingerprint."""
+function qualification_mask_definition(mask::AbstractMatrix{Bool})
+    buffer = IOBuffer()
+    IO.write_native_definition_value(buffer, BitMatrix(mask))
+    return bytes2hex(take!(buffer))
+end
+
 """Outer/frozen qualification masks bound to deterministic SHA-256 identities."""
 struct BandRepresentationQualificationScope
     outer_mask::BitMatrix
     frozen_mask::BitMatrix
-    outer_mask_sha256::String
-    frozen_mask_sha256::String
+    outer_mask_sha256::Union{Nothing, String}
+    frozen_mask_sha256::Union{Nothing, String}
     diagnostic_status::Symbol
+    outer_mask_definition::Union{Nothing, String}
+    frozen_mask_definition::Union{Nothing, String}
 
     function BandRepresentationQualificationScope(
         outer_mask,
@@ -178,6 +187,9 @@ struct BandRepresentationQualificationScope
         outer_mask_sha256 = nothing,
         frozen_mask_sha256 = nothing,
         diagnostic_status = :AVAILABLE,
+        content_authentication::Bool = true,
+        outer_mask_definition = nothing,
+        frozen_mask_definition = nothing,
     )
         outer = BitMatrix(Bool.(outer_mask))
         frozen = BitMatrix(Bool.(frozen_mask))
@@ -186,11 +198,74 @@ struct BandRepresentationQualificationScope
         all((.!frozen) .| outer) ||
             throw(ArgumentError("frozen qualification mask must be contained in outer mask"))
         outer_digest =
+            !content_authentication ? nothing :
             outer_mask_sha256 === nothing ? qualification_mask_sha256(outer) :
             String(outer_mask_sha256)
         frozen_digest =
+            !content_authentication ? nothing :
             frozen_mask_sha256 === nothing ? qualification_mask_sha256(frozen) :
             String(frozen_mask_sha256)
-        return new(outer, frozen, outer_digest, frozen_digest, Symbol(diagnostic_status))
+        outer_definition = content_authentication ? nothing : qualification_mask_definition(outer)
+        frozen_definition = content_authentication ? nothing : qualification_mask_definition(frozen)
+        outer_mask_definition === nothing ||
+            isequal(outer_mask_definition, outer_definition) ||
+            throw(ArgumentError("outer mask differs from its complete recorded definition"))
+        frozen_mask_definition === nothing ||
+            isequal(frozen_mask_definition, frozen_definition) ||
+            throw(ArgumentError("frozen mask differs from its complete recorded definition"))
+        return new(
+            outer,
+            frozen,
+            outer_digest,
+            frozen_digest,
+            Symbol(diagnostic_status),
+            outer_definition,
+            frozen_definition,
+        )
     end
+end
+
+"""Complete representation values for consumers explicitly opting out of content hashes."""
+function band_representation_input_definition(representation::BandRepresentation)
+    arrays = (
+        :real_lattice,
+        :reciprocal_lattice,
+        :kpoints_fractional,
+        :energies_ev,
+        :kpoint_map,
+        :reciprocal_shifts,
+        :sewing_matrices,
+        :band_block_labels,
+        :irreducible_indices,
+        :full_to_irreducible,
+        :full_to_operation,
+    )
+    values = (
+        schema = "wanniernlqg.search-representation-input/1",
+        source_code = representation.source_code,
+        spinor = representation.spinor,
+        mp_grid = representation.mp_grid,
+        arrays = NamedTuple{arrays}(Tuple(getfield(representation, n) for n in arrays)),
+        operations = [
+            (
+                rotation_fractional = op.rotation_fractional,
+                translation_fractional = op.translation_fractional,
+                rotation_cartesian = op.rotation_cartesian,
+                antiunitary = op.antiunitary,
+            ) for op in representation.operations
+        ],
+        conventions = representation.conventions,
+    )
+    buffer = IOBuffer()
+    IO.write_native_definition_value(buffer, values)
+    for key in sort!(collect(keys(representation.input_definitions)))
+        reference=representation.input_definitions[key]
+        IO.write_native_definition_value(buffer, (key, reference.byte_count))
+        IO.with_scientific_input_definition_bytes(reference) do source
+            while !eof(source)
+                write(buffer, read(source, 65536))
+            end
+        end
+    end
+    return bytes2hex(take!(buffer))
 end

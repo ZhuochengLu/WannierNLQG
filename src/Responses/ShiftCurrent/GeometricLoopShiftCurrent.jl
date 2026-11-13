@@ -35,10 +35,10 @@ Add geometric-loop current kernels to the frequency-resolved rank-three tensor u
 Preserve band/tensor traversal and return the mutated accumulator; physical prefactors and k-mesh normalization are caller-specified.
 """
 function accumulate_geometric_loop_shift_current_response!(
-    local_response::Array{ComplexF64, 4},
+    local_response::AbstractArray{ComplexF64, 4},
     response_kernel::Array{ComplexF64, 5},
     occupation_differences::Array{Float64, 3},
-    delta::Array{Float64, 3},
+    delta::AbstractArray{Float64, 3},
     frequency_denominator_weights::Vector{Float64},
     prefactor::Number,
     num_orbitals::Int64,

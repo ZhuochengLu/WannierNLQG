@@ -1,5 +1,5 @@
 const VASP_PAW_MATRIX_ELEMENT_SCHEMA = "WannierNLQG.vasp_paw_matrix_elements"
-const VASP_PAW_MATRIX_ELEMENT_SCHEMA_VERSION = "1.0"
+const VASP_PAW_MATRIX_ELEMENT_SCHEMA_VERSION = "2.0"
 const VASP_PROJECTION_BOHR_ANGSTROM = 0.529177249
 const VASP_PROJECTION_RYDBERG_EV = 13.605826
 const VASP_PROJECTION_HSQDTM_EV_ANGSTROM2 =
@@ -408,14 +408,6 @@ function _vasp_solver_gauge_spinor_pairs(
     return pairs
 end
 
-# Hash AMN dimensions and column-major complex payload without relying on a file encoding.
-function _vasp_paw_amn_array_sha256(amn::WannierAMN)
-    buffer = IOBuffer()
-    write(buffer, Int64(amn.num_bands), Int64(amn.num_kpts), Int64(amn.num_wannier))
-    write(buffer, reinterpret(UInt8, vec(amn.data)))
-    return bytes2hex(SHA.sha256(take!(buffer)))
-end
-
 """
 Transform raw VASP AMN columns into the WIN/SAWF target gauge.
 
@@ -661,7 +653,7 @@ function _vasp_projection_orbital_values(
     elseif block.orbital_set == "d"
         momentum > 1.0e-12 || return zeros(ComplexF64, 5)
         x, y, z = Float64.(local_momentum) ./ momentum
-        # VASP/Wannier90 m=1:5: dz2, dxz, dyz, dx2-y2, dxy; Fourier phase (-im)^2.
+        # VASP/Wannier m=1:5: dz2, dxz, dyz, dx2-y2, dxy; Fourier phase (-im)^2.
         angular =
             sqrt(15.0 / (4.0 * pi)) .*
             [(3.0 * z^2 - 1.0) / sqrt(12.0), x * z, y * z, (x^2 - y^2) / 2.0, x * y]
@@ -841,45 +833,23 @@ function _with_vasp_operator_artifacts(
         execution
     paths = collect(values(_preparation_source_files(source)))
     append!(paths, additional_inputs)
-    root, implementation = _preparation_implementation_paths()
-    return with_verified_file_digests(vcat(paths, implementation)) do
-        run =
-            () -> task_local_storage(
-                () -> _with_spn_provenance_reuse(f),
-                :wannier_preparation_execution,
-                effective,
-            )
-        if effective !== nothing && (effective.mode == :dense_reference || !effective.resume)
-            # Explicit baseline/recompute settings override inherited batch caches.
-            return task_local_storage(run, :wannier_preparation_artifact_cache, nothing)
+    # Persistent digest-only cache entries lack the complete historical inputs
+    # required for non-hash reuse.  Keep live source observations, and recompute
+    # through the existing numerical path instead of adopting such entries.
+    return with_native_source_lifetime(paths) do
+        task_local_storage(:wannier_preparation_execution, effective) do
+            task_local_storage(:wannier_preparation_artifact_cache, nothing) do
+                _with_spn_provenance_reuse(f)
+            end
         end
-        get(task_local_storage(), :wannier_preparation_artifact_cache, nothing) === nothing ||
-            return run()
-        source_bindings = sort!([
-            (realpath(path), sha256_file(path)) for
-            path in values(_preparation_source_files(source))
-        ])
-        code = [(relpath(path, root), sha256_file(path)) for path in implementation]
-        contract =
-            bytes2hex(SHA.sha256(repr(("vasp-operator-preparation-v1", source_bindings, code))))
-        directory =
-            effective === nothing || effective.checkpoint_directory === nothing ?
-            joinpath(output_directory, ".wannier_preparation", "vasp") :
-            joinpath(effective.checkpoint_directory, "shared-native")
-        return with_preparation_artifact_cache(run, directory, contract)
     end
 end
 
 """Bind operator inputs to the physical explicit spin basis when no INCAR exists."""
 function _vasp_operator_input_sha256(source::VASPWavefunctionSource, native::NativeWavefunctionData)
-    hashes = copy(native.input_sha256)
-    hashes["POTCAR"] = sha256_file(something(source.potcar_file))
-    if get(hashes, "INCAR", "") == "EXPLICIT_SPIN_BASIS"
-        delete!(hashes, "INCAR")
-        hashes["SPIN_BASIS_CONTRACT"] =
-            bytes2hex(SHA.sha256(codeunits(get(native.source_metadata, "saxis", "not_applicable"))))
-    end
-    return hashes
+    native.source_definition === nothing &&
+        throw(ArgumentError("NATIVE_SOURCE_COMPLETE_DEFINITION_REQUIRED"))
+    return Dict("SPIN_BASIS_CONTRACT"=>get(native.source_metadata, "saxis", "not_applicable"))
 end
 
 """Reuse compact raw PAW data shared by native spin and overlap operator stages.
@@ -895,39 +865,22 @@ function _vasp_operator_paw_context(source::VASPWavefunctionSource, native::Nati
             read_vasp_paw_system(something(source.potcar_file), native.structure)
         end
     end
-    hashes = copy(native.input_sha256)
-    # With no INCAR, both readers use the same explicit source SAXIS. Their
-    # requirement-status markers differ but are not distinct physical inputs.
-    source.incar_file === nothing && (hashes["INCAR"] = "SOURCE_SPIN_BASIS")
-    hashes["POTCAR"] = sha256_file(something(source.potcar_file))
-    identity = _vasp_raw_context_identity(source, native, hashes)
-    return _vasp_compact_paw_context(native, identity) do
-        read_vasp_paw_system(something(source.potcar_file), native.structure)
-    end
+    throw(
+        ArgumentError(
+            "VASP_PAW_CACHE_EXPLICIT_MIGRATION_REQUIRED: digest-only persistent context is unsupported",
+        ),
+    )
 end
 
-"""Canonicalize equivalent source selections while retaining physical configuration and hashes."""
+"""Identify an uncached VASP computation without constructing unused content credentials."""
 function _vasp_raw_context_identity(
     source::VASPWavefunctionSource,
     native::NativeWavefunctionData,
-    hashes,
+    inputs,
 )
-    bands = native_point_metadata(native, 1).num_bands
-    selection = source.band_range === nothing ? (1:bands) : source.band_range
-    length(selection) == bands || throw(ArgumentError("VASP_RAW_CONTEXT_BAND_RANGE_MISMATCH"))
-    fields = map(fieldnames(typeof(source))) do name
-        value = getfield(source, name)
-        if name == :band_range
-            value = selection
-        elseif name == :spinor
-            value = native.spinor
-        elseif name in (:poscar_file, :wavecar_file, :potcar_file, :incar_file, :outcar_file) &&
-               value !== nothing
-            value = ispath(value) ? realpath(value) : abspath(value)
-        end
-        name => value
-    end
-    return bytes2hex(SHA.sha256(repr((fields, sort!(collect(hashes); by = first)))))
+    get(task_local_storage(), :wannier_preparation_artifact_cache, nothing) === nothing ||
+        throw(ArgumentError("VASP_PAW_CACHE_EXPLICIT_MIGRATION_REQUIRED"))
+    return "uncached-vasp-values/1"
 end
 
 """Seal PAW/projector/norm payloads separately so a resumed stage needs no coefficient replay."""
@@ -1176,11 +1129,9 @@ function _paw_finite_b_atomic_matrix(
     radial_cache = Dict{NTuple{3, Int}, Float64}()
     output = zeros(ComplexF64, length(channels), length(channels))
     for (left, left_channel) in enumerate(channels), (right, right_channel) in enumerate(channels)
-        for degree in
-            abs(
-            left_channel.angular_momentum - right_channel.angular_momentum,
-        ):(left_channel.angular_momentum + right_channel.angular_momentum)
-
+        degree_lower = abs(left_channel.angular_momentum - right_channel.angular_momentum)
+        degree_upper = left_channel.angular_momentum + right_channel.angular_momentum
+        for degree in degree_lower:degree_upper
             radial_key = (left_channel.radial_channel, right_channel.radial_channel, degree)
             radial = get!(radial_cache, radial_key) do
                 _paw_radial_delta(
@@ -1801,10 +1752,14 @@ function _validate_vasp_paw_qualification_scope(
     size(scope.frozen_mask) == (bands, kpoints) || throw(
         ArgumentError("VASP_PAW_TARGET_SCOPE_DIMENSION_MISMATCH: frozen mask dimensions disagree"),
     )
-    canonical = BandRepresentationQualificationScope(scope.outer_mask, scope.frozen_mask)
-    canonical.outer_mask_sha256 == scope.outer_mask_sha256 ||
+    canonical = BandRepresentationQualificationScope(
+        scope.outer_mask,
+        scope.frozen_mask;
+        content_authentication = false,
+    )
+    canonical.outer_mask_definition == scope.outer_mask_definition ||
         throw(ArgumentError("VASP_PAW_TARGET_SCOPE_HASH_MISMATCH: outer mask digest differs"))
-    canonical.frozen_mask_sha256 == scope.frozen_mask_sha256 ||
+    canonical.frozen_mask_definition == scope.frozen_mask_definition ||
         throw(ArgumentError("VASP_PAW_TARGET_SCOPE_HASH_MISMATCH: frozen mask digest differs"))
     for kpoint in 1:kpoints
         count(@view(scope.outer_mask[:, kpoint])) >= num_wannier || throw(
@@ -1955,7 +1910,8 @@ function _write_vasp_paw_provenance(
     trial_normalization::VASPTrialNormalizationDiagnostics,
     qualification_scope::BandRepresentationQualificationScope,
     qualification_metadata::Dict{String, String},
-    parent_audit::VASPPAWParentAudit,
+    parent_audit::VASPPAWParentAudit;
+    source_definition::IO.ScientificInputDefinition,
 )
     HDF5.enable_complex_support()
     return atomic_hdf5_write(filename) do temporary
@@ -1970,21 +1926,16 @@ function _write_vasp_paw_provenance(
             attributes["atomic_phase_convention"] = "absorbed by exp(+i G.R) projector rephasing; no duplicate outer phase"
             attributes["reciprocal_vector_unit"] = "angstrom^-1"
             attributes["finite_b_expansion"] = "real spherical harmonics; spherical Bessel; real Gaunt"
-            attributes["projection_basis_sha256"] = projection_basis_sha256(basis)
+            attributes["projection_basis_definition"] = projection_basis_definition(basis)
             attributes["vasp_version"] = string(projection_contract.vasp_version)
             attributes["projection_radial_backend"] = String(projection_contract.radial_backend)
             attributes["projection_cutoff_ev"] = projection_contract.cutoff_ev
             attributes["amn_q0_metric_backend"] = "integrated_ae_minus_ps_partial_waves"
             attributes["mmn_augmentation_backend"] = "potcar_tabulated_finite_b"
-            attributes["amn_raw_array_sha256"] = _vasp_paw_amn_array_sha256(result.amn)
-            attributes["amn_solver_array_sha256"] = _vasp_paw_amn_array_sha256(result.solver_amn)
             attributes["solver_gauge_formula"] = "A_wannierization(k)=A_raw(k)*D_T(k)*U_q^dagger"
             attributes["solver_center_phase_convention"] = "D_T[n,n]=exp(+i*2*pi*k_fractional dot T_n); T=wrapped-WIN"
             attributes["solver_spin_basis_convention"] = "right multiply VASP spin_qaxis pairs by U_q^dagger into Cartesian-z Pauli basis"
-            haskey(result.artifacts, "amn") &&
-                (attributes["amn_raw_file_sha256"] = sha256_file(result.artifacts["amn"]))
-            haskey(result.artifacts, "solver_amn") &&
-                (attributes["amn_solver_file_sha256"] = sha256_file(result.artifacts["solver_amn"]))
+            attributes["content_authentication"] = "NOT_PERFORMED"
             attributes["radial_q_max_absolute"] = result.radial_q_max_absolute
             attributes["generalized_norm_max_absolute"] = result.generalized_norm_max_absolute
             attributes["amn_max_principal_angle_rad"] = result.amn_max_principal_angle_rad
@@ -1993,7 +1944,8 @@ function _write_vasp_paw_provenance(
                 get(qualification_metadata, "target_authority", "full_parent")
             attributes["parent_audit_policy"] =
                 get(qualification_metadata, "parent_audit_policy", "audit_only")
-            input_group = HDF5.create_group(handle, "input_sha256")
+            write_scientific_input_reference_hdf5(handle, "source_definition", source_definition)
+            input_group = HDF5.create_group(handle, "input_definitions")
             write_string_dictionary(input_group, result.input_sha256)
             threshold_group = HDF5.create_group(handle, "thresholds")
             for field in fieldnames(VASPPAWParityThresholds)
@@ -2001,8 +1953,8 @@ function _write_vasp_paw_provenance(
             end
             scope_group = HDF5.create_group(handle, "qualification_scope")
             scope_attributes = HDF5.attributes(scope_group)
-            scope_attributes["outer_mask_sha256"] = qualification_scope.outer_mask_sha256
-            scope_attributes["frozen_mask_sha256"] = qualification_scope.frozen_mask_sha256
+            scope_attributes["outer_mask_definition"] = qualification_scope.outer_mask_definition
+            scope_attributes["frozen_mask_definition"] = qualification_scope.frozen_mask_definition
             scope_attributes["diagnostic_status"] = String(qualification_scope.diagnostic_status)
             for (key, value) in qualification_metadata
                 scope_attributes[key] = value
@@ -2135,7 +2087,7 @@ fail-stop before SAWF or TB construction.
 function _generate_vasp_paw_matrix_elements(
     source::VASPWavefunctionSource,
     basis::WannierProjectionBasis,
-    topology_mmn_file::AbstractString;
+    topology_mmn_file::Union{AbstractString, WannierNNKP};
     output_mmn_file::AbstractString,
     output_amn_file::AbstractString,
     provenance_hdf5::AbstractString,
@@ -2146,7 +2098,7 @@ function _generate_vasp_paw_matrix_elements(
     require_oracle::Bool = true,
     qualification_scope::Union{Nothing, BandRepresentationQualificationScope} = nothing,
     qualification_metadata::Dict{String, String} = Dict{String, String}(),
-    qualification_input_sha256::Dict{String, String} = Dict{String, String}(),
+    qualification_input_definitions::Dict{String, String} = Dict{String, String}(),
 )
     source.potcar_file === nothing && throw(
         ArgumentError("VASP_PAW_DATA_REQUIRED: VASPWavefunctionSource.potcar_file is required"),
@@ -2162,15 +2114,41 @@ function _generate_vasp_paw_matrix_elements(
     require_oracle &&
         (oracle_mmn_file === nothing || oracle_amn_file === nothing) &&
         throw(ArgumentError("VASP_PAW_DATA_REQUIRED: both MMN and AMN oracle files are required"))
-    topology = read_wannier_mmn_topology(topology_mmn_file)
+    owned_topology =
+        topology_mmn_file isa WannierNNKP ?
+        owned_wannier_topology(topology_mmn_file; content_authentication = false) : nothing
+    topology = owned_topology === nothing ? read_wannier_mmn_topology(topology_mmn_file) : nothing
     native = read_vasp_wavefunctions(
         source;
+        content_authentication = false,
         point_provider = native_vasp_point_provider,
         normalize_coefficients = false,
     )
     get(native.source_metadata, "coefficient_normalization", "") == "vasp_raw" || throw(
         ArgumentError("VASP_PAW_RAW_COEFFICIENTS_REQUIRED: WAVECAR coefficients were normalized"),
     )
+    if owned_topology !== nothing
+        points = permutedims(
+            reduce(
+                hcat,
+                (native_point_metadata(native, k).k_fractional for k in eachindex(native.kpoints)),
+            ),
+        )
+        isapprox(owned_topology.real_lattice, native.structure.lattice; atol = 1e-10, rtol = 0) &&
+        size(owned_topology.kpoints_fractional) == size(points) &&
+        isapprox(owned_topology.kpoints_fractional, points; atol = 1e-10, rtol = 0) &&
+        owned_topology.spinor == native.spinor ||
+            throw(ArgumentError("NATIVE_GEOMETRY_SOURCE_DRIFT"))
+        isempty(owned_topology.excluded_bands) ||
+            throw(ArgumentError("owned native topology cannot exclude source bands"))
+        topology = WannierMMNTopology(
+            native_point_metadata(native, 1).num_bands,
+            length(native.kpoints),
+            size(owned_topology.neighbors, 1),
+            copy(owned_topology.neighbors),
+            copy(owned_topology.reciprocal_shifts),
+        )
+    end
     paw = read_vasp_paw_system(something(source.potcar_file), native.structure)
     projection_contract = _build_vasp_projection_contract(source, native, basis)
     radial_q_maximum, radial_worst = _paw_radial_q_gate(paw)
@@ -2178,15 +2156,17 @@ function _generate_vasp_paw_matrix_elements(
     bands = native_point_metadata(native, 1).num_bands
     kpoints = length(native.kpoints)
     effective_scope = if qualification_scope === nothing
-        BandRepresentationQualificationScope(trues(bands, kpoints), falses(bands, kpoints))
+        BandRepresentationQualificationScope(
+            trues(bands, kpoints),
+            falses(bands, kpoints);
+            content_authentication = false,
+        )
     else
         qualification_scope
     end
     _validate_vasp_paw_qualification_scope(effective_scope, bands, kpoints, basis.num_wannier)
-    for (key, digest) in qualification_input_sha256
-        occursin(r"^[0-9a-f]{64}$", digest) ||
-            throw(ArgumentError("VASP_PAW_TARGET_SCOPE_HASH_MISMATCH: invalid $(key) SHA-256"))
-    end
+    all(!isempty(key) && !isempty(value) for (key, value) in qualification_input_definitions) ||
+        throw(ArgumentError("VASP_PAW_TARGET_SCOPE_DEFINITION_MISSING"))
     parent_norm, target_norm =
         _paw_generalized_norm_scopes(native, paw, projectors, (nothing, effective_scope.outer_mask))
     parent_generalized_norm_maximum, parent_generalized_norm_worst = parent_norm
@@ -2316,8 +2296,8 @@ function _generate_vasp_paw_matrix_elements(
     qualification_authority = get(qualification_metadata, "target_authority", "full_parent")
     diagnostics = String[
         "qualification_authority=$(qualification_authority)",
-        "outer_mask_sha256=$(effective_scope.outer_mask_sha256)",
-        "frozen_mask_sha256=$(effective_scope.frozen_mask_sha256)",
+        "outer_mask_definition=$(effective_scope.outer_mask_definition)",
+        "frozen_mask_definition=$(effective_scope.frozen_mask_definition)",
         "radial_q_worst=$(radial_worst)",
         "target_generalized_norm_worst=$(generalized_norm_worst)",
         "target_amn_minimum_rank=$(minimum_rank)",
@@ -2343,22 +2323,17 @@ function _generate_vasp_paw_matrix_elements(
     (qualification.amn_raw_pass && qualification.amn_subspace_pass) ||
         push!(diagnostics, "VASP_PAW_AMN_PARITY_FAILED")
     passed = qualification.passed
+    native.source_definition===nothing &&
+        throw(ArgumentError("NATIVE_SOURCE_COMPLETE_DEFINITION_REQUIRED"))
     input_hashes = merge(
-        native.input_sha256,
         Dict(
-            "POTCAR" => sha256_file(something(source.potcar_file)),
-            "OUTCAR" => sha256_file(something(source.outcar_file)),
-            "TOPOLOGY_MMN" => sha256_file(topology_mmn_file),
-            "ORACLE_MMN" =>
-                oracle_mmn_file === nothing ? "NOT_PROVIDED" :
-                sha256_file(something(oracle_mmn_file)),
-            "ORACLE_AMN" =>
-                oracle_amn_file === nothing ? "NOT_PROVIDED" :
-                sha256_file(something(oracle_amn_file)),
+            "TOPOLOGY"=>IO.wannier_topology_definition(topology),
+            "ORACLE_MMN_STATUS"=>oracle_mmn_file===nothing ? "NOT_PROVIDED" : "PROVIDED",
+            "ORACLE_AMN_STATUS"=>oracle_amn_file===nothing ? "NOT_PROVIDED" : "PROVIDED",
         ),
         Dict(
-            "TARGET_SCOPE_$(uppercase(key))" => value for
-            (key, value) in qualification_input_sha256
+            "TARGET_SCOPE_$(uppercase(key))"=>value for
+            (key, value) in qualification_input_definitions
         ),
     )
     artifacts = Dict(
@@ -2368,6 +2343,21 @@ function _generate_vasp_paw_matrix_elements(
         "provenance_hdf5" => abspath(provenance_hdf5),
     )
     solver_amn_path === nothing || (artifacts["solver_amn"] = abspath(something(solver_amn_path)))
+    if owned_topology !== nothing
+        energies = Matrix{Float64}(undef, mmn.num_bands, mmn.num_kpts)
+        for kpoint in 1:mmn.num_kpts
+            energies[:, kpoint] .= native_point_metadata(native, kpoint).energies_ev
+        end
+        all(isfinite, energies) || throw(ArgumentError("VASP_NATIVE_EIG_NONFINITE"))
+        eig_path = write_wannier_eig(
+            joinpath(dirname(output_mmn_file), "native_paw.eig"),
+            WannierEIG(mmn.num_bands, mmn.num_kpts, energies);
+            roundtrip = true,
+        )
+        isequal(read_wannier_eig(eig_path).data, energies) ||
+            throw(ArgumentError("VASP_NATIVE_WRITE_READBACK_FAILED: EIG differs after readback"))
+        artifacts["eig"] = abspath(eig_path)
+    end
     result = VASPPAWMatrixElementResult(
         mmn,
         amn,
@@ -2396,7 +2386,8 @@ function _generate_vasp_paw_matrix_elements(
         trial_normalization,
         effective_scope,
         qualification_metadata,
-        parent_audit,
+        parent_audit;
+        source_definition = native.source_definition,
     )
     return result
 end
@@ -2411,7 +2402,7 @@ internal workflow resolver.
 function generate_vasp_paw_matrix_elements(
     source::VASPWavefunctionSource,
     basis::WannierProjectionBasis,
-    topology_mmn_file::AbstractString;
+    topology_mmn_file::Union{AbstractString, WannierNNKP};
     output_mmn_file::AbstractString,
     output_amn_file::AbstractString,
     provenance_hdf5::AbstractString,

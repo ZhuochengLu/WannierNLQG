@@ -1,0 +1,27 @@
+# WannierNLQG input schema 1.0.
+# Fill every physical placeholder before run. check reports missing values.
+
+[model]
+source = "wannier"
+# model_file = "path/to/model_tb.dat"  # relative to this file; lattice/position in Å
+
+[response]
+# fermi_energy_ev = <finite real energy in eV>
+# temperature_k = <finite nonnegative temperature in K>
+# photon_energies_ev = [<photon energy in eV>, ...]
+
+[response.sampling]
+kind = "bz_mesh"
+# k_mesh = [<positive integer>, <positive integer>, <positive integer>]
+# spatial_dimension = <1, 2 or 3 physical Cartesian axes>
+
+[response.execution]
+fourier_backend = "direct"  # explicit implementation selection, not a physical default
+# Numerical defaults are obtained from the current task/method/model resolver.
+
+[response.tasks.shift]
+kind = "shift_current"
+method = "Conventional"  # legality checked against the existing task registry
+
+[output]
+# output_root = "results"

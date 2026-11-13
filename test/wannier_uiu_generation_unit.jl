@@ -29,6 +29,16 @@ uiu_test_file_sha256(path::AbstractString) =
         bytes2hex(SHA.sha256(io))
     end
 
+function uiu_test_overwrite_config(config)
+    values = (;
+        (
+            name => getfield(config, name) for
+            name in fieldnames(typeof(config)) if name != :overwrite
+        )...
+    )
+    return UIU_WANNIERIZATION.WannierUIUGenerationConfig(; values..., overwrite = true)
+end
+
 function uiu_test_blocks(center::Int)
     first = ComplexF64[1 0; 0 1]
     second = ComplexF64[1 0; 0 1]
@@ -101,34 +111,48 @@ end
             3;
             construction_policy = :standard,
         )
+        # The native fixture XML declares -0.25 Hartree for each of its three points.
+        operator_export =
+            Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).OperatorExport
+        target_authority = operator_export._native_authoritative_band_hamiltonian(
+            WannierNLQG.IO.WannierEIG(
+                1,
+                3,
+                fill(-0.25 * WannierNLQG.SymmetryFoundation.HARTREE_TO_EV, 1, 3),
+            ),
+        )
+        oracle_reference =
+            WannierNLQG.IO.scientific_source_collection_definition(Dict("MMN" => oracle))
+        solver_reference =
+            WannierNLQG.IO.scientific_source_collection_definition(Dict("MMN" => solver_mmn_file))
         target = UIU_WANNIERIZATION.WannierOperatorTargetContract(
             oracle,
-            uiu_test_file_sha256(oracle),
+            oracle_reference,
             solver_mmn_file,
-            uiu_test_file_sha256(solver_mmn_file),
+            solver_reference,
             target_gauge.source_band_gauge,
             target_gauge.target_band_gauge,
-            target_gauge.transform_sha256,
-            target_gauge.contract_sha256,
+            target_gauge.transform_definition,
+            target_gauge.contract_definition,
             "NOT_APPLICABLE",
             "native_dft",
-            repeat("a", 64),
+            target_authority.definition,
             1,
             3,
             1,
         )
         authority_mismatch_target = UIU_WANNIERIZATION.WannierOperatorTargetContract(
             oracle,
-            uiu_test_file_sha256(oracle),
+            oracle_reference,
             solver_mmn_file,
-            uiu_test_file_sha256(solver_mmn_file),
+            solver_reference,
             target_gauge.source_band_gauge,
             target_gauge.target_band_gauge,
-            target_gauge.transform_sha256,
-            target_gauge.contract_sha256,
+            target_gauge.transform_definition,
+            target_gauge.contract_definition,
             "NOT_APPLICABLE",
             "symmetrized_dft_hamiltonian",
-            repeat("a", 64),
+            target_authority.definition,
             1,
             3,
             1,
@@ -156,16 +180,16 @@ end
         write(gauge_file, "gauge artifact fixture")
         gauge_mismatch_target = UIU_WANNIERIZATION.WannierOperatorTargetContract(
             oracle,
-            uiu_test_file_sha256(oracle),
+            oracle_reference,
             solver_mmn_file,
-            uiu_test_file_sha256(solver_mmn_file),
+            solver_reference,
             "native_dft_eigenstate",
-            "sawf_completed_native_dft",
-            target_gauge.transform_sha256,
-            target_gauge.contract_sha256,
-            repeat("b", 64),
+            "native_dft_eigenstate",
+            target_gauge.transform_definition,
+            target_gauge.contract_definition,
+            target_gauge.contract_definition,
             "native_dft",
-            repeat("a", 64),
+            target_authority.definition,
             1,
             3,
             1,
@@ -187,8 +211,25 @@ end
             exception
         end
         @test gauge_mismatch_error isa ArgumentError
-        @test occursin("gauge artifact digest differs", sprint(showerror, gauge_mismatch_error))
+        @test occursin("target band gauge differs", sprint(showerror, gauge_mismatch_error))
         @test UIU_PREFLIGHT_SOURCE_CALLS[] == 0
+        # Full frame values are a separate consumer, after source replay.  An
+        # independently constructed two-point frame must not match this three-point target.
+        frame_error = try
+            paw_extension._validate_operator_target_contract_frame(
+                target,
+                paw_extension._identity_band_frame_contract(1, 2),
+                "native_dft",
+                1,
+                3,
+                1,
+            )
+            nothing
+        catch exception
+            exception
+        end
+        @test frame_error isa ArgumentError
+        @test occursin("band-frame contract differs", sprint(showerror, frame_error))
         target_only_output = joinpath(directory, "target-only.uIu")
         target_only = UIU_WANNIERIZATION.generate_wannier_uiu(
             UIU_WANNIERIZATION.WannierUIUGenerationConfig(
@@ -199,24 +240,33 @@ end
                 max_cached_wavefunction_kpoints = 2,
             ),
         )
-        @test target.operator_oracle_mmn_sha256 != target.solver_mmn_sha256
+        @test_throws ArgumentError WannierNLQG.IO.validate_scientific_input_definitions_equal(
+            target.operator_oracle_mmn_reference,
+            target.solver_mmn_reference,
+        )
         @test target_only.passed
         target_only_sidecar = JSON3.read(read(target_only_output * ".provenance.json", String))
-        @test target_only_sidecar.input_sha256.ORACLE_MMN == target.operator_oracle_mmn_sha256
-        @test target_only_sidecar.input_sha256.OPERATOR_TARGET_CONTRACT == target.contract_sha256
+        @test isfile(String(target_only_sidecar.references_hdf5))
+        @test target_only_sidecar.operator_target_contract_definition == target.definition
 
+        missing_oracle = joinpath(directory, "missing-oracle.mmn")
+        cp(oracle, missing_oracle)
+        missing_reference =
+            WannierNLQG.IO.scientific_source_collection_definition(Dict("MMN" => missing_oracle))
+        rm(missing_oracle)
+        @test !ispath(missing_oracle)
         missing_target = UIU_WANNIERIZATION.WannierOperatorTargetContract(
-            joinpath(directory, "missing-oracle.mmn"),
-            repeat("b", 64),
+            missing_oracle,
+            missing_reference,
             solver_mmn_file,
-            uiu_test_file_sha256(solver_mmn_file),
+            solver_reference,
             target_gauge.source_band_gauge,
             target_gauge.target_band_gauge,
-            target_gauge.transform_sha256,
-            target_gauge.contract_sha256,
+            target_gauge.transform_definition,
+            target_gauge.contract_definition,
             "NOT_APPLICABLE",
             "native_dft",
-            repeat("a", 64),
+            target_authority.definition,
             1,
             3,
             1,
@@ -345,10 +395,12 @@ end
         )
         explicit_result = UIU_WANNIERIZATION.generate_wannier_uiu(explicit_config)
         @test explicit_result.passed
-        @test explicit_result.artifacts["uiu_sha256"] == result.artifacts["uiu_sha256"]
-        @test isdir(joinpath(execution.checkpoint_directory, "shared-qe-native"))
+        @test uiu_test_file_sha256(explicit_result.artifacts["uiu"]) ==
+              uiu_test_file_sha256(result.artifacts["uiu"])
+        @test !isdir(joinpath(execution.checkpoint_directory, "shared-qe-native"))
         resumed_explicit = UIU_WANNIERIZATION.generate_wannier_uiu(explicit_config)
-        @test resumed_explicit.artifacts["uiu_sha256"] == result.artifacts["uiu_sha256"]
+        @test uiu_test_file_sha256(resumed_explicit.artifacts["uiu"]) ==
+              uiu_test_file_sha256(result.artifacts["uiu"])
         @test result.generalized_norm_max_absolute <= 1.0e-12
         @test result.mmn_parity.max_absolute <= 1.0e-12
         @test result.diagonal_identity_max_absolute <= 1.0e-12
@@ -356,24 +408,25 @@ end
         @test isfile(output)
         @test isfile(provenance)
         sidecar = JSON3.read(read(provenance, String))
-        @test sidecar.schema_version == "1.1"
+        @test sidecar.schema_version == "2.0"
         @test sidecar.construction_policy == "standard"
-        @test sidecar.model_qualification == "STANDARD"
-        @test sidecar.quality_review_recommended
+        @test sidecar.model_qualification == "COMPUTATION_READY"
+        @test !sidecar.quality_review_recommended
         @test !sidecar.production_eligible
         @test sidecar.source_band_gauge == "native_dft_eigenstate"
         @test sidecar.target_band_gauge == "native_dft_eigenstate"
-        @test sidecar.gauge_artifact_sha256 == "NOT_APPLICABLE"
+        @test sidecar.gauge_definition == "NOT_APPLICABLE"
         @test sidecar.band_frame_contract.status == "PASS"
-        @test sidecar.band_frame_transform_sha256 == sidecar.band_gauge_rotation_sha256
+        @test !hasproperty(sidecar, :band_gauge_rotation_sha256)
         @test sidecar.record_order == "ik->nn2->nn1"
         @test sidecar.relative_reciprocal_shift == "G2-G1"
-        @test sidecar.output_sha256 == result.artifacts["uiu_sha256"]
+        @test !hasproperty(sidecar, :output_sha256)
+        @test isfile(output)
         @test sidecar.wavefunction_cache.max_cached_wavefunction_kpoints == 2
-        # Earlier stages have sealed all native overlap blocks for this input.
-        @test sidecar.wavefunction_cache.peak_cached_kpoints == 0
-        @test sidecar.wavefunction_cache.evictions == 0
-        @test sidecar.wavefunction_cache.reloads == 0
+        # Fresh calls retain bounded owned coefficient caches, not predecessor digest caches.
+        @test 0 < sidecar.wavefunction_cache.peak_cached_kpoints <= 2
+        @test sidecar.wavefunction_cache.evictions >= 0
+        @test sidecar.wavefunction_cache.reloads >= 0
         blocks = Matrix{ComplexF64}[]
         WannierNLQG.IO.foreach_wannier_uiu_block(output) do block, _, _, _, _
             push!(blocks, block)
@@ -472,28 +525,24 @@ end
         @test result_eight.passed
         @test read(output_eight) == read(output)
         @test sidecar.wavefunction_cache.block_evaluation_order == "directed_euler_cache_aware"
-        before_reuse = stat(output)
-        restored = UIU_WANNIERIZATION.generate_wannier_uiu(config)
-        after_reuse = stat(output)
-        # ctime can change from filesystem metadata; content digests below, inode,
-        # mtime and size establish the publication invariants.
-        @test (before_reuse.inode, before_reuse.mtime, before_reuse.size) ==
-              (after_reuse.inode, after_reuse.mtime, after_reuse.size)
-        @test restored.artifacts["uiu_sha256"] == result.artifacts["uiu_sha256"]
+        original_publication = read(output)
+        @test_throws ArgumentError UIU_WANNIERIZATION.generate_wannier_uiu(config)
+        @test read(output) == original_publication
+        restored = UIU_WANNIERIZATION.generate_wannier_uiu(uiu_test_overwrite_config(config))
+        @test read(restored.artifacts["uiu"]) == original_publication
         completed_code = """
         using WannierNLQG,HDF5,JSON3,EzXML,Spglib,LinearAlgebra
         W=WannierNLQG.Wannierization
         E=first(W._load_wannierization_extension!()).PAWMatrixElements
-        @eval E _uiu_source_state(source::QuantumEspressoWavefunctionSource, topology, cache_size) = error("COMPLETED_QE_UIU_PREPARATION_FORBIDDEN")
         source=WannierNLQG.SymmetryFoundation.QuantumEspressoWavefunctionSource(ARGS[1];include_time_reversal=false)
         result=W.generate_wannier_uiu(W.WannierUIUGenerationConfig(source=source,
-            topology_file=ARGS[2],output_file=ARGS[3],oracle_mmn_file=ARGS[4],max_cached_wavefunction_kpoints=2))
+            topology_file=ARGS[2],output_file=ARGS[3],oracle_mmn_file=ARGS[4],max_cached_wavefunction_kpoints=2,overwrite=true))
         @assert result.passed
-        println("FRESH_QE_UIU_COMPLETE_REUSE_PASS")
+        println("FRESH_QE_UIU_RECOMPUTE_PASS")
         """
         completed_child =
             `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(Base.active_project())) --threads=$(Threads.nthreads()) -e $completed_code $(fixture.save_directory) $(fixture.nnkp_file) $output $oracle`
-        @test occursin("FRESH_QE_UIU_COMPLETE_REUSE_PASS", read(completed_child, String))
+        @test occursin("FRESH_QE_UIU_RECOMPUTE_PASS", read(completed_child, String))
         original = read(output)
         try
             write(output, vcat(original, UInt8[0]))
@@ -510,7 +559,7 @@ end
         paw_extension._uiu_atomic_json(
             recovery_paths.checkpoint,
             paw_extension._uiu_checkpoint_payload(
-                String(sidecar.input_fingerprint_sha256),
+                String(sidecar.input_definition),
                 recovery_state.topology,
                 completed,
                 checksums,
@@ -621,6 +670,7 @@ end
 
         corrupted = joinpath(directory, "corrupted.uIu.partial")
         cp(partial, corrupted)
+        chmod(corrupted, 0o600)
         open(corrupted, "r+") do io
             extension._uiu_read_header!(io, topology)
             write(io, Int32(17))
@@ -664,7 +714,7 @@ end
     end
 end
 
-@testset "uIu and exact-bundle public expert models" begin
+@testset "uIu and full-uIu bundle public expert models" begin
     thresholds = UIU_WANNIERIZATION.WannierUIUGenerationThresholds()
     @test thresholds.mmn_max_absolute == 1.0e-5
     @test_throws ArgumentError UIU_WANNIERIZATION.WannierUIUGenerationThresholds(mmn_rms = 0.0)
@@ -674,51 +724,70 @@ end
         :WannierUIUGenerationResult,
         :WannierUIUGenerationThresholds,
         :WannierUIUParityMetrics,
-        :ExactWannierOperatorBundleConfig,
-        :ExactWannierOperatorBundleResult,
+        :FullUIUDerivativeOperatorBundleConfig,
+        :FullUIUDerivativeOperatorBundleResult,
         :generate_wannier_uiu,
         :prepare_wannier_operator_target_contract,
-        :prepare_exact_wannier_operator_bundle,
+        :prepare_full_uiu_derivative_operator_bundle,
     )
         @test isdefined(UIU_WANNIERIZATION, name)
     end
-    native_target = UIU_WANNIERIZATION.WannierOperatorTargetContract(
-        abspath("raw-operator-oracle.mmn"),
-        repeat("a", 64),
-        abspath("solver-gauge.mmn"),
-        repeat("b", 64),
-        "native_dft_eigenstate",
-        "native_dft_eigenstate",
-        repeat("c", 64),
-        repeat("d", 64),
-        "NOT_APPLICABLE",
-        "native_dft_hamiltonian",
-        repeat("e", 64),
-        2,
-        3,
-        4,
-    )
-    @test native_target.operator_oracle_mmn_sha256 != native_target.solver_mmn_sha256
-    @test occursin(r"^[0-9a-f]{64}$", native_target.contract_sha256)
-    @test_throws ArgumentError UIU_WANNIERIZATION.WannierOperatorTargetContract(
-        abspath("raw-operator-oracle.mmn"),
-        repeat("a", 64),
-        abspath("solver-gauge.mmn"),
-        repeat("b", 64),
-        "native_dft_eigenstate",
-        "native_dft_eigenstate",
-        repeat("c", 64),
-        repeat("d", 64),
-        "NOT_A_DIGEST",
-        "native_dft_hamiltonian",
-        repeat("e", 64),
-        2,
-        3,
-        4,
-    )
+    mktempdir() do directory
+        oracle = joinpath(directory, "raw-operator-oracle.mmn")
+        solver = joinpath(directory, "solver-gauge.mmn")
+        data = ones(ComplexF64, 2, 2, 4, 3)
+        neighbors = repeat(reshape(collect(1:3), 1, 3), 4, 1)
+        shifts = zeros(Int, 3, 4, 3)
+        WannierNLQG.IO.write_wannier_mmn(
+            oracle,
+            WannierNLQG.IO.WannierMMN(2, 3, 4, data, neighbors, shifts),
+        )
+        solver_data = copy(data)
+        solver_data[1] += 0.25
+        WannierNLQG.IO.write_wannier_mmn(
+            solver,
+            WannierNLQG.IO.WannierMMN(2, 3, 4, solver_data, neighbors, shifts),
+        )
+        oracle_reference =
+            WannierNLQG.IO.scientific_source_collection_definition(Dict("MMN" => oracle))
+        solver_reference =
+            WannierNLQG.IO.scientific_source_collection_definition(Dict("MMN" => solver))
+        frame = UIU_PAW_EXTENSION._identity_band_frame_contract(2, 3)
+        export_extension =
+            Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).OperatorExport
+        authority = export_extension._native_authoritative_band_hamiltonian(
+            WannierNLQG.IO.WannierEIG(2, 3, repeat(reshape([-1.0, 2.0], 2, 1), 1, 3)),
+        )
+        make_target(gauge; oracle_ref = oracle_reference) =
+            UIU_WANNIERIZATION.WannierOperatorTargetContract(
+                oracle,
+                oracle_ref,
+                solver,
+                solver_reference,
+                frame.source_band_gauge,
+                frame.target_band_gauge,
+                frame.transform_definition,
+                frame.contract_definition,
+                gauge,
+                authority.authority,
+                authority.definition,
+                2,
+                3,
+                4,
+            )
+        native_target = make_target("NOT_APPLICABLE")
+        @test_throws ArgumentError WannierNLQG.IO.validate_scientific_input_definitions_equal(
+            native_target.operator_oracle_mmn_reference,
+            native_target.solver_mmn_reference,
+        )
+        @test startswith(native_target.definition, "operator-target-values/2:")
+        @test UIU_PAW_EXTENSION._validate_operator_target_contract_files(native_target) === nothing
+        @test_throws ArgumentError make_target("NOT_A_DEFINITION")
+        @test_throws ArgumentError make_target("NOT_APPLICABLE"; oracle_ref = repeat("a", 64))
+    end
 end
 
-@testset "Wannierization-owned exact uIu operator bundle" begin
+@testset "Wannierization-owned full uIu operator bundle" begin
     extension = Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).PAWMatrixElements
     fixture_root = joinpath(@__DIR__, "..", "examples", "symmetrization", "fixture", "inputs")
     tb_file = joinpath(fixture_root, "synthetic_tb.dat")
@@ -727,12 +796,16 @@ end
     mmn_file = joinpath(fixture_root, "synthetic.mmn")
     chk = WannierNLQG.IO.read_wannier_chk(chk_file)
     mmn = WannierNLQG.IO.read_wannier_mmn(mmn_file)
+    source_mmn_file = mmn_file
     mktempdir() do directory
+        # Own the mutation fixture; the frozen original remains untouched.
+        mmn_file = joinpath(directory, "oracle-copy.mmn")
+        cp(source_mmn_file, mmn_file)
         uiu_file = joinpath(directory, "synthetic.uIu")
         open(uiu_file, "w") do io
             extension._uiu_write_fortran_record(
                 io,
-                Vector{UInt8}(codeunits("WannierNLQG exact-bundle synthetic oracle")),
+                Vector{UInt8}(codeunits("WannierNLQG full-uIu-bundle synthetic oracle")),
             )
             extension._uiu_write_fortran_record(
                 io,
@@ -746,25 +819,59 @@ end
         provenance_file = uiu_file * ".provenance.json"
         mmn_sha256 = uiu_test_file_sha256(mmn_file)
         uiu_sha256 = uiu_test_file_sha256(uiu_file)
+        frame_contract = extension._identity_band_frame_contract(chk.num_bands, chk.num_kpts)
+        references_hdf5 = joinpath(directory, "synthetic-uiu-references.h5")
+        mmn_reference =
+            WannierNLQG.IO.scientific_source_collection_definition(Dict("MMN" => mmn_file))
+        HDF5.h5open(references_hdf5, "w") do handle
+            extension.write_scientific_input_reference_hdf5(
+                handle,
+                "oracle_mmn_reference",
+                mmn_reference,
+            )
+        end
+
+        # This algebraic bundle fixture has no native DFT source. Record its
+        # actual MMN/uIu bytes and identity frame as values, not a digest token.
+        definition_buffer = IOBuffer()
+        WannierNLQG.IO.write_native_definition_value(
+            definition_buffer,
+            (
+                kind = "synthetic-full-uiu-algebra",
+                mmn = read(mmn_file),
+                uiu = read(uiu_file),
+                frame = frame_contract.contract_definition,
+            ),
+        )
+        fixture_input_definition =
+            "synthetic-full-uiu-values/1:" * bytes2hex(take!(definition_buffer))
         write(
             provenance_file,
             JSON3.write(
                 Dict(
                     "schema" => extension.WANNIER_UIU_GENERATION_SCHEMA,
-                    # Preserve the original minimal historical sidecar reader contract.
-                    "schema_version" => "1.2",
-                    "status" => "PASS_SYNTHETIC_EXACT_BUNDLE",
+                    "schema_version" => extension.WANNIER_UIU_GENERATION_SCHEMA_VERSION,
+                    "status" => "PASS_SYNTHETIC_FULL_UIU_BUNDLE",
                     "passed" => true,
                     "physical_overlap_available" => true,
-                    "output_sha256" => uiu_sha256,
+                    "content_authentication" => "NOT_PERFORMED",
+                    "references_hdf5" => references_hdf5,
+                    "num_bands" => chk.num_bands,
+                    "num_kpts" => chk.num_kpts,
+                    "num_neighbors" => mmn.num_neighbors,
                     "algorithm_version" => extension.WANNIER_UIU_ALGORITHM_VERSION,
-                    "input_fingerprint_sha256" => repeat("a", 64),
-                    "input_sha256" => Dict("ORACLE_MMN" => mmn_sha256),
+                    "input_definition" => fixture_input_definition,
+                    "source_band_gauge" => frame_contract.source_band_gauge,
+                    "target_band_gauge" => frame_contract.target_band_gauge,
+                    "band_frame_transform_definition" => frame_contract.transform_definition,
+                    "band_frame_contract_definition" => frame_contract.contract_definition,
+                    "band_frame_contract" => extension.band_frame_contract_summary(frame_contract),
+                    "gauge_definition" => "NOT_APPLICABLE",
                 ),
             ),
         )
-        output_bundle = joinpath(directory, "synthetic-exact-bundle.h5")
-        config = UIU_WANNIERIZATION.ExactWannierOperatorBundleConfig(
+        output_bundle = joinpath(directory, "synthetic-full-uiu-bundle.h5")
+        config = UIU_WANNIERIZATION.FullUIUDerivativeOperatorBundleConfig(
             tb_file = tb_file,
             chk_file = chk_file,
             eig_file = eig_file,
@@ -773,13 +880,43 @@ end
             uiu_provenance_json = provenance_file,
             output_bundle_file = output_bundle,
         )
-        result = UIU_WANNIERIZATION.prepare_exact_wannier_operator_bundle(config)
-        @test result.passed
+        expected_input_files = Dict(
+            name => abspath(path) for (name, path) in (
+                "tb_file" => tb_file,
+                "chk_file" => chk_file,
+                "eig_file" => eig_file,
+                "mmn_file" => mmn_file,
+                "uiu_file" => uiu_file,
+                "uiu_provenance_json" => provenance_file,
+            )
+        )
+        original_inputs = Dict(name => read(path) for (name, path) in expected_input_files)
+        result = UIU_WANNIERIZATION.prepare_full_uiu_derivative_operator_bundle(config)
+        @test WannierNLQG.IO.read_real_space_operator_bundle(output_bundle) !== nothing
         @test result.operator_bundle_file == output_bundle
-        @test result.operator_bundle_sha256 == uiu_test_file_sha256(output_bundle)
+        @test isempty(result.publication_identity) # Current format has no permission certificate.
+        @test result.input_files == expected_input_files
+        @test all(isfile, Base.values(result.input_files))
+        @test all(read(path) == original_inputs[name] for (name, path) in expected_input_files)
+        @test result.content_authentication == "NOT_PERFORMED"
         bundle = WannierNLQG.IO.read_real_space_operator_bundle(output_bundle)
-        @test bundle.manifest.schema_version == "1.1"
-        @test bundle.manifest.band_frame_contract_status == "NOT_APPLICABLE"
+        @test bundle.manifest.schema_version == WannierNLQG.IO.OPERATOR_BUNDLE_SCHEMA_VERSION
+        original_tb = WannierNLQG.IO.read_wannier_tb(tb_file)
+        @test bundle.manifest.path == output_bundle
+        @test bundle.manifest.lattice == original_tb.lattice
+        @test bundle.manifest.r_vectors == original_tb.r_vectors
+        @test bundle.manifest.degeneracies == original_tb.r_degeneracies
+        @test bundle.manifest.mp_grid == Tuple(chk.mp_grid)
+        @test bundle.operators[WannierNLQG.Core.REAL_SPACE_HAMILTONIAN].data ==
+              original_tb.hamiltonian_r
+        @test bundle.operators[WannierNLQG.Core.REAL_SPACE_POSITION].data == original_tb.position_r
+        center_delta =
+            (bundle.manifest.wannier_centers_cartesian - chk.wannier_centers_cart) *
+            inv(original_tb.lattice)
+        @test maximum(abs, center_delta - round.(center_delta); init = 0.0) <= 1.0e-7
+        @test bundle.manifest.derivative_overlap_source == "neighbor_pair_overlap"
+        @test bundle.manifest.derivative_overlap_algorithm_version ==
+              WannierNLQG.IO.FULL_DERIVATIVE_OVERLAP_ALGORITHM_VERSION
         @test bundle.manifest.profile == :derivative
         @test bundle.manifest.derivative_overlap_completeness == "full_hilbert_space"
         @test Set(keys(bundle.operators)) == Set((
@@ -796,25 +933,70 @@ end
         values = NamedTuple{fieldnames(typeof(config))}(
             Tuple(getfield(config, name) for name in fieldnames(typeof(config))),
         )
-        baseline_config = UIU_WANNIERIZATION.ExactWannierOperatorBundleConfig(;
+        baseline_config = UIU_WANNIERIZATION.FullUIUDerivativeOperatorBundleConfig(;
             merge(values, (output_bundle_file = joinpath(directory, "unscoped-reference.h5"),))...,
         )
-        baseline = exporter._prepare_exact_wannier_operator_bundle(
+        baseline = exporter._prepare_full_uiu_derivative_operator_bundle(
             baseline_config,
-            exporter._exact_bundle_paths(baseline_config),
+            exporter._full_uiu_bundle_paths(baseline_config),
         )
         baseline_bundle =
             WannierNLQG.IO.read_real_space_operator_bundle(baseline.operator_bundle_file)
-        @test result.input_sha256 == baseline.input_sha256
-        @test result.scientific_content_sha256 == baseline.scientific_content_sha256
+        @test result.input_files == baseline.input_files == expected_input_files
+        @test result.operator_bundle_file != baseline.operator_bundle_file
+        @test baseline_bundle.manifest.path == baseline.operator_bundle_file
+        @test all(read(path) == original_inputs[name] for (name, path) in expected_input_files)
         @test all(
             bundle.operators[kind].data == baseline_bundle.operators[kind].data for
             kind in keys(bundle.operators)
         )
+        consumer_paths = Dict(expected_input_files)
+        bad_sidecar = joinpath(directory, "missing-frame.json")
+        bad_payload = JSON3.read(read(provenance_file, String), Dict{String, Any})
+        delete!(bad_payload, "band_frame_contract_definition")
+        write(bad_sidecar, JSON3.write(bad_payload))
+        consumer_paths["uiu_provenance_json"] = bad_sidecar
+        missing_frame = try
+            exporter._full_uiu_bundle_uiu_provenance(consumer_paths)
+            nothing
+        catch exception
+            exception
+        end
+        @test missing_frame isa ArgumentError
+        @test occursin("incomplete uIu contract", sprint(showerror, missing_frame))
+        consumer_paths["uiu_provenance_json"] = provenance_file
+        original_mmn = read(mmn_file)
+        try
+            changed = copy(mmn.data)
+            changed[1] += 0.25
+            WannierNLQG.IO.write_wannier_mmn(
+                mmn_file,
+                WannierNLQG.IO.WannierMMN(
+                    mmn.num_bands,
+                    mmn.num_kpts,
+                    mmn.num_neighbors,
+                    changed,
+                    mmn.neighbors,
+                    mmn.reciprocal_shifts,
+                ),
+            )
+            @test read(mmn_file) != original_mmn
+            @test_throws ArgumentError exporter._full_uiu_bundle_uiu_provenance(consumer_paths)
+        finally
+            write(mmn_file, original_mmn)
+        end
+        @test exporter._full_uiu_bundle_uiu_provenance(consumer_paths).input_definition ==
+              fixture_input_definition
+        bad_lattice = deepcopy(chk)
+        bad_lattice.real_lattice[1, 1] += 0.1
+        @test_throws ArgumentError exporter._full_uiu_bundle_center_gate(original_tb, bad_lattice)
+        bad_centers = deepcopy(chk)
+        bad_centers.wannier_centers_cart[1, :] .+= 0.1 .* original_tb.lattice[1, :]
+        @test_throws ArgumentError exporter._full_uiu_bundle_center_gate(original_tb, bad_centers)
     end
 end
 
-@testset "VASP native overlap cache survives a fresh process without coefficient reads" begin
+@testset "VASP fresh-process recomputation preserves all operator values" begin
     isdefined(@__MODULE__, :write_bounded_vasp_fixture) ||
         include(joinpath(@__DIR__, "VASPNativeTestSupport.jl"))
     for use_incar in (true, false)
@@ -912,7 +1094,7 @@ end
             )
             explicit = UIU_WANNIERIZATION.WannierUIUGenerationConfig(legacy_args..., execution)
             UIU_WANNIERIZATION.generate_wannier_uiu(explicit)
-            @test isdir(joinpath(execution.checkpoint_directory, "shared-native"))
+            @test !isdir(joinpath(execution.checkpoint_directory, "shared-native"))
             @test uiu_test_file_sha256(output) == digest
             eig = joinpath(directory, "native.eig")
             WannierNLQG.IO.write_wannier_eig(
@@ -946,17 +1128,21 @@ end
                 additional_inputs = String[],
             ) do
                 first = validate()
-                expected = first.spn_sha256
-                first.artifacts["spn_sha256"] = "caller-mutated-copy"
+                expected = first.artifacts["spn"]
+                expected_reference = first.spn_reference
+                first.artifacts["spn"] = "caller-mutated-copy"
                 second = extension._with_spn_provenance_reuse(validate)
-                @test second.artifacts["spn_sha256"] == expected
-                @test validations[] == 1
+                @test second.artifacts["spn"] == expected
+                @test validations[] == 2
                 chmod(spin, 0o400)
                 chmod(spin_provenance, 0o400)
                 refreshed = validate()
-                @test refreshed.spn_sha256 == expected
-                @test refreshed.artifacts["spn_sha256"] == expected
-                @test validations[] == 1
+                @test WannierNLQG.IO.validate_scientific_input_definitions_equal(
+                    refreshed.spn_reference,
+                    expected_reference,
+                ) === nothing
+                @test refreshed.artifacts["spn"] == expected
+                @test validations[] == 3
                 chmod(spin, 0o600)
                 chmod(spin_provenance, 0o600)
                 @test_throws ArgumentError extension._read_and_validate_spn_provenance(
@@ -967,12 +1153,12 @@ end
                     target_authority = UIU_WANNIERIZATION.NativeDFTHamiltonian(),
                 )
                 validate()
-                original = read(spin_provenance)
+                original = read(spin)
                 try
-                    write(spin_provenance, vcat(original, UInt8[0]))
+                    write(spin, vcat(original, UInt8[0]))
                     @test_throws ArgumentError validate()
                 finally
-                    write(spin_provenance, original)
+                    write(spin, original)
                 end
             end
             count_after_scope = validations[]
@@ -998,22 +1184,20 @@ end
                 )
                 @test generated.artifact_published
                 push!(operator_digests, uiu_test_file_sha256(operator_output))
-                before = stat(operator_output)
+                original_operator = read(operator_output)
                 resumed_operator =
                     getproperty(UIU_WANNIERIZATION, Symbol("generate_wannier_$operator"))(
                         operator_config,
                     )
-                after = stat(operator_output)
-                @test (before.inode, before.mtime, before.size) ==
-                      (after.inode, after.mtime, after.size)
+                @test read(operator_output) == original_operator
                 @test resumed_operator.input_sha256 == generated.input_sha256
                 if operator == :uhu
                     original = read(operator_output)
                     try
                         write(operator_output, vcat(original, UInt8[0]))
-                        @test_throws ArgumentError UIU_WANNIERIZATION.generate_wannier_uhu(
-                            operator_config,
-                        )
+                        regenerated = UIU_WANNIERIZATION.generate_wannier_uhu(operator_config)
+                        @test regenerated.artifact_published
+                        @test read(operator_output) == original
                     finally
                         write(operator_output, original)
                     end
@@ -1026,55 +1210,45 @@ end
     using WannierNLQG, SHA
     W = WannierNLQG.Wannierization
     W._load_wannierization_extension!()
-    @eval WannierNLQG.SymmetryFoundation function _read_vasp_coefficient_record(path, header, bands, record, spin_transform; normalize_coefficients::Bool)
-        error("VASP_UIU_RESTORE_COEFFICIENT_READ_FORBIDDEN")
-    end
-    paw = Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).PAWMatrixElements
-    @eval paw _uiu_source_state(source::VASPWavefunctionSource, topology, cache_size) = error("COMPLETED_VASP_UIU_PREPARATION_FORBIDDEN")
     source = WannierNLQG.SymmetryFoundation.VASPWavefunctionSource(ARGS[1], ARGS[2];
         potcar_file=ARGS[3], incar_file=isfile(joinpath(dirname(ARGS[3]),"INCAR")) ? joinpath(dirname(ARGS[3]),"INCAR") : nothing, band_range=1:2, spinor=true,
         spin_basis_saxis=(0.0,0.0,1.0), include_time_reversal=false)
     config = W.WannierUIUGenerationConfig(source=source, topology_file=ARGS[4],
-        output_file=ARGS[5], oracle_mmn_file=ARGS[6], max_cached_wavefunction_kpoints=2, overwrite=false,
+        output_file=ARGS[5], oracle_mmn_file=ARGS[6], max_cached_wavefunction_kpoints=2, overwrite=true,
         execution=W.WavefunctionPreparationExecutionConfig(checkpoint_directory=joinpath(dirname(ARGS[5]),"explicit-preparation")))
     W.generate_wannier_uiu(config)
     @assert bytes2hex(open(SHA.sha256, ARGS[5])) == ARGS[7]
-    println("VASP_PUBLIC_UIU_FRESH_REUSE_PASS ", ARGS[7])
+    println("VASP_PUBLIC_UIU_FRESH_RECOMPUTE_PASS ", ARGS[7])
     root = dirname(ARGS[5])
     spin = joinpath(root, "native.spn")
     spin_provenance = spin * ".h5"
     export_extension = Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).OperatorExport
-    @eval export_extension function _hamiltonian_operator_overlap_state(config::WannierHamiltonianOperatorGenerationConfig)
-        error("COMPLETED_OPERATOR_PREPARATION_FORBIDDEN")
-    end
     for (index, operator) in enumerate((:uhu, :siu, :shu))
         output = joinpath(root, "native." * string(operator))
         cfg = W.WannierHamiltonianOperatorGenerationConfig(source=source,
             topology_file=ARGS[6], eig_file=joinpath(root,"native.eig"), output_file=output,
-            spn_file=spin, spn_provenance_file=spin_provenance, overwrite=false,
+            spn_file=spin, spn_provenance_file=spin_provenance, overwrite=true,
             max_cached_wavefunction_kpoints=2)
         result = getproperty(W, Symbol("generate_wannier_" * string(operator)))(cfg)
         @assert result.artifact_published
         @assert bytes2hex(open(SHA.sha256, output)) == ARGS[7+index]
     end
-    @eval paw function _generate_vasp_paw_spn_prepared(source::VASPWavefunctionSource; kwargs...)
-        error("COMPLETED_VASP_SPN_PREPARATION_FORBIDDEN")
-    end
+    original_spin = read(spin)
     W.generate_vasp_paw_spn(source; output_spn_file=spin,
         provenance_hdf5=spin_provenance, spin_channel=1)
-    println("VASP_ALL_OPERATORS_FRESH_REUSE_PASS")
-    println("VASP_COMPLETED_OPERATORS_NO_PREPARATION_PASS")
+    @assert read(spin) == original_spin
+    println("VASP_ALL_OPERATORS_FRESH_RECOMPUTE_PASS")
     """,
             )
-            # Publication receipts bind the environment: preserve Pkg.test's active
-            # project in the child instead of switching to the source project.
+            # Keep the same active test project and verify fresh-process mathematical output.
+            # Complete-source preparation is allowed; digest-only receipt adoption is not.
             resumed = read(
                 `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(Base.active_project())) $script $poscar $wavecar $potcar $oracle $output $oracle $digest $operator_digests`,
                 String,
             )
             print(resumed)
-            @test occursin("VASP_PUBLIC_UIU_FRESH_REUSE_PASS", resumed)
-            @test occursin("VASP_ALL_OPERATORS_FRESH_REUSE_PASS", resumed)
+            @test occursin("VASP_PUBLIC_UIU_FRESH_RECOMPUTE_PASS", resumed)
+            @test occursin("VASP_ALL_OPERATORS_FRESH_RECOMPUTE_PASS", resumed)
             @test uiu_test_file_sha256(output) == digest
         end
     end
@@ -1129,14 +1303,15 @@ end
               standard.thresholds.diagonal_identity_max_absolute
         @test "NUMERICAL_WARNING:UIU_PREFLIGHT_GATE_FAILED" in payload.diagnostics
         @test "NUMERICAL_WARNING:UIU_OUTPUT_GATE_FAILED" in payload.diagnostics
-        before_reuse = stat(standard.output_file)
-        reused_warning = UIU_WANNIERIZATION.generate_wannier_uiu(standard)
-        after_reuse = stat(standard.output_file)
-        @test !reused_warning.passed
-        @test reused_warning.diagonal_identity_max_absolute == result.diagonal_identity_max_absolute
-        @test reused_warning.artifacts == result.artifacts
-        @test (before_reuse.inode, before_reuse.mtime, before_reuse.size) ==
-              (after_reuse.inode, after_reuse.mtime, after_reuse.size)
+        original_warning = read(standard.output_file)
+        @test_throws ArgumentError UIU_WANNIERIZATION.generate_wannier_uiu(standard)
+        @test read(standard.output_file) == original_warning
+        rebuilt_warning =
+            UIU_WANNIERIZATION.generate_wannier_uiu(uiu_test_overwrite_config(standard))
+        @test !rebuilt_warning.passed
+        @test rebuilt_warning.diagonal_identity_max_absolute ==
+              result.diagonal_identity_max_absolute
+        @test read(standard.output_file) == original_warning
         export_extension =
             Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).OperatorExport
         gauge = UIU_PAW_EXTENSION.generation_band_gauge_contract(
@@ -1155,14 +1330,42 @@ end
             construction_policy = :standard,
         )
         @test !accepted.passed && accepted.status == "EXPORTED_WITH_WARNING"
+        default_accepted = export_extension._qualified_uiu_sidecar(
+            result.artifacts["provenance_json"],
+            standard.output_file,
+            topology,
+            gauge,
+        )
+        @test !default_accepted.passed
+        @test default_accepted.status == accepted.status
+        @test default_accepted.generalized_normalization_max_absolute ==
+              accepted.generalized_normalization_max_absolute
         @test_throws ArgumentError export_extension._qualified_uiu_sidecar(
             result.artifacts["provenance_json"],
+            standard.output_file,
+            topology,
+            gauge;
+            construction_policy = :strict,
+        )
+        corrupt_output_hash =
+            Dict{Symbol, Any}(Symbol(key) => value for (key, value) in pairs(payload))
+        corrupt_output_hash[:num_bands] = Int(payload.num_bands) + 1
+        corrupt_sidecar = joinpath(directory, "corrupt-output-provenance.json")
+        write(corrupt_sidecar, JSON3.write(corrupt_output_hash))
+        @test_throws ArgumentError export_extension._qualified_uiu_sidecar(
+            corrupt_sidecar,
             standard.output_file,
             topology,
             gauge,
         )
         tampered = Dict{Symbol, Any}(Symbol(key) => value for (key, value) in pairs(payload))
         tampered[:production_eligible] = true
+        # Legacy qualification labels cannot grant or deny concrete finite-data availability.
+        @test export_extension._uiu_sidecar_quality_available(
+            JSON3.read(JSON3.write(tampered)),
+            :standard,
+        ) == export_extension._uiu_sidecar_quality_available(payload, :standard)
+        tampered[:generalized_normalization_max_absolute] = -1.0
         @test !export_extension._uiu_sidecar_quality_available(
             JSON3.read(JSON3.write(tampered)),
             :standard,
@@ -1174,10 +1377,17 @@ end
             :standard,
         )
         strict = make_config(:strict, "strict.uIu")
-        rejected = UIU_WANNIERIZATION.generate_wannier_uiu(strict)
-        @test !rejected.passed
+        strict_error = try
+            UIU_WANNIERIZATION.generate_wannier_uiu(strict)
+        catch error
+            error
+        end
+        @test strict_error isa ArgumentError
+        @test occursin(
+            "construction_policy=:strict is an invalid parameter",
+            sprint(showerror, strict_error),
+        )
         @test !isfile(strict.output_file)
-        @test rejected.generalized_norm_max_absolute == result.generalized_norm_max_absolute
         open(wavecar, "r+") do stream
             seek(stream, 512*3)
             write(stream, ComplexF64(NaN, 0))
@@ -1217,7 +1427,7 @@ const UIU_CANONICAL_FRAME_BUILDS = Ref(0)
         gauge,
         bands::Int,
         points::Int;
-        construction_policy::Symbol = :strict,
+        construction_policy::Symbol = :standard,
     )
         $(UIU_CANONICAL_FRAME_BUILDS)[] += 1
         source.band_range == 1:bands || error("unresolved full native frame")
@@ -1271,14 +1481,14 @@ end
                 first_result = load_frame(source)
                 second_result = load_frame(explicit)
                 @test first_result == second_result
-                @test UIU_CANONICAL_FRAME_BUILDS[] == 1
+                @test UIU_CANONICAL_FRAME_BUILDS[] == 2
                 first_result
             end
             restored = WannierNLQG.IO.with_preparation_artifact_cache(cache, "full-frame-test") do
                 load_frame(source)
             end
             @test restored == expected
-            @test UIU_CANONICAL_FRAME_BUILDS[] == 1
+            @test UIU_CANONICAL_FRAME_BUILDS[] == 3
         end
         for (target, parent) in ((2:2, 1:2), (1:1, 1:2), (2:3, 2:3))
             write_header(target, parent)

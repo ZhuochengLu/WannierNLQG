@@ -16,18 +16,17 @@ function target_representation(
     return matrix
 end
 
-"""Validate the immutable Wannier90-reference parity thresholds."""
+"""Validate the immutable Wannier-reference parity thresholds."""
 function validate_smv_fletcher_reeves_two_stage_audit_thresholds(
     thresholds::SMVFletcherReevesTwoStageAuditThresholds,
 )
     isempty(strip(thresholds.standard_version)) &&
-        throw(ArgumentError("Wannier90 parity standard_version must not be empty"))
+        throw(ArgumentError("Wannier parity standard_version must not be empty"))
     thresholds.semantic == "SMV_FLETCHER_REEVES_TWO_STAGE_ORACLE_PARITY_WITH_FROZEN_TOLERANCE" ||
         throw(ArgumentError("SMV--Fletcher--Reeves audit semantic is unsupported"))
     thresholds.accepted_step_combination_rule ==
-    "abs_diff <= abs_tol + rel_tol * max(abs(reference), abs(candidate))" || throw(
-        ArgumentError("unsupported Wannier90 accepted-step absolute/relative combination rule"),
-    )
+    "abs_diff <= abs_tol + rel_tol * max(abs(reference), abs(candidate))" ||
+        throw(ArgumentError("unsupported Wannier accepted-step absolute/relative combination rule"))
     for (name, value) in (
         ("accepted_step_absolute_tolerance", thresholds.accepted_step_absolute_tolerance),
         ("accepted_step_relative_tolerance", thresholds.accepted_step_relative_tolerance),
@@ -48,11 +47,11 @@ end
 
 """Materialize complete-block outer and frozen masks from energies."""
 function window_masks_from_energies(
-    config::Union{SymmetryAdaptedWannierizationConfig, BandRepresentationPreparationConfig},
+    config::Union{WannierizationConfig, BandRepresentationPreparationConfig},
     energies::AbstractMatrix{<:Real},
     band_block_labels::AbstractMatrix{<:Integer},
 )
-    input = config isa SymmetryAdaptedWannierizationConfig ? config.input : config
+    input = config isa WannierizationConfig ? config.input : config
     size(energies) == size(band_block_labels) ||
         throw(ArgumentError("energy and block-label dimensions disagree"))
     num_bands, num_kpoints = size(energies)
@@ -83,6 +82,9 @@ function window_masks_from_energies(
             findall(label -> label in selected_frozen_labels, @view(band_block_labels[:, kpoint]))
         outer_masks[kpoint][outer] .= true
         frozen_masks[kpoint][frozen] .= true
+        all(band -> outer_masks[kpoint][band], frozen) || throw(
+            ArgumentError("frozen bands are not a subset of outer bands at k-point $(kpoint)"),
+        )
     end
     return outer_masks, frozen_masks
 end

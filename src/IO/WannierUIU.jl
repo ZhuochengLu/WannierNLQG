@@ -1,4 +1,4 @@
-"""Dimensions and free-form header of a standard Wannier90 unformatted `.uIu` file."""
+"""Dimensions and free-form header of a standard Wannier unformatted `.uIu` file."""
 struct WannierUIUHeader
     comment::String
     num_bands::Int
@@ -63,7 +63,7 @@ function read_wannier_uiu_header(filename::AbstractString; formatted::Bool = fal
     end
 end
 
-"""Parse one finite Wannier90 decimal, including Fortran D exponents."""
+"""Parse one finite Wannier decimal, including Fortran D exponents."""
 function _parse_wannier_float(token::AbstractString, context::AbstractString)
     value = try
         parse(Float64, replace(token, r"[dD]" => "E"))
@@ -179,10 +179,10 @@ _atomic_wannier_operator_write(writer, filename::AbstractString) =
     foreach_wannier_uiu_block(callback, filename; expected_num_bands=nothing,
                               expected_num_kpts=nothing, expected_num_neighbors=nothing)
 
-Stream the direct overlaps in Wannier90's `ik, nn2, nn1` record order without
+Stream the direct overlaps in Wannier's `ik, nn2, nn1` record order without
 materializing the complete five-dimensional file. `callback(block, ik, nn2,
 nn1, header)` receives the transposed `num_bands x num_bands` matrix used by
-Wannier90 `get_FF_R`, i.e. the direct overlap
+Wannier `get_FF_R`, i.e. the direct overlap
 `<u_{q+b1}|u_{q+b2}>`. Record markers, dimensions, record count, and trailing
 bytes are validated before returning.
 """
@@ -252,7 +252,7 @@ end
 """
     write_wannier_uiu(filename, header, block_provider; formatted=false)
 
-Atomically stream a Wannier90 uIu file. `block_provider(ik, nn2, nn1, header)`
+Atomically stream a Wannier uIu file. `block_provider(ik, nn2, nn1, header)`
 returns the physical matrix `<u_{q+b1}|u_{q+b2}>` with bra and ket as row and
 column indices. The serialized order is exactly `ik -> nn2 -> nn1`.
 """

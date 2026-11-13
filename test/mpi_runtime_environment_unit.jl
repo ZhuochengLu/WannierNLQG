@@ -46,6 +46,15 @@ function function_entry()
     ENV["WANNIERNLQG_USE_MPI"] = "1"
     R.bundle_mpi_initialize()
     @test R.BUNDLE_MPI_CONTEXT.has_mpi && R.BUNDLE_MPI_CONTEXT.started
+    available = R._mpi_shared_window_available()
+    expected_available = Base.invokelatest() do
+        all(
+            name -> isdefined(R.MPI, name),
+            (:Win_allocate_shared, :Win_lock, :Win_unlock, :Win_sync, :Win_shared_query),
+        )
+    end
+    @test available === expected_available
+    @test !isdefined(Main, :MPI)
     comm = R.bundle_mpi_comm_world()
     @test R.bundle_mpi_comm_rank(comm) == 0 && R.bundle_mpi_comm_size(comm) == 1
     @test R.bundle_mpi_reduce_sum([3.0], 0, comm) == [3.0]

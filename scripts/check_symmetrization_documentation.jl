@@ -1,6 +1,7 @@
 #!/usr/bin/env julia
 
 using WannierNLQG
+using Test
 
 const ROOT = normpath(joinpath(@__DIR__, ".."))
 const GUIDE = joinpath(ROOT, "docs", "SYMMETRIZATION.md")
@@ -27,6 +28,30 @@ documentation_check(
     "guide retains the obsolete Symmetrization trigger set",
 )
 
+# Reject missing or ambiguous sections before indexing the current field table.
+function configuration_table_section(text, start_heading, stop_heading)
+    documentation_check(
+        count(start_heading, text) == 1,
+        "configuration heading is missing or ambiguous: $(start_heading)",
+    )
+    documentation_check(
+        count(stop_heading, text) == 1,
+        "configuration heading is missing or ambiguous: $(stop_heading)",
+    )
+    start = findfirst(start_heading, text)
+    stop = findfirst(stop_heading, text)
+    documentation_check(first(start) < first(stop), "configuration headings are out of order")
+    return text[(last(start) + 1):(first(stop) - 1)]
+end
+
+@testset "configuration documentation section boundaries" begin
+    @test configuration_table_section("start\n| field | value |\nstop", "start", "stop") ==
+          "\n| field | value |\n"
+    for value in ("stop", "start", "start start stop", "stop start")
+        @test_throws ErrorException configuration_table_section(value, "start", "stop")
+    end
+end
+
 for (config_type, start_heading, stop_heading) in (
     (
         WannierNLQG.Symmetrization.MagneticMomentConfig,
@@ -40,7 +65,7 @@ for (config_type, start_heading, stop_heading) in (
     ),
     (WannierNLQG.Symmetrization.SymmetrizationConfig, "### 2.3 SymmetrizationConfig", "## 3."),
 )
-    section = split(split(text, start_heading; limit = 2)[2], stop_heading; limit = 2)[1]
+    section = configuration_table_section(text, start_heading, stop_heading)
     for field in fieldnames(config_type)
         row = "| $(field) |"
         count_in_tables = count(line -> startswith(line, row), split(section, '\n'))

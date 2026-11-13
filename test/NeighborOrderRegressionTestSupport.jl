@@ -92,7 +92,7 @@ function neighbor_order_regression_tests(directory)
                 formatted,
             )
             f = Base.invokelatest(
-                extension._construct_exact_full_derivative_overlap_tensor_q,
+                extension._construct_full_uiu_derivative_overlap_tensor_q,
                 chk,
                 stencil,
                 centers,
@@ -195,7 +195,7 @@ function neighbor_order_regression_tests(directory)
                     invalid=merge(base, (overlap_order = badmap,))
                     for constructor in (
                         ()->Base.invokelatest(
-                            extension._construct_exact_full_derivative_overlap_tensor_q,
+                            extension._construct_full_uiu_derivative_overlap_tensor_q,
                             chk,
                             invalid,
                             centers,

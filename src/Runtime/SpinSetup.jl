@@ -1,6 +1,6 @@
 # Validate that two ordered center sources agree modulo lattice translations.
 function validate_wannier_center_sources(
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     checkpoint::WannierCHK;
     tolerance_angstrom::Float64 = 1.0e-6,
 )
@@ -39,7 +39,7 @@ Enforce Hermiticity/roundtrip checks and preserve upstream spin units; missing f
 Load spin real space.
 """
 function load_spin_real_space(
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     spin_file::AbstractString,
     checkpoint_file::AbstractString;
     spin_file_formatted::Bool = false,
@@ -67,7 +67,7 @@ end
 """
 Load legacy spin input only when spin is enabled; otherwise return nothing without reading files.
 """
-function maybe_load_spin_from_config(model::TightBindingModel, config::EffectiveTaskConfig)
+function maybe_load_spin_from_config(model::AbstractResponseModel, config::EffectiveTaskConfig)
     config.spin_enabled || return nothing
     isempty(config.spin_file) && error("spin_enabled=true requires EffectiveTaskConfig.spin_file.")
     isempty(config.checkpoint_file) &&
@@ -96,7 +96,7 @@ Pass supported numerical options to the streaming builder; preserve upstream spi
 Load spin velocity real space.
 """
 function load_spin_velocity_real_space(
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     spin_file::AbstractString,
     checkpoint_file::AbstractString,
     eigenvalue_file::AbstractString,
@@ -122,7 +122,7 @@ end
 Load spin-velocity sources only when the validated task bundle demands them, using resolved context paths.
 """
 function maybe_load_spin_velocity_from_context(
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     ctx::RunContext,
     config::EffectiveTaskConfig,
 )

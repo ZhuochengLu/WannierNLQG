@@ -34,7 +34,7 @@ function build_config(;
                 quantity = "BCK",
                 method = "Conventional",
                 physics = GeometryParameters(),
-                numerics = GeometryNumerics(denominator_regularization = 0.001),
+                numerics = Numerics(denominator_regularization = 0.001),
                 observable = KSliceSelection(
                     component = TensorComponent(1, 2),
                     bands = Subspace([1, 2]),

@@ -1,0 +1,32 @@
+workflow = "wannierization"
+mode = "ordinary"
+
+# Ordered rows must match the EIG/MMN/AMN input indexing.
+[structure]
+lattice_angstrom = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+species = ["X"]
+positions_fractional = [[0.0, 0.0, 0.0]]
+
+[kmesh]
+dimensions = [1, 1, 1]
+points_fractional = [[0.0, 0.0, 0.0]]
+
+[basis]
+projections = ["X:s"]
+
+[matrices]
+eig_file = "seed.eig"
+mmn_file = "seed.mmn"
+amn_file = "seed.amn"
+
+[solver]
+initialization = "amn"
+# Independent Z/U limits and tolerances use the typed defaults when omitted.
+
+[output]
+final_tb_symmetry_report_enabled = false
+model_file = "results/seed.h5"
+# checkpoint_hdf5 = "results/seed.wannierization.h5"  # Optional restart artifact
+profile = "hamiltonian_position"
+num_print_cycles = 1
+num_dump_cycles = 100

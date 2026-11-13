@@ -1,3 +1,30 @@
+"""Read the external metric of selected Hamiltonian-frame states; absent full F is an error."""
+function quantum_metric_external_component(
+    data::KPointMatrixData,
+    group,
+    tensor_indices;
+    occupations = nothing,
+)
+    data.metric_external === nothing && error("QUANTUM_METRIC_FULL_DERIVATIVE_OVERLAP_REQUIRED")
+    data.metric_external_generation == data.generation || error("QUANTUM_METRIC_STALE_EXTERNAL")
+    a, b = tensor_indices
+    value = 0.0
+    for n in group
+        value +=
+            (occupations === nothing ? 1.0 : occupations[n]) *
+            real(data.metric_external[n, n, a, b])
+    end
+    return ComplexF64(value, 0.0)
+end
+
+"""Combine metric components without confusing a target-subspace trace with a band sum."""
+function _metric_contribution(internal, external, contribution::Symbol)
+    contribution === :internal && return internal
+    contribution === :external && return external
+    contribution === :total && return internal + external
+    throw(ArgumentError("Unknown metric contribution $(contribution)"))
+end
+
 # Conventional k-resolved quantum-geometry and quantum-Hermitian-connection kernels.
 
 using LinearAlgebra
@@ -269,6 +296,8 @@ function quantum_metric_component(
     band::Int,
     tensor_indices::Vector{Int},
     num_orbitals::Int64,
+    ;
+    contribution::Symbol = :total,
 )
     a, b = tensor_indices
     value = 0.0
@@ -276,7 +305,12 @@ function quantum_metric_component(
         m == band && continue
         value += real(data.berry_connection[band, m, a] * data.berry_connection[m, band, b])
     end
-    return ComplexF64(value, 0.0)
+    contribution === :internal && return ComplexF64(value, 0.0)
+    return _metric_contribution(
+        ComplexF64(value, 0.0),
+        quantum_metric_external_component(data, (band,), tensor_indices),
+        contribution,
+    )
 end
 
 """
@@ -289,6 +323,8 @@ function quantum_metric_band_sum_component(
     tensor_indices::Vector{Int},
     num_orbitals::Int64,
     occupations::AbstractVector{<:Real},
+    ;
+    contribution::Symbol = :total,
 )
     length(occupations) == num_orbitals ||
         error("Quantum_Metric band-sum occupations length must match num_orbitals=$(num_orbitals).")
@@ -305,7 +341,12 @@ function quantum_metric_band_sum_component(
                 real(data.berry_connection[n, m, a] * data.berry_connection[m, n, b])
         end
     end
-    return ComplexF64(value, 0.0)
+    contribution === :internal && return ComplexF64(value, 0.0)
+    return _metric_contribution(
+        ComplexF64(value, 0.0),
+        quantum_metric_external_component(data, 1:num_orbitals, tensor_indices; occupations),
+        contribution,
+    )
 end
 
 """
@@ -463,16 +504,23 @@ function interband_quantum_metric_group_sum_component(
 end
 
 """
-Return the external-band metric trace of the target subspace in Cartesian `(a,b)` order.
+Return the selected internal, external or total target-subspace metric in Cartesian `(a,b)` order.
 
 Delegate to the nonempty, bounds-checked interband group sum; no group averaging or occupation weights are introduced.
 """
-quantum_metric_group_sum_component(
+function quantum_metric_group_sum_component(
     data::KPointMatrixData,
     band_group::Vector{Int},
     tensor_indices::Vector{Int},
-    num_orbitals::Int64,
-) = interband_quantum_metric_group_sum_component(data, band_group, tensor_indices, num_orbitals)
+    num_orbitals::Int64;
+    contribution::Symbol = :total,
+)
+    internal =
+        interband_quantum_metric_group_sum_component(data, band_group, tensor_indices, num_orbitals)
+    contribution === :internal && return internal
+    external = quantum_metric_external_component(data, band_group, tensor_indices)
+    return _metric_contribution(internal, external, contribution)
+end
 
 """
 Sum the real diagonal non-Abelian curvature over the target band group, excluding internal-group connection transitions.

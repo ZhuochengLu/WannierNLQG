@@ -644,3 +644,47 @@ end
     @test only(rebased.symmetry_warnings) ==
           "TASK bundle contains one response-symmetry identity in multiple input bases; basis-dependent group details remain per-task in machine-readable summaries"
 end
+
+@testset "finite symmetry group integration preserves Seitz and antiunitary tables" begin
+    rotation=Matrix{Int}(I, 3, 3)
+    identity=response_group_test_operation(rotation; source_index = 2)
+    half_translation=response_group_test_operation(
+        rotation;
+        translation = [0.5, 0.0, 0.0],
+        source_index = 1,
+    )
+    operations=[half_translation, identity]
+    original=deepcopy(operations)
+    ordered,
+    table,
+    index=RESPONSE_GROUP_FOUNDATION.finite_symmetry_group_tables(
+        operations;
+        seitz = true,
+        tolerance = 1e-8,
+    )
+    @test ordered[1].translation_fractional==zeros(3)
+    @test table==[1 2; 2 1]
+    @test index==1
+    @test operations==original
+    antiunitary=response_group_test_operation(rotation; antiunitary = true)
+    _,
+    antiunitary_table,
+    antiunitary_identity=RESPONSE_GROUP_FOUNDATION.finite_symmetry_group_tables(
+        [identity, antiunitary];
+        seitz = true,
+        tolerance = 1e-8,
+    )
+    @test antiunitary_table==[1 2; 2 1]
+    @test antiunitary_identity==1
+    incomplete=response_group_test_operation(rotation; translation = [1/3, 0.0, 0.0])
+    @test_throws ErrorException RESPONSE_GROUP_FOUNDATION.finite_symmetry_group_tables(
+        [identity, incomplete];
+        seitz = true,
+        tolerance = 1e-8,
+    )
+    @test_throws ErrorException RESPONSE_GROUP_FOUNDATION.finite_symmetry_group_tables(
+        typeof(identity)[];
+        seitz = true,
+        tolerance = 1e-8,
+    )
+end

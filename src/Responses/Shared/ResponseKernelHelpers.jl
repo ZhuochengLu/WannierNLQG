@@ -473,6 +473,26 @@ function compute_geometric_loop_shifted_overlaps!(
     return nothing
 end
 
+# Multiply complete endpoint velocities and the actual overlap without a half factor.
+# Caller-owned insertion storage must not alias either velocity or the overlap.
+function _geometric_velocity_insertions_blas!(
+    insertions,
+    left_velocity,
+    right_velocity,
+    overlap,
+    directions,
+)
+    @views for direction in directions
+        mul!(insertions[:, :, direction], left_velocity[:, :, direction], overlap)
+        mul!(insertions[:, :, direction], overlap, right_velocity[:, :, direction], 1.0, 1.0)
+    end
+    return insertions
+end
+
+# Full-V finite-q PDSC uses dense products at medium/large finite-model size.
+# Ordinary optical-commutator consumers and small models retain scalar ordering.
+const _GEOMETRIC_FULL_V_BLAS_MIN_ORBITALS = 64
+
 """
 Fill shifted valence-to-conduction insertions `V_valence * overlap_2 + overlap_2 * V_conduction` for requested Cartesian directions.
 
@@ -483,19 +503,35 @@ function compute_geometric_loop_third_insertions!(
     valence_shift::GeometricLoopMatrixData,
     conduction_shift::GeometricLoopMatrixData,
     overlap_2::AbstractMatrix{ComplexF64},
-    directions,
+    directions;
+    valence_velocity_vertices = nothing,
+    conduction_velocity_vertices = nothing,
+    use_blas::Bool = false,
 )
     num_orbitals = valence_shift.num_orbitals
+    valence_velocity =
+        valence_velocity_vertices === nothing ? valence_shift.velocity_vertices :
+        valence_velocity_vertices
+    conduction_velocity =
+        conduction_velocity_vertices === nothing ? conduction_shift.velocity_vertices :
+        conduction_velocity_vertices
+    use_blas && return _geometric_velocity_insertions_blas!(
+        insertions,
+        valence_velocity,
+        conduction_velocity,
+        overlap_2,
+        directions,
+    )
     @inbounds for direction in directions
         for valence_band in 1:num_orbitals
             for conduction_band in 1:num_orbitals
                 total = COMPLEX_ZERO
                 for orbital in 1:num_orbitals
                     total +=
-                        valence_shift.velocity_vertices[valence_band, orbital, direction] *
+                        valence_velocity[valence_band, orbital, direction] *
                         overlap_2[orbital, conduction_band] +
                         overlap_2[valence_band, orbital] *
-                        conduction_shift.velocity_vertices[orbital, conduction_band, direction]
+                        conduction_velocity[orbital, conduction_band, direction]
                 end
                 insertions[valence_band, conduction_band, direction] = total
             end
@@ -514,19 +550,35 @@ function compute_geometric_loop_second_insertions!(
     valence_central::GeometricLoopMatrixData,
     conduction_central::GeometricLoopMatrixData,
     overlap_4::AbstractMatrix{ComplexF64},
-    directions,
+    directions;
+    valence_velocity_vertices = nothing,
+    conduction_velocity_vertices = nothing,
+    use_blas::Bool = false,
 )
     num_orbitals = valence_central.num_orbitals
+    valence_velocity =
+        valence_velocity_vertices === nothing ? valence_central.velocity_vertices :
+        valence_velocity_vertices
+    conduction_velocity =
+        conduction_velocity_vertices === nothing ? conduction_central.velocity_vertices :
+        conduction_velocity_vertices
+    use_blas && return _geometric_velocity_insertions_blas!(
+        insertions,
+        conduction_velocity,
+        valence_velocity,
+        overlap_4,
+        directions,
+    )
     @inbounds for direction in directions
         for conduction_band in 1:num_orbitals
             for valence_band in 1:num_orbitals
                 total = COMPLEX_ZERO
                 for orbital in 1:num_orbitals
                     total +=
-                        conduction_central.velocity_vertices[conduction_band, orbital, direction] *
+                        conduction_velocity[conduction_band, orbital, direction] *
                         overlap_4[orbital, valence_band] +
                         overlap_4[conduction_band, orbital] *
-                        valence_central.velocity_vertices[orbital, valence_band, direction]
+                        valence_velocity[orbital, valence_band, direction]
                 end
                 insertions[conduction_band, valence_band, direction] = total
             end

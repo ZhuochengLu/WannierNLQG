@@ -57,7 +57,7 @@ $$
 \widetilde C_{ab}=C_{ab}-A_aB_b-B_a^\dagger A_b+A_aHA_b.
 $$
 
-After rotating all operators to the common orbital frame, form $p=U_{\rm occ}U_{\rm occ}^\dagger$, $q=1-p$, $h=U\operatorname{diag}(E)U^\dagger$, and $Z_a=q(D_ap)p$. Its cross-block matrix elements are **unregularized**:
+After rotating all operators to the common orbital frame, form $p=U_{\rm occ}U_{\rm occ}^\dagger$, $q=1-p$, $h=U\operatorname{diag}(E)U^\dagger$, and $Z_a=q(D_ap)p$. The exact zero-width reference has cross-block matrix elements:
 
 $$
 (U^\dagger Z_aU)_{mn}=\frac{V^a_{mn}}{E_n-E_m},\quad m\notin p,\ n\in p;
@@ -86,7 +86,7 @@ $a,b$ are Cartesian directions and $i$ follows `yz, zx, xy`; $n,m$ denote Hamilt
 
 ## 5. Applicability, limits, and qualification
 
-- At $T=0$, a Fermi energy exactly on an eigenvalue is rejected (`ORBITAL_FERMI_SURFACE_POINT_UNRESOLVED`); no half-filled block is invented.
+- At $T=0$, a chemical potential exactly at a spectral interval boundary uses the symmetric average of the two complete occupied-subspace responses. No fractional density matrix is inserted as a projector.
 - Exact degeneracies belong to one occupied block. Near but distinct energies are not silently merged. A material result requires common source, gauge, frame, operator-window, and thermal-tail evidence.
 - Raw uIu finite differences and derivatives of an interpolated connection can differ on a coarse source mesh. Source-neighbor order, center phases, and discretization must be audited before comparison.
 - The Projector trace above includes this project's **external-completion generalization**. Its implementation identity alone does not establish material convergence or production eligibility.
@@ -106,3 +106,98 @@ $a,b$ are Cartesian directions and $i$ follows `yz, zx, xy`; $n,m$ denote Hamilt
 2. D. Xiao, M.-C. Chang, and Q. Niu, “Berry phase effects on electronic properties,” *Rev. Mod. Phys.* **82**, 1959–2007 (2010). [DOI](https://doi.org/10.1103/RevModPhys.82.1959)
 
 See the [input and output contract](../docs/LINEAR_AND_ORBITAL_RESPONSES.md). Cite the release's Projector external-completion equations as project implementation rather than misattributing them to Ref. 1.
+
+
+## 8. Positive-width complete-velocity prescription
+
+The normal and expert OM response entries use one finite, strictly positive
+`denominator_regularization` in eV, default **0.001 eV**. An expert metric geometry
+already carrying an explicitly planned positive width retains that width when no
+override is supplied. Normal tasks always pass their own resolved value explicitly.
+Zero, negative, NaN and infinite values are unsupported for OM. There is no
+bare fallback or width inferred from the entries of a position matrix.
+
+Let $\mathcal V^a=\hbar v^a$ be the complete physical velocity vertex in eV Angstrom,
+$p$ a complete occupied spectral projector and $q=1-p$. The new internal tangent is
+
+$$
+(Z_{a,\eta})_{mn}=\mathcal V^a_{mn}
+\frac{E_n-E_m}{(E_n-E_m)^2+\eta^2},\qquad m\in q,\ n\in p.
+$$
+
+It minimizes $\|[H,Z]+q\mathcal V^ap\|_F^2+\eta^2\|Z\|_F^2$ under $Z=qZp$.
+Thus $\|Z_{a,\eta}\|_F\le\|q\mathcal V^ap\|_F/(2\eta)$, and the construction is
+unitarily covariant in a common physical orthonormal representation. No giant
+Kronecker matrix is assembled in production: the existing robust scalar inverse
+fills the band-frame connection
+
+$$
+(r^{\rm OM}_{a,\eta})_{mn}=-i\mathcal V^a_{mn}
+\frac{E_m-E_n}{(E_m-E_n)^2+\eta^2}.
+$$
+
+Conventional uses this connection in Sec. 2, while Projector uses
+$Z=-iqr^{\rm OM}_{\eta}p$ in the independent Sec. 3 traces. Both use the same
+width and external completion. The supplied shared Berry connection is not
+modified. The generic position buffer $i\Delta r_\eta$ is not a substitute for
+complete $\mathcal V$.
+
+For orthogonal input, write $G_a=U^\dagger(\partial_aH^W)U$,
+$D_\eta=-G_a\Delta/(\Delta^2+\eta^2)$ and
+$w=\eta^2/(\Delta^2+\eta^2)$. The OM connection is
+$(1-w)\odot A+iD_\eta$, whereas the previous generic connection is $A+iD_\eta$.
+Simply preserving that old Conventional connection while regularizing the
+Projector inverse would define two different finite-width methods. Both OM
+methods now change together; finite-width values need not equal old outputs.
+
+For nonorthogonal input, $C^\dagger SC=I$. The existing matrices are
+$G_S=C^\dagger S_aC$, $B=C^\dagger(r_a+iS_a)C$,
+$A_{\rm eff}=B-iG_S/2$ and
+$N_{mn}=(C^\dagger H_aC)_{mn}-(E_m+E_n)(G_S)_{mn}/2$.
+They give $\mathcal V_{mn}=N_{mn}+i(E_m-E_n)(A_{\rm eff})_{mn}$.
+The symmetric coefficient in $N$ is a generalized-eigenproblem identity; actual
+energies and occupation boundaries are not averaged. The same complete-velocity
+OM prescription applies in the S-normalized band frame. Nonorthogonal Projector
+and material-completion support remain unsupported; Euclidean $CC^\dagger$ is
+not introduced as a metric projector.
+
+`gap_tolerance` is no longer an OM input or diagnostic control. Any explicit
+value, including one inherited from `[response.numerics]`, reports that OM does
+not support this parameter. Other responses and generic exact spectral tools
+retain their existing controls. OM retains only the existing machine-precision
+recognition of numerical equal-energy blocks, with no refusal for a small
+nonzero interblock gap and no merging of physically split levels.
+
+## 9. Zero-temperature spectral boundary
+
+For an existing spectral interval boundary $E_*$, let $p_-$ exclude its whole
+numerical equal-energy block and $p_+=p_-+P_*$. At $\mu=E_*$ define
+
+$$
+M(E_*)=\tfrac12\big[M_{p_-}(\mu=E_*)+M_{p_+}(\mu=E_*)\big].
+$$
+
+Both branches are evaluated analytically at the same chemical potential; no
+$\mu\pm\epsilon$, energy averaging or arbitrary half-block band selection is
+used. Each branch is an idempotent projector. In particular,
+$p_-+P_*/2$ is not inserted into formulas requiring a projector.
+For interval boundaries $b_j$, the zero-T weights are
+$w_j=f(b_j;\mu,0)-f(b_{j+1};\mu,0)$ with $f(\mu;\mu,0)=1/2$ and
+$m_j=\mu w_j$. The two adjacent intervals have weights $1/2$ and first moments
+$\mu/2$. Away from a boundary these are the original 0/1 interval weights.
+A numerical block member that is not itself an interval boundary creates no
+additional artificial occupation jump. Every positive temperature retains the
+existing analytic thermal convolution without a small-T switch.
+
+This is the fixed-$\mu$, fixed-positive-$\eta$, $T\to0^+$ convention. It is not a
+claim about all canonical fixed-particle-number fillings or joint $T,\eta\to0$
+limits. The full original k-point quadrature weight is retained while two
+response branches are averaged. Exact hits have finite weight on a finite grid;
+flat bands or many such nodes can make the convention consequential. This does
+not establish mesh or material convergence.
+
+The finite-width tangent is a numerical regularization inside the supplied
+Wannier space, not the exact $\partial P$ or a new disorder/self-energy model.
+External-completion operators and their source/window qualification remain
+unchanged; there is no uniform full-Hilbert-space eta claim. Exact-width
+identities in Secs. 2--3 remain the positive-$\eta\to0$ reference.

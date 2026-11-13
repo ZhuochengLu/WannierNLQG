@@ -1,3 +1,16 @@
+"""Select the source-aware provider for admitted uniform full-BZ models."""
+function response_fourier_grid(cfg, model, legacy_builder, nkdiv, nkfft)
+    model isa AnalyticKModel &&
+        return nothing, "analytic callback has no real-space Fourier coefficient provider"
+    if model isa NonorthogonalLocalizedModel
+        cfg.integration_bounds === nothing &&
+        cfg.integration_algorithm isa UniformIntegration &&
+        all(spec -> spec.calculation == :integral, normalize_task_specs(cfg)) || return nothing,
+        "localized FFT/Mixed requires uniform full-BZ Integral; other nodes use Direct"
+    end
+    return legacy_builder(nkdiv, nkfft)
+end
+
 const FOURIER_MEMORY_SAFETY_FACTOR = 1.20
 
 const FOURIER_CAPABILITY_LABELS = (
@@ -17,6 +30,7 @@ const FOURIER_CAPABILITY_LABELS = (
     (:spin_times_position, SPIN_TIMES_POSITION),
     (:spin_times_hamiltonian_position, SPIN_TIMES_HAMILTONIAN_POSITION),
     (:spin_velocity, SPIN_VELOCITY),
+    (:optical_cutoff_vertices, OPTICAL_CUTOFF_VERTICES),
 )
 
 const FourierOffsetSignature = Tuple{NTuple{3, Int}, Int}
@@ -102,6 +116,19 @@ end
 Enumerate the exact shifted k-points required by one task.
 """
 function fourier_task_offset_signatures(cfg::EffectiveTaskConfig, spec::NormalizedTaskSpec)
+    if spec.quantity in BERRY_MULTIPOLE_QUANTITIES
+        offsets = Set{FourierOffsetSignature}([((0, 0, 0), 0)])
+        settings = something(cfg.berry_multipole)
+        if cfg.derivative_backend == :finite_difference
+            fourier_push_axis_offsets!(offsets, 3)
+            settings.local_derivative_order == 2 && fourier_push_second_offsets!(offsets, 3)
+        end
+        return offsets
+    end
+    if cfg.derivative_backend == :analytic &&
+       spec.quantity in (:berry_curvature_dipole, :berry_curvature_quadrupole)
+        return Set{FourierOffsetSignature}([((0, 0, 0), 0)])
+    end
     definition = task_definition(spec.quantity, spec.method, spec.calculation)
     definition === nothing && error("Missing TaskDefinition for $(spec.label).")
     policy = definition.fourier_policy
@@ -139,6 +166,10 @@ function fourier_task_offset_signatures(cfg::EffectiveTaskConfig, spec::Normaliz
     end
 
     if finite_q
+        # Raw A for the optical q link is evaluated at its center, not either endpoint.
+        push!(offsets, ((0, 0, 0), 0))
+        spec.quantity == :photon_drag_shift_current &&
+            fourier_push_axis_offsets!(offsets, spatial_dimension, 0)
         for photon_half_steps in (-1, 1)
             push!(offsets, ((0, 0, 0), photon_half_steps))
             spec.quantity == :photon_drag_shift_current &&
@@ -199,7 +230,11 @@ function fourier_task_offset_graph(
 )
     graph = Dict{FourierOffsetSignature, Vector{Symbol}}()
     for offset in fourier_task_offset_signatures(cfg, spec)
-        layout = MixedFourierLayout(fourier_reduced_offset_plan(cfg, spec, offset, provider_plan))
+        reduced_plan = fourier_reduced_offset_plan(cfg, spec, offset, provider_plan)
+        layout =
+            cfg.native_model_input isa NonorthogonalLocalizedInput ?
+            MixedFourierLayout(reduced_plan, cfg.native_model_input.model) :
+            MixedFourierLayout(reduced_plan)
         graph[offset] = copy(layout.groups)
     end
     return graph
@@ -253,7 +288,7 @@ Estimate resident Mixed-FFT buffers for the exact union offset graph.
 function fourier_offset_memory_estimate(
     grid::MixedFourierGrid,
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     group_offset_counts::Vector{NamedTuple},
 )
     base =
@@ -261,6 +296,7 @@ function fourier_offset_memory_estimate(
     bytes_by_group = Dict(item.group => item.bytes for item in base.group_bytes)
     raw_bytes =
         sum(get(bytes_by_group, item.group, 0) * item.offset_count for item in group_offset_counts)
+    raw_bytes = WorkspacePlanning.checked_sum_bytes((raw_bytes, base.fixed_scratch_bytes))
     return ceil(Int, FOURIER_MEMORY_SAFETY_FACTOR * raw_bytes)
 end
 
@@ -316,7 +352,7 @@ end
 
 # Estimate Direct work from representative k points and raw components.
 function _response_symmetry_direct_cost(
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     workspace::MatrixElementWorkspace,
     evaluation_kpoint_count::Int,
     response_component_workload::Int,
@@ -330,7 +366,7 @@ end
 # Estimate Mixed-FFT work from occupied blocks and response workload.
 function _response_symmetry_mixed_cost(
     grid::MixedFourierGrid,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     workspace::MatrixElementWorkspace,
     evaluation_kpoint_indices::Vector{Int},
     response_component_workload::Int,
@@ -358,7 +394,7 @@ end
 function build_fourier_execution_plan(
     cfg::EffectiveTaskConfig,
     specs::Vector{NormalizedTaskSpec},
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     workspace::MatrixElementWorkspace,
     ranks::Int,
     workers::Int,
@@ -386,6 +422,19 @@ function build_fourier_execution_plan(
     direct_cost =
         symmetry_workload_enabled ?
         _response_symmetry_direct_cost(model, workspace, evaluation_count, component_workload) : 0.0
+    if cfg.integration_bounds !== nothing || cfg.integration_algorithm isa HAdaptiveCubature
+        backend==:mixed && throw(
+            ArgumentError("KRegion/adaptive nodes support Direct evaluation; use direct or auto"),
+        )
+        return _direct_fourier_execution_plan(
+            task_signatures;
+            factor_source = cfg.integration_bounds!==nothing ? :region_direct : :adaptive_direct,
+            symmetry_workload_enabled,
+            evaluation_kpoint_count = evaluation_count,
+            response_component_workload = component_workload,
+            auto_direct_cost_estimate = direct_cost,
+        )
+    end
     if backend == :direct || (auto_requested && cfg.NKdiv === nothing && cfg.NKFFT === nothing)
         factor_source = auto_requested ? :auto_direct_no_factors : :not_applicable
         return _direct_fourier_execution_plan(
@@ -399,8 +448,9 @@ function build_fourier_execution_plan(
     end
 
     workers > 0 || error("Julia worker count must be positive; got $(workers).")
-    grid, reason = grid_builder(cfg.NKdiv, cfg.NKFFT)
+    grid, reason = response_fourier_grid(cfg, model, grid_builder, cfg.NKdiv, cfg.NKFFT)
     if grid === nothing
+        auto_requested && @warn "Requested Auto Fourier evaluation uses effective Direct" reason
         auto_requested && return _direct_fourier_execution_plan(
             task_signatures;
             factor_source = :auto_fallback_grid,

@@ -54,7 +54,7 @@ function _align_wilson_source_internal_connection!(
     ws::WilsonLoopResponseWorkspace,
     ::IdentityWilsonFrameConnector,
     wannier_centers_fractional::Matrix{Float64},
-    model::TightBindingModel,
+    model::AbstractResponseModel,
 )
     return ws.source_internal_connection
 end
@@ -64,7 +64,7 @@ function _align_wilson_source_internal_connection!(
     ws::WilsonLoopResponseWorkspace,
     ::WannierCenterWilsonFrameConnector,
     wannier_centers_fractional::Matrix{Float64},
-    model::TightBindingModel,
+    model::AbstractResponseModel,
 )
     eigenvectors = ws.central_data.spectrum.source_eigenvectors
     eigenvectors_adjoint = ws.central_data.spectrum.source_eigenvectors_adjoint
@@ -92,20 +92,15 @@ end
 function _prepare_wilson_source_internal_connection!(
     ws::WilsonLoopResponseWorkspace,
     wannier_centers_fractional::Matrix{Float64},
-    model::TightBindingModel,
+    model::AbstractResponseModel,
 )
     data = ws.central_data
-    source_connection = data.source_gauge_berry_connection
-    source_hamiltonian_derivatives = data.source_gauge_hamiltonian_derivatives
-    inverse_energy_differences = data.inverse_energy_differences
-    output = ws.source_internal_connection
-    @inbounds for direction in axes(output, 3), column in axes(output, 2), row in axes(output, 1)
-        output[row, column, direction] =
-            source_connection[row, column, direction] +
-            1.0im *
-            source_hamiltonian_derivatives[row, column, direction] *
-            inverse_energy_differences[row, column]
-    end
+    MatrixElements.raw_position_connections!(
+        ws.source_internal_connection,
+        data.common;
+        source_gauge = true,
+        scratch = ws.scratch.matrix_elements.scratch.matrix_temporary,
+    )
     return _align_wilson_source_internal_connection!(
         ws,
         ws.frame_connector,
@@ -376,7 +371,7 @@ function prepare_wilson_loop_response_cache!(
     kpoint::Vector{Float64},
     finite_difference_vectors::Matrix{Float64},
     wannier_centers_fractional::Matrix{Float64},
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     spatial_dimension::Int64;
     denominator_regularization::Float64,
     degeneracy_threshold::Float64,
@@ -392,7 +387,7 @@ function prepare_wilson_loop_response_cache!(
         denominator_regularization,
         spatial_dimension,
     )
-    mark_degenerate_groups!(central_data, degeneracy_threshold)
+    MatrixElements.mark_wilson_response_groups!(central_data, degeneracy_threshold)
     all(isfinite, wannier_centers_fractional) ||
         error("Wilson Wannier centers contain non-finite fractional coordinates.")
     size(wannier_centers_fractional) == (3, central_data.num_orbitals) || throw(

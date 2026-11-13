@@ -1,4 +1,4 @@
-const RESPONSE_W90_QUALIFICATION_SCHEMA = "wanniernlqg.response-symmetry-qualification/1.0"
+const RESPONSE_SYMMETRY_QUALIFICATION_SCHEMA = "wanniernlqg.response-symmetry-qualification/1.0"
 
 # Convert a JSON number matrix without accepting ragged or non-finite input.
 function _response_qualification_matrix(value, ::Type{T}, name::AbstractString) where {T}
@@ -268,8 +268,12 @@ function _response_hamiltonian_covariance(
     absolute_tolerance::Float64,
     relative_tolerance::Float64,
 )
-    hamiltonian =
-        _gauge_aware_r_to_q(model.hamiltonian_r, model.r_vectors, model.r_degeneracies, chk.kpt_red)
+    hamiltonian = _response_qualification_r_to_q(
+        model.hamiltonian_r,
+        model.r_vectors,
+        model.r_degeneracies,
+        chk.kpt_red,
+    )
     maximum_absolute = 0.0
     maximum_mixed_ratio = 0.0
     spectral_square_sum = 0.0
@@ -332,7 +336,8 @@ function _response_mmn_covariance(
     kpoint_map::Matrix{Int};
     tolerance::Float64,
 )
-    edge_map = _gauge_aware_edge_map(chk, mmn, kpoint_map, operations; tolerance = 1.0e-8)
+    edge_map =
+        _response_qualification_edge_map(chk, mmn, kpoint_map, operations; tolerance = 1.0e-8)
     maximum_absolute = 0.0
     maximum_relative = 0.0
     worst = Dict{String, Any}()
@@ -524,7 +529,7 @@ function _response_qualification_apply_downstream_evidence!(
 end
 
 """
-Qualify one complete-contract artifact against the declared Wannier90 gauge chain.
+Qualify one complete-contract artifact against the declared Wannier gauge chain.
 
 The AMN band sewing is exactly
 `A(gk) * D_g(k) / A(k)^(*)`; the final Wannier sewing is
@@ -532,7 +537,7 @@ The AMN band sewing is exactly
 TB symmetrization is applied. Formal downstream gates stop after the first
 failure; optional diagnostic continuation is kept in a separate lane.
 """
-function qualify_response_symmetry_wannier90(
+function qualify_response_symmetry_wannier_frame(
     artifact_file::AbstractString;
     win_file::AbstractString,
     amn_file::AbstractString,
@@ -587,12 +592,11 @@ function qualify_response_symmetry_wannier90(
 
     payload = JSON3.read(read(artifact_path, String), Dict{String, Any})
     get(payload, "schema", nothing) in
-    (RESPONSE_SYMMETRY_ARTIFACT_SCHEMA, "wanniernlqg.response-symmetry/1.1") || throw(
-        ArgumentError("Wannier90 qualification requires a complete-contract response artifact"),
-    )
+    (RESPONSE_SYMMETRY_ARTIFACT_SCHEMA, "wanniernlqg.response-symmetry/1.1") ||
+        throw(ArgumentError("Wannier qualification requires a complete-contract response artifact"))
     artifact = read_response_symmetry_artifact(artifact_path)
     artifact.cartesian_rotation_policy == "group_invariant_metric" ||
-        throw(ArgumentError("Wannier90 qualification requires group-invariant effective rotations"))
+        throw(ArgumentError("Wannier qualification requires group-invariant effective rotations"))
     structure_pass = _response_qualification_structure_pass(payload)
     operations = _response_qualification_operations(payload)
     win = read_wannier_win(paths["win"])
@@ -626,7 +630,7 @@ function qualify_response_symmetry_wannier90(
     )
     formal_gates = Dict{String, Any}(
         "structure_magnetic_symmetry" => Dict("status" => structure_pass ? "PASS" : "FAIL"),
-        "wannier90_gauge" => Dict(
+        "wannier_frame" => Dict(
             "status" =>
                 structure_pass ? (dimension_pass ? "PENDING" : "FAIL") :
                 "NOT_RUN_DOWNSTREAM_BLOCKED",
@@ -693,7 +697,7 @@ function qualify_response_symmetry_wannier90(
             "worst_unitarity" => actual.worst_unitarity,
             "worst_group_law" => worst_group,
         )
-        formal_gates["wannier90_gauge"] = sewing_evidence
+        formal_gates["wannier_frame"] = sewing_evidence
 
         if sewing_pass
             hamiltonian_evidence = _response_hamiltonian_covariance(
@@ -764,7 +768,7 @@ function qualify_response_symmetry_wannier90(
     )
     required_gate_names = (
         "structure_magnetic_symmetry",
-        "wannier90_gauge",
+        "wannier_frame",
         "hamiltonian_covariance",
         "mmn_covariance",
         "integrand_covariance",
@@ -788,7 +792,7 @@ function qualify_response_symmetry_wannier90(
     )
 
     result = Dict{String, Any}(
-        "schema" => RESPONSE_W90_QUALIFICATION_SCHEMA,
+        "schema" => RESPONSE_SYMMETRY_QUALIFICATION_SCHEMA,
         "generated_at_utc" =>
             Dates.format(Dates.now(Dates.UTC), dateformat"yyyy-mm-ddTHH:MM:SSZ"),
         "artifact" => Dict(
@@ -803,7 +807,7 @@ function qualify_response_symmetry_wannier90(
         "antiunitary_operation_count" => count(operation -> operation.antiunitary, operations),
         "thresholds" => thresholds,
         "formal_gates" => formal_gates,
-        "wannier90_gauge" => sewing_evidence,
+        "wannier_frame" => sewing_evidence,
         "hamiltonian_covariance" => hamiltonian_evidence,
         "mmn_covariance" => mmn_evidence,
         "diagnostic_continue" => diagnostic_continue,
@@ -818,13 +822,13 @@ function qualify_response_symmetry_wannier90(
     if qualified_artifact_file !== nothing
         qualified_payload = deepcopy(payload)
         qualified_provenance = qualified_payload["provenance"]
-        qualified_provenance["wannier90_inputs"] = input_hashes
+        qualified_provenance["wannier_inputs"] = input_hashes
         qualification = qualified_payload["qualification"]
         qualification["status"] = overall_status
         qualification["engineering_status"] = "QUALIFICATION_EXECUTED"
         qualification["production_eligible"] = production_eligible
         qualification["gates"] = formal_gates
-        qualification["wannier90_gauge"] = sewing_evidence
+        qualification["wannier_frame"] = sewing_evidence
         qualification["diagnostic_lane"] = diagnostic_lane
         integrand_payload = Dict{String, Any}(deepcopy(formal_gates["integrand_covariance"]))
         get!(integrand_payload, "maximum_relative_residual", nothing)

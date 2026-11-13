@@ -10,8 +10,11 @@ function _effective_window_band_count(band_window_size::Int, num_orbitals::Int)
     return band_window_size
 end
 
-# Construct a logical integral grid from two or three counts, fixing the third coordinate at zero for two-dimensional meshes.
-function _integral_k_grid(k_mesh::Union{NTuple{2, Int}, NTuple{3, Int}})
+# Construct a logical integral grid from one, two, or three counts, fixing inactive coordinates at zero.
+function _integral_k_grid(k_mesh::Union{NTuple{1, Int}, NTuple{2, Int}, NTuple{3, Int}})
+    if length(k_mesh) == 1
+        return IntegralKGrid(k_mesh[1], 1, 1, true)
+    end
     if length(k_mesh) == 2
         nk1, nk2 = k_mesh
         return IntegralKGrid(nk1, nk2, 1, true)
@@ -71,6 +74,15 @@ function fourier_execution_summary(
         String[string(group) for group in first(active_stats).groups]
     summary = (
         backend = plan.backend,
+        requested_backend = normalized_fourier_backend(cfg),
+        effective_backend = plan.backend,
+        requested_domain_nodes = prod(cfg.k_mesh),
+        computation_grid_nodes = grid===nothing ? nothing : prod(grid.mesh),
+        domain_index_mapping = cfg.integration_bounds===nothing ? "original periodic grid" :
+                               cfg.integration_algorithm isa UniformIntegration &&
+                               cfg.integration_algorithm.region_quadrature == :left_endpoint ?
+                               "Cartesian left endpoint evaluated directly" :
+                               "Cartesian midpoint evaluated directly",
         NKdiv = grid === nothing ? nothing : grid.nkdiv,
         NKFFT = grid === nothing ? nothing : grid.nkfft,
         factor_source = plan.factor_source,
@@ -91,6 +103,19 @@ function fourier_execution_summary(
                         maximum(stat.cache_entries for stat in active_stats),
         allocated_bytes = isempty(active_stats) ? 0 :
                           sum(stat.allocated_bytes for stat in active_stats),
+        current_allocated_bytes = isempty(active_stats) ? 0 :
+                                  sum(stat.current_allocated_bytes for stat in active_stats),
+        peak_allocated_bytes = isempty(active_stats) ? 0 :
+                               sum(stat.peak_allocated_bytes for stat in active_stats),
+        buffer_allocations = isempty(active_stats) ? 0 :
+                             sum(stat.buffer_allocations for stat in active_stats),
+        plan_builds = isempty(active_stats) ? 0 : sum(stat.plan_builds for stat in active_stats),
+        buffer_allocation_seconds = isempty(active_stats) ? 0.0 :
+                                    sum(stat.buffer_allocation_seconds for stat in active_stats),
+        plan_build_seconds = isempty(active_stats) ? 0.0 :
+                             sum(stat.plan_build_seconds for stat in active_stats),
+        repack_seconds = isempty(active_stats) ? 0.0 :
+                         sum(stat.repack_seconds for stat in active_stats),
         allocated_memory_limit_bytes = isempty(active_stats) ? 0 :
                                        sum(stat.memory_limit_bytes for stat in active_stats),
         pack_seconds = isempty(active_stats) ? 0.0 :
@@ -207,11 +232,15 @@ Include native source-gauge storage only when a consuming policy needs it, prese
 function bundle_matrix_element_plan(
     specs::Vector{NormalizedTaskSpec},
     cfg::EffectiveTaskConfig,
-    tensor_indices::Union{Nothing, AbstractVector{<:Integer}} = nothing,
+    tensor_indices::Union{Nothing, AbstractVector{<:Integer}} = nothing;
+    curvature_curl_only::Bool = false,
 )
     capabilities = MatrixElementKind[SPECTRUM]
     push_unique_capability!(kind) = kind in capabilities || push!(capabilities, kind)
-    directions = MatrixElementDirectionRequirements(cfg.spatial_dimension)
+    # Intrinsic Hall geometry is Cartesian 3D; integration measure remains independently d-dimensional.
+    matrix_dimension =
+        any(spec -> spec.quantity == :intrinsic_ahc, specs) ? 3 : cfg.spatial_dimension
+    directions = MatrixElementDirectionRequirements(matrix_dimension)
     source_gauge_required = any(specs) do spec
         definition = task_definition(spec.quantity, spec.method, spec.calculation)
         definition === nothing && error("Missing TaskDefinition for $(spec.label).")
@@ -233,11 +262,26 @@ function bundle_matrix_element_plan(
         policy = definition.matrix_policy
         if policy == MATRIX_SPECTRUM
             nothing
-        elseif policy in (
-            MATRIX_LINEAR_TRANSPORT,
-            MATRIX_LINEAR_OPTICAL_RESPONSE,
-            MATRIX_ORBITAL_MAGNETIZATION,
-        )
+        elseif policy == MATRIX_BERRY_MULTIPOLE_DC
+            settings = something(cfg.berry_multipole)
+            tensor_plan = berry_multipole_tensor_plan(settings)
+            for kind in (HAMILTONIAN_DERIVATIVES, BERRY_CONNECTION, WANNIER_CURVATURE)
+                push_unique_capability!(kind)
+            end
+            for component in tensor_plan.moment_components
+                a, b = component[1:2]
+                directions = require_matrix_element_axes(directions, BERRY_CONNECTION, (a, b))
+                directions = require_matrix_element_pairs(directions, WANNIER_CURVATURE, ((a, b),))
+                if settings.parameters.integral_form == :fermi_surface
+                    directions = require_matrix_element_axes(
+                        directions,
+                        HAMILTONIAN_DERIVATIVES,
+                        component[3:end],
+                    )
+                end
+            end
+        elseif policy == MATRIX_INTRINSIC_AHC
+            # Raw complete first jets and ambient curvature, not regularized r_eta.
             for kind in (HAMILTONIAN_DERIVATIVES, INTERNAL_CONNECTION, WANNIER_CURVATURE)
                 push_unique_capability!(kind)
             end
@@ -251,19 +295,78 @@ function bundle_matrix_element_plan(
                     [(a, b) for a in 1:3 for b in 1:3],
                 )
             end
-        elseif policy == MATRIX_SECOND_HARMONIC
+        elseif policy in (
+            MATRIX_LINEAR_TRANSPORT,
+            MATRIX_LINEAR_OPTICAL_RESPONSE,
+            MATRIX_ORBITAL_MAGNETIZATION,
+        )
             for kind in
-                (BERRY_CONNECTION, INTERNAL_CONNECTION_DERIVATIVES, HAMILTONIAN_SECOND_DERIVATIVES)
+                (HAMILTONIAN_DERIVATIVES, INTERNAL_CONNECTION, BERRY_CONNECTION, WANNIER_CURVATURE)
                 push_unique_capability!(kind)
             end
             for kind in
-                (BERRY_CONNECTION, INTERNAL_CONNECTION, HAMILTONIAN_DERIVATIVES, GAUGE_CORRECTION)
+                (HAMILTONIAN_DERIVATIVES, INTERNAL_CONNECTION, WANNIER_POSITION, BERRY_CONNECTION)
+                directions=require_matrix_element_axes(directions, kind, (1, 2, 3))
+            end
+            for kind in (WANNIER_CURVATURE, INTERNAL_CONNECTION_DERIVATIVES)
+                directions=require_matrix_element_pairs(
+                    directions,
+                    kind,
+                    [(a, b) for a in 1:3 for b in 1:3],
+                )
+            end
+            # All metric spectral consumers use the prepared physical velocity.
+            if cfg.native_model_input isa NonorthogonalLocalizedInput
+                for kind in (BERRY_CONNECTION, VELOCITY_VERTICES)
+                    push_unique_capability!(kind)
+                    directions=require_matrix_element_axes(directions, kind, (1, 2, 3))
+                end
+            end
+        elseif policy in (MATRIX_SECOND_HARMONIC, MATRIX_JERK_CURRENT, MATRIX_THIRD_HARMONIC)
+            # Orthogonal nonlinear kernels build their explicit D/r roles from h/A.
+            # Metric SHG additionally requests the optional normalized cutoff source jet.
+            metric_shg =
+                policy == MATRIX_SECOND_HARMONIC &&
+                cfg.native_model_input isa NonorthogonalLocalizedInput
+            nonlinear_kinds =
+                metric_shg ?
+                (
+                    BERRY_CONNECTION,
+                    INTERNAL_CONNECTION_DERIVATIVES,
+                    HAMILTONIAN_SECOND_DERIVATIVES,
+                ) :
+                (
+                    HAMILTONIAN_DERIVATIVES,
+                    INTERNAL_CONNECTION,
+                    INTERNAL_CONNECTION_DERIVATIVES,
+                    HAMILTONIAN_SECOND_DERIVATIVES,
+                )
+            for kind in nonlinear_kinds
+                push_unique_capability!(kind)
+            end
+            vertex_kinds =
+                metric_shg ?
+                (BERRY_CONNECTION, INTERNAL_CONNECTION, HAMILTONIAN_DERIVATIVES, GAUGE_CORRECTION) :
+                (INTERNAL_CONNECTION, HAMILTONIAN_DERIVATIVES)
+            for kind in vertex_kinds
                 directions = require_matrix_element_axes(directions, kind, (1, 2, 3))
             end
             for kind in (INTERNAL_CONNECTION_DERIVATIVES, HAMILTONIAN_SECOND_DERIVATIVES)
                 directions = require_matrix_element_pairs(
                     directions,
                     kind,
+                    [(a, b) for a in 1:3 for b in 1:3],
+                )
+            end
+            if policy == MATRIX_SECOND_HARMONIC &&
+               cfg.native_model_input isa NonorthogonalLocalizedInput
+                for kind in (VELOCITY_VERTICES, WANNIER_CURVATURE, OPTICAL_CUTOFF_VERTICES)
+                    push_unique_capability!(kind)
+                end
+                directions=require_matrix_element_axes(directions, VELOCITY_VERTICES, (1, 2, 3))
+                directions=require_matrix_element_pairs(
+                    directions,
+                    WANNIER_CURVATURE,
                     [(a, b) for a in 1:3 for b in 1:3],
                 )
             end
@@ -374,12 +477,26 @@ function bundle_matrix_element_plan(
                 directions = require_matrix_element_axes(directions, SPIN, (beta,))
             end
         elseif policy == MATRIX_PHOTON_DRAG_INJECTION_CURRENT
-            push_unique_capability!(VELOCITY_VERTICES)
+            # Complete V consumes raw A and h for both full and component plans.
+            push_unique_capability!(INTERNAL_CONNECTION)
             push_unique_capability!(HAMILTONIAN_DERIVATIVES)
+            if tensor_indices === nothing
+                directions = require_matrix_element_axes(
+                    directions,
+                    INTERNAL_CONNECTION,
+                    1:cfg.spatial_dimension,
+                )
+                directions = require_matrix_element_axes(
+                    directions,
+                    HAMILTONIAN_DERIVATIVES,
+                    1:cfg.spatial_dimension,
+                )
+            end
             if tensor_indices !== nothing
                 a, b, c = tensor_indices
-                directions = require_matrix_element_axes(directions, VELOCITY_VERTICES, (b, c))
-                directions = require_matrix_element_axes(directions, HAMILTONIAN_DERIVATIVES, (a,))
+                directions = require_matrix_element_axes(directions, INTERNAL_CONNECTION, (b, c))
+                directions =
+                    require_matrix_element_axes(directions, HAMILTONIAN_DERIVATIVES, (a, b, c))
             end
         elseif policy in (
             MATRIX_CONVENTIONAL_QUANTUM_METRIC,
@@ -412,47 +529,104 @@ function bundle_matrix_element_plan(
                 directions =
                     require_matrix_element_pairs(directions, INTERNAL_CONNECTION_DERIVATIVES, pairs)
             end
+        elseif policy == MATRIX_GEOMETRIC_SHIFT_CURRENT_FINITE_Q && tensor_indices === nothing
+            # Complete-V finite-q PDSC uses raw external A and first H derivatives.
+            # Other Geometric/Wilson formulas retain their own r requirements.
+            push_unique_capability!(INTERNAL_CONNECTION)
+            push_unique_capability!(HAMILTONIAN_DERIVATIVES)
+            directions = require_matrix_element_axes(
+                directions,
+                INTERNAL_CONNECTION,
+                1:cfg.spatial_dimension,
+            )
+            directions = require_matrix_element_axes(
+                directions,
+                HAMILTONIAN_DERIVATIVES,
+                1:cfg.spatial_dimension,
+            )
         elseif policy in (
             MATRIX_GEOMETRIC_SHIFT_CURRENT_Q0,
             MATRIX_GEOMETRIC_SHIFT_CURRENT_FINITE_Q,
             MATRIX_GEOMETRIC_QHC,
             MATRIX_GEOMETRIC_SHIFT_VECTOR,
+            MATRIX_WILSON_SHIFT_CURRENT,
+            MATRIX_WILSON_QHC,
+            MATRIX_WILSON_SHIFT_VECTOR,
         )
-            loop_kind = VELOCITY_VERTICES
-            push_unique_capability!(loop_kind)
-            if tensor_indices !== nothing
-                _, b, c = tensor_indices
-                directions = require_matrix_element_axes(directions, loop_kind, (b, c))
-            end
-        elseif policy in
-               (MATRIX_WILSON_SHIFT_CURRENT, MATRIX_WILSON_QHC, MATRIX_WILSON_SHIFT_VECTOR)
-            push_unique_capability!(BERRY_CONNECTION)
-            if tensor_indices !== nothing
-                _, b, c = tensor_indices
-                directions = require_matrix_element_axes(directions, BERRY_CONNECTION, (b, c))
+            # Bare loop readers construct D0/r0 and their optical velocity on demand.
+            # This does not select the complete-V finite-q photon-drag role.
+            for kind in (HAMILTONIAN_DERIVATIVES, INTERNAL_CONNECTION)
+                push_unique_capability!(kind)
+                if tensor_indices !== nothing
+                    _, b, c = tensor_indices
+                    directions = require_matrix_element_axes(directions, kind, (b, c))
+                end
             end
         else
             error("No matrix capability assembly for policy=$(policy).")
         end
     end
 
+    if any(
+        spec -> spec.quantity in (:photon_drag_injection_current, :photon_drag_shift_current),
+        specs,
+    )
+        momenta =
+            cfg.photon_momentum_path === nothing ? (cfg.photon_momentum,) :
+            cfg.photon_momentum_path.photon_momenta
+        if tensor_indices !== nothing &&
+           any(spec -> spec.quantity == :photon_drag_shift_current, specs)
+            # The unchanged p-covariant derivative also consumes raw A along its derivative axis.
+            directions =
+                require_matrix_element_axes(directions, INTERNAL_CONNECTION, (tensor_indices[1],))
+        end
+    end
     request = MatrixElementRequest(
         capabilities...;
-        spatial_dimension = cfg.spatial_dimension,
+        spatial_dimension = matrix_dimension,
+        denominator_regularization = cfg.denominator_regularization,
+        degeneracy_threshold = cfg.degeneracy_threshold,
+    )
+    # A full response requests the original response-dimensional channel set.
+    # Extra raw-A channels for optical q must not enlarge response derivatives.
+    tensor_indices === nothing && (directions = compile_matrix_plan(request).direction_requirements)
+    if cfg.native_model_input === nothing && any(
+        spec -> spec.quantity in (:photon_drag_injection_current, :photon_drag_shift_current),
+        specs,
+    )
+        momenta =
+            cfg.photon_momentum_path === nothing ? (cfg.photon_momentum,) :
+            cfg.photon_momentum_path.photon_momenta
+        q_axes = Tuple(d for d in 1:3 if any(q -> !iszero(q[d]), momenta))
+        if !isempty(q_axes)
+            directions = MatrixElements.extend_matrix_element_directions(
+                directions,
+                max(cfg.spatial_dimension, maximum(q_axes)),
+            )
+            directions = require_matrix_element_axes(directions, INTERNAL_CONNECTION, q_axes)
+            push_unique_capability!(INTERNAL_CONNECTION)
+        end
+    end
+    request = MatrixElementRequest(
+        capabilities...;
+        spatial_dimension = directions.spatial_dimension,
         denominator_regularization = cfg.denominator_regularization,
         degeneracy_threshold = cfg.degeneracy_threshold,
     )
     convention = normalize_wannier_center_convention(cfg.wannier_center_convention)
-    return tensor_indices === nothing ?
-           compile_matrix_plan(
-        request;
-        source_gauge_required,
-        wannier_center_convention = convention,
-    ) :
-           compile_matrix_plan(
+    return compile_matrix_plan(
         request,
         directions;
         source_gauge_required,
         wannier_center_convention = convention,
+        curvature_curl_only,
+        orthogonal_geometry_components = any(
+            spec -> spec.quantity in BERRY_MULTIPOLE_QUANTITIES,
+            specs,
+        ) ? berry_multipole_geometry_components(cfg) :
+                                         cfg.derivative_backend == :analytic && any(
+            spec -> spec.quantity in (:berry_curvature_dipole, :berry_curvature_quadrupole),
+            specs,
+        ) ? (Tuple(Int.(cfg.tensor_indices)),) : (),
     )
 end

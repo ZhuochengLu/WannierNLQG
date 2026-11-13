@@ -1,0 +1,20 @@
+# Template: supply one consistent native calculation; not a material qualification.
+workflow = "symmetrization"
+mode = "projection"
+
+[source]
+kind = "vasp"
+poscar_file = "inputs/POSCAR"
+outcar_file = "inputs/OUTCAR"
+
+[basis]
+projections = ["Si:s", "Si:p"]
+
+[model]
+tb_file = "inputs/seed_tb.dat"
+wannier_center_policy = "symmetrize"
+real_space_replica_policy = "minimum_distance"
+
+[output]
+tb_file = "results/seed_tb.dat"
+packed_file = "results/seed.h5"

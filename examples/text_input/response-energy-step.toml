@@ -1,0 +1,27 @@
+# Synthetic public input; paths are relative to this file.
+[model]
+source = "wannier"
+model_file = "../fixtures/synthetic_runtime/synthetic_tb.dat"
+
+[response]
+photon_energy_min_ev = 0.0
+photon_energy_max_ev = 1.0
+photon_energy_step_ev = 0.3
+fermi_energy_ev = 0.0
+temperature_k = 0.0
+
+[response.sampling]
+kind = "bz_mesh"
+k_mesh = [1, 1, 1]
+spatial_dimension = 3
+
+[response.execution]
+fourier_backend = "direct"
+
+[response.tasks.sc]
+kind = "SC"
+method = "Conventional"
+
+[output]
+output_root = "results/energy-step"
+progress_enabled = false

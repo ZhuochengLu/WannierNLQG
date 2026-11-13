@@ -34,7 +34,7 @@ function build_config(;
                 quantity = "BCQK",
                 method = "Conventional",
                 physics = GeometryParameters(),
-                numerics = GeometryNumerics(
+                numerics = Numerics(
                     denominator_regularization = 0.001,
                     finite_difference_step = 0.0001,
                 ),

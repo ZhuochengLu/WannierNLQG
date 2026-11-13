@@ -3,7 +3,7 @@
 
 Select one basis-wide radial Fourier--Bessel transform. The compatibility
 backend reproduces the fixed mixed-grid, trapezoidal, not-a-knot numerical
-contract used for WannierBerri parity. The high-precision backend evaluates the
+compatibility contract. The high-precision backend evaluates the
 same radial integral with a configurable Gauss--Laguerre rule and does not pass
 through the compatibility tabulation or spline. A projection basis owns one
 such convention, so specs cannot silently mix radial algorithms.
@@ -16,10 +16,10 @@ struct ProjectionRadialTransformConfig
         method::Symbol = :gauss_laguerre_high_precision,
         gauss_laguerre_order::Integer = 64,
     )
-        method in (:wannierberri_compatible, :gauss_laguerre_high_precision) || throw(
+        method in (:mixed_grid_cubic, :gauss_laguerre_high_precision) || throw(
             ArgumentError(
                 "projection radial transform method must be " *
-                ":wannierberri_compatible or :gauss_laguerre_high_precision",
+                ":mixed_grid_cubic or :gauss_laguerre_high_precision",
             ),
         )
         order = Int(gauss_laguerre_order)
@@ -31,7 +31,7 @@ end
 # Return the complete selected algorithm contract for hashing and provenance.
 function projection_radial_transform_contract(config::ProjectionRadialTransformConfig)
     common = (contract_version = "1.0", method = config.method)
-    if config.method == :wannierberri_compatible
+    if config.method == :mixed_grid_cubic
         return merge(
             common,
             (
@@ -65,7 +65,7 @@ end
 """
     ProjectionSpec(; selector, orbital_sets, positions=nothing, local_bases=I, indices=nothing)
 
-High-level declaration of one ordered group of Wannier90-style projections.
+High-level declaration of one ordered group of Wannier-style projections.
 `positions` is a `3 x num_centers` fractional column matrix. When it is
 omitted, the basis expander resolves `selector` against an explicit
 `CrystalStructure`. `orbital_sets` accepts one string or an ordered tuple of
@@ -245,5 +245,29 @@ function WannierProjectionBasis(
         num_wannier,
         tolerance,
         radial_transform,
+    )
+end
+
+"""Expose every ordered projection input without a numerical digest or array copy.
+
+The caller owns any persistence/framing. Local bases, fractional centers, orbital
+labels, spin convention and explicit orbital numbering remain mathematical input.
+"""
+function projection_basis_input_values(basis::WannierProjectionBasis)
+    return (
+        schema = "wanniernlqg.projection-basis-input/1",
+        num_wannier = basis.num_wannier,
+        spinor = basis.spinor,
+        radial_transform = projection_radial_transform_contract(basis.radial_transform),
+        blocks = [
+            (
+                selector = block.selector,
+                orbital_set = block.orbital_set,
+                positions_fractional = block.positions_fractional,
+                indices = block.indices,
+                local_bases = block.local_bases,
+                spinor = block.spinor,
+            ) for block in basis.blocks
+        ],
     )
 end

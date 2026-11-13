@@ -15,11 +15,11 @@ function build_config(input_root::AbstractString, output_root::AbstractString)
     )
     return W.WannierUIUGenerationConfig(
         source = source,
-        topology_file = joinpath(input_root, "wannier90.mmn"),
-        oracle_mmn_file = joinpath(input_root, "wannier90.mmn"),
-        output_file = joinpath(output_root, "wannier90.uIu"),
+        topology_file = joinpath(input_root, "wannier.mmn"),
+        oracle_mmn_file = joinpath(input_root, "wannier.mmn"),
+        output_file = joinpath(output_root, "wannier.uIu"),
         scratch_directory = joinpath(output_root, "scratch"),
-        provenance_json = joinpath(output_root, "wannier90.uIu.provenance.json"),
+        provenance_json = joinpath(output_root, "wannier.uIu.provenance.json"),
         resume = true,
         overwrite = false,
         require_mmn_oracle = true,

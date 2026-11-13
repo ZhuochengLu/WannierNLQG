@@ -8,7 +8,6 @@ function _assemble_solver_terminal_result(state::NamedTuple)
         retained_disentanglement_nonconverged,
         diagnostics,
         effective_compatibility_policy,
-        fixed_stationary,
         frames,
         frozen_indices,
         full_constraint_scope,
@@ -28,7 +27,25 @@ function _assemble_solver_terminal_result(state::NamedTuple)
         z_stability_count,
         z_steps,
     ) = state
-    fixed_stationary || push!(
+    zero_optimization =
+        state.effective_controls.objectives !== nothing &&
+        state.effective_controls.objectives.dis_num_iter == 0 &&
+        state.effective_controls.objectives.num_iter == 0
+    retained_converged =
+        state.effective_controls.objectives !== nothing && state.optimizer_phase == :completed
+    terminal_status =
+        zero_optimization ? COMPLETED_WITH_WARNINGS :
+        retained_converged ? (retained_disentanglement_nonconverged ? MAX_ITERATIONS : COMPLETED) :
+        MAX_ITERATIONS
+    zero_optimization && push!(
+        diagnostics,
+        WannierizationDiagnostic(
+            :OPTIMIZATION_SKIPPED,
+            :info,
+            "both optimization stages explicitly skipped; initialized state retained",
+        ),
+    )
+    (zero_optimization || retained_converged) || push!(
         diagnostics,
         WannierizationDiagnostic(
             :MAX_ITERATIONS_REACHED,
@@ -36,31 +53,11 @@ function _assemble_solver_terminal_result(state::NamedTuple)
             apply_symmetry ?
             "SAWF iteration reached max_iterations without the requested convergence criterion" :
             "ordinary full-BZ Wannierization reached max_iterations without convergence";
-            context = Dict("max_iterations" => string(config.solver.max_iterations)),
+            context = Dict(
+                "max_iterations" => string(state.effective_controls.total_iteration_budget),
+            ),
         ),
     )
-    if config.solver.acceleration.schedule == :joint &&
-       z_stability_count < config.solver.acceleration.z_stability_window
-        input_summary["disentanglement_convergence"] = "NONCONVERGED_RETAINED"
-        input_summary["z_seal_class"] = "NONCONVERGED_RETAINED"
-        push!(
-            diagnostics,
-            WannierizationDiagnostic(
-                :JOINT_Z_NONCONVERGED_STANDARD,
-                :warning,
-                "joint iteration retained a structurally valid diagnostic state without a qualified Z seal";
-                context = Dict(
-                    "z_steps" => string(z_steps),
-                    "z_stability_count" => string(z_stability_count),
-                    "required_stability_count" =>
-                        string(config.solver.acceleration.z_stability_window),
-                ),
-            ),
-        )
-    elseif config.solver.acceleration.schedule == :joint
-        input_summary["disentanglement_convergence"] = "CONVERGED"
-        input_summary["z_seal_class"] = "CONVERGED"
-    end
     final_projector_diagnostic =
         apply_symmetry ?
         _selected_projector_compatibility_diagnostic(
@@ -73,8 +70,8 @@ function _assemble_solver_terminal_result(state::NamedTuple)
         ) : nothing
     final_projector_diagnostic === nothing || push!(
         diagnostics,
-        config.input.construction_policy == :standard &&
-            final_projector_diagnostic.code == :ANTIUNITARY_PROJECTOR_COVARIANCE_FAILED ?
+        final_projector_diagnostic.code == :ANTIUNITARY_PROJECTOR_COVARIANCE_FAILED &&
+            _construction_compatibility_quality_failure(final_projector_diagnostic) ?
         _construction_quality_diagnostic(final_projector_diagnostic, "final_projector") :
         final_projector_diagnostic,
     )
@@ -100,14 +97,9 @@ function _assemble_solver_terminal_result(state::NamedTuple)
             projector_covariance_tolerance,
             apply_symmetry;
             construction_policy = config.input.construction_policy,
+            terminal_retained_state = true,
         )
-        accepted_state_tb_ready =
-            terminal_qualification.qualified &&
-            (
-                config.input.construction_policy == :standard ||
-                final_projector_diagnostic === nothing
-            ) &&
-            (config.input.construction_policy == :standard || u_steps > 0)
+        accepted_state_tb_ready = terminal_qualification.qualified
         input_summary["localization_convergence"] =
             get(input_summary, "localization_convergence", "IN_PROGRESS") == "IN_PROGRESS" ?
             "MAX_ITERATIONS" : input_summary["localization_convergence"]
@@ -115,7 +107,7 @@ function _assemble_solver_terminal_result(state::NamedTuple)
             diagnostics,
             WannierizationDiagnostic(
                 accepted_state_tb_ready ? :NONCONVERGED_DISENTANGLEMENT_ACCEPTED_STATE_TB_READY :
-                :NONCONVERGED_DISENTANGLEMENT_DIAGNOSTIC_TB_REJECTED,
+                :NONCONVERGED_DISENTANGLEMENT_RETAINED_STATE_INVALID,
                 accepted_state_tb_ready ? :warning : :error,
                 accepted_state_tb_ready ?
                 "localization retained a finite invariant-valid terminal state after nonconverged disentanglement; standard TB export is allowed" :
@@ -130,7 +122,7 @@ function _assemble_solver_terminal_result(state::NamedTuple)
     end
     _record_terminal_state!(
         input_summary,
-        MAX_ITERATIONS,
+        terminal_status,
         diagnostics,
         history,
         something(latest_restart_state).iteration,
@@ -150,7 +142,7 @@ function _assemble_solver_terminal_result(state::NamedTuple)
         v_matrix,
     )
     return WannierizationResult(
-        MAX_ITERATIONS,
+        terminal_status,
         v_matrix,
         centers,
         spreads,
@@ -170,11 +162,9 @@ function _finish_solver_iteration(state::NamedTuple)
     (;
         actual_u_mix_ratio,
         actual_z_mix_ratio,
-        amn_sha256,
-        anderson_residual_history,
-        anderson_z_history,
+
         apply_symmetry,
-        basis_sha256,
+
         best_polar_centers,
         best_polar_frames,
         best_polar_objective,
@@ -182,7 +172,7 @@ function _finish_solver_iteration(state::NamedTuple)
         centers,
         compatibility,
         config,
-        config_sha256,
+
         convergence_values,
         retained_disentanglement_nonconverged,
         diagnostics,
@@ -190,24 +180,11 @@ function _finish_solver_iteration(state::NamedTuple)
         effective_algorithms,
         effective_compatibility_policy,
         epoch,
-        fixed_complete,
-        fixed_mode,
-        fixed_source_qualified,
-        fixed_stability_count,
-        fixed_stationary,
-        fixed_stationary_count,
         frames,
         frozen_indices,
         full_constraint_scope,
         gradient_fallback_active,
         gradient_steps,
-        grassmann_actual_decrease_history,
-        grassmann_gradient_history,
-        grassmann_predicted_decrease_history,
-        grassmann_projector_change_history,
-        grassmann_radius_history,
-        grassmann_ratio_history,
-        grassmann_trust_radius,
         history,
         improvement_streak,
         included_bands,
@@ -261,44 +238,22 @@ function _finish_solver_iteration(state::NamedTuple)
         stencil,
         tangent_plans,
         total_spread_window_std,
-        trajectory_previous_frames,
-        trajectory_two_step_frames,
         two_stage_complete,
         u_active_orbit_count,
         u_branch_signature,
         u_cg_iteration,
         u_cg_restart_count,
         u_generalized_gradient_rms,
-        u_lbfgs_restart_count,
-        u_lbfgs_rho_history,
-        u_lbfgs_s_history,
-        u_lbfgs_y_history,
         u_stability_count,
         u_steps,
-        wannier90_reference_omega_i,
-        wannier90_reference_overlaps,
-        wannier90_reference_unitaries,
+        recursive_localization_omega_i,
+        recursive_localization_overlaps,
+        recursive_localization_unitaries,
         weights,
         z_previous,
         z_stability_count,
         z_steps,
     ) = state
-    if fixed_stationary
-        push!(
-            diagnostics,
-            WannierizationDiagnostic(
-                :SYMMETRY_PROJECTED_STATIONARY,
-                :warning,
-                "projected gradient is stationary but the spread window has not converged";
-                context = Dict(
-                    "gradient_rms" => string(result.gradient_rms),
-                    "u_residual" => string(result.u_residual),
-                    "spread_window_standard_deviation" => string(total_spread_window_std),
-                ),
-            ),
-        )
-        return SolverIterationDecision(true, state)
-    end
     stage_stop_reason === nothing || begin
         push!(
             diagnostics,
@@ -316,14 +271,10 @@ function _finish_solver_iteration(state::NamedTuple)
         return SolverIterationDecision(true, state)
     end
     solver_converged =
-        fixed_mode ? fixed_complete :
         config.solver.acceleration.schedule == :two_stage ? two_stage_complete :
-        z_stability_count >= config.solver.acceleration.z_stability_window &&
-        u_stability_count >= config.solver.convergence_window
+        z_stability_count >= state.effective_controls.accepted_disentanglement_window &&
+        u_stability_count >= max(2, state.effective_controls.objectives.conv_window)
     if solver_converged
-        if fixed_mode
-            input_summary["localization_convergence"] = "CONVERGED"
-        end
         final_projector_diagnostic =
             apply_symmetry ?
             _selected_projector_compatibility_diagnostic(
@@ -336,14 +287,14 @@ function _finish_solver_iteration(state::NamedTuple)
             ) : nothing
         final_projector_diagnostic === nothing || push!(
             diagnostics,
-            config.input.construction_policy == :standard &&
-                final_projector_diagnostic.code == :ANTIUNITARY_PROJECTOR_COVARIANCE_FAILED ?
+            final_projector_diagnostic.code == :ANTIUNITARY_PROJECTOR_COVARIANCE_FAILED &&
+                _construction_compatibility_quality_failure(final_projector_diagnostic) ?
             _construction_quality_diagnostic(final_projector_diagnostic, "final_projector") :
             final_projector_diagnostic,
         )
         if final_projector_diagnostic !== nothing && !(
-            config.input.construction_policy == :standard &&
-            final_projector_diagnostic.code == :ANTIUNITARY_PROJECTOR_COVARIANCE_FAILED
+            final_projector_diagnostic.code == :ANTIUNITARY_PROJECTOR_COVARIANCE_FAILED &&
+            _construction_compatibility_quality_failure(final_projector_diagnostic)
         )
             return _failure_result(
                 REPRESENTATION_INCOMPATIBLE,
@@ -390,24 +341,29 @@ function _finish_solver_iteration(state::NamedTuple)
                 projector_covariance_tolerance,
                 apply_symmetry;
                 construction_policy = config.input.construction_policy,
+                terminal_retained_state = true,
             ) : nothing
         accepted_state_tb_ready =
-            diagnostic_qualification !== nothing &&
-            something(diagnostic_qualification).qualified &&
-            (config.input.construction_policy == :standard || u_steps > 0)
+            diagnostic_qualification !== nothing && something(diagnostic_qualification).qualified
         if retained_disentanglement_nonconverged
-            input_summary["localization_convergence"] = "CONVERGED"
+            input_summary["localization_convergence"] =
+                state.effective_controls.objectives.num_iter == 0 ? "SKIPPED_ZERO_STEPS" :
+                "CONVERGED"
             input_summary["failure_class"] = "NUMERICAL_B"
             push!(
                 diagnostics,
                 WannierizationDiagnostic(
                     accepted_state_tb_ready ?
                     :NONCONVERGED_DISENTANGLEMENT_ACCEPTED_STATE_TB_READY :
-                    :NONCONVERGED_DISENTANGLEMENT_DIAGNOSTIC_TB_REJECTED,
+                    :NONCONVERGED_DISENTANGLEMENT_RETAINED_STATE_INVALID,
                     accepted_state_tb_ready ? :warning : :error,
                     accepted_state_tb_ready ?
-                    "localization converged from a structurally qualified but nonconverged disentanglement projector; standard TB export is allowed" :
-                    "the nonconverged disentanglement trajectory did not retain an exportable diagnostic localization state";
+                    (
+                        state.effective_controls.objectives.num_iter == 0 ?
+                        "localization initialization completed without optimization from a structurally qualified but nonconverged disentanglement projector; standard TB export is allowed" :
+                        "localization converged from a structurally qualified but nonconverged disentanglement projector; standard TB export is allowed"
+                    ) :
+                    "the nonconverged disentanglement trajectory did not retain an exportable accepted localization state";
                     context = Dict(
                         "localization_steps" => string(u_steps),
                         "structural_gate_pass" => string(
@@ -464,13 +420,12 @@ function _finish_solver_iteration(state::NamedTuple)
     return SolverIterationDecision(
         false,
         (;
+            effective_controls = state.effective_controls,
             actual_u_mix_ratio,
             actual_z_mix_ratio,
-            amn_sha256,
-            anderson_residual_history,
-            anderson_z_history,
+
             apply_symmetry,
-            basis_sha256,
+
             best_polar_centers,
             best_polar_frames,
             best_polar_objective,
@@ -478,7 +433,7 @@ function _finish_solver_iteration(state::NamedTuple)
             centers,
             compatibility,
             config,
-            config_sha256,
+
             convergence_values,
             retained_disentanglement_nonconverged,
             diagnostics,
@@ -486,24 +441,11 @@ function _finish_solver_iteration(state::NamedTuple)
             effective_algorithms,
             effective_compatibility_policy,
             epoch,
-            fixed_complete,
-            fixed_mode,
-            fixed_source_qualified,
-            fixed_stability_count,
-            fixed_stationary,
-            fixed_stationary_count,
             frames,
             frozen_indices,
             full_constraint_scope,
             gradient_fallback_active,
             gradient_steps,
-            grassmann_actual_decrease_history,
-            grassmann_gradient_history,
-            grassmann_predicted_decrease_history,
-            grassmann_projector_change_history,
-            grassmann_radius_history,
-            grassmann_ratio_history,
-            grassmann_trust_radius,
             history,
             improvement_streak,
             included_bands,
@@ -554,23 +496,17 @@ function _finish_solver_iteration(state::NamedTuple)
             started_ns,
             stencil,
             tangent_plans,
-            trajectory_previous_frames,
-            trajectory_two_step_frames,
             two_stage_complete,
             u_active_orbit_count,
             u_branch_signature,
             u_cg_iteration,
             u_cg_restart_count,
             u_generalized_gradient_rms,
-            u_lbfgs_restart_count,
-            u_lbfgs_rho_history,
-            u_lbfgs_s_history,
-            u_lbfgs_y_history,
             u_stability_count,
             u_steps,
-            wannier90_reference_omega_i,
-            wannier90_reference_overlaps,
-            wannier90_reference_unitaries,
+            recursive_localization_omega_i,
+            recursive_localization_overlaps,
+            recursive_localization_unitaries,
             weights,
             z_previous,
             z_stability_count,

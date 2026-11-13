@@ -1,0 +1,17 @@
+workflow = "mesh_screening"
+
+[structure]
+lattice_angstrom = [[2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 2.0]]
+species = ["Si"]
+positions_fractional = [[0.0, 0.0, 0.0]]
+
+[kmesh]
+dimensions = [2, 2, 2]
+offset_grid_steps = [0.0, 0.0, 0.0]
+
+[mesh_screening]
+density_target = 5.0
+search_radius = 2
+
+[output]
+report_json_file = "results/mesh.json"

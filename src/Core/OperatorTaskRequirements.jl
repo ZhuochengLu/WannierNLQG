@@ -142,7 +142,7 @@ const _OPERATOR_TASK_SPIN_CURRENT_OPERATORS = (
     REAL_SPACE_SPIN_TIMES_HAMILTONIAN_POSITION,
 )
 
-# Projector geometry rows: the exact full derivative-overlap tensor is required.
+# Projector geometry rows: the complete uIu derivative-overlap tensor is required.
 const _OPERATOR_TASK_PROJECTOR_GEOMETRY_OPERATORS =
     (REAL_SPACE_HAMILTONIAN, REAL_SPACE_POSITION, REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR)
 
@@ -169,6 +169,16 @@ weighted operators that Runtime adds for the physical (non-`defined_finite_model
 input semantics.
 """
 const OPERATOR_TASK_REQUIREMENTS = (
+    _operator_task_requirement(
+        :berry_curvature_dipole_conductivity,
+        :conventional,
+        _OPERATOR_TASK_SPECTRUM_OPERATORS,
+    ),
+    _operator_task_requirement(
+        :berry_curvature_quadrupole_conductivity,
+        :conventional,
+        _OPERATOR_TASK_SPECTRUM_OPERATORS,
+    ),
     _operator_task_requirement(:band_structure, :conventional, _OPERATOR_TASK_SPECTRUM_OPERATORS),
     _operator_task_requirement(:berry_curvature, :conventional, _OPERATOR_TASK_SPECTRUM_OPERATORS),
     _operator_task_requirement(
@@ -216,6 +226,8 @@ const OPERATOR_TASK_REQUIREMENTS = (
         :projector,
         _OPERATOR_TASK_SPECTRUM_OPERATORS,
     ),
+    _operator_task_requirement(:intrinsic_ahc, :conventional, _OPERATOR_TASK_SPECTRUM_OPERATORS),
+    _operator_task_requirement(:intrinsic_ahc, :projector, _OPERATOR_TASK_SPECTRUM_OPERATORS),
     _operator_task_requirement(:linear_transport, :conventional, _OPERATOR_TASK_SPECTRUM_OPERATORS),
     _operator_task_requirement(:linear_transport, :projector, _OPERATOR_TASK_SPECTRUM_OPERATORS),
     _operator_task_requirement(
@@ -241,16 +253,11 @@ const OPERATOR_TASK_REQUIREMENTS = (
     _operator_task_requirement(
         :quantum_christoffel_symbol,
         :conventional,
-        _OPERATOR_TASK_SPECTRUM_OPERATORS,
+        _OPERATOR_TASK_PROJECTOR_GEOMETRY_OPERATORS,
     ),
     _operator_task_requirement(
         :quantum_hermitian_connection,
         :conventional,
-        _OPERATOR_TASK_SPECTRUM_OPERATORS,
-    ),
-    _operator_task_requirement(
-        :quantum_hermitian_connection,
-        :geometric_loop,
         _OPERATOR_TASK_SPECTRUM_OPERATORS,
     ),
     _operator_task_requirement(
@@ -263,14 +270,24 @@ const OPERATOR_TASK_REQUIREMENTS = (
         :wilson_loop,
         _OPERATOR_TASK_SPECTRUM_OPERATORS,
     ),
-    _operator_task_requirement(:quantum_metric, :conventional, _OPERATOR_TASK_SPECTRUM_OPERATORS),
+    _operator_task_requirement(
+        :quantum_metric,
+        :conventional,
+        _OPERATOR_TASK_PROJECTOR_GEOMETRY_OPERATORS,
+    ),
     _operator_task_requirement(
         :quantum_metric_dipole,
         :conventional,
-        _OPERATOR_TASK_SPECTRUM_OPERATORS,
+        _OPERATOR_TASK_PROJECTOR_GEOMETRY_OPERATORS,
     ),
     _operator_task_requirement(
         :quantum_metric_quadrupole,
+        :conventional,
+        _OPERATOR_TASK_PROJECTOR_GEOMETRY_OPERATORS,
+    ),
+    _operator_task_requirement(:jerk_current, :conventional, _OPERATOR_TASK_SPECTRUM_OPERATORS),
+    _operator_task_requirement(
+        :third_harmonic_generation,
         :conventional,
         _OPERATOR_TASK_SPECTRUM_OPERATORS,
     ),
@@ -417,6 +434,7 @@ requires the five OAM operators.
 function resolve_operator_requirements(
     operator_tasks;
     orbital_input_semantics::Symbol = :unspecified,
+    content_authentication::Bool = true,
 )
     entries = OperatorTask[_normalize_operator_task(task) for task in operator_tasks]
     isempty(entries) && throw(
@@ -479,7 +497,9 @@ function resolve_operator_requirements(
         required_operators = required_operators,
         required_sources = required_sources,
         registry_version = OPERATOR_REQUIREMENT_REGISTRY_VERSION,
-        selection_sha256 = _operator_selection_digest(tasks, required_operators, required_sources),
+        selection_sha256 = content_authentication ?
+                           _operator_selection_digest(tasks, required_operators, required_sources) :
+                           nothing,
     )
 end
 

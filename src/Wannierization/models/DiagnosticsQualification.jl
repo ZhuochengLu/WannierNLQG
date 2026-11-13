@@ -1,19 +1,8 @@
-# Hash the fully expanded target basis, including its local gauge and numbering.
-function _projection_basis_sha256(basis::WannierProjection.WannierProjectionBasis)
+# Complete basis values retain local gauge and numbering without a fingerprint.
+function _projection_basis_definition(basis::WannierProjection.WannierProjectionBasis)
     buffer = IOBuffer()
-    write(buffer, reinterpret(UInt8, Int64[basis.num_wannier, Int(basis.spinor)]))
-    write(
-        buffer,
-        repr(WannierProjection.projection_radial_transform_contract(basis.radial_transform)),
-        '\n',
-    )
-    for block in basis.blocks
-        write(buffer, block.selector, '\0', block.orbital_set, '\0')
-        write(buffer, reinterpret(UInt8, vec(block.positions_fractional)))
-        write(buffer, reinterpret(UInt8, Int64.(vec(block.indices))))
-        write(buffer, reinterpret(UInt8, vec(block.local_bases)))
-    end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    IO.write_native_definition_value(buffer, WannierProjection.projection_basis_input_values(basis))
+    return bytes2hex(take!(buffer))
 end
 
 # Store durable files without changing the numerical solver status.
@@ -23,7 +12,7 @@ Base.@kwdef struct WannierizationArtifacts
     validated_checkpoint_hdf5::Union{Nothing, String} = nothing
     wannierization_log::Union{Nothing, String} = nothing
     packed_hdf5::Union{Nothing, String} = nothing
-    wannier90_tb::Union{Nothing, String} = nothing
+    model_tb::Union{Nothing, String} = nothing
     tb_symmetry_json::Union{Nothing, String} = nothing
 end
 
@@ -48,14 +37,15 @@ struct WannierizationDiagnostic
 end
 
 const TB_SYMMETRY_QUALIFICATION_SCHEMA = "WannierNLQG.tb_symmetry_qualification"
-const TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION = "1.7"
+const TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION = "2.0"
 const TB_TARGET_LEAKAGE_WEIGHT_SEMANTICS = "physical_paw_s_leakage_weight_v1"
 const TB_TARGET_LEAKAGE_WEIGHT_FORMULAS =
     "W_state=max_i(R' S R)_ii;W_reconstruction=lambda_max(R' S R);" *
     "W_T_to_C=opnorm(B_CT,2)^2;W_C_to_T=opnorm(B_TC,2)^2;" *
     "rows=target;columns=source"
-const TB_TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256 =
-    bytes2hex(SHA.sha256(codeunits(TB_TARGET_LEAKAGE_WEIGHT_FORMULAS)))
+const TB_TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION = TB_TARGET_LEAKAGE_WEIGHT_FORMULAS
+# Retained protocol literal for unrelated shared legacy bundle consumers; never computed.
+const TB_TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256 = "bac0eb8b0df105c221d0e5a253be1890ac7933e51c776bf9aa760fb91362a3b7"
 const TB_TARGET_LEAKAGE_MAXIMUM_THRESHOLD = 5.0e-6
 
 """One auditable scalar in the final exported-TB symmetry qualification."""
@@ -98,122 +88,16 @@ struct TBSymmetryMetric
     end
 end
 
-# Hash typed scalar fields instead of serializer-dependent JSON or HDF5 byte layouts.
-function tb_symmetry_payload_sha256(
-    overall,
-    reason,
-    metrics;
-    schema_version::AbstractString = TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION,
-    authoritative_hamiltonian::AbstractString = "native_dft",
-    authoritative_hamiltonian_sha256::AbstractString = "LEGACY_NATIVE_DFT",
-    energy_shift_qualification::AbstractString = "legacy_energy_shift_hard_gate",
-    maximum_energy_shift_audit_reference_ev::AbstractString = "NOT_APPLICABLE",
-    rms_energy_shift_audit_reference_ev::AbstractString = "NOT_APPLICABLE",
-    target_energy_shift_audit_status::AbstractString = "NOT_APPLICABLE",
-    symmetrized_parent_energy_shift_audit_status::AbstractString = "NOT_APPLICABLE",
-    residual_gate_phase::AbstractString = "legacy_pre_symmetrization",
-    raw_preflight_diagnostic_status::AbstractString = "NOT_APPLICABLE",
-    native_difference_qualification::AbstractString = "legacy_hard_gate",
-    native_difference_audit_status::AbstractString = "NOT_APPLICABLE",
-    qualification_scope::AbstractString = "full_parent",
-    target_anchor::AbstractString = "NOT_APPLICABLE",
-    target_complement_completion::AbstractString = "NOT_APPLICABLE",
-    target_complement_max_element_ev::AbstractString = "NOT_APPLICABLE",
-    auxiliary_parent_qualification::AbstractString = "legacy_hard_gate",
-    symmetrized_target_subspace_status::AbstractString = "NOT_APPLICABLE",
-    auxiliary_parent_audit_status::AbstractString = "NOT_APPLICABLE",
-    target_scope_production_eligible::Bool = false,
-    target_leakage_semantics::AbstractString = "NOT_APPLICABLE",
-    target_leakage_formula_sha256::AbstractString = "NOT_RECORDED",
-    target_leakage_threshold::Union{Nothing, Real} = nothing,
-    scoped_production_eligible::Bool = false,
-    global_production_eligible::Bool = false,
-)
-    authority_value =
-        SymmetryFoundation.validate_authoritative_hamiltonian_key(authoritative_hamiltonian)
-    buffer = IOBuffer()
-    write(buffer, TB_SYMMETRY_QUALIFICATION_SCHEMA, '\0')
-    write(buffer, String(schema_version), '\0')
-    write(buffer, String(overall), '\0', String(reason), '\0')
-    if schema_version in ("1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7")
-        write(
-            buffer,
-            authority_value,
-            '\0',
-            String(authoritative_hamiltonian_sha256),
-            '\0',
-            scoped_production_eligible ? "true" : "false",
-            '\0',
-            global_production_eligible ? "true" : "false",
-            '\0',
-        )
-    end
-    if schema_version in ("1.2", "1.3", "1.4", "1.5", "1.6", "1.7")
-        for value in (
-            energy_shift_qualification,
-            maximum_energy_shift_audit_reference_ev,
-            rms_energy_shift_audit_reference_ev,
-            target_energy_shift_audit_status,
-            symmetrized_parent_energy_shift_audit_status,
-        )
-            write(buffer, String(value), '\0')
-        end
-    end
-    if schema_version in ("1.3", "1.4", "1.5", "1.6", "1.7")
-        write(buffer, String(residual_gate_phase), '\0')
-        write(buffer, String(raw_preflight_diagnostic_status), '\0')
-    end
-    if schema_version in ("1.4", "1.5", "1.6", "1.7")
-        write(buffer, String(native_difference_qualification), '\0')
-        write(buffer, String(native_difference_audit_status), '\0')
-    end
-    if schema_version in ("1.5", "1.6", "1.7")
-        for value in (
-            qualification_scope,
-            target_anchor,
-            target_complement_completion,
-            target_complement_max_element_ev,
-            auxiliary_parent_qualification,
-            symmetrized_target_subspace_status,
-            auxiliary_parent_audit_status,
-            target_scope_production_eligible ? "true" : "false",
-        )
-            write(buffer, String(value), '\0')
-        end
-    end
-    if schema_version == "1.7"
-        write(buffer, String(target_leakage_semantics), '\0')
-        write(buffer, String(target_leakage_formula_sha256), '\0')
-        write(buffer, UInt8(target_leakage_threshold !== nothing))
-        target_leakage_threshold === nothing ||
-            write(buffer, reinterpret(UInt8, [Float64(target_leakage_threshold)]))
-    end
-    for metric in sort!(TBSymmetryMetric[metrics...]; by = item -> item.name)
-        for text in
-            (metric.name, metric.status, metric.applicability, metric.reason, metric.convention)
-            write(buffer, text, '\0')
-        end
-        for scalar in (metric.value, metric.threshold)
-            write(buffer, UInt8(scalar !== nothing))
-            scalar === nothing || write(buffer, reinterpret(UInt8, [something(scalar)]))
-        end
-    end
-    return bytes2hex(SHA.sha256(take!(buffer)))
-end
+"""Final scientific qualification values, with no content-hash authentication.
 
-"""
-Canonical qualification of the final exported and independently read-back TB.
-
-`payload_sha256` binds the ordered scalar payload, independent of the JSON and
-HDF5 container encodings. Solver convergence and representation diagnostics
-remain separate contracts.
+Equality between publications compares these actual scalar records, not a digest.
+Solver convergence and representation diagnostics remain separate contracts.
 """
 struct TBSymmetryQualification
     schema_version::String
     overall::String
     reason::String
     metrics::Vector{TBSymmetryMetric}
-    payload_sha256::String
     authoritative_hamiltonian::String
     authoritative_hamiltonian_sha256::String
     energy_shift_qualification::String
@@ -234,7 +118,7 @@ struct TBSymmetryQualification
     auxiliary_parent_audit_status::String
     target_scope_production_eligible::Bool
     target_leakage_semantics::String
-    target_leakage_formula_sha256::String
+    target_leakage_formula_definition::String
     target_leakage_threshold::Union{Nothing, Float64}
     scoped_production_eligible::Bool
     global_production_eligible::Bool
@@ -244,7 +128,6 @@ struct TBSymmetryQualification
         reason,
         metrics;
         schema_version::AbstractString = TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION,
-        payload_sha256::Union{Nothing, AbstractString} = nothing,
         authoritative_hamiltonian::AbstractString = "native_dft",
         authoritative_hamiltonian_sha256::AbstractString = "LEGACY_NATIVE_DFT",
         energy_shift_qualification::AbstractString = "legacy_energy_shift_hard_gate",
@@ -265,22 +148,17 @@ struct TBSymmetryQualification
         auxiliary_parent_audit_status::AbstractString = "NOT_APPLICABLE",
         target_scope_production_eligible::Bool = false,
         target_leakage_semantics::AbstractString = "NOT_APPLICABLE",
-        target_leakage_formula_sha256::AbstractString = "NOT_RECORDED",
+        target_leakage_formula_definition::AbstractString = "NOT_RECORDED",
         target_leakage_threshold::Union{Nothing, Real} = nothing,
         scoped_production_eligible::Bool = false,
         global_production_eligible::Bool = false,
     )
         schema_value = String(schema_version)
-        schema_value in (
-            "1.0",
-            "1.1",
-            "1.2",
-            "1.3",
-            "1.4",
-            "1.5",
-            "1.6",
-            TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION,
-        ) || throw(ArgumentError("unsupported final TB symmetry schema version $(schema_value)"))
+        schema_value == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION || throw(
+            ArgumentError(
+                "TB_QUALIFICATION_MIGRATION_REQUIRED: use explicit conversion to the no-content-hash schema",
+            ),
+        )
         overall_value = String(overall)
         overall_value in ("PASS", "FAIL", "INCOMPLETE", "NOT_RUN") ||
             throw(ArgumentError("unsupported final TB symmetry status $(overall_value)"))
@@ -294,24 +172,42 @@ struct TBSymmetryQualification
         authority_value =
             SymmetryFoundation.validate_authoritative_hamiltonian_key(authoritative_hamiltonian)
         is_symmetrized_authority = authority_value == "symmetrized_dft_hamiltonian"
-        schema_value in ("1.2", "1.3", "1.4", "1.5", "1.6", "1.7") &&
+        # A mathematical model carries no production/audit labels. Their absence
+        # is unknown evidence, not a physical failure or a production permission.
+        management_absent =
+            !target_scope_production_eligible &&
+            !scoped_production_eligible &&
+            !global_production_eligible &&
+            all(
+                ==("NOT_RECORDED"),
+                (
+                    energy_shift_qualification,
+                    residual_gate_phase,
+                    native_difference_qualification,
+                    auxiliary_parent_qualification,
+                ),
+            )
+        schema_value == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION &&
             is_symmetrized_authority &&
+            !management_absent &&
             energy_shift_qualification != "audit_only" &&
             throw(
                 ArgumentError(
                     "HAMILTONIAN_REFERENCE_MISMATCH: TB qualification 1.2 requires audit-only symmetrized energy shifts",
                 ),
             )
-        schema_value in ("1.3", "1.4", "1.5", "1.6", "1.7") &&
+        schema_value == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION &&
             is_symmetrized_authority &&
+            !management_absent &&
             residual_gate_phase != "post_symmetrization" &&
             throw(
                 ArgumentError(
                     "HAMILTONIAN_REFERENCE_MISMATCH: TB qualification 1.3 requires post-symmetrization residual gates",
                 ),
             )
-        schema_value in ("1.4", "1.5", "1.6", "1.7") &&
+        schema_value == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION &&
             is_symmetrized_authority &&
+            !management_absent &&
             native_difference_qualification != "audit_only" &&
             throw(
                 ArgumentError(
@@ -326,7 +222,7 @@ struct TBSymmetryQualification
                     "UNSUPPORTED_LEGACY_TARGET_LEAKAGE_SEMANTICS: schema-1.6 target TB qualification uses amplitude leakage gates",
                 ),
             )
-            schema_value == "1.7" || throw(
+            schema_value == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION || throw(
                 ArgumentError(
                     "TARGET_SUBSPACE_CONTRACT_MISMATCH: target TB qualification requires schema 1.7",
                 ),
@@ -336,11 +232,12 @@ struct TBSymmetryQualification
                     "UNSUPPORTED_LEGACY_TARGET_LEAKAGE_SEMANTICS: target TB qualification does not declare PAW-S leakage weights",
                 ),
             )
-            target_leakage_formula_sha256 == TB_TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256 || throw(
-                ArgumentError(
-                    "TARGET_SUBSPACE_CONTRACT_MISMATCH: target leakage formula SHA-256 is incompatible",
-                ),
-            )
+            target_leakage_formula_definition == TB_TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION ||
+                throw(
+                    ArgumentError(
+                        "TARGET_SUBSPACE_CONTRACT_MISMATCH: target leakage formula SHA-256 is incompatible",
+                    ),
+                )
             target_leakage_threshold_value !== nothing &&
             isfinite(something(target_leakage_threshold_value)) &&
             0.0 <= something(target_leakage_threshold_value) <= TB_TARGET_LEAKAGE_MAXIMUM_THRESHOLD ||
@@ -351,7 +248,7 @@ struct TBSymmetryQualification
                 )
         end
         if is_symmetrized_authority
-            schema_value == "1.7" || throw(
+            schema_value == TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION || throw(
                 ArgumentError(
                     "HAMILTONIAN_REFERENCE_MISMATCH: symmetrized DFT target TB qualification requires schema 1.7",
                 ),
@@ -360,52 +257,17 @@ struct TBSymmetryQualification
                 throw(ArgumentError("HAMILTONIAN_REFERENCE_MISMATCH: target TB scope differs"))
             target_anchor == "completed_symmetrized_target" ||
                 throw(ArgumentError("HAMILTONIAN_REFERENCE_MISMATCH: target TB anchor differs"))
-            auxiliary_parent_qualification == "audit_only" || throw(
+            (auxiliary_parent_qualification == "audit_only" || management_absent) || throw(
                 ArgumentError(
                     "HAMILTONIAN_REFERENCE_MISMATCH: target TB requires audit-only auxiliary parent",
                 ),
             )
-        end
-        digest = tb_symmetry_payload_sha256(
-            overall_value,
-            reason,
-            metric_values;
-            schema_version = schema_value,
-            authoritative_hamiltonian = authority_value,
-            authoritative_hamiltonian_sha256,
-            energy_shift_qualification,
-            maximum_energy_shift_audit_reference_ev,
-            rms_energy_shift_audit_reference_ev,
-            target_energy_shift_audit_status,
-            symmetrized_parent_energy_shift_audit_status,
-            residual_gate_phase,
-            raw_preflight_diagnostic_status,
-            native_difference_qualification,
-            native_difference_audit_status,
-            qualification_scope,
-            target_anchor,
-            target_complement_completion,
-            target_complement_max_element_ev,
-            auxiliary_parent_qualification,
-            symmetrized_target_subspace_status,
-            auxiliary_parent_audit_status,
-            target_scope_production_eligible,
-            target_leakage_semantics,
-            target_leakage_formula_sha256,
-            target_leakage_threshold = target_leakage_threshold_value,
-            scoped_production_eligible,
-            global_production_eligible,
-        )
-        if payload_sha256 !== nothing
-            String(payload_sha256) == digest ||
-                throw(ArgumentError("final TB symmetry payload SHA-256 mismatch"))
         end
         return new(
             schema_value,
             overall_value,
             String(reason),
             metric_values,
-            digest,
             authority_value,
             String(authoritative_hamiltonian_sha256),
             String(energy_shift_qualification),
@@ -426,7 +288,7 @@ struct TBSymmetryQualification
             String(auxiliary_parent_audit_status),
             target_scope_production_eligible,
             String(target_leakage_semantics),
-            String(target_leakage_formula_sha256),
+            String(target_leakage_formula_definition),
             target_leakage_threshold_value,
             scoped_production_eligible,
             false,
@@ -479,15 +341,15 @@ struct RepresentationCompatibilityReport
     maximum_reciprocal_shift_residual::Float64
     theta_squared_residual::Float64
     maximum_kramers_residual::Float64
-    representation_sha256::String
     diagnostics::Vector{WannierizationDiagnostic}
     metadata_origin::Symbol
     gate_definition_status::RepresentationGateDefinitionStatus
     assessment_status::RepresentationAssessmentStatus
     maximum_required_block_unitarity_residual::Float64
     oracle_excess_group_law_residuals::Union{Nothing, NTuple{4, Float64}}
-    qualification_sha256::Union{Nothing, String}
+    qualification_record::Union{Nothing, NamedTuple}
     validation_profile::Symbol
+    representation_definition::Union{Nothing, String}
 end
 
 """Prepared representation plus inventory, scoped diagnostics, and policy evidence."""
@@ -502,8 +364,14 @@ struct BandRepresentationPreparationResult
     effective_compatibility_policy::Symbol
     symmetry_tolerance_status::Symbol
     output_hdf5::Union{Nothing, String}
-    artifact_sha256::Union{Nothing, String}
+    content_authentication::String
     diagnostics::Vector{WannierizationDiagnostic}
+end
+
+# Historical in-memory reports have no complete representation binding. They may
+# be inspected, but cannot certify a new no-hash publication without recomputation.
+function RepresentationCompatibilityReport(arguments::Vararg{Any, 21})
+    return RepresentationCompatibilityReport(arguments..., nothing)
 end
 
 # Construct four independent empty contexts for legacy reports.
@@ -520,14 +388,13 @@ function RepresentationCompatibilityReport(
     maximum_reciprocal_shift_residual,
     theta_squared_residual,
     maximum_kramers_residual,
-    representation_sha256,
     diagnostics,
     metadata_origin,
     gate_definition_status,
     assessment_status,
     maximum_required_block_unitarity_residual,
     oracle_excess_group_law_residuals,
-    qualification_sha256,
+    qualification_record,
     validation_profile,
 )
     residuals = Tuple(Float64.(collect(maximum_group_law_residuals)))
@@ -545,14 +412,13 @@ function RepresentationCompatibilityReport(
         Float64(maximum_reciprocal_shift_residual),
         Float64(theta_squared_residual),
         Float64(maximum_kramers_residual),
-        String(representation_sha256),
         WannierizationDiagnostic[diagnostics...],
         Symbol(metadata_origin),
         gate_definition_status,
         assessment_status,
         Float64(maximum_required_block_unitarity_residual),
         oracle_excess_group_law_residuals,
-        qualification_sha256,
+        qualification_record,
         Symbol(validation_profile),
     )
 end
@@ -568,7 +434,6 @@ function RepresentationCompatibilityReport(
     maximum_reciprocal_shift_residual,
     theta_squared_residual,
     maximum_kramers_residual,
-    representation_sha256,
     diagnostics,
     metadata_origin,
 )
@@ -583,7 +448,6 @@ function RepresentationCompatibilityReport(
         maximum_reciprocal_shift_residual,
         theta_squared_residual,
         maximum_kramers_residual,
-        representation_sha256,
         diagnostics,
         metadata_origin,
         GATE_VALID,
@@ -601,18 +465,45 @@ struct WannierizationIteration
     spread_total::Float64
     spread_standard_deviation::Float64
     maximum_covariance_error::Float64
-    diagnostics::Union{Nothing, WannierizationIterationDiagnostics}
+    diagnostics::Union{
+        Nothing,
+        WannierizationIterationDiagnostics,
+        OrdinaryWannierizationIterationDiagnostics,
+    }
 
     function WannierizationIteration(
         iteration,
         spread_total,
         spread_standard_deviation,
         covariance,
-        diagnostics::Union{Nothing, WannierizationIterationDiagnostics} = nothing,
+        diagnostics::Union{
+            Nothing,
+            WannierizationIterationDiagnostics,
+            OrdinaryWannierizationIterationDiagnostics,
+        } = nothing,
     )
         iteration > 0 || throw(ArgumentError("iteration must be positive"))
         values = Float64.((spread_total, spread_standard_deviation, covariance))
         all(isfinite, values) || throw(ArgumentError("iteration record contains non-finite values"))
         return new(Int(iteration), values[1], values[2], values[3], diagnostics)
     end
+end
+
+"""Compare every typed qualification value, including ordered metric values."""
+function same_tb_symmetry_qualification(
+    left::TBSymmetryQualification,
+    right::TBSymmetryQualification,
+)
+    for name in fieldnames(TBSymmetryQualification)
+        if name == :metrics
+            length(left.metrics) == length(right.metrics) || return false
+            for (a, b) in zip(left.metrics, right.metrics)
+                all(n -> isequal(getfield(a, n), getfield(b, n)), fieldnames(TBSymmetryMetric)) ||
+                    return false
+            end
+        else
+            isequal(getfield(left, name), getfield(right, name)) || return false
+        end
+    end
+    return true
 end

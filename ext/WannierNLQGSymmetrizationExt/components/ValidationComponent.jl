@@ -2,5 +2,4 @@
 
 include("../MagneticMomentReaders.jl")
 include("validation/OperatorWorkflowValidation.jl")
-include("validation/GaugeAwareValidation.jl")
 include("../ResponseSymmetryQualification.jl")

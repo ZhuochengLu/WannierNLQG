@@ -273,3 +273,44 @@ function orbital_completion(sources::OrbitalRealSpaceSources, model, workspace)
     end
     return OrbitalCompletion(tf, tb, tc)
 end
+
+"""Build OM-only finite-eta connection from complete physical V in eV Angstrom.
+
+For row m, column n, r_OM[m,n]=-i*V[m,n]*(E_m-E_n)/((E_m-E_n)^2+eta^2).
+Its occupied-to-empty tangent is Z=-i*q*r_OM*p, the regularized Sylvester
+least-squares solution. True energies and complete numerical spectral blocks
+are retained; no user gap cutoff, energy averaging or occupation enters here.
+Allocate an owned connection so the shared Berry connection is never modified.
+Metric inputs remain wrapped and S-normalized; this does not admit metric
+Euclidean projector contractions. External completion and response units belong
+to the downstream contraction. Eta is finite, positive and measured in eV.
+"""
+function regularized_orbital_geometry(
+    geometry::Union{SpectralResponseGeometry, NonorthogonalSpectralResponseGeometry},
+    eta::Real,
+)
+    isfinite(eta) && eta > 0 || throw(
+        ArgumentError(
+            "OM_REGULARIZATION_POSITIVE_REQUIRED: denominator_regularization must be finite and positive.",
+        ),
+    )
+    energies = geometry.energies
+    blocks = spectral_subspace_blocks(energies; gap_tolerance = 0.0)
+    velocity = geometry.covariant_hamiltonian
+    connection = similar(velocity)
+    for axis in axes(velocity, 3), column in eachindex(energies), row in eachindex(energies)
+        gap = energies[row] - energies[column]
+        connection[row, column, axis] =
+            -im * velocity[row, column, axis] * regularized_energy_inverse(gap, eta)
+    end
+    base = SpectralResponseGeometry(
+        energies,
+        geometry.eigenvectors,
+        connection,
+        velocity,
+        geometry.curvature,
+        blocks,
+    )
+    return geometry isa NonorthogonalSpectralResponseGeometry ?
+           NonorthogonalSpectralResponseGeometry(base, Float64(eta)) : base
+end

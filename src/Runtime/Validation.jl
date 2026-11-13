@@ -5,13 +5,77 @@ Reject unsupported or contradictory settings before numerical computation; the c
 """
 function validate_config(cfg::EffectiveTaskConfig)
     specs = normalize_task_specs(cfg)
+    if any(s->s.quantity==:intrinsic_ahc, specs)
+        cfg.integration_algorithm isa UniformIntegration ||
+            throw(ArgumentError("intrinsic_ahc first version requires uniform integration"))
+        iszero(cfg.temperature) || throw(ArgumentError("INTRINSIC_HALL_REQUIRES_ZERO_TEMPERATURE"))
+        cfg.band_selection == -1 || throw(ArgumentError("intrinsic_ahc requires AllBands"))
+        cfg.native_model_input isa NonorthogonalLocalizedInput &&
+            any(s->s.quantity==:intrinsic_ahc && s.method==:projector, specs) &&
+            throw(ArgumentError("NONORTHOGONAL_PROJECTOR_RESPONSE_UNSUPPORTED"))
+    end
+    if cfg.integration_algorithm isa UniformIntegration &&
+       cfg.integration_algorithm.region_quadrature != :midpoint
+        cfg.integration_bounds !== nothing && all(s -> s.calculation == :integral, specs) ||
+            throw(ArgumentError("explicit region_quadrature requires an Integral KRegion task"))
+    end
+    if cfg.integration_affine_region !== nothing
+        cfg.integration_algorithm isa UniformIntegration ||
+            throw(ArgumentError("affine KRegion currently requires UniformIntegration"))
+        length(cfg.k_mesh) == affine_dimension(cfg.integration_affine_region) &&
+        all(n -> 0 < n <= 2^52 - 1, cfg.k_mesh) || throw(
+            ArgumentError(
+                "affine KRegion requires positive midpoint counts matching the basis dimension",
+            ),
+        )
+        foldl(Base.checked_mul, cfg.k_mesh)
+        cfg.integration_bounds == cartesian_affine_bounds(cfg.integration_affine_region) ||
+            throw(ArgumentError("affine enclosing bounds must match its declared geometry"))
+    end
+    full_domain_execution =
+        cfg.integration_bounds !== nothing || cfg.integration_algorithm isa HAdaptiveCubature
+    if cfg.integration_bounds !== nothing
+        lowercase(cfg.fourier_backend) in ("direct", "auto") || throw(
+            ArgumentError(
+                "KRegion currently supports Direct evaluation; use fourier_backend=direct or auto instead of mixed",
+            ),
+        )
+    end
+    if cfg.integration_algorithm isa HAdaptiveCubature
+        length(specs) == 1 || throw(
+            ArgumentError(
+                "adaptive integration retains one response tensor/tree/budget per task; use independent TaskSpec objects",
+            ),
+        )
+        all(spec -> spec.calculation == :integral, specs) ||
+            throw(ArgumentError("adaptive integration consumes Integral point providers"))
+        lowercase(cfg.fourier_backend) in ("direct", "auto") || throw(
+            ArgumentError(
+                "arbitrary adaptive nodes use Direct evaluation; explicit Mixed requires a regular commensurate grid",
+            ),
+        )
+        validate_integration_budget(response_integration_domain(cfg), cfg.integration_algorithm)
+        cfg.temperature>0 || throw(
+            ArgumentError("first adaptive response evaluator requires finite positive temperature"),
+        )
+        cfg.broadening>0 || throw(
+            ArgumentError("first adaptive response evaluator requires finite positive broadening"),
+        )
+        nonzero_photon_momentum(cfg.photon_momentum) &&
+            throw(ArgumentError("adaptive response evaluator supports q=0"))
+    elseif !(cfg.integration_algorithm isa UniformIntegration)
+        throw(
+            ArgumentError("unsupported integration algorithm $(typeof(cfg.integration_algorithm))"),
+        )
+    end
     if any(
         spec->spec.quantity in
               (:linear_transport, :linear_optical_response, :orbital_magnetization),
         specs,
     )
         cfg.spatial_dimension==3 || error("New response tasks require spatial_dimension=3")
-        cfg.response_symmetry_file===nothing ||
+        full_domain_execution ||
+            cfg.response_symmetry_file===nothing ||
             cfg.response_symmetry_kmesh_mode=="full" ||
             error("New response tasks require full BZ; reduced mode is unsupported")
         cfg.band_selection == -1 || error("New response tasks require AllBands")
@@ -77,7 +141,7 @@ function validate_config(cfg::EffectiveTaskConfig)
     cfg.mp_grid === nothing ||
         all(>(0), something(cfg.mp_grid)) ||
         error("mp_grid entries must be positive; got $(cfg.mp_grid).")
-    if response_symmetry_kmesh_mode == :full
+    if !full_domain_execution && response_symmetry_kmesh_mode == :full
         if cfg.response_symmetry_report_enabled
             cfg.response_symmetry_file === nothing && error(
                 "response_symmetry_kmesh_mode=\"full\" with " *
@@ -91,7 +155,7 @@ function validate_config(cfg::EffectiveTaskConfig)
             )
         end
     end
-    if cfg.response_symmetry_file !== nothing
+    if !full_domain_execution && cfg.response_symmetry_file !== nothing
         isempty(strip(something(cfg.response_symmetry_file))) &&
             error("response_symmetry_file must be nothing or a non-empty path.")
         calculation in (:integral, :kslice) || error(
@@ -129,7 +193,8 @@ function validate_config(cfg::EffectiveTaskConfig)
     end
     if any(spec -> is_zeeman_interband_quantum_geometry_quantity(spec.quantity), specs) &&
        !cfg.spin_enabled &&
-       !using_operator_bundle
+       !using_operator_bundle &&
+       cfg.native_model_input === nothing
         error(
             "Zeeman interband quantum geometry requires either a spin-capable operator bundle or spin_enabled=true with spin_file and checkpoint_file.",
         )
@@ -211,7 +276,11 @@ end
 function validate_kpath_config(cfg::EffectiveTaskConfig)
     length(cfg.kpath_nodes) >= 2 ||
         error("K-path calculation requires at least two kpath_nodes entries.")
-    segment_count = length(cfg.kpath_nodes) - 1
+    !isempty(cfg.kpath_branches) &&
+    all(range -> length(range) >= 2, cfg.kpath_branches) &&
+    reduce(vcat, collect.(cfg.kpath_branches)) == collect(eachindex(cfg.kpath_nodes)) ||
+        error("KPath branches must partition the nodes into connected chains.")
+    segment_count = sum(range -> length(range) - 1, cfg.kpath_branches)
     length(cfg.kpoints_per_segment) == segment_count || error(
         "kpoints_per_segment length=$(length(cfg.kpoints_per_segment)) must equal segment_count=$(segment_count).",
     )
@@ -231,7 +300,7 @@ function validate_kpath_config(cfg::EffectiveTaskConfig)
         isempty(strip(label)) && error("kpath_nodes entry $(index) label must not be empty.")
         all(isfinite, coordinate) ||
             error("kpath_nodes entry $(index) contains non-finite fractional coordinates.")
-        if index > 1
+        if index > 1 && !any(range -> first(range) == index, cfg.kpath_branches)
             previous = cfg.kpath_nodes[index - 1][2]
             maximum(abs(coordinate[axis] - previous[axis]) for axis in 1:3) > 1.0e-14 ||
                 error("kpath_nodes entries $(index - 1) and $(index) define a zero-length segment.")
@@ -244,14 +313,15 @@ const LEGACY_FOURIER_CONFIGURATION_ENV =
     ("WANNIERNLQG_FOURIER_BACKEND", "WANNIERNLQG_MIXED_NKDIV", "WANNIERNLQG_MIXED_NKFFT")
 
 """
-Accept an absent factor or positive mesh-compatible two/three-entry factors; reject incompatible lengths and nonpositive entries.
+Accept an absent factor or positive mesh-compatible one/two/three-entry factors; reject incompatible lengths and nonpositive entries.
 """
 function validate_fourier_factor(name::AbstractString, value, k_mesh)
     value === nothing && return nothing
-    length(value) in (2, 3) || error("$(name) must contain two or three positive integers.")
+    length(value) in (1, 2, 3) ||
+        error("$(name) must contain one, two, or three positive integers.")
     all(>(0), value) || error("$(name) entries must be positive; got $(value).")
     length(value) == length(k_mesh) ||
-        (length(value) == 3 && length(k_mesh) == 2 && value[3] == 1) ||
+        (length(value) > length(k_mesh) && all(==(1), value[(length(k_mesh) + 1):end])) ||
         error("$(name)=$(value) is incompatible with k_mesh=$(k_mesh).")
     return nothing
 end
@@ -283,13 +353,13 @@ function validate_fourier_configuration(cfg::EffectiveTaskConfig)
     if backend == :mixed && cfg.NKdiv === nothing && cfg.NKFFT === nothing
         error("fourier_backend=\"mixed\" requires at least one explicit factor: NKdiv or NKFFT.")
     end
-    mesh = length(cfg.k_mesh) == 2 ? (cfg.k_mesh[1], cfg.k_mesh[2], 1) : cfg.k_mesh
+    mesh = ntuple(axis -> axis <= length(cfg.k_mesh) ? cfg.k_mesh[axis] : 1, 3)
     nkdiv =
         cfg.NKdiv === nothing ? nothing :
-        length(cfg.NKdiv) == 2 ? (cfg.NKdiv[1], cfg.NKdiv[2], 1) : cfg.NKdiv
+        ntuple(axis -> axis <= length(cfg.NKdiv) ? cfg.NKdiv[axis] : 1, 3)
     nkfft =
         cfg.NKFFT === nothing ? nothing :
-        length(cfg.NKFFT) == 2 ? (cfg.NKFFT[1], cfg.NKFFT[2], 1) : cfg.NKFFT
+        ntuple(axis -> axis <= length(cfg.NKFFT) ? cfg.NKFFT[axis] : 1, 3)
     if nkdiv !== nothing && nkfft !== nothing
         product = ntuple(axis -> nkdiv[axis] * nkfft[axis], 3)
         product == mesh || error("NKdiv*NKFFT=$(product) does not equal k_mesh=$(mesh).")
@@ -304,12 +374,12 @@ function validate_fourier_configuration(cfg::EffectiveTaskConfig)
 end
 
 """
-Require two mesh entries for k slices and compatible two/three-dimensional integral meshes.
+Require two mesh entries for k slices and compatible one/two/three-dimensional integral meshes.
 
-Three-entry integration meshes require spatial dimension three; invalid combinations raise errors.
+Sampling dimension is independent of tensor axes; three-entry meshes require dimension three.
 """
 function validate_k_mesh_for_calculation(
-    k_mesh::Union{NTuple{2, Int}, NTuple{3, Int}},
+    k_mesh::Union{NTuple{1, Int}, NTuple{2, Int}, NTuple{3, Int}},
     calculation::Symbol,
     spatial_dimension::Int,
 )
@@ -317,8 +387,8 @@ function validate_k_mesh_for_calculation(
         length(k_mesh) == 2 ||
             error("K-slice requires two-entry k_mesh=(nk1,nk2); got k_mesh=$(k_mesh).")
     elseif calculation == :integral
-        length(k_mesh) in (2, 3) || error(
-            "Integral requires k_mesh=(nk1,nk2) or k_mesh=(nk1,nk2,nk3); got k_mesh=$(k_mesh).",
+        length(k_mesh) in (1, 2, 3) || error(
+            "Integral requires k_mesh=(nk1,), (nk1,nk2), or (nk1,nk2,nk3); got k_mesh=$(k_mesh).",
         )
         if length(k_mesh) == 3 && spatial_dimension != 3
             error(
@@ -340,8 +410,8 @@ function validate_quantity_short_label_calculation(
     calculation::Symbol,
 )
     # SHG is the public quantity name for both supported sampling geometries.
-    quantity == :second_harmonic_generation &&
-        uppercase(strip(requested_quantity)) == "SHG" &&
+    quantity in (:second_harmonic_generation, :third_harmonic_generation) &&
+        uppercase(strip(requested_quantity)) in ("SHG", "THG") &&
         return nothing
     definition = quantity_short_label_definition(requested_quantity)
     definition === nothing && return nothing
@@ -494,7 +564,10 @@ end
 Return the public tensor rank required by a task, including four-axis spin-current and curvature cases.
 """
 function expected_cidx_rank(spec::NormalizedTaskSpec)
-    spec.quantity in (:linear_transport, :linear_optical_response) && return 2
+    spec.quantity in
+    (:jerk_current, :third_harmonic_generation, :berry_curvature_quadrupole_conductivity) &&
+        return 4
+    spec.quantity in (:intrinsic_ahc, :linear_transport, :linear_optical_response) && return 2
     spec.quantity==:orbital_magnetization && return 1
     if is_rank2_real_only_kslice_quantity(spec.quantity)
         return 2
@@ -564,7 +637,13 @@ function select_task(quantity::Symbol, method::Symbol, calculation::Symbol)
     # These messages predate the registry and are part of the public validation
     # contract. Legal routing above has one source of truth; this cold error path
     # deliberately preserves the exact historical diagnostics.
-    if quantity == :quantum_hermitian_connection && calculation == :integral
+    if quantity == :quantum_hermitian_connection && method == :geometric_loop
+        throw(
+            ArgumentError(
+                "GEOMETRIC_LOOP_QHC_UNSUPPORTED: Quantum Hermitian Connection with Geometric Loop is not supported in WannierNLQG 1.2. Select a supported QHC method explicitly.",
+            ),
+        )
+    elseif quantity == :quantum_hermitian_connection && calculation == :integral
         error("Unsupported combination: Quantum_Hermitian_Connection + Integral is not defined.")
     elseif quantity == :hermitian_curvature_tensor && calculation == :kslice
         error(

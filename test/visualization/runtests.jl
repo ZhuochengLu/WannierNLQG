@@ -6,14 +6,59 @@ using HDF5
 
 const ROOT = normpath(joinpath(@__DIR__, "..", ".."))
 const FIXTURES = joinpath(@__DIR__, "fixtures")
-const PYTHON = something(Sys.which("python3"), "")
-isempty(PYTHON) && error("python3 is required for visualization focused tests")
+# Full/focused publication tests must use the explicitly selected locked runtime.
+const PYTHON = get(ENV, "WANNIERNLQG_VISUALIZATION_PYTHON", "")
+isempty(PYTHON) && error("set WANNIERNLQG_VISUALIZATION_PYTHON to the absolute pinned interpreter")
+isabspath(PYTHON) && isfile(PYTHON) ||
+    error("publication test interpreter must be an existing absolute file")
+const PYTHON_IDENTITY = JSON3.read(
+    read(
+        `$(PYTHON) -c "import json, os, sys; print(json.dumps({'python': sys.executable, 'realpath': os.path.realpath(sys.executable), 'version': sys.version}))"`,
+        String,
+    ),
+)
+println(
+    "publication test interpreter: ",
+    JSON3.write(
+        Dict(
+            "requested" => PYTHON,
+            "actual" => String(PYTHON_IDENTITY.python),
+            "realpath" => String(PYTHON_IDENTITY.realpath),
+            "version" => String(PYTHON_IDENTITY.version),
+        ),
+    ),
+)
+
+@testset "band branches and explicit sidecar migration" begin
+    @test success(Base.run(ignorestatus(`$(PYTHON) $(joinpath(@__DIR__, "band_branch_unit.py"))`)))
+end
 
 @testset "publication environment and dependency failures" begin
     probe = joinpath(ROOT, "scripts", "visualization", "check_environment.py")
     negatives = joinpath(@__DIR__, "environment_unit.py")
+    @test normpath(abspath(String(PYTHON_IDENTITY.python))) == normpath(abspath(PYTHON))
     @test success(Base.run(ignorestatus(`$(PYTHON) $(probe)`)))
     @test success(Base.run(ignorestatus(`$(PYTHON) $(negatives)`)))
+    # Strict dependency policy: Full never supplies the standalone skip flag.
+    mktempdir() do directory
+        export_regressions = joinpath(@__DIR__, "pdf_export_unit.py")
+        @test success(
+            Base.run(ignorestatus(`$(PYTHON) $(export_regressions) --output $(directory)`)),
+        )
+        result = JSON3.read(read(joinpath(directory, "unit-result.json"), String))
+        @test String(result.status) == "PASS"
+        @test Int(result.tests) == 6
+        boundary_regressions = joinpath(@__DIR__, "publication_boundary_unit.py")
+        boundary_directory = joinpath(directory, "publication-boundary")
+        @test success(
+            Base.run(
+                ignorestatus(`$(PYTHON) $(boundary_regressions) --output $(boundary_directory)`),
+            ),
+        )
+        boundary = JSON3.read(read(joinpath(boundary_directory, "boundary-result.json"), String))
+        @test String(boundary.status) == "PASS"
+        @test Int(boundary.tests) == 7
+    end
 end
 
 function process_exitcode(command)
@@ -731,8 +776,8 @@ plt.close(fig)
         HDF5.h5open(packed_model, "w") do handle
             root_attributes = HDF5.attributes(handle)
             root_attributes["schema"] = "wanniernlqg.real-space-operators"
-            root_attributes["schema_version"] = "1.1"
-            root_attributes["scientific_content_sha256"] = repeat("a", 64)
+            root_attributes["schema_version"] = "1.2"
+            root_attributes["publication_identity"] = repeat("a", 64)
             model_group = HDF5.create_group(handle, "model")
             model_group["lattice"] = packed_lattice
         end
@@ -741,7 +786,8 @@ plt.close(fig)
         write(
             packed_metadata,
             """[Run]\ncalculation = kslice\nquantity = shift_vector\nmethod = conventional\n\n""" *
-            """[Input]\ncase_root = $(directory)\nmodel_file = packed_model.h5\nmodel_sha256 = $(packed_sha)\nmodel_input_mode = packed_hdf5\n\n""" *
+            """[Input]\ncase_root = $(directory)\nmodel_file = packed_model.h5\nmodel_identity = $(packed_sha)\nmodel_input_mode = packed_hdf5\n\n""" *
+            """[Geometry]\nschema = wanniernlqg.model-geometry/1\nlattice_convention = row-lattice: R_cart = R_frac(row) * lattice; q_frac = lattice * q_cart / 2pi\nlattice_row.1_angstrom = (2.0,0.0,0.0)\nlattice_row.2_angstrom = (0.4,2.5,0.0)\nlattice_row.3_angstrom = (0.0,0.2,3.0)\n\n""" *
             """[Numerics]\nk_mesh = (2, 2)\nkslice_origin = (0.0,0.0,0.0)\nkslice_vector_1 = (1.0,0.0,0.0)\nkslice_vector_2 = (0.0,1.0,0.0)\n\n""" *
             """[Outputs]\noutputs.count = 1\noutput.1 = kslice_real.dat\n""",
         )
@@ -862,3 +908,6 @@ plt.close(fig)
         @test process.exitcode != 0
     end
 end
+
+# This result-metadata consumer shares the same pinned visualization interpreter.
+include(joinpath(@__DIR__, "..", "visualization_metadata_unit.jl"))

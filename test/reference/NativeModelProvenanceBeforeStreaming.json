@@ -1,0 +1,7 @@
+{
+  "purpose": "ARCHIVED_TEST_REFERENCE_ONLY_NOT_A_RUNTIME_FALLBACK",
+  "source": "constraint-action-013/src/IO/NativeModelProvenance.jl",
+  "source_manifest_sha256": "baee7a3ce1bab17f25ac6f9a147a39d18ec81bd265ad592c6f334011062e7aa0",
+  "file_sha256": "dd84f7bc1a99990545c95ba2ca8e39c08e88c784f8748a253449c5a9510ad259",
+  "contract": "Original native model binding independently verifies exact definition-stream bytes across admitted backends; archived production algorithm is loaded only by tests."
+}

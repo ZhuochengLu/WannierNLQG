@@ -30,18 +30,24 @@ band_representation_schema_version() =
     _call_symmetry_foundation_extension(:band_representation_schema_version)
 
 """Read and validate one public schema-1.0 band-representation HDF5 artifact."""
-read_band_representation_hdf5(filename::AbstractString) =
-    _call_symmetry_foundation_extension(:read_band_representation_hdf5, filename)
+read_band_representation_hdf5(filename::AbstractString; content_authentication::Bool = true) =
+    _call_symmetry_foundation_extension(
+        :read_band_representation_hdf5,
+        filename;
+        content_authentication,
+    )
 
 """Read shared representation-preparation metadata for expert workflow preflight."""
 function read_band_representation_preparation_hdf5(
     filename::AbstractString,
-    representation::BandRepresentation,
+    representation::BandRepresentation;
+    content_authentication::Bool = true,
 )
     return _call_symmetry_foundation_extension(
         :read_band_representation_preparation_hdf5,
         filename,
-        representation,
+        representation;
+        content_authentication,
     )
 end
 

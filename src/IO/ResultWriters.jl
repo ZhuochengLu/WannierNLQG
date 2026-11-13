@@ -14,6 +14,7 @@ function write_response_tensor(
     filename::AbstractString,
     ;
     digits::Int = 7,
+    region_metadata = nothing,
 )
     7 <= digits <= 17 ||
         throw(ArgumentError("response output digits must lie in 7:17; got $(digits)"))
@@ -36,6 +37,11 @@ function write_response_tensor(
     filepath = joinpath(directory, filename)
     open(filepath, "w") do file
         println(file, "#### WannierNLQG response tensor")
+        if region_metadata !== nothing
+            for (key, value) in pairs(region_metadata)
+                println(file, "# ", key, "=", value)
+            end
+        end
 
         # Preserve the historical numerical-result header byte-for-byte. Public
         # configuration and metadata use descriptive names, but result columns
@@ -111,4 +117,16 @@ function write_kslice(
         end
     end
     return filepath
+end
+
+"""Write already assembled numerical integration records without interpreting physics or algorithms."""
+function write_integration_diagnostics(directory::AbstractString, records)
+    mkpath(directory)
+    path=joinpath(directory, "integration_diagnostics.txt")
+    open(path, "w") do stream
+        for record in records, (key, value) in pairs(record)
+            println(stream, key, "=", value)
+        end
+    end
+    return path
 end

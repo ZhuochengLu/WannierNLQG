@@ -3,4 +3,3 @@
 include("../WannierCenterGeometry.jl")
 include("../WannierMeshScreening.jl")
 include("projection/OperatorProjection.jl")
-include("projection/GaugeAwareProjection.jl")

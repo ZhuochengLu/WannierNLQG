@@ -1,22 +1,22 @@
-const AUTHORITATIVE_BAND_HAMILTONIAN_ALGORITHM_VERSION = "authoritative-band-hamiltonian-v3-physical-frame-transform"
+const AUTHORITATIVE_BAND_HAMILTONIAN_ALGORITHM_VERSION = "authoritative-band-hamiltonian-v4-complete-values"
 
-"""Digest-bound Hamiltonian field in the exact band gauge used by SAWF."""
+"""Value-bound Hamiltonian field in the exact band gauge used by SAWF."""
 struct AuthoritativeBandHamiltonian
     matrices_ev::Array{ComplexF64, 3}
     authority::String
-    digest::String
-    input_sha256::Dict{String, String}
+    definition::String
+    input_definitions::Dict{String, String}
     algorithm_version::String
-    gauge_artifact_sha256::Union{Nothing, String}
+    gauge_definition::Union{Nothing, String}
     qualified::Bool
 
     function AuthoritativeBandHamiltonian(
         matrices_ev,
         authority,
-        digest,
-        input_sha256,
+        definition,
+        input_definitions,
         algorithm_version,
-        gauge_artifact_sha256,
+        gauge_definition,
         qualified,
     )
         matrices = Array{ComplexF64, 3}(matrices_ev)
@@ -36,47 +36,47 @@ struct AuthoritativeBandHamiltonian
             ),
         )
         authority_value = validate_authoritative_hamiltonian_key(authority)
-        digest_value = String(digest)
-        occursin(r"^[0-9a-f]{64}$", digest_value) ||
-            throw(ArgumentError("authoritative band Hamiltonian digest must be SHA-256"))
-        hashes = Dict{String, String}(input_sha256)
-        all(occursin(r"^[0-9a-f]{64}$", value) for value in values(hashes)) ||
-            throw(ArgumentError("authoritative band Hamiltonian input hashes must be SHA-256"))
-        artifact_hash = gauge_artifact_sha256 === nothing ? nothing : String(gauge_artifact_sha256)
-        artifact_hash === nothing ||
-            occursin(r"^[0-9a-f]{64}$", artifact_hash) ||
-            throw(ArgumentError("gauge artifact digest must be SHA-256"))
+        definition_value = String(definition)
+        startswith(definition_value, "authoritative-hamiltonian-values/4:") ||
+            throw(ArgumentError("AUTHORITATIVE_HAMILTONIAN_EXPLICIT_MIGRATION_REQUIRED"))
+        definitions = Dict{String, String}(input_definitions)
+        artifact_definition = gauge_definition === nothing ? nothing : String(gauge_definition)
+        expected =
+            _authoritative_band_hamiltonian_definition(matrices, authority_value, definitions)
+        definition_value == expected || throw(
+            ArgumentError(
+                "HAMILTONIAN_REFERENCE_MISMATCH: supplied complete definition differs from matrices",
+            ),
+        )
         return new(
             matrices,
             authority_value,
-            digest_value,
-            hashes,
+            definition_value,
+            definitions,
             String(algorithm_version),
-            artifact_hash,
+            artifact_definition,
             Bool(qualified),
         )
     end
 end
 
-"""Hash an authoritative Hamiltonian together with its authority and source hashes."""
-function _authoritative_band_hamiltonian_digest(
+"""Encode the actual authoritative Hamiltonian and its consumed frame definitions."""
+function _authoritative_band_hamiltonian_definition(
     matrices::Array{ComplexF64, 3},
     authority::AbstractString,
-    input_sha256::AbstractDict,
+    input_definitions::AbstractDict,
 )
     stream = IOBuffer()
-    write(stream, AUTHORITATIVE_BAND_HAMILTONIAN_ALGORITHM_VERSION)
-    write(stream, '\0')
-    write(stream, authority)
-    write(stream, '\0')
-    for key in sort!(String.(collect(keys(input_sha256))))
-        write(stream, key)
-        write(stream, '=')
-        write(stream, String(input_sha256[key]))
-        write(stream, '\0')
-    end
-    write(stream, reinterpret(UInt8, vec(matrices)))
-    return bytes2hex(SHA.sha256(take!(stream)))
+    IO.write_native_definition_value(
+        stream,
+        (
+            algorithm = AUTHORITATIVE_BAND_HAMILTONIAN_ALGORITHM_VERSION,
+            authority = String(authority),
+            inputs = Dict{String, String}(input_definitions),
+            matrices_ev = matrices,
+        ),
+    )
+    return "authoritative-hamiltonian-values/4:" * bytes2hex(take!(stream))
 end
 
 """Materialize diagonal band-gauge Hamiltonians from an EIG energy table."""
@@ -89,10 +89,7 @@ function _diagonal_band_hamiltonian(energies_ev::AbstractMatrix{<:Real})
     return matrices
 end
 
-"""Return the byte-level SHA-256 of a dense Hamiltonian audit array."""
-_authoritative_array_sha256(values) = bytes2hex(SHA.sha256(reinterpret(UInt8, vec(Array(values)))))
-
-"""Validate the Reynolds-projected Hamiltonian audit and return its bound hashes."""
+"""Validate the actual Reynolds-projected Hamiltonian audit without diagnostic fingerprints."""
 function _validate_reynolds_hamiltonian_audit(payload, audit)
     energies = audit.symmetrized_energies_ev
     rotations = audit.native_to_symmetrized_rotations
@@ -126,11 +123,7 @@ function _validate_reynolds_hamiltonian_audit(payload, audit)
             "HAMILTONIAN_REFERENCE_MISMATCH: Reynolds representative eigenspectrum residual $(maximum_residual) exceeds 1e-10 eV",
         ),
     )
-    return Dict(
-        "REYNOLDS_REPRESENTATIVE_HAMILTONIANS" => _authoritative_array_sha256(representatives),
-        "NATIVE_TO_SYMMETRIZED_ROTATIONS" => _authoritative_array_sha256(rotations),
-        "SYMMETRIZED_PARENT_ENERGIES" => _authoritative_array_sha256(energies),
-    )
+    return nothing
 end
 
 """Construct native authority from the exact EIG payload used by the solver."""
@@ -138,22 +131,18 @@ function _native_authoritative_band_hamiltonian(
     eig::WannierEIG;
     eig_file::Union{Nothing, AbstractString} = nothing,
 )
-    input_sha256 = Dict{String, String}()
-    if eig_file !== nothing
-        path = abspath(String(eig_file))
-        isfile(path) || throw(ArgumentError("authoritative EIG file does not exist: $(path)"))
-        input_sha256["EIG"] = sha256_file(path)
-    else
-        input_sha256["EIG_ARRAY"] = bytes2hex(SHA.sha256(reinterpret(UInt8, vec(eig.data))))
-    end
+    eig_file === nothing ||
+        isfile(eig_file) ||
+        throw(ArgumentError("authoritative EIG file does not exist: $(eig_file)"))
+    input_definitions = Dict{String, String}()
     matrices = _diagonal_band_hamiltonian(eig.data)
     authority = authoritative_hamiltonian_key(NativeDFTHamiltonian())
-    digest = _authoritative_band_hamiltonian_digest(matrices, authority, input_sha256)
+    definition = _authoritative_band_hamiltonian_definition(matrices, authority, input_definitions)
     return AuthoritativeBandHamiltonian(
         matrices,
         authority,
-        digest,
-        input_sha256,
+        definition,
+        input_definitions,
         AUTHORITATIVE_BAND_HAMILTONIAN_ALGORITHM_VERSION,
         nothing,
         true,
@@ -191,7 +180,7 @@ function _native_completed_authoritative_band_hamiltonian(
     source::AbstractWavefunctionSource,
     gauge_hdf5::AbstractString,
     eig::WannierEIG;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
     eig_file::Union{Nothing, AbstractString} = nothing,
 )
     num_bands, num_kpoints = size(eig.data)
@@ -203,30 +192,24 @@ function _native_completed_authoritative_band_hamiltonian(
         num_kpoints;
         construction_policy,
     )
-    contract.status == "PASS" || throw(
-        ArgumentError(
-            "BAND_FRAME_CONTRACT_NOT_QUALIFIED: completed native-SAWF authority requires a PASS frame contract",
-        ),
-    )
+    contract.legacy && throw(ArgumentError("BAND_FRAME_COMPLETE_DATA_REQUIRED"))
     matrices = _native_completed_frame_hamiltonian_matrices(eig, contract)
-    input_sha256 = Dict{String, String}()
-    if eig_file === nothing
-        input_sha256["EIG_ARRAY"] = bytes2hex(SHA.sha256(reinterpret(UInt8, vec(eig.data))))
-    else
-        input_sha256["EIG"] = sha256_file(abspath(String(eig_file)))
-    end
-    input_sha256["WAVEFUNCTION_GAUGE_HDF5"] = something(contract.gauge_artifact_sha256)
-    input_sha256["BAND_FRAME_TRANSFORM"] = contract.transform_sha256
-    input_sha256["BAND_FRAME_CONTRACT"] = contract.contract_sha256
+    eig_file === nothing ||
+        isfile(eig_file) ||
+        throw(ArgumentError("authoritative EIG file does not exist: $(eig_file)"))
+    input_definitions = Dict(
+        "BAND_FRAME_TRANSFORM" => contract.transform_definition,
+        "BAND_FRAME_CONTRACT" => contract.contract_definition,
+    )
     authority = authoritative_hamiltonian_key(NativeDFTHamiltonian())
-    digest = _authoritative_band_hamiltonian_digest(matrices, authority, input_sha256)
+    definition = _authoritative_band_hamiltonian_definition(matrices, authority, input_definitions)
     return AuthoritativeBandHamiltonian(
         matrices,
         authority,
-        digest,
-        input_sha256,
+        definition,
+        input_definitions,
         AUTHORITATIVE_BAND_HAMILTONIAN_ALGORITHM_VERSION,
-        contract.gauge_artifact_sha256,
+        contract.gauge_definition,
         true,
     )
 end
@@ -235,36 +218,34 @@ end
 Load the actual Reynolds-projected eigenpairs from a qualified star-gauge
 artifact. Metadata labels alone are never accepted as Hamiltonian data.
 """
-function _bind_authority_band_frame!(input_sha256::AbstractDict, restored)
+function _bind_authority_band_frame!(input_definitions::AbstractDict, restored)
     restored.band_frame_contract === nothing && throw(
         ArgumentError(
             "LEGACY_BAND_FRAME_CONTRACT_NOT_RECORDED: symmetrized authority requires a schema-1.11 frame contract",
         ),
     )
     frame_contract = something(restored.band_frame_contract)
-    frame_contract.status == "PASS" || throw(ArgumentError("BAND_FRAME_CONTRACT_NOT_QUALIFIED"))
-    input_sha256["BAND_FRAME_TRANSFORM"] = frame_contract.transform_sha256
-    input_sha256["BAND_FRAME_CONTRACT"] = frame_contract.contract_sha256
+    frame_contract.legacy && throw(ArgumentError("BAND_FRAME_COMPLETE_DATA_REQUIRED"))
+    input_definitions["BAND_FRAME_TRANSFORM"] = frame_contract.transform_definition
+    input_definitions["BAND_FRAME_CONTRACT"] = frame_contract.contract_definition
     return frame_contract
 end
 
-"""Load the digest-bound Reynolds-projected target-frame Hamiltonian authority."""
+"""Load the value-bound Reynolds-projected target-frame Hamiltonian authority."""
 function _symmetrized_authoritative_band_hamiltonian(
     source::AbstractWavefunctionSource,
     gauge_hdf5::AbstractString,
     requested_authority::SymmetrizedDFTHamiltonian;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
-    identity =
-        () -> repr((source, requested_authority, sha256_file(gauge_hdf5), construction_policy))
-    return IO.cached_preparation_artifact("symmetrized-hamiltonian", identity) do
-        _build_symmetrized_authoritative_band_hamiltonian(
-            source,
-            gauge_hdf5,
-            requested_authority;
-            construction_policy,
-        )
-    end
+    # The old persistent cache had only source digests, not complete input
+    # definitions. Recompute from the actual gauge rather than adopt it.
+    return _build_symmetrized_authoritative_band_hamiltonian(
+        source,
+        gauge_hdf5,
+        requested_authority;
+        construction_policy,
+    )
 end
 
 """Build and strictly verify the compact Hamiltonian authority from its gauge artifact."""
@@ -272,7 +253,7 @@ function _build_symmetrized_authoritative_band_hamiltonian(
     source::AbstractWavefunctionSource,
     gauge_hdf5::AbstractString,
     requested_authority::SymmetrizedDFTHamiltonian;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
     path = abspath(gauge_hdf5)
     restored = read_generation_gauge(path; construction_policy, source)
@@ -298,32 +279,26 @@ function _build_symmetrized_authoritative_band_hamiltonian(
             "HAMILTONIAN_REFERENCE_MISMATCH: completed eigenvalues differ from Reynolds-projected Hamiltonian eigenvalues",
         ),
     )
-    reynolds_hashes = _validate_reynolds_hamiltonian_audit(payload, audit_value)
-    # The sealed completed wavefunctions are the eigen-gauge of the actual
-    # Reynolds-projected matrices, so their Hamiltonian is diagonal in this
-    # gauge.  The explicit hashes below keep the full Reynolds matrices and
-    # native-to-symmetrized rotations in the authority digest; an energy-only
-    # or metadata-only artifact can therefore never qualify.
+    _validate_reynolds_hamiltonian_audit(payload, audit_value)
+    # The checked completed eigen-gauge has diagonal H. The actual frame
+    # and Hamiltonian values, rather than a file digest, bind its consumers.
     matrices = _diagonal_band_hamiltonian(energies)
-    artifact_sha256 = sha256_file(path)
-    input_sha256 = copy(payload.input_sha256)
-    input_sha256["WAVEFUNCTION_GAUGE_HDF5"] = artifact_sha256
-    _bind_authority_band_frame!(input_sha256, restored)
-    merge!(input_sha256, reynolds_hashes)
-    digest = _authoritative_band_hamiltonian_digest(matrices, authority, input_sha256)
+    input_definitions = Dict{String, String}()
+    frame_contract = _bind_authority_band_frame!(input_definitions, restored)
+    definition = _authoritative_band_hamiltonian_definition(matrices, authority, input_definitions)
     return AuthoritativeBandHamiltonian(
         matrices,
         authority,
-        digest,
-        input_sha256,
+        definition,
+        input_definitions,
         AUTHORITATIVE_BAND_HAMILTONIAN_ALGORITHM_VERSION,
-        artifact_sha256,
+        frame_contract.gauge_definition,
         true,
     )
 end
 
 """Resolve the symmetrized Hamiltonian authority from a workflow configuration."""
-function _symmetrized_authoritative_band_hamiltonian(config::SymmetryAdaptedWannierizationConfig)
+function _symmetrized_authoritative_band_hamiltonian(config::WannierizationConfig)
     config.input.wavefunction_gauge_hdf5 === nothing && throw(
         ArgumentError(
             "SYMMETRIZED_HAMILTONIAN_ARTIFACT_REQUIRED: wavefunction_gauge_hdf5 is missing",
@@ -344,14 +319,11 @@ function _symmetrized_authoritative_band_hamiltonian(config::SymmetryAdaptedWann
 end
 
 """Select and construct the configured native or symmetrized Hamiltonian authority."""
-function authoritative_band_hamiltonian(
-    config::SymmetryAdaptedWannierizationConfig,
-    eig::WannierEIG,
-)
+function authoritative_band_hamiltonian(config::WannierizationConfig, eig::WannierEIG)
     if config.input.authoritative_hamiltonian isa NativeDFTHamiltonian
         # Public workflows validate the EIG path before this point.  The
         # in-memory expert/export surface remains usable for sealed synthetic
-        # tests by digesting the exact supplied EIG array when no file exists.
+        # tests by retaining the exact supplied Hamiltonian values.
         eig_file = isfile(config.input.eig_file) ? config.input.eig_file : nothing
         if config.input.wavefunction_gauge_hdf5 === nothing
             return _native_authoritative_band_hamiltonian(eig; eig_file)

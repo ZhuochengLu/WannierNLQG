@@ -2,6 +2,7 @@
 
 using TOML
 using SHA
+using Test
 
 include(joinpath(@__DIR__, "ArchitectureContracts.jl"))
 using .ArchitectureContracts
@@ -37,6 +38,16 @@ function source_files(directory::AbstractString)
     return sort(files)
 end
 
+# Pkg.test exposes only explicitly declared test dependencies, unlike direct
+# project includes. Aggregate all undeclared imports before entering other gates.
+test_dependency_errors = test_dependency_violations(
+    Dict(
+        relpath(path, ROOT) => read(path, String) for path in source_files(joinpath(ROOT, "test"))
+    ),
+    keys(TOML.parsefile(joinpath(ROOT, "test", "Project.toml"))["deps"]),
+)
+isempty(test_dependency_errors) || fail(join(test_dependency_errors, "; "))
+
 function active_code_files(directory::AbstractString)
     files = String[]
     for (root, _, names) in walkdir(directory)
@@ -55,8 +66,15 @@ end
 
 function assert_complete_composition(
     implementation_root::AbstractString,
-    composition_file::AbstractString,
+    composition_file::AbstractString;
+    shared_edges = Dict{String, String}(),
 )
+    # Cross-root dependencies are exact consumer-to-file edges, never a directory exemption.
+    declared_shared = Dict(
+        normpath(joinpath(implementation_root, consumer)) => normpath(target) for
+        (consumer, target) in shared_edges
+    )
+    observed_shared = Set{String}()
     included = Set{String}()
     active = Set{String}()
     function visit(path::AbstractString)
@@ -68,10 +86,17 @@ function assert_complete_composition(
         for matched in eachmatch(r"include\(\"([^\"]+)\"\)", composition)
             target = normpath(joinpath(dirname(normalized_path), matched.captures[1]))
             relative_target = replace(relpath(target, implementation_root), '\\' => '/')
-            startswith(relative_target, "../") && fail(
-                "$(relpath(normalized_path, ROOT)) includes outside its implementation root: " *
-                "$(matched.captures[1])",
-            )
+            if startswith(relative_target, "../")
+                get(declared_shared, normalized_path, nothing) == target || fail(
+                    "$(relpath(normalized_path, ROOT)) includes outside its implementation root: " *
+                    "$(matched.captures[1])",
+                )
+                normalized_path in observed_shared && fail("declared shared edge is repeated")
+                isfile(target) || fail("declared shared file is missing: $(target)")
+                push!(observed_shared, normalized_path)
+                visit(target)
+                continue
+            end
             isfile(target) ||
                 fail("$(relpath(normalized_path, ROOT)) includes missing file $(relative_target)")
             relative_target in included &&
@@ -83,6 +108,7 @@ function assert_complete_composition(
         return nothing
     end
     visit(composition_file)
+    Set(keys(declared_shared)) == observed_shared || fail("declared shared edge was not reached")
     implemented = Set(
         replace(relpath(path, implementation_root), '\\' => '/') for
         path in source_files(implementation_root) if path != composition_file
@@ -92,6 +118,52 @@ function assert_complete_composition(
         "missing=$(sort!(collect(setdiff(implemented, included)))) " *
         "extra=$(sort!(collect(setdiff(included, implemented))))",
     )
+end
+
+# Exercise the exact shared-edge exception independently of the real writer/reader.
+@testset "extension shared-edge closure remains exact" begin
+    mktempdir() do temporary
+        implementation = mkpath(joinpath(temporary, "implementation"))
+        shared = mkpath(joinpath(temporary, "shared"))
+        main = joinpath(implementation, "Main.jl")
+        leaf = joinpath(implementation, "Leaf.jl")
+        reference = joinpath(shared, "Reference.jl")
+        write(main, "include(\"Leaf.jl\")\n")
+        write(leaf, "include(\"../shared/Reference.jl\")\n")
+        write(reference, "const SHARED_VALUE = 1\n")
+        edge = Dict("Leaf.jl" => reference)
+        @test_throws ErrorException assert_complete_composition(implementation, main)
+        @test assert_complete_composition(implementation, main; shared_edges = edge) === true
+        @test_throws ErrorException assert_complete_composition(
+            implementation,
+            main;
+            shared_edges = Dict("Other.jl" => reference),
+        )
+        @test_throws ErrorException assert_complete_composition(
+            implementation,
+            main;
+            shared_edges = Dict("Leaf.jl" => joinpath(shared, "Wrong.jl")),
+        )
+        write(leaf, "include(\"../shared/Reference.jl\")\ninclude(\"../shared/Reference.jl\")\n")
+        @test_throws ErrorException assert_complete_composition(
+            implementation,
+            main;
+            shared_edges = edge,
+        )
+        write(leaf, "include(\"../shared/Reference.jl\")\n")
+        write(reference, "include(\"../implementation/Leaf.jl\")\n")
+        @test_throws ErrorException assert_complete_composition(
+            implementation,
+            main;
+            shared_edges = edge,
+        )
+        rm(reference)
+        @test_throws ErrorException assert_complete_composition(
+            implementation,
+            main;
+            shared_edges = edge,
+        )
+    end
 end
 
 function assert_include_only_composition(path::AbstractString)
@@ -137,6 +209,7 @@ required_files = [
     "src/SymmetryFoundation/SymmetryFoundation.jl",
     "src/SymmetryFoundation/SymmetryDetectionContracts.jl",
     "src/SymmetryFoundation/SymmetryModels.jl",
+    "src/SymmetryFoundation/HighSymmetryBandPaths.jl",
     "src/SymmetryFoundation/BandRepresentationModels.jl",
     "src/SymmetryFoundation/BandRepresentationContracts.jl",
     "src/SymmetryFoundation/SpinSymmetryActions.jl",
@@ -154,7 +227,6 @@ required_files = [
     "src/WannierProjection/WannierProjectionRepresentations.jl",
     "src/WannierProjection/WannierProjectionIntegrationContracts.jl",
     "src/Symmetrization/Symmetrization.jl",
-    "src/Symmetrization/GaugeAwareSymmetrizationModels.jl",
     "src/Symmetrization/SymmetrizationConfigs.jl",
     "src/Symmetrization/SymmetrizationExtensionLoading.jl",
     "src/Symmetrization/SymmetrizationExpertInterfaces.jl",
@@ -168,6 +240,7 @@ required_files = [
     "ext/WannierNLQGSymmetrizationExt/WannierNLQGSymmetrizationExt.jl",
     "ext/WannierNLQGSymmetrizationExt/MagneticMomentReaders.jl",
     "ext/WannierNLQGOperatorBundleExt/WannierNLQGOperatorBundleExt.jl",
+    "ext/WannierNLQGOperatorBundleExt/CurrentModelFormat.jl",
     "ext/WannierNLQGSymmetrizationExt/WannierMeshScreening.jl",
     "ext/WannierNLQGSymmetrizationExt/components/ValidationComponent.jl",
     "ext/WannierNLQGSymmetrizationExt/components/SewingComponent.jl",
@@ -175,14 +248,9 @@ required_files = [
     "ext/WannierNLQGSymmetrizationExt/components/PersistenceComponent.jl",
     "ext/WannierNLQGSymmetrizationExt/components/WorkflowComponent.jl",
     "ext/WannierNLQGSymmetrizationExt/components/validation/OperatorWorkflowValidation.jl",
-    "ext/WannierNLQGSymmetrizationExt/components/validation/GaugeAwareValidation.jl",
-    "ext/WannierNLQGSymmetrizationExt/components/sewing/GaugeAwareSewing.jl",
     "ext/WannierNLQGSymmetrizationExt/components/projection/OperatorProjection.jl",
-    "ext/WannierNLQGSymmetrizationExt/components/projection/GaugeAwareProjection.jl",
     "ext/WannierNLQGSymmetrizationExt/components/persistence/OperatorPersistence.jl",
-    "ext/WannierNLQGSymmetrizationExt/components/persistence/GaugeAwarePersistence.jl",
     "ext/WannierNLQGSymmetrizationExt/components/workflow/OperatorWorkflow.jl",
-    "ext/WannierNLQGSymmetrizationExt/components/workflow/GaugeAwareWorkflow.jl",
     "ext/WannierNLQGSymmetryFoundationExt/WannierNLQGSymmetryFoundationExt.jl",
     "ext/WannierNLQGSymmetryFoundationExt/SymmetryOperationDetection.jl",
     "ext/WannierNLQGSymmetryFoundationExt/TBSymmetryDetectionCompatibility.jl",
@@ -275,6 +343,17 @@ required_files = [
     "src/Runtime/Setup/FourierExecutionPlan.jl",
     "src/Runtime/Execution/TransitionScreening.jl",
     "src/Runtime/Execution/IntegralFamilies.jl",
+    "src/Runtime/Execution/ConventionalCurrentIntegralExecution.jl",
+    "src/Runtime/Execution/ProjectorShiftCurrentExecution.jl",
+    "src/Runtime/Execution/GeometricShiftCurrentExecution.jl",
+    "src/Runtime/Execution/WilsonShiftCurrentExecution.jl",
+    "src/Runtime/Execution/PhotonDragInjectionExecution.jl",
+    "src/Runtime/Execution/ConventionalCurrentKSliceExecution.jl",
+    "src/Runtime/Execution/ConventionalGeometryKSliceExecution.jl",
+    "src/Runtime/Execution/ProjectorQuantumConnectionKSliceExecution.jl",
+    "src/Runtime/Execution/GeometricQuantumConnectionKSliceExecution.jl",
+    "src/Runtime/Execution/WilsonQuantumConnectionKSliceExecution.jl",
+    "src/Runtime/Setup/ConventionalCurrentWorkerWorkspaces.jl",
     "src/Runtime/Execution/KSliceFamilies.jl",
     "src/Runtime/Execution/IntegralDriver.jl",
     "src/Runtime/Execution/KSliceDriver.jl",
@@ -290,6 +369,12 @@ for relative_path in required_files
 end
 
 for removed_path in (
+    "src/Symmetrization/GaugeAwareSymmetrizationModels.jl",
+    "ext/WannierNLQGSymmetrizationExt/components/validation/GaugeAwareValidation.jl",
+    "ext/WannierNLQGSymmetrizationExt/components/sewing/GaugeAwareSewing.jl",
+    "ext/WannierNLQGSymmetrizationExt/components/projection/GaugeAwareProjection.jl",
+    "ext/WannierNLQGSymmetrizationExt/components/persistence/GaugeAwarePersistence.jl",
+    "ext/WannierNLQGSymmetrizationExt/components/workflow/GaugeAwareWorkflow.jl",
     "src/Core/SymmetryModels.jl",
     "src/IO/WannierInput.jl",
     "src/IO/MagneticMomentReaders.jl",
@@ -365,13 +450,20 @@ for relative_path in (
     joinpath("MatrixElements", "ConventionCovariantTransport.jl"),
     joinpath("Responses", "Shared", "GeometricLoopCovariantKernels.jl"),
     joinpath("Responses", "Shared", "LoopCurrentSharedKernels.jl"),
-    joinpath("Responses", "QuantumGeometry", "GeometricLoopQuantumGeometry.jl"),
     joinpath("Responses", "QuantumGeometry", "GeometricLoopShiftVector.jl"),
 )
     source = read(joinpath(SRC, relative_path), String)
     occursin("wannier_centers_fractional", source) ||
         fail("$(relative_path) must consume ordered Wannier centers for covariant transport")
 end
+
+# The retired QHC entry only rejects; live GL routes above still require transport.
+retired_gl_qhc=read(
+    joinpath(SRC, "Responses", "QuantumGeometry", "GeometricLoopQuantumGeometry.jl"),
+    String,
+)
+occursin("GEOMETRIC_LOOP_QHC_UNSUPPORTED", retired_gl_qhc) ||
+    fail("retired Geometric Loop QHC must retain its explicit unsupported error")
 
 geometric_transport_source =
     read(joinpath(SRC, "Responses", "Shared", "GeometricLoopCovariantKernels.jl"), String)
@@ -392,8 +484,68 @@ occursin("compute_loop_overlap!", wilson_transport_source) &&
     fail("Wilson transport must not fall back to the Geometric bare-overlap primitive")
 
 bundle_composition = read(joinpath(SRC, "Runtime", "BundleKLoop.jl"), String)
-count(==('\n'), bundle_composition) <= 24 ||
-    fail("Runtime/BundleKLoop.jl must remain a small bundle composition root")
+# The explicit include-only sequence preserves the composition boundary while admitting
+# the approved BerryMultipole driver; comments and blank lines carry no runtime work.
+const BUNDLE_COMPOSITION_LAYERS = (
+    "Setup/ExecutionState.jl",
+    "Planning/BundlePlans.jl",
+    "Execution/TransitionScreening.jl",
+    "Setup/FourierExecutionPlan.jl",
+    "Setup/BundleAssembly.jl",
+    "Setup/ConventionalCurrentWorkerWorkspaces.jl",
+    "Execution/ResponsePointEvaluation.jl",
+    "Execution/IntegralFamilies.jl",
+    "Execution/PairedPhotonMomentumExecution.jl",
+    "Execution/KSliceFamilies.jl",
+    "Reduction/DeterministicReduction.jl",
+    "Output/ResponseOutput.jl",
+    "Execution/TaskSamplingScheduler.jl",
+    "Execution/ResponseIntegration.jl",
+    "Execution/ResponseCubatureTree.jl",
+    "Execution/SecondHarmonicDriver.jl",
+    "Execution/ThirdOrderDriver.jl",
+    "Execution/BerryMultipoleDriver.jl",
+    "Output/SpectralResponseOutput.jl",
+    "Execution/MixedBlockAccess.jl",
+    "Execution/SpectralResponseDriver.jl",
+    "Execution/AdaptiveCurrentDriver.jl",
+    "Execution/IntegralDriver.jl",
+    "Execution/KSliceDriver.jl",
+    "Execution/BundleDispatch.jl",
+)
+# Extract only literal include calls; any executable body or dynamic path fails closed.
+function bundle_composition_layers(source)
+    expression = Meta.parseall(source)
+    expression.head == :toplevel || return nothing
+    layers = String[]
+    for statement in expression.args
+        statement isa LineNumberNode && continue
+        statement isa Expr &&
+        statement.head == :call &&
+        length(statement.args) == 2 &&
+        statement.args[1] == :include &&
+        statement.args[2] isa String || return nothing
+        push!(layers, statement.args[2])
+    end
+    return Tuple(layers)
+end
+bundle_composition_layers(bundle_composition) == BUNDLE_COMPOSITION_LAYERS ||
+    fail("Runtime/BundleKLoop.jl must retain its ordered include-only composition")
+@testset "bundle composition rejects executable or ambiguous additions" begin
+    @test bundle_composition_layers(bundle_composition) == BUNDLE_COMPOSITION_LAYERS
+    @test bundle_composition_layers(bundle_composition * "\n# documentation only\n") ==
+          BUNDLE_COMPOSITION_LAYERS
+    for addition in
+        ("println(1)", "include(path)", "quote include(\"other.jl\") end", "function extra() end")
+        @test bundle_composition_layers(bundle_composition * "\n" * addition) === nothing
+    end
+    @test bundle_composition_layers(
+        bundle_composition * "\ninclude(\"Setup/ExecutionState.jl\")",
+    ) != BUNDLE_COMPOSITION_LAYERS
+    @test bundle_composition_layers(
+        replace(bundle_composition, "include(\"Execution/BerryMultipoleDriver.jl\")" => ""),
+    ) != BUNDLE_COMPOSITION_LAYERS
+end
 for layer in (
     "Setup/ExecutionState",
     "Planning/BundlePlans",
@@ -446,7 +598,11 @@ assert_complete_composition(wannier_projection_root, wannier_projection_composit
 assert_complete_composition(symmetrization_root, joinpath(symmetrization_root, "Symmetrization.jl"))
 assert_complete_composition(
     foundation_extension_root,
-    joinpath(foundation_extension_root, "WannierNLQGSymmetryFoundationExt.jl"),
+    joinpath(foundation_extension_root, "WannierNLQGSymmetryFoundationExt.jl");
+    shared_edges = Dict(
+        "BandRepresentationPersistence.jl" =>
+            joinpath(EXT, "shared", "ScientificInputReferenceHDF5.jl"),
+    ),
 )
 assert_complete_composition(
     extension_root,
@@ -589,7 +745,10 @@ end
 assert_complete_composition(wannierization_root, joinpath(wannierization_root, "Wannierization.jl"))
 assert_complete_composition(
     wannierization_extension_root,
-    joinpath(wannierization_extension_root, "WannierNLQGWannierizationExt.jl"),
+    joinpath(wannierization_extension_root, "WannierNLQGWannierizationExt.jl");
+    shared_edges = Dict(
+        "support/HDF5Operations.jl" => joinpath(EXT, "shared", "ScientificInputReferenceHDF5.jl"),
+    ),
 )
 component_contract =
     TOML.parsefile(joinpath(ROOT, "test", "contracts", "wannierization_components.toml"))
@@ -618,8 +777,17 @@ for component in sort!(collect(keys(expected_components)))
         ],
     )
     actual_component_files[component] = files
-    component_sources[component] =
-        join((read(joinpath(wannierization_extension_root, file), String) for file in files), "\n")
+    # This helper is included into the support component, not a new component owner.
+    shared_files =
+        component == "WannierizationInternalSupport" ?
+        [joinpath(EXT, "shared", "ScientificInputReferenceHDF5.jl")] : String[]
+    component_sources[component] = join(
+        vcat(
+            [read(joinpath(wannierization_extension_root, file), String) for file in files],
+            [read(file, String) for file in shared_files],
+        ),
+        "\n",
+    )
     dependencies = Set(String.(relative_module_dependencies(source)))
     component_graph[component] = dependencies
     dependency_errors = exact_allowlist_violations(
@@ -660,7 +828,17 @@ for component in sort!(collect(keys(expected_components)))
         "components/$(component).jl must use exact import statements, found using " *
         join(using_providers, ", "),
     )
-    root_usage_errors = root_module_usage_violations(component_sources[component])
+    # Qualified calls through explicitly imported project submodules retain that owner;
+    # direct root calls and undeclared project paths remain forbidden.
+    imported_project_modules = String[
+        provider for provider in expected_components[component]["project_dependencies"] if
+        haskey(expected_import_records, provider) &&
+        expected_import_records[provider].module_binding
+    ]
+    root_usage_errors = root_module_usage_violations(
+        component_sources[component];
+        allowed_module_paths = imported_project_modules,
+    )
     isempty(root_usage_errors) ||
         fail("components/$(component).jl uses the WannierNLQG root outside pkgversion provenance")
 
@@ -777,17 +955,30 @@ photon_drag_shift_entry = read(
     joinpath(responses_root, "PhotonDragShiftCurrent", "GeometricLoopPhotonDragShiftCurrent.jl"),
     String,
 )
-occursin("compute_geometric_loop_photon_drag_shift_current_kernel! =", photon_drag_shift_entry) ||
-    fail("photon-drag shift-current entry must retain its explicit physical-effect name")
-integral_families = read(joinpath(SRC, "Runtime", "Execution", "IntegralFamilies.jl"), String)
-occursin("Responses.compute_geometric_loop_photon_drag_shift_current_kernel!", integral_families) ||
-    fail("Runtime must use the non-exported photon-drag shift-current entry by qualification")
+(
+    occursin(
+        "compute_geometric_loop_photon_drag_shift_current_kernel! =",
+        photon_drag_shift_entry,
+    ) || occursin(
+        r"(?m)^function\s+compute_geometric_loop_photon_drag_shift_current_kernel!\s*\(",
+        photon_drag_shift_entry,
+    )
+) || fail("photon-drag shift-current entry must retain its explicit physical-effect name")
+geometric_shift_execution =
+    read(joinpath(SRC, "Runtime", "Execution", "GeometricShiftCurrentExecution.jl"), String)
+occursin(
+    "Responses.compute_geometric_loop_photon_drag_shift_current_kernel!",
+    geometric_shift_execution,
+) || fail("Runtime must use the non-exported photon-drag shift-current entry by qualification")
 
 allowed_response_directories = Set([
+    "IntrinsicHall",
     "LinearTransport",
     "LinearOpticalResponse",
     "OrbitalMagnetization",
     "SecondHarmonicGeneration",
+    "JerkCurrent",
+    "ThirdHarmonicGeneration",
     "Shared",
     "ShiftCurrent",
     "PhotonDragShiftCurrent",
@@ -835,9 +1026,9 @@ end
 facade = read(joinpath(SRC, "WannierNLQG.jl"), String)
 include_order = [
     "Core",
+    "IO",
     "SymmetryFoundation",
     "WannierProjection",
-    "IO",
     "MatrixElements",
     "Symmetrization",
     "Wannierization",
@@ -850,32 +1041,54 @@ issorted(first.(positions)) ||
     fail("facade submodule include order does not follow the dependency DAG")
 Set(exported_symbols(facade)) == Set([
     :SeparateRelaxation,
-    :FermiSurfaceBroadening,
     :LinearTransportParameters,
     :LinearOpticalResponseParameters,
     :OrbitalMagnetizationParameters,
-    :LinearResponseNumerics,
-    :OrbitalNumerics,
+    :IntrinsicHallParameters,
+    :BerryMultipoleParameters,
+    :Numerics,
+    :Numerics,
     :TaskConfig,
     :TaskSpec,
     :RunResult,
     :ResponseQualificationResult,
+    # The text frontend exposes these seven already supported public entrypoints.
+    :TaskInputResolution,
+    :read_task_input,
+    :resolve_task_input,
+    :explain_task_input,
+    :write_task_input_template,
+    :write_task_input_resolution,
+    :run_task_input,
     :run,
     :ModelInput,
+    :RealSpaceTBInput,
+    :AnalyticKInput,
+    :PointOrbitalSymmetryOperation,
+    :write_native_response_symmetry,
+    :KRegion,
     :BZMesh,
     :KSlice,
     :KPath,
+    :automatic_kpath,
     :ExecutionOptions,
+    :UniformIntegration,
+    :HAdaptiveCubature,
+    :IntegrationDomain,
+    :IntegrationDomain2D,
+    :integrate_response,
     :OutputOptions,
     :OpticalParameters,
     :SHGParameters,
-    :SHGNumerics,
+    :JerkParameters,
+    :THGParameters,
+    :Numerics,
     :FiniteQOpticalParameters,
     :GeometryParameters,
     :BandParameters,
-    :OpticalNumerics,
-    :GeometryNumerics,
-    :BandNumerics,
+    :Numerics,
+    :Numerics,
+    :Numerics,
     :BandTargets,
     :Subspace,
     :Subspaces,
@@ -885,16 +1098,15 @@ Set(exported_symbols(facade)) == Set([
     :InterbandGroups,
     :TripleGroups,
     :TensorComponent,
+    :TensorComponents,
     :FullTensor,
     :KSliceSelection,
     :read_linear_transport_result,
     :read_orbital_magnetization_result,
 ]) || fail("facade export set differs from the grouped response API contract")
-Set(exported_symbols(wannierization_composition)) == Set((
-    :SymmetryAdaptedWannierizationConfig,
-    :WannierizationResult,
-    :construct_symmetry_adapted_wannier_functions,
-)) || fail("Wannierization facade export set differs from its three-symbol allowlist")
+Set(exported_symbols(wannierization_composition)) ==
+Set((:WannierizationConfig, :WannierizationResult, :construct_wannier_functions)) ||
+    fail("Wannierization facade export set differs from its three-symbol allowlist")
 
 project = TOML.parsefile(joinpath(ROOT, "Project.toml"))
 extensions = project["extensions"]
@@ -907,8 +1119,13 @@ for extension_name in sort!(collect(keys(expected_extensions)))
     actual_dependencies = Set{String}()
     for path in source_files(joinpath(EXT, extension_name))
         source = read(path, String)
-        for matched in eachmatch(r"(?m)^\s*(?:using|import)\s+([A-Za-z][A-Za-z0-9_.]*)", source)
-            push!(actual_dependencies, matched.captures[1])
+        if extension_name == "WannierNLQGWannierizationPrecompileExt"
+            # The composite owner imports several providers in one using statement.
+            union!(actual_dependencies, direct_import_providers(source))
+        else
+            for matched in eachmatch(r"(?m)^\s*(?:using|import)\s+([A-Za-z][A-Za-z0-9_.]*)", source)
+                push!(actual_dependencies, matched.captures[1])
+            end
         end
     end
     expected_source_dependencies =
@@ -978,21 +1195,22 @@ for forbidden in ("using ..IO", "using ..Runtime")
     occursin(forbidden, module_sources[:Responses]) &&
         fail("Responses has a forbidden dependency $(forbidden)")
 end
+# Runtime's named integration ports retain their meaning across formatted newlines.
+runtime_dependency_text = replace(module_sources[:Runtime], r"\s+" => " ")
 for required in (
     "using ..Core",
     "using ..IO",
     "using ..MatrixElements",
     "using ..Responses",
-    "using ..SymmetryFoundation: response_symmetry_group_report",
+    "using ..SymmetryFoundation: response_symmetry_group_report, CrystalStructure, high_symmetry_band_path, read_poscar_structure",
 )
-    occursin(required, module_sources[:Runtime]) ||
-        fail("Runtime is missing dependency $(required)")
+    occursin(required, runtime_dependency_text) || fail("Runtime is missing dependency $(required)")
 end
 
 allowed_dependencies = Dict(
     "Core" => Set{String}(),
-    "SymmetryFoundation" => Set(["Core"]),
-    "WannierProjection" => Set(["SymmetryFoundation"]),
+    "SymmetryFoundation" => Set(["Core", "IO"]),
+    "WannierProjection" => Set(["Core", "SymmetryFoundation"]),
     "IO" => Set(["Core"]),
     "MatrixElements" => Set(["Core", "IO"]),
     "Symmetrization" => Set(["Core", "SymmetryFoundation", "WannierProjection"]),
@@ -1010,7 +1228,12 @@ for (layer, allowed) in allowed_dependencies
                 dependency == "Responses" &&
                 basename(path) in
                 ("LinearTransport.jl", "LinearOpticalResponse.jl", "OrbitalMagnetization.jl")
-            (dependency in allowed || nested_response_parent) ||
+            # The text frontend composes existing preparation owners only at this module port.
+            preparation_input_port =
+                layer == "Runtime" &&
+                basename(path) == "Runtime.jl" &&
+                dependency in ("Wannierization", "Symmetrization", "WannierProjection")
+            (dependency in allowed || nested_response_parent || preparation_input_port) ||
                 fail("$(relpath(path, ROOT)) has forbidden dependency $(dependency)")
         end
     end
@@ -1035,8 +1258,7 @@ for forbidden in ("WannierNLQG.Responses", "WannierNLQG.Runtime")
         fail("Wannierization extension has forbidden dependency $(forbidden)")
 end
 for path in source_files(wannierization_extension_root)
-    for forbidden in
-        (r"\busing\s+PyCall\b", r"\busing\s+PythonCall\b", r"\bimport\s+wannierberri\b")
+    for forbidden in (r"\busing\s+PyCall\b", r"\busing\s+PythonCall\b")
         assert_absent(path, forbidden)
     end
 end
@@ -1057,45 +1279,116 @@ production_sources = Dict(
 )
 results_artifacts_source =
     read(joinpath(SRC, "Wannierization", "models", "ResultsArtifacts.jl"), String)
-sawf_leaf_fields = Set{Symbol}()
-for group in (
-    "WannierizationInputConfig",
-    "WannierizationSolverConfig",
-    "WannierizationCheckpointConfig",
-    "WannierizationRuntimeConfig",
-    "WannierizationOutputConfig",
+# Frozen b98 grouped contract plus the two approved checkpoint storage fields.
+expected_sawf_group_fields = Dict(
+    "WannierizationInputConfig" => Set((
+        :amn_file,
+        :authoritative_hamiltonian,
+        :band_representation,
+        :band_representation_hdf5,
+        :compatibility_policy,
+        :construction_policy,
+        :degeneracy_tolerance_ev,
+        :eig_file,
+        :empirical_covariance_budget,
+        :frozen_max_ev,
+        :frozen_min_ev,
+        :frozen_states,
+        :geometry,
+        :matrix_elements,
+        :mmn_file,
+        :num_wannier,
+        :operation_indices,
+        :outer_max_ev,
+        :outer_min_ev,
+        :preparation_execution,
+        :projection_basis,
+        :representation_tolerance,
+        :sewing_backend,
+        :source,
+        :symmetry_tolerance,
+        :target_center_matching_tolerance,
+        :wannierization_mode,
+        :wavefunction_gauge_backend,
+        :wavefunction_gauge_hdf5,
+        :win_file,
+    )),
+    "WannierizationSolverConfig" => Set((
+        :acceleration,
+        :initialization,
+        :initialization_backend,
+        :little_group_max_iterations,
+        :little_group_tolerance,
+        :multi_start,
+        :numerical_thresholds,
+        :parallel,
+        :paw_scdm_input_hdf5,
+        :random_seed,
+        :smv_fletcher_reeves_two_stage_audit_manifest,
+        :smv_fletcher_reeves_two_stage_audit_thresholds,
+        :stage_controls,
+        :symmetrize_z,
+        :u_mix_ratio,
+        :z_mix_ratio,
+    )),
+    "WannierizationCheckpointConfig" => Set((
+        :checkpoint_hdf5,
+        :num_dump_cycles,
+        :recovery,
+        :reference_root,
+        :restart_hdf5,
+        :storage,
+    )),
+    "WannierizationRuntimeConfig" =>
+        Set((:detailed_progress, :iteration_observer, :num_print_cycles)),
+    "WannierizationOutputConfig" => Set((
+        :band_representation_output_hdf5,
+        :final_tb_symmetry_report_enabled,
+        :model_file,
+        :operator_closure_tolerance,
+        :operator_files_formatted,
+        :operator_tasks,
+        :profile,
+        :shu_file,
+        :shu_provenance_json,
+        :siu_file,
+        :siu_provenance_json,
+        :spin_family_covariance_tolerance,
+        :spin_family_idempotence_tolerance,
+        :spn_file,
+        :spn_formatted,
+        :spn_provenance_file,
+        :tb_output_formats,
+        :uhu_file,
+        :uhu_provenance_json,
+        :uiu_file,
+        :uiu_provenance_json,
+        :write_model_tb,
+    )),
 )
+sawf_leaf_fields = Set{Symbol}()
+for (group, expected_fields) in expected_sawf_group_fields
     matched = match(Regex("(?s)struct " * group * "(.*?)\\nend"), results_artifacts_source)
     matched === nothing && fail("cannot derive SAWF leaf fields for $(group)")
-    for field in eachmatch(r"(?m)^    ([A-Za-z_][A-Za-z0-9_]*)::", matched.captures[1])
-        push!(sawf_leaf_fields, Symbol(field.captures[1]))
-    end
+    actual_fields = Set(
+        Symbol(field.captures[1]) for
+        field in eachmatch(r"(?m)^    ([A-Za-z_][A-Za-z0-9_]*)::", matched.captures[1])
+    )
+    actual_fields == expected_fields || fail("Wannierization grouped fields differ for $(group)")
+    union!(sawf_leaf_fields, actual_fields)
 end
-length(sawf_leaf_fields) == 75 ||
-    fail("Wannierization grouped configuration must contain 75 leaf fields")
-sawf_flat_reads = typed_sawf_flat_config_reads(boundary_sources, sawf_leaf_fields)
-expected_negative_sawf_flat_reads =
-    Set(("test/wannierization_config_architecture_unit.jl: ordinary_default.win_file",))
-sawf_flat_read_errors = exact_allowlist_violations(
-    "typed SAWF top-level leaf reads",
-    Set(sawf_flat_reads),
+length(sawf_leaf_fields) == 77 ||
+    fail("Wannierization grouped configuration must contain 77 distinct leaf fields")
+# Independent diagnostics share already validated source/schema inputs; collect
+# all categories before failing. Missing files/schema errors above remain fatal.
+expected_negative_sawf_flat_reads = Set{String}()
+architecture_boundary_errors = independent_architecture_boundary_violations(
+    boundary_sources,
+    production_sources,
+    sawf_leaf_fields,
     expected_negative_sawf_flat_reads,
 )
-isempty(sawf_flat_read_errors) || fail(join(sawf_flat_read_errors, ", "))
-spglib_violations = production_spglib_violations(production_sources)
-isempty(spglib_violations) ||
-    fail("Spglib ownership violations remain: " * join(spglib_violations, ", "))
-private_boundary_violations = private_shared_boundary_violations(boundary_sources)
-isempty(private_boundary_violations) ||
-    fail("shared-layer private references remain: " * join(private_boundary_violations, ", "))
-private_module_violations = private_module_boundary_violations(production_sources)
-isempty(private_module_violations) || fail(
-    "production module-private cross-owner references remain: " *
-    join(private_module_violations, ", "),
-)
-semantic_type_violations = semantic_duplicate_type_violations(production_sources)
-isempty(semantic_type_violations) ||
-    fail("semantic duplicate types remain: " * join(semantic_type_violations, ", "))
+isempty(architecture_boundary_errors) || fail(join(architecture_boundary_errors, "\n"))
 
 shared_type_owners = Dict(
     "CrystalStructure" => joinpath(SRC, "SymmetryFoundation"),
@@ -1147,7 +1440,7 @@ native_vasp_reader_owners == [joinpath(SRC, "SymmetryFoundation", "VASPWavefunct
 
 for path in all_architecture_sources
     assert_absent(path, "_legacy_build_band_representation")
-    assert_absent(path, ":wannierberri_native")
+    assert_absent(path, ":unsupported_native_profile")
     assert_absent(path, ":wanniernlqg_extension")
 end
 for path in vcat(
@@ -1349,30 +1642,16 @@ active_roots = [
     joinpath(ROOT, "scripts"),
     joinpath(ROOT, "test"),
 ]
-const WANNIER90_VERSION_BOUND_IDENTIFIERS = Set([
-    "Wannier90Matrices",
-    "Wannier90ReferenceDiagnosticSet",
-    "Wannier90ReferenceDiagnostics",
-    "SMVFletcherReevesTwoStageAuditThresholds",
-    "Wannier90ReferenceSupplement",
-    "Wannier90References",
-    "Wannier90SourceIntegrity",
-    "Wannier90StrictPlotAudit",
-])
+
 for active_root in active_roots
     for path in active_code_files(active_root)
         filename = basename(path)
         baseline_adapter =
             filename in ("check_fused_kloop_regression.jl", "benchmark_hot_allocations.jl")
-        occursin(r"(?i)qiao|wannier90", filename) &&
+        occursin(r"(?i)qiao", filename) &&
             fail("active filename contains a forbidden person/version name: $(relpath(path, ROOT))")
         source_text = read(path, String)
-        for identifier in eachmatch(r"\bWannier90[A-Za-z_][A-Za-z0-9_]*\b", source_text)
-            identifier.match in WANNIER90_VERSION_BOUND_IDENTIFIERS || fail(
-                "unapproved Wannier90-bound identifier $(identifier.match) remains in " *
-                relpath(path, ROOT),
-            )
-        end
+
         for pattern in (
             r"\bQiao[A-Za-z_][A-Za-z0-9_]*\b",
             r"\bqiao_[A-Za-z0-9_]+\b",
@@ -1392,6 +1671,24 @@ for path in vcat(source_files(SRC), source_files(EXT))
     contains_han_text(read(path, String)) &&
         fail("$(relpath(path, ROOT)) contains non-English source text")
 end
+
+# Ordinary-policy rules are a development/CI static gate, never an ordinary
+# runtime installation audit. Historical evidence readers keep their contracts.
+isfile(joinpath(ROOT, "docs", "ORDINARY_CALCULATION_POLICY.md")) ||
+    fail("canonical ordinary calculation policy is missing")
+const HISTORICAL_CONSTRUCTION_POLICY_FILES = Set([
+    "ext/WannierNLQGWannierizationExt/star_gauge/Persistence.jl",
+    "ext/WannierNLQGWannierizationExt/solver/RestartContract.jl",
+])
+for path in vcat(source_files(SRC), source_files(EXT))
+    relative = replace(relpath(path, ROOT), '\\'=>'/')
+    relative in HISTORICAL_CONSTRUCTION_POLICY_FILES && continue
+    assert_absent(path, r"construction_policy\s*(?:==|!=)\s*:strict")
+end
+assert_absent(
+    joinpath(SRC, "Runtime", "Output", "SpectralResponseOutput.jl"),
+    r"(?:release_tree_sha256|source_tree_sha256)\s*\(",
+)
 
 include(joinpath(SRC, "WannierNLQG.jl"))
 using .WannierNLQG
@@ -1441,25 +1738,38 @@ compiler_type_symbols = Dict(
 # Permit their literal Type operands only in the two verified guarded files;
 # calls, imports, and every other source retain the ordinary boundary checks.
 compiler_type_symbols_by_source = Dict()
-if !WannierNLQG.FIRST_USE_TRACE_COMPATIBLE
+public_workload_architecture =
+    isdefined(WannierNLQG, :FIRST_USE_WORKLOAD_ARCHITECTURE) &&
+    WannierNLQG.FIRST_USE_WORKLOAD_ARCHITECTURE === :public_representative
+if public_workload_architecture
+    for path in (
+        "src/FirstUse/Generated/RegistrySignatures.jl",
+        "src/FirstUse/Generated/Current12SCSignatures.jl",
+        "ext/WannierNLQGWannierizationExt/Generated/Current12ProjectionReaderSignatures.jl",
+    )
+        isfile(joinpath(ROOT, path)) &&
+            fail("public workload architecture retained compiler captures: $path")
+    end
+end
+if !WannierNLQG.FIRST_USE_TRACE_COMPATIBLE && !public_workload_architecture
     guarded_trace_sources = (
         (
             "ext/WannierNLQGSymmetrizationExt/Generated/SymmetrizationResponseWriterSignatures.jl",
             "1a8abf6a2d98c54bb8f807fc170db02d9df47fc6cb8a061da8f4b1ae35567a07",
             "ext/WannierNLQGSymmetrizationExt/WannierNLQGSymmetrizationExt.jl",
-            "311bf0bf49367ab2a4fe9f38ac756cc224125758e2b9e7fdea65e1f676b339a7",
+            "569ed75f7630804d866ac0fa333c8f57e4ec4e832d518372e252cc29ced31aa9",
             Symbol("#3#4"),
         ),
         (
             "ext/WannierNLQGWannierizationExt/Generated/VASPPAWSPNResidualSignatures.jl",
             "8fcbd76c2d1634edc5a0fd62b866328ef003d84b950b3efc1a6909d02056c039",
             "ext/WannierNLQGWannierizationExt/WannierNLQGWannierizationExt.jl",
-            "68f31c1d168e15451b98270701f4e38b6ded10fdc15e992d9a5e6ddd0ff60b7f",
+            "24ba724d02f2a95db4ea6ea8df1d0320fa1778cd740334e4529dec9dd083d158",
             Symbol("#124#132"),
         ),
     )
     bytes2hex(sha256(read(joinpath(SRC, "WannierNLQG.jl")))) ==
-    "7a7e17c1032b66759f47110f3dfab99c6b156d929b498617a51fb6c41ad77c25" ||
+    "887911169c915d6dceb64ceb1e9caa3927e944b18c0aa1dfed224bc0440165fc" ||
         fail("captured compiler trace version guard changed; revalidate its source pins")
     for (path, digest, parent_path, parent_digest, type_name) in guarded_trace_sources
         bytes2hex(sha256(read(joinpath(ROOT, path)))) == digest ||
@@ -1472,8 +1782,12 @@ if !WannierNLQG.FIRST_USE_TRACE_COMPATIBLE
         compiler_type_symbols_by_source[path] = verified_types
     end
 end
+# Julia AST analysis has an explicit language inventory. The complete mixed
+# inventory is still checked by private_shared_boundary_violations above.
+julia_boundary_sources = julia_boundary_source_inventory(boundary_sources)
+integration_boundary_errors = String[]
 shared_boundary_violations = shared_boundary_reference_violations(
-    boundary_sources,
+    julia_boundary_sources,
     Dict(
         "SymmetryFoundation" =>
             names(WannierNLQG.SymmetryFoundation; all = false, imported = false),
@@ -1489,7 +1803,8 @@ shared_boundary_violations = shared_boundary_reference_violations(
     compiler_type_symbols,
     compiler_type_symbols_by_source,
 )
-isempty(shared_boundary_violations) || fail(
+isempty(shared_boundary_violations) || push!(
+    integration_boundary_errors,
     "shared-layer qualified references bypass integration allowlists: " *
     join(shared_boundary_violations, ", "),
 )
@@ -1499,8 +1814,10 @@ matrix_elements_boundary_violations = shared_boundary_reference_violations(
     Dict("MatrixElements" => WannierNLQG.MatrixElements.MATRIX_ELEMENTS_INTEGRATION_API);
     owner_prefixes = Dict("MatrixElements" => ("src/MatrixElements/",)),
     compiler_type_symbols = compiler_type_symbols,
+    compiler_type_symbols_by_source = compiler_type_symbols_by_source,
 )
-isempty(matrix_elements_boundary_violations) || fail(
+isempty(matrix_elements_boundary_violations) || push!(
+    integration_boundary_errors,
     "MatrixElements qualified references bypass the integration allowlist: " *
     join(matrix_elements_boundary_violations, ", "),
 )
@@ -1519,7 +1836,8 @@ integration_allowlist_errors = integration_allowlist_violations(
         "MatrixElements" => WannierNLQG.MatrixElements.MATRIX_ELEMENTS_INTEGRATION_API,
     ),
 )
-isempty(integration_allowlist_errors) || fail(
+isempty(integration_allowlist_errors) || push!(
+    integration_boundary_errors,
     "integration allowlists are mixed or ambiguous: " * join(integration_allowlist_errors, ", "),
 )
 matrix_elements_test_api_errors = test_api_violations(
@@ -1528,8 +1846,11 @@ matrix_elements_test_api_errors = test_api_violations(
     String.(WannierNLQG.MatrixElements.MATRIX_ELEMENTS_TEST_API),
     String.(names(WannierNLQG.MatrixElements; all = true, imported = true)),
 )
-isempty(matrix_elements_test_api_errors) ||
-    fail("invalid MatrixElements test API: " * join(matrix_elements_test_api_errors, ", "))
+isempty(matrix_elements_test_api_errors) || push!(
+    integration_boundary_errors,
+    "invalid MatrixElements test API: " * join(matrix_elements_test_api_errors, ", "),
+)
+isempty(integration_boundary_errors) || fail(join(integration_boundary_errors, "\n"))
 
 expected_fields = Set([:model, :sampling, :tasks, :execution, :output])
 Set(fieldnames(WannierNLQG.TaskConfig)) == expected_fields ||

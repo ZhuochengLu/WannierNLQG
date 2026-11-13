@@ -20,7 +20,7 @@ if !isdefined(Main, :synthetic_vasp_wannierization_fixture)
             false,
         )
         basis = WannierNLQG.WannierProjection.WannierProjectionBasis([projection_block], 1, false)
-        config = PAW_WANNIERIZATION.SymmetryAdaptedWannierizationConfig(
+        config = PAW_WANNIERIZATION.WannierizationConfig(
             input = PAW_WANNIERIZATION.WannierizationInputConfig(
                 wannierization_mode = :ordinary,
                 win_file = "synthetic.win",
@@ -80,10 +80,10 @@ isdefined(@__MODULE__, :synthetic_potcar_block) ||
         :require_oracle,
     ]
 
-    external = PAW_WANNIERIZATION.ExternalWannier90Matrices("x.mmn", "x.amn")
+    external = PAW_WANNIERIZATION.ExternalOverlapProjectionMatrices("x.mmn", "x.amn")
     @test external.mmn_file == "x.mmn"
     @test external.amn_file == "x.amn"
-    @test_throws ArgumentError PAW_WANNIERIZATION.ExternalWannier90Matrices("", "x.amn")
+    @test_throws ArgumentError PAW_WANNIERIZATION.ExternalOverlapProjectionMatrices("", "x.amn")
 
     native = PAW_WANNIERIZATION.NativeVASPPAWMatrices("x.mmn"; artifact_dir = "artifacts")
     @test native.require_oracle
@@ -524,7 +524,11 @@ end
     workflow = first(PAW_WANNIERIZATION._load_wannierization_extension!()).WorkflowOrchestration
     outer = BitMatrix([true true; true false; false true])
     frozen = falses(3, 2)
-    scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(outer, frozen)
+    scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
+        outer,
+        frozen;
+        content_authentication = false,
+    )
     Base.invokelatest(extension._validate_vasp_paw_qualification_scope, scope, 3, 2, 2)
 
     overlap = Matrix{ComplexF64}(I, 3, 3)
@@ -819,18 +823,22 @@ end
             Dict{String, String}(),
             Dict{String, String}(),
         )
-        target_failure = try
-            Base.invokelatest(
-                workflow._require_native_vasp_paw_qualification,
-                failed_result,
-                thresholds,
-            )
-            nothing
-        catch exception
-            exception
-        end
-        @test target_failure isa ArgumentError
-        @test occursin("VASP_PAW_MMN_PARITY_FAILED", sprint(showerror, target_failure))
+        @test Base.invokelatest(
+            workflow._require_native_vasp_paw_qualification,
+            failed_result,
+            thresholds,
+        ) === nothing
+        @test !failed_result.passed
+        @test failed_result.mmn_parity === failed_target_mmn
+        @test "VASP_PAW_MMN_PARITY_FAILED" in failed_result.diagnostics
+        retained_rows =
+            Base.invokelatest(workflow._native_vasp_paw_gate_diagnostics, failed_result, thresholds)
+        mmn_measurement =
+            only(filter(row -> row.context["metric"] == "mmn_max_absolute", retained_rows)).context
+        @test parse(Float64, mmn_measurement["value"]) ≈ 1.0e-3 atol = 2.0e-16 rtol = 0.0
+        @test parse(Float64, mmn_measurement["threshold"]) == thresholds.mmn_max_absolute
+        @test mmn_measurement["gate_result"] == "FAIL"
+        @test mmn_measurement["action"] == "CONTINUE_STANDARD"
         @test !Base.invokelatest(
             extension._paw_target_qualification,
             0.0,
@@ -850,8 +858,9 @@ end
     bad_digest_scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
         outer,
         frozen;
-        outer_mask_sha256 = repeat("0", 64),
+        content_authentication = false,
     )
+    bad_digest_scope.outer_mask[1, 1] = !bad_digest_scope.outer_mask[1, 1]
     @test_throws ArgumentError Base.invokelatest(
         extension._validate_vasp_paw_qualification_scope,
         bad_digest_scope,
@@ -863,7 +872,8 @@ end
     rank_deficient_outer[:, 1] .= (true, false, false)
     rank_deficient_scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
         rank_deficient_outer,
-        frozen,
+        frozen;
+        content_authentication = false,
     )
     @test_throws ArgumentError Base.invokelatest(
         extension._validate_vasp_paw_qualification_scope,
@@ -895,7 +905,9 @@ end
         @test !any(contract.scope.frozen_mask)
         @test contract.metadata["target_authority"] == "outer_window"
         @test contract.metadata["window_closure"] == "complete_degeneracy_blocks"
-        @test contract.input_sha256["EIG"] == bytes2hex(SHA.sha256(read(eig_file)))
+        @test isempty(contract.input_sha256)
+        @test contract.metadata["content_authentication"] == "NOT_PERFORMED"
+        @test PAW_IO.read_wannier_eig(eig_file).data == energies
     end
 end
 
@@ -1082,18 +1094,30 @@ end
             norm_native,
             norm_native.input_sha256,
         )
-        @test implicit_key != Base.invokelatest(
+        @test implicit_key == Base.invokelatest(
             extension._vasp_raw_context_identity,
             shifted_source,
             norm_native,
             norm_native.input_sha256,
         )
-        @test implicit_key != Base.invokelatest(
+        @test implicit_key == Base.invokelatest(
             extension._vasp_raw_context_identity,
             explicit_source,
             norm_native,
             Dict("fixture" => repeat("1", 64)),
         )
+        @test implicit_key == "uncached-vasp-values/1"
+        @test_throws ArgumentError PAW_IO.with_preparation_artifact_cache(
+            joinpath(directory, "old-digest-context"),
+            "legacy-context",
+        ) do
+            Base.invokelatest(
+                extension._vasp_raw_context_identity,
+                implicit_source,
+                norm_native,
+                norm_native.input_sha256,
+            )
+        end
         scope_poscar = joinpath(directory, "scope.POSCAR")
         scope_wavecar = joinpath(directory, "scope.WAVECAR")
         write(scope_poscar, "identity-only scope fixture")
@@ -1117,8 +1141,8 @@ end
             scope_source,
             directory,
         ) == [1.0, 2.0]
-        @test scope_builds[] == 1
-        @test isdir(joinpath(directory, ".wannier_preparation", "vasp"))
+        @test scope_builds[] == 2
+        @test !isdir(joinpath(directory, ".wannier_preparation", "vasp"))
         @test get(task_local_storage(), :wannier_preparation_artifact_cache, nothing) === nothing
         dense_execution =
             PAW_WANNIERIZATION.WavefunctionPreparationExecutionConfig(mode = :dense_reference)
@@ -1160,7 +1184,8 @@ end
                 () -> get(task_local_storage(), :wannier_preparation_artifact_cache, nothing),
                 scope_source,
                 directory,
-            ) === outer
+            ) === nothing
+            @test get(task_local_storage(), :wannier_preparation_artifact_cache, nothing) === outer
         end
         cache_directory = joinpath(directory, "shared-raw-paw")
         builds = Ref(0)
@@ -1367,8 +1392,31 @@ end
         original = workflow._resolve_wannier_matrix_elements(config, basis)
         @test original.paw_result isa PAW_WANNIERIZATION.VASPPAWMatrixElementResult
         reference = original.accepted_matrix_reference
-        accepted =
-            (input_summary = Dict("native_matrix_acceptance_json" => JSON3.write(reference)),)
+        # Synthetic terminal checkpoint interface fixture only: MAX_ITERATIONS
+        # deliberately makes no convergence claim. Matrices above were generated.
+        accepted = (
+            status = PAW_WANNIERIZATION.MAX_ITERATIONS,
+            input_summary = Dict("native_matrix_acceptance_json" => JSON3.write(reference)),
+        )
+        @test accepted.status == PAW_WANNIERIZATION.MAX_ITERATIONS
+        nonterminal =
+            (status = PAW_WANNIERIZATION.INVALID_INPUT, input_summary = accepted.input_summary)
+        nonterminal_error = try
+            workflow._resolve_wannier_matrix_elements(
+                config,
+                basis;
+                accepted_result = nonterminal,
+                generator = (_, _) -> error("REGENERATION_FORBIDDEN"),
+            )
+            nothing
+        catch error
+            error
+        end
+        @test nonterminal_error isa ArgumentError
+        @test occursin(
+            "ACCEPTED_OPERATOR_CHECKPOINT_NOT_TERMINAL",
+            sprint(showerror, nonterminal_error),
+        )
         restored = workflow._resolve_wannier_matrix_elements(
             config,
             basis;
@@ -1399,6 +1447,7 @@ end
             modified_vasp_wannierization_config(config; wavefunction_gauge_hdf5 = gauge_dependency)
         bound = workflow._resolve_wannier_matrix_elements(bound_config, basis)
         bound_acceptance = (
+            status = PAW_WANNIERIZATION.MAX_ITERATIONS,
             input_summary = Dict(
                 "native_matrix_acceptance_json" => JSON3.write(bound.accepted_matrix_reference),
             ),

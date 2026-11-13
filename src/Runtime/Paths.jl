@@ -48,9 +48,7 @@ end
 Read a file and return its lowercase hexadecimal SHA-256; file access errors propagate.
 """
 function checksum_file(path::AbstractString)
-    open(path, "r") do io
-        return bytes2hex(sha256(io))
-    end
+    return sha256_file(path)
 end
 
 """
@@ -90,11 +88,12 @@ function default_system_name(cfg::EffectiveTaskConfig, specs::Vector{NormalizedT
     return "GeS"
 end
 
+"""Resolve and validate declared file inputs without hashing or creating outputs.
+
+Use this same resolution for run-scoped source observations and context setup so
+relative paths, seed inputs and paired-bundle contracts cannot drift.
 """
-Prepare run context.
-"""
-function prepare_run_context(cfg::EffectiveTaskConfig, specs::Vector{NormalizedTaskSpec})
-    comm = bundle_mpi_comm_world()
+function resolve_runtime_model_inputs(cfg::EffectiveTaskConfig, specs)
     case_root = resolve_case_root(cfg.case_root)
     bundle_file =
         if cfg.real_space_operator_bundle_file === nothing ||
@@ -151,13 +150,9 @@ function prepare_run_context(cfg::EffectiveTaskConfig, specs::Vector{NormalizedT
         end
         seed_inputs.model_file
     end
-    paired_tb_validation_file = if model_input_mode == :packed_hdf5 && !isempty(cfg.model_file)
-        resolved = resolve_path(cfg.model_file, cfg.model_file; base = case_root)
-        isfile(resolved) || error("Paired TB validation file does not exist: $(resolved)")
-        resolved
-    else
-        nothing
-    end
+    # Packed H/r are authoritative; a redundant text path is not an input
+    # identity dependency of the current model reader.
+    paired_tb_validation_file = nothing
     model_file = model_input_mode == :packed_hdf5 ? something(bundle_file) : legacy_model_file
     if seed_inputs !== nothing
         required = Pair{String, String}[
@@ -176,12 +171,71 @@ function prepare_run_context(cfg::EffectiveTaskConfig, specs::Vector{NormalizedT
     if !isfile(model_file)
         error("Model input file does not exist: $(model_file)")
     end
+    return (;
+        case_root,
+        bundle_file,
+        model_input_mode,
+        seed_inputs,
+        model_file,
+        paired_tb_validation_file,
+    )
+end
+
+"""List scientific files observed across one ordinary run.
+
+Native imports retain their separate collective admission. WSVEC is admitted by
+its own decoded replica-policy boundary; undeclared outputs are not enrolled.
+No numerical contents are read by this path inventory.
+"""
+function runtime_input_source_paths(cfg::EffectiveTaskConfig, specs)
+    # Native declarations are observed in setup and adopted by their schema2 reader.
+    cfg.native_model_input === nothing || return String[]
+    paths = if cfg.native_model_input === nothing
+        resolved = resolve_runtime_model_inputs(cfg, specs)
+        result = String[resolved.model_file]
+        resolved.paired_tb_validation_file === nothing ||
+            push!(result, resolved.paired_tb_validation_file)
+        if resolved.seed_inputs !== nothing
+            seed = resolved.seed_inputs
+            append!(
+                result,
+                (seed.spin_file, seed.checkpoint_file, seed.eigenvalue_file, seed.overlap_file),
+            )
+        end
+        result
+    else
+        # Native source files use their observed import lifetime in the native
+        # collective preflight; do not enroll them in ordinary file observation.
+        String[]
+    end
+    for configured in (cfg.response_symmetry_file,)
+        configured === nothing && continue
+        isempty(strip(configured)) && continue
+        push!(paths, resolve_path(configured, configured; base = resolve_case_root(cfg.case_root)))
+    end
+    return unique(paths)
+end
+
+"""
+Prepare run context.
+"""
+function prepare_run_context(cfg::EffectiveTaskConfig, specs::Vector{NormalizedTaskSpec})
+    cfg.native_model_input === nothing || return prepare_native_run_context(cfg, specs)
+    comm = bundle_mpi_comm_world()
+    (;
+        case_root,
+        bundle_file,
+        model_input_mode,
+        seed_inputs,
+        model_file,
+        paired_tb_validation_file,
+    ) = resolve_runtime_model_inputs(cfg, specs)
     demand = operator_demand_plan(specs, cfg)
     model_input_mode == :legacy &&
         demand.requires_full_projector_geometry &&
         error(
-            "PROJECTOR_FULL_DERIVATIVE_OVERLAP_REQUIRED: Projector shift-current/QHC requires " *
-            "a schema-6 Packed HDF5 bundle generated from exact .uIu input",
+            "FULL_DERIVATIVE_OVERLAP_REQUIRED: this geometry task requires " *
+            "a schema-6 Packed HDF5 bundle generated from a full .uIu source",
         )
     num_orbitals = if model_input_mode == :packed_hdf5
         manifest = bundle_mpi_root_call(
@@ -189,19 +243,16 @@ function prepare_run_context(cfg::EffectiveTaskConfig, specs::Vector{NormalizedT
             comm,
         )
         validate_operator_demand(manifest, demand)
-        if paired_tb_validation_file !== nothing
-            manifest.paired_tb_sha256 === nothing &&
-                error("Bundle does not embed a paired TB SHA-256.")
-            paired_digest =
-                bundle_mpi_root_call(() -> checksum_file(paired_tb_validation_file); comm)
-            paired_digest == manifest.paired_tb_sha256 ||
-                error("Provided TB SHA-256 does not match the bundle paired TB digest.")
-        end
+        # Current HDF5 contains the actual H/r payload used below. A redundant
+        # text path supplies no additional data and requires no identity scan.
         manifest.num_orbitals
     else
         bundle_mpi_root_call(() -> read_wannier_tb_num_orbitals(model_file); comm)
     end
-    model_sha256 = bundle_mpi_root_call(() -> checksum_file(model_file); comm)
+    model_identity = bundle_mpi_root_call(
+        () -> scientific_file_identity(observe_scientific_source(realpath(model_file)));
+        comm,
+    )
 
     run_dir = resolve_path(cfg.output_root, default_output_root(case_root); base = case_root)
 
@@ -218,7 +269,7 @@ function prepare_run_context(cfg::EffectiveTaskConfig, specs::Vector{NormalizedT
         specs,
         run_dir,
         model_file,
-        model_sha256,
+        model_identity,
         model_input_mode,
         bundle_file,
         paired_tb_validation_file,
@@ -229,6 +280,7 @@ function prepare_run_context(cfg::EffectiveTaskConfig, specs::Vector{NormalizedT
         progress_out_path,
         progress_jsonl_path,
         seed_inputs,
+        nothing,
     )
 end
 
@@ -244,6 +296,49 @@ metadata_value(value::Symbol) = string(value)
 Convert a metadata value to display text; string vectors use a bracketed comma-separated representation.
 """
 metadata_value(values::AbstractVector{String}) = "[" * join(values, ", ") * "]"
+
+# Display-only tuple adapter. Keep immutable support records and their ownership
+# intact while avoiding one compiled Base.show tree per material-sized NTuple.
+struct MetadataSupportTupleDisplay
+    values::Tuple
+end
+
+# Count immutable support entries without materializing another container.
+Base.length(values::MetadataSupportTupleDisplay) = nfields(values.values)
+# Yield the borrowed tuple field and its next index without copying support values.
+function Base.iterate(values::MetadataSupportTupleDisplay, index::Int = 1)
+    index > nfields(values.values) && return nothing
+    return (getfield(values.values, index), index + 1)
+end
+# Preserve Base tuple punctuation and element display for the borrowed support fields.
+function Base.show(io::Base.IO, values::MetadataSupportTupleDisplay)
+    return Base.show_delim_array(io, values, '(', ',', ')', true)
+end
+
+# Preserve canonical support text while bounding tuple-length display specialization.
+Base.@nospecializeinfer @noinline function metadata_value(
+    @nospecialize(value::NamedTuple{(:schema, :num_orbitals, :r_vectors, :scalar_degeneracies)}),
+)
+    # Base.show prints an explicit type for abstract declared field types.
+    # Preserve that fallback instead of wrapping a superficially similar record.
+    for index in 1:nfields(value)
+        typeof(getfield(value, index)) === fieldtype(typeof(value), index) || return string(value)
+    end
+    r_vectors = value.r_vectors
+    degeneracies = value.scalar_degeneracies
+    if value.schema isa String &&
+       value.num_orbitals isa Int &&
+       r_vectors isa Tuple{Vararg{NTuple{3, Int}}} &&
+       degeneracies isa Tuple{Vararg{Int}}
+        return string((
+            schema = value.schema,
+            num_orbitals = value.num_orbitals,
+            r_vectors = MetadataSupportTupleDisplay(r_vectors),
+            scalar_degeneracies = MetadataSupportTupleDisplay(degeneracies),
+        ))
+    end
+    return string(value)
+end
 
 """
 Write an aligned titled key/value section to the supplied stream, indenting multiline values.
@@ -312,6 +407,10 @@ function metadata_numerics_entries(cfg::EffectiveTaskConfig, ctx::RunContext)
             "energy_reference_E_ref_eV" => metadata_value(cfg.fermi_energy),
             "kpath_nodes" => metadata_value(cfg.kpath_nodes),
             "kpoints_per_segment" => metadata_value(cfg.kpoints_per_segment),
+            "kpath_branches" => metadata_value([
+                [first(range), last(range)] for range in cfg.kpath_branches
+            ]),
+            "kpath_provenance" => metadata_value(cfg.kpath_provenance),
             "real_space_replica_policy" => cfg.real_space_replica_policy,
             "wsvec_file" => metadata_value(cfg.wsvec_file),
             "mp_grid" => metadata_value(cfg.mp_grid),
@@ -338,6 +437,9 @@ function metadata_numerics_entries(cfg::EffectiveTaskConfig, ctx::RunContext)
         "broadening_type" => cfg.broadening_type,
         "transition_window_factor" => metadata_value(cfg.transition_window_factor),
         "denominator_regularization" => metadata_value(cfg.denominator_regularization),
+        "denominator_regularization_source" => (cfg.denominator_regularization_was_explicit ?
+                                                "USER" : "DEFAULT"),
+        "include_external" => string(cfg.include_external),
         "spatial_dimension" => metadata_value(cfg.spatial_dimension),
         "band_window_size" => metadata_value(cfg.band_window_size),
         "response_output_digits" => metadata_value(cfg.response_output_digits),
@@ -365,7 +467,10 @@ function metadata_numerics_entries(cfg::EffectiveTaskConfig, ctx::RunContext)
         append!(
             entries,
             [
-                "spectral_gap_tolerance_ev"=>string(cfg.spectral_gap_tolerance),
+                "spectral_gap_tolerance_ev"=>(
+                    all(s -> s.quantity==:orbital_magnetization, ctx.specs) ? "NOT_APPLICABLE" :
+                    string(cfg.spectral_gap_tolerance)
+                ),
                 "response_semantics"=>"see spectral_response_metadata.txt",
             ],
         )
@@ -375,7 +480,7 @@ function metadata_numerics_entries(cfg::EffectiveTaskConfig, ctx::RunContext)
                 entries,
                 [
                     "fermi_energies" => metadata_value(cfg.fermi_energies),
-                    "fermi_energies_sha256" => cfg.fermi_energies_sha256,
+                    "fermi_energies_definition" => cfg.fermi_energies_definition,
                 ],
             )
         end
@@ -385,7 +490,13 @@ function metadata_numerics_entries(cfg::EffectiveTaskConfig, ctx::RunContext)
             entries,
             Pair{String, String}[
                 "shg_low_frequency_broadening" => metadata_value(cfg.shg_low_frequency_broadening),
+                "shg_intermediate_regularization" => metadata_value(
+                    cfg.shg_intermediate_regularization,
+                ),
                 "shg_eta_correction" => metadata_value(cfg.shg_eta_correction),
+                "shg_geometry_prescription" => cfg.native_model_input isa NonorthogonalLocalizedInput ?
+                                               "metric_optical_r0_r_eta_Gcut; eta_g=denominator_regularization; eta_sum=intermediate_regularization; retained_metric_BCD_and_Hessian" :
+                                               "orthogonal_existing",
                 "shg_output" => string(cfg.shg_output),
                 "shg_response" => string(cfg.shg_response),
                 "shg_zero_temperature_policy" => "temperature <= 1e-7 K: step occupations; omit one-band terms",
@@ -507,6 +618,101 @@ function metadata_numerics_entries(cfg::EffectiveTaskConfig, ctx::RunContext)
                 :conventional,
                 :kslice;
                 part = :i,
+            ),
+        )
+    end
+    spectral_quantities = (:linear_transport, :linear_optical_response, :orbital_magnetization)
+    if any(spec -> spec.quantity in spectral_quantities, ctx.specs)
+        push!(entries, "spectral_position_contract" => "common_regularized_r_eta")
+        push!(
+            entries,
+            "spectral_position_regularization_ev" => string(cfg.denominator_regularization),
+        )
+        if any(
+            spec -> spec.quantity == :orbital_magnetization && spec.method == :projector,
+            ctx.specs,
+        )
+            push!(
+                entries,
+                "orbital_projector_derivative_contract" => "exact_full_velocity_over_physical_gap",
+            )
+        end
+    end
+    if any(
+        spec ->
+            !(spec.quantity in spectral_quantities) &&
+            spec.method in (:wilson_loop, :geometric_loop),
+        ctx.specs,
+    )
+        push!(entries, "position_vertex_contract" => "bare_r0_A_plus_i_h_I0")
+        push!(entries, "position_bare_inverse_cutoff_ev" => "1e-7")
+        push!(entries, "position_bare_regularization_ev" => "not_applicable")
+    end
+    if any(spec -> !(spec.quantity in spectral_quantities) && spec.method == :projector, ctx.specs)
+        push!(
+            entries,
+            "projector_derivative_contract" => "covariant_finite_difference_of_projectors",
+        )
+    end
+    if any(
+        spec ->
+            spec.quantity in ZERO_REGULARIZATION_GEOMETRY_QUANTITIES ||
+            spec.quantity in BERRY_MULTIPOLE_QUANTITIES,
+        ctx.specs,
+    )
+        has_derivative =
+            any(spec -> spec.quantity in FINITE_DIFFERENCE_GEOMETRY_QUANTITIES, ctx.specs) ||
+            (cfg.berry_multipole !== nothing && cfg.berry_multipole.local_derivative_order > 0)
+        route = has_derivative ? string(cfg.derivative_backend) : "static_geometry"
+        reason =
+            !has_derivative ? "no outer geometric derivative" :
+            cfg.derivative_backend_was_explicit ? "explicit applicable backend" :
+            cfg.denominator_regularization > 0 ?
+            "supplied positive width selects regularized finite differences" :
+            "zero width with the supported task default backend"
+        push!(entries, "geometry_derivative_route"=>route)
+        push!(entries, "geometry_derivative_route_reason"=>reason)
+        push!(entries, "geometry_zero_gap_threshold_ev"=>string(cfg.spectral_gap_tolerance))
+        push!(
+            entries,
+            "geometry_zero_domain"=>"full eigenframe isolated at every consumed point; no implicit degenerate-band assignment",
+        )
+    end
+    if any(
+        spec -> spec.quantity in (
+            :quantum_metric,
+            :quantum_metric_dipole,
+            :quantum_metric_quadrupole,
+            :quantum_christoffel_symbol,
+        ),
+        ctx.specs,
+    )
+        push!(
+            entries,
+            "metric_contributions" =>
+                (cfg.include_external ? "total,internal,external" : "internal"),
+        )
+        push!(
+            entries,
+            "metric_overlap_requirement" =>
+                (cfg.include_external ? "full_derivative_overlap" : "not_required"),
+        )
+        push!(
+            entries,
+            "metric_geometry_contract" =>
+                (cfg.denominator_regularization == 0 ? "unregularized" : "regularized"),
+        )
+        push!(
+            entries,
+            "metric_denominator_regularization_ev" => string(cfg.denominator_regularization),
+        )
+        push!(entries, "metric_derivative_step" => string(cfg.finite_difference_step))
+        push!(
+            entries,
+            "metric_component_filename_rule" => (
+                cfg.include_external ?
+                "insert _internal or _external before extension; primary is total" :
+                "primary is internal; no external file"
             ),
         )
     end
@@ -753,14 +959,53 @@ function metadata_numerics_entries(cfg::EffectiveTaskConfig, ctx::RunContext)
             )
         end
     end
+    if any(
+        spec -> spec.quantity in (:berry_curvature_dipole, :berry_curvature_quadrupole),
+        ctx.specs,
+    )
+        push!(
+            entries,
+            "derivative_backend_requested" => (
+                cfg.derivative_backend_was_explicit ? string(cfg.derivative_backend) :
+                "not specified"
+            ),
+        )
+        push!(entries, "derivative_backend_effective" => string(cfg.derivative_backend))
+        if cfg.derivative_backend == :analytic
+            maximum_order =
+                any(spec -> spec.quantity == :berry_curvature_quadrupole, ctx.specs) ? 3 : 2
+            input = cfg.native_model_input
+            for order in 1:maximum_order
+                h_source =
+                    input isa AnalyticKInput ?
+                    MatrixElements.geometry_hamiltonian_derivative_source(input, order) :
+                    :direct_fourier
+                a_source =
+                    input isa AnalyticKInput ?
+                    MatrixElements.geometry_position_derivative_source(input, order) :
+                    :direct_fourier
+                push!(entries, "analytic_H_derivative_source_order_$order" => string(h_source))
+                push!(entries, "analytic_A_derivative_source_order_$order" => string(a_source))
+            end
+            push!(
+                entries,
+                "analytic_geometry_scope" => "orthogonal smooth isolated-band eigenframe; zero denominator regularization; complete intermediate-band sums",
+            )
+        end
+    end
     append!(
         entries,
         Pair{String, String}[
             "kslice_origin" => metadata_value(cfg.kslice_origin),
             "kslice_vector_1" => metadata_value(cfg.kslice_vector_1),
             "kslice_vector_2" => metadata_value(cfg.kslice_vector_2),
-            "photon_momentum" => metadata_value(cfg.photon_momentum),
-            "finite_difference_step" => metadata_value(cfg.finite_difference_step),
+            "photon_momentum" => cfg.photon_momentum_path === nothing ?
+                                 metadata_value(cfg.photon_momentum) : "PAIRED_CARTESIAN_AXIS",
+            "finite_difference_step" => cfg.derivative_backend == :analytic ?
+                                        "not applicable (analytic derivative backend)" :
+                                        cfg.derivative_backend == :not_applicable ?
+                                        "not applicable (no response derivative)" :
+                                        metadata_value(cfg.finite_difference_step),
             "wannier_center_convention_requested" => cfg.wannier_center_convention,
             "wannier_center_convention_resolved" => wannier_center_convention_name(
                 normalize_wannier_center_convention(cfg.wannier_center_convention),
@@ -788,6 +1033,53 @@ function metadata_numerics_entries(cfg::EffectiveTaskConfig, ctx::RunContext)
             "degeneracy_threshold" => metadata_value(cfg.degeneracy_threshold),
         ],
     )
+    if any(spec -> spec.quantity == :jerk_current, ctx.specs)
+        push!(entries, "jerk_current.occupation_policy" => "core-fermi-dirac/1")
+        push!(entries, "jerk_current.zero_thermal_energy_occupation" => "E<=mu:1;E>mu:0")
+    end
+    if all(spec -> spec.quantity == :intrinsic_ahc, ctx.specs)
+        filter!(entry -> first(entry) != "degeneracy_threshold", entries)
+    end
+    if all(spec -> spec.quantity in (:jerk_current, :third_harmonic_generation), ctx.specs)
+        filter!(entry -> first(entry) != "degeneracy_threshold", entries)
+    end
+    if any(spec -> spec.quantity in (:shift_spin_current, :injection_spin_current), ctx.specs)
+        push!(entries, "spin_current.connection_prescription" => "positive_eta_smooth_D")
+        push!(
+            entries,
+            "spin_current.compensation" => "eta_squared_over_gap_squared_plus_eta_squared",
+        )
+        push!(
+            entries,
+            "spin_current.regularization_ev" => metadata_value(cfg.denominator_regularization),
+        )
+        push!(entries, "spin_current.degeneracy_threshold" => "not applicable")
+        all(spec -> spec.quantity in (:shift_spin_current, :injection_spin_current), ctx.specs) &&
+            filter!(entry -> first(entry) != "degeneracy_threshold", entries)
+    end
+    if cfg.photon_momentum_path !== nothing
+        append!(
+            entries,
+            Pair{String, String}[
+                "photon_momentum_pairing" => "zip; original row order",
+                "photon_momenta_A_inverse" => metadata_value(
+                    cfg.photon_momentum_path.photon_momenta,
+                ),
+                "photon_momentum_grouping" => "exact isequal, signed zeros distinct",
+            ],
+        )
+    end
+    return entries
+end
+
+# Render one cold summary through the existing value formatter, preserving key order.
+Base.@nospecializeinfer Base.@noinline function metadata_summary_entries(
+    @nospecialize(summary::NamedTuple),
+)
+    entries = Pair{String, String}[]
+    for key in keys(summary)
+        push!(entries, string(key) => metadata_value(getproperty(summary, key)))
+    end
     return entries
 end
 
@@ -809,6 +1101,41 @@ function write_metadata(
     replica_summary::NamedTuple = NamedTuple(),
     qualification_summary::NamedTuple = NamedTuple(),
     metadata_centers::Union{Nothing, Matrix{Float64}} = nothing,
+    model_geometry::NamedTuple = NamedTuple(),
+)
+    # Private per-call holders retain the same values without specializing the large
+    # writer/open callback on material-sized payload types. They never escape.
+    metadata_summaries = (
+        qualification_summary = Ref{NamedTuple}(qualification_summary),
+        replica_summary = Ref{NamedTuple}(replica_summary),
+        fourier_summary = Ref{NamedTuple}(fourier_summary),
+        response_symmetry_summary = Ref{NamedTuple}(response_symmetry_summary),
+        band_summary = Ref{NamedTuple}(band_summary),
+    )
+    return _write_metadata(
+        cfg,
+        ctx,
+        outputs,
+        execution_mode;
+        matrix_families,
+        family_counts,
+        metadata_summaries,
+        metadata_centers,
+        model_geometry,
+    )
+end
+
+# Emit ordinary metadata using fixed summary holders; formatting stays at each section.
+function _write_metadata(
+    cfg::EffectiveTaskConfig,
+    ctx::RunContext,
+    outputs::Vector{String},
+    execution_mode::AbstractString = "fused_kloop";
+    matrix_families::Vector{String} = String[],
+    family_counts::Vector{<:Any} = Any[],
+    metadata_summaries::NamedTuple,
+    metadata_centers::Union{Nothing, Matrix{Float64}} = nothing,
+    model_geometry::NamedTuple = NamedTuple(),
 )
     _ = family_counts
     single_task = length(ctx.specs) == 1
@@ -852,26 +1179,218 @@ function write_metadata(
         "case_root" => case_root,
         "run_dir" => metadata_display_path(ctx.run_dir, case_root),
         "model_file" => metadata_display_path(ctx.model_file, case_root),
-        "model_sha256" => ctx.model_sha256,
+        "model_identity" => ctx.model_identity,
         "model_input_mode" => String(ctx.model_input_mode),
         "operator_demand" => join(
             real_space_operator_name.(ctx.operator_demand.required_operators),
             ",",
         ),
-        "bloch_phase_convention_storage" => "Convention_II_R_only",
+        "bloch_phase_convention_storage" => (cfg.native_model_input isa AnalyticKInput && cfg.native_model_input.basis == :fixed_orthonormal ?
+                                             "fixed_orthonormal_k_basis; no real-space representation" :
+                                             cfg.native_model_input isa AnalyticKInput && cfg.native_model_input.basis == :explicit ?
+                                             "declared_smooth_k_connection; no real-space representation or inferred cross-point overlap" :
+                                             "Convention_II_R_only"),
         "bloch_phase_convention_runtime" => wannier_center_convention_name(
             normalize_wannier_center_convention(cfg.wannier_center_convention),
         ),
-        "wannier_center_source" => "tb_position_R0_diagonal",
+        "wannier_center_source" => (cfg.native_model_input isa NonorthogonalLocalizedInput ?
+                                    (cfg.native_model_input.model.orbital_centers_cartesian === nothing ?
+                                     "localized_explicit_centers_absent" :
+                                     "declared_localized_orbital_centers_cartesian") :
+                                    cfg.native_model_input isa AnalyticKInput ?
+                                    (cfg.native_model_input.orbital_positions === nothing ?
+                                     (cfg.native_model_input.basis == :explicit ?
+                                      "not declared; inactive workspace centers are not orbital positions" :
+                                      "not_applicable_fixed_orthonormal_basis") :
+                                     "declared_native_orbital_positions") :
+                                    "tb_position_R0_diagonal"),
         "spin_enabled" => metadata_value(cfg.spin_enabled),
     ]
+    if any(
+        spec -> spec.quantity in (:photon_drag_shift_current, :photon_drag_injection_current),
+        ctx.specs,
+    )
+        producer_root = Base.pkgdir(parentmodule(@__MODULE__))
+        producer_manifest = joinpath(producer_root, "SOURCE_MANIFEST.tsv")
+        optical_provider_source =
+            joinpath(producer_root, "src", "MatrixElements", "OpticalMomentumOverlap.jl")
+        append!(
+            input_entries,
+            [
+                "producer_package_version" => string(Base.pkgversion(parentmodule(@__MODULE__))),
+                "producer_source_root" => producer_root,
+                "producer_source_manifest_sha256_declared" =>
+                    (isfile(producer_manifest) ? sha256_file(producer_manifest) : "NOT_RECORDED"),
+                "producer_source_identity_scope" => "declared control manifest; full installation audit is separate",
+                "photon_drag_optical_provider_sha256" => (
+                    isfile(optical_provider_source) ? sha256_file(optical_provider_source) :
+                    "NOT_RECORDED"
+                ),
+                "photon_drag_response_band_scope" => "all finite-model bands",
+                "photon_drag_intermediate_band_scope" => "all finite-model bands",
+                "photon_drag_injection_degenerate_current" => "full exact-spectral-subspace current trace; external pair weights",
+                "photon_drag_denominator_formula" => "[DeltaE/(DeltaE^2+gamma^2)]^2",
+                "photon_drag_transition_gap" => "epsilon_m(k+q/2)-epsilon_n(k-q/2); eV",
+                "photon_drag_gamma_eV" => metadata_value(cfg.denominator_regularization),
+                "photon_drag_weight_derivative_scope" => "outside geometric finite-difference kernel",
+                "photon_drag_optical_overlap_strategy" => (
+                    cfg.native_model_input isa NonorthogonalLocalizedInput ?
+                    "NOT_SUPPORTED_NONORTHOGONAL_FINITE_Q" :
+                    cfg.native_model_input isa AnalyticKInput ?
+                    (
+                        cfg.native_model_input.basis == :fixed_orthonormal ?
+                        "exact_fixed_basis_identity" : "exact_declared_point_orbital_link"
+                    ) :
+                    cfg.native_model_input isa RealSpaceTBInput ?
+                    "exact_declared_point_orbital_link" :
+                    "wannier_raw_A_first_order_R_only_with_endpoint_convention_transform"
+                ),
+                "photon_drag_optical_overlap_orientation" => "q=k_left-k_right Cartesian inverse Angstrom; A at endpoint midpoint",
+                "photon_drag_optical_overlap_response_order" => "full existing finite-q response retained; higher-order microscopic accuracy not implied",
+                "photon_drag_pdsc_auxiliary_transport" => "original p-links and explicit residual connection retained",
+                "photon_drag_velocity_source" => (
+                    cfg.native_model_input isa AnalyticKInput &&
+                    cfg.native_model_input.basis == :fixed_orthonormal ?
+                    "full dH/dk in the fixed basis, including diagonal entries" :
+                    "full dH+i[H,A] endpoint physical velocity in source gauge; intraband retained"
+                ),
+            ],
+        )
+    end
+    if cfg.native_model_input !== nothing
+        native = cfg.native_model_input
+        parameter_metadata =
+            native isa AnalyticKInput && native.basis == :fixed_orthonormal ?
+            native_parameters_metadata(native.parameters) : native.parameters
+        push!(input_entries, "native_model_parameters" => repr(parameter_metadata))
+        push!(
+            input_entries,
+            "native_model_basis" => (
+                native isa NonorthogonalLocalizedInput ? "nonorthogonal_localized" :
+                native isa AnalyticKInput ? String(native.basis) : String(native.position_model)
+            ),
+        )
+        push!(
+            input_entries,
+            "native_model_source_identity" => (
+                isempty(native.source_file) ? "NOT_RECORDED" : native_source_file_identity(native)
+            ),
+        )
+        push!(input_entries, "native_spin_roundtrip_status" => "NOT_EVALUATED")
+        native isa RealSpaceTBInput &&
+            push!(input_entries, "native_derivative_method" => "ANALYTIC_FOURIER")
+        if native isa NonorthogonalLocalizedInput
+            append!(
+                input_entries,
+                [
+                    "localized_spin_representation" => String(native.model.spin_representation),
+                    "localized_magnetic_state" => String(native.model.magnetic_state),
+                    "localized_spin_orbit_coupling" =>
+                        metadata_value(native.model.spin_orbit_coupling),
+                    "localized_spin_ordering" => String(native.model.spin_ordering),
+                    "localized_spatial_orbital_count" =>
+                        metadata_value(native.model.num_spatial_orbitals),
+                    "localized_explicit_state_multiplicity" => "1",
+                ],
+            )
+            representation = native.model.representation_diagnostics
+            append!(
+                input_entries,
+                Pair{String, String}[
+                    "native_effective_construction_scheme" => representation.scheme,
+                    "native_raw_operator_defects" => repr(representation.raw),
+                    "native_effective_operator_defects" => repr(representation.effective),
+                    "native_operator_adjustment" => repr(representation.adjustment),
+                    "native_representation_reporting_warning" => string(
+                        representation.exceeds_reporting_tolerance,
+                    ),
+                    "native_raw_file_modified" => string(representation.raw_file_modified),
+                    "native_metric_floor_semantics" => "condition warning; positive definiteness remains required",
+                ],
+            )
+            push!(input_entries, "native_derivative_method" => "METRIC_AWARE_ANALYTIC_FOURIER")
+            push!(
+                input_entries,
+                "native_metric_relative_floor" => string(native.model.metric_relative_floor),
+            )
+            push!(
+                input_entries,
+                "native_hamiltonian_representation_tolerance_ev" =>
+                    string(native.model.hamiltonian_representation_tolerance_ev),
+            )
+            push!(
+                input_entries,
+                "native_overlap_representation_tolerance" =>
+                    string(native.model.overlap_representation_tolerance),
+            )
+            push!(
+                input_entries,
+                "native_position_translation_tolerance_angstrom" =>
+                    string(native.model.position_translation_tolerance_angstrom),
+            )
+            push!(
+                input_entries,
+                "native_representation_norms" => "H_FROBENIUS_EV;S_FROBENIUS_DIMENSIONLESS;r_MAX_ENTRY_ANGSTROM",
+            )
+            push!(
+                input_entries,
+                "native_hermitian_solver_triangle" => "PAIR_PROJECTED_EFFECTIVE_OPERATORS; UPPER_FOR_ROUNDOFF; RAW_DIAGNOSTICS_SEPARATE",
+            )
+            push!(
+                input_entries,
+                "native_scalar_minimum_gap_ev" => string(max(1e-4, cfg.degeneracy_threshold)),
+            )
+            push!(input_entries, "native_scope" => "SPINLESS_SCALAR_SEPARATED_BANDS")
+        end
+        if native isa AnalyticKInput
+            push!(
+                input_entries,
+                "native_derivative_evidence" => "native_derivatives.tsv (shared run root; actual evaluated orders)",
+            )
+            push!(input_entries, "native_derivative_method" => String(native.derivative_method))
+            push!(
+                input_entries,
+                "native_finite_difference_step_A_inverse" => string(native.finite_difference_step),
+            )
+            push!(input_entries, "native_periodic" => string(native.periodic))
+            push!(
+                input_entries,
+                "native_evaluation_bounds_A_inverse" => repr(native.evaluation_bounds),
+            )
+        end
+        if cfg.integration_bounds !== nothing
+            lower, upper = cfg.integration_bounds
+            dimension = integration_dimension(cfg)
+            push!(
+                input_entries,
+                "integration_domain_cartesian_A_inverse" => repr(cfg.integration_bounds),
+            )
+            push!(input_entries, "integration_dimension" => string(dimension))
+            push!(input_entries, "integration_measure" => "d^$(dimension)k/(2pi)^$(dimension)")
+            push!(
+                input_entries,
+                "integration_cutoff_qualification" => "USER_DOMAIN_CUTOFF_DEPENDENT",
+            )
+            push!(
+                input_entries,
+                "response_unit_relative_to_bulk" => "multiply bulk unit by m^$(3-dimension)",
+            )
+        end
+    end
+    for (key, value) in pairs(integration_affine_region_metadata(cfg))
+        push!(input_entries, string(key) => repr(value))
+    end
+    if cfg.integration_bounds !== nothing &&
+       cfg.integration_algorithm isa UniformIntegration &&
+       cfg.integration_algorithm.region_quadrature == :left_endpoint
+        push!(input_entries, "integration_region_quadrature" => "left_endpoint")
+    end
     if ctx.model_input_mode == :legacy
         try
             centers =
                 metadata_centers === nothing ? _read_wannier_tb_centers(ctx.model_file) :
                 metadata_centers
             all(isfinite, centers) || error("TB Wannier centers contain non-finite values.")
-            center_bytes = reinterpret(UInt8, vec(centers))
             push!(input_entries, "wannier_center_count" => string(size(centers, 2)))
             push!(
                 input_entries,
@@ -883,7 +1402,8 @@ function write_metadata(
             )
             push!(
                 input_entries,
-                "wannier_center_cartesian_sha256" => bytes2hex(SHA.sha256(center_bytes)),
+                "wannier_centers_cartesian_definition_A" =>
+                    repr(Tuple(Tuple(centers[:, index]) for index in axes(centers, 2))),
             )
         catch err
             push!(
@@ -924,56 +1444,87 @@ function write_metadata(
     open(ctx.metadata_path, "w") do io
         metadata_section(io, "Run", run_entries)
         metadata_section(io, "Input", input_entries)
-        if !isempty(keys(qualification_summary))
+        if !isempty(keys(model_geometry))
+            metadata_section(
+                io,
+                "Geometry",
+                Pair{String, String}[
+                    "schema" => model_geometry.schema,
+                    "lattice_convention" => model_geometry.lattice_convention,
+                    [
+                        "lattice_row.$(i)_angstrom" => metadata_value(
+                            model_geometry.lattice_rows_angstrom[i],
+                        ) for i in 1:3
+                    ]...,
+                ],
+            )
+        end
+        if !isempty(keys(metadata_summaries.qualification_summary[]))
             metadata_section(
                 io,
                 "Qualification",
-                Pair{String, String}[
-                    string(key) => metadata_value(getproperty(qualification_summary, key)) for
-                    key in keys(qualification_summary)
-                ],
+                metadata_summary_entries(metadata_summaries.qualification_summary[]),
             )
         end
         metadata_section(io, "Tasks", task_entries)
         metadata_section(io, "Numerics", metadata_numerics_entries(cfg, ctx))
-        if !isempty(keys(replica_summary))
+        if native_direct_low_dimensional(cfg)
+            d = native_physical_dimension(cfg.native_model_input)
+            metadata_section(
+                io,
+                "NativePhysicalGeometry",
+                Pair{String, String}[
+                    "physical_dimension" => string(d),
+                    "dimension_origin" => "physical lattice input shape; not inferred from sampling",
+                    "physical_axes" => join(("x", "y", "z")[1:d], ","),
+                    "auxiliary_length_angstrom" => "1.0 per missing direction",
+                    "auxiliary_periodicity" => "none; actual model periodicity applies only to physical axes",
+                    "auxiliary_integration" => "none; rule and budget use physical dimension",
+                    "coefficient_normalization" => "three-dimensional reference-cell volume; sheet/line conversion is postprocessing",
+                    "local_observables" => "original response-specific units; spin has three components and orbital moments retain their axial components",
+                ],
+            )
+        end
+        if all(spec -> spec.calculation == :kslice, ctx.specs)
+            metadata_section(
+                io,
+                "KSliceNormalization",
+                Pair{String, String}[
+                    "value_kind" => "local k-space observable or response density",
+                    "quadrature_weights" => "not applied; mesh counts select sample locations only",
+                    "legacy_current_migration" => "SC/IC/ISC/SSC/PDSC/PDIC no longer contain 1/(N_u*N_v); physical prefactors and cell convention retained",
+                    "conductivity_measure" => "retain the response-specific fractional-BZ density or Cartesian-SI integrand and declared output units",
+                    "geometry_and_moment" => "native local geometry or muB moment; no conductivity coefficient is inferred",
+                    "reconstruction" => "requires matching complete domain, band/component/term selections and the response-specific integration measure; one arbitrary plane is not a 3D BZ integral",
+                ],
+            )
+        end
+        if !isempty(keys(metadata_summaries.replica_summary[]))
             metadata_section(
                 io,
                 "Replica",
-                Pair{String, String}[
-                    string(key) => metadata_value(getproperty(replica_summary, key)) for
-                    key in keys(replica_summary)
-                ],
+                metadata_summary_entries(metadata_summaries.replica_summary[]),
             )
         end
-        if !isempty(keys(fourier_summary))
+        if !isempty(keys(metadata_summaries.fourier_summary[]))
             metadata_section(
                 io,
                 "Fourier",
-                Pair{String, String}[
-                    string(key) => metadata_value(getproperty(fourier_summary, key)) for
-                    key in keys(fourier_summary)
-                ],
+                metadata_summary_entries(metadata_summaries.fourier_summary[]),
             )
         end
-        if !isempty(keys(response_symmetry_summary))
+        if !isempty(keys(metadata_summaries.response_symmetry_summary[]))
             metadata_section(
                 io,
                 "ResponseSymmetry",
-                Pair{String, String}[
-                    string(key) => metadata_value(getproperty(response_symmetry_summary, key)) for
-                    key in keys(response_symmetry_summary)
-                ],
+                metadata_summary_entries(metadata_summaries.response_symmetry_summary[]),
             )
         end
-        if !isempty(keys(band_summary))
+        if !isempty(keys(metadata_summaries.band_summary[]))
             metadata_section(
                 io,
                 "Band",
-                Pair{String, String}[
-                    string(key) => metadata_value(getproperty(band_summary, key)) for
-                    key in keys(band_summary)
-                ],
+                metadata_summary_entries(metadata_summaries.band_summary[]),
             )
         end
         first_definition =

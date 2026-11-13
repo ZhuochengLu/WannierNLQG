@@ -29,7 +29,7 @@ function conventional_magnetization_traces(geometry, completion, occupied)
     return f, g, k
 end
 
-"""Projector traces from analytic Dp in the orbital frame (document W11–W12)."""
+"""Independent orbital-frame traces from the prepared regularized tangent Z=-i*q*r_OM*p."""
 function projector_magnetization_traces(geometry, completion, occupied)
     count=length(geometry.energies);
     u=geometry.eigenvectors
@@ -39,10 +39,7 @@ function projector_magnetization_traces(geometry, completion, occupied)
     for a in 1:3
         cross=zeros(ComplexF64, count, count)
         for n in 1:occupied, m in (occupied + 1):count
-            cross[
-                m,
-                n,
-            ]=geometry.covariant_hamiltonian[m, n, a]/(geometry.energies[n]-geometry.energies[m])
+            cross[m, n]=-im * geometry.connection[m, n, a]
         end
         push!(z, u*cross*u')
     end
@@ -64,7 +61,28 @@ function projector_magnetization_traces(geometry, completion, occupied)
 end
 
 """Build occupied-subspace traces once for every spectral interval at one k point."""
-function orbital_magnetization_kernel(geometry, completion; projector = false)
+function orbital_magnetization_kernel(
+    geometry,
+    completion;
+    projector = false,
+    denominator_regularization::Real = geometry isa NonorthogonalSpectralResponseGeometry ?
+                                       geometry.denominator_regularization_ev : 0.001,
+)
+    if geometry isa NonorthogonalSpectralResponseGeometry
+        projector && throw(ArgumentError("NONORTHOGONAL_PROJECTOR_RESPONSE_UNSUPPORTED"))
+        maximum(abs, geometry.curvature)<=1e-9 ||
+            throw(ArgumentError("ORBITAL_FINITE_MODEL_NOT_FLAT"))
+        all(
+            iszero,
+            (
+                completion.derivative_overlap,
+                completion.energy_connection,
+                completion.energy_overlap,
+            ),
+        ) || throw(ArgumentError("NONORTHOGONAL_MATERIAL_COMPLETION_UNSUPPORTED"))
+    end
+
+    geometry = MatrixElements.regularized_orbital_geometry(geometry, denominator_regularization)
     energy = geometry.energies
     boundaries = vcat(-Inf, [energy[first(block)] for block in geometry.blocks], Inf)
     traces = Tuple{Matrix{ComplexF64}, Matrix{ComplexF64}, Matrix{ComplexF64}}[]
@@ -89,23 +107,26 @@ function orbital_magnetization_response(
     geometry,
     completion;
     projector = false,
+    denominator_regularization::Real = geometry isa NonorthogonalSpectralResponseGeometry ?
+                                       geometry.denominator_regularization_ev : 0.001,
     fermi_energies::Vector{Float64},
     temperature,
 )
     axis = validate_fermi_energies(fermi_energies)
     result=zeros(Float64, length(axis), 3, 3)
-    kernel = orbital_magnetization_kernel(geometry, completion; projector)
+    kernel =
+        orbital_magnetization_kernel(geometry, completion; projector, denominator_regularization)
     energy = kernel.energy
     boundaries = kernel.boundaries
     factor=RESPONSE_CHARGE_C^2*1e-20/(2RESPONSE_HBAR_JS*RESPONSE_BOHR_MAGNETON)
     for (mu_index, fermi_energy) in enumerate(axis)
-        temperature==0 &&
-            any(e->e==fermi_energy, energy) &&
-            error("ORBITAL_FERMI_SURFACE_POINT_UNRESOLVED")
         for interval in 1:(length(boundaries) - 1)
             lower, upper=boundaries[interval], boundaries[interval + 1]
             if temperature==0
-                weight=lower<fermi_energy<upper ? 1.0 : 0.0
+                # Half at a boundary averages complete left/right projectors.
+                # No mu shift or fractional density matrix is used as a projector.
+                weight=response_occupation(lower, fermi_energy, 0.0) -
+                       response_occupation(upper, fermi_energy, 0.0)
                 first_moment=fermi_energy*weight
             else
                 fl=isinf(lower) ? 1.0 : response_occupation(lower, fermi_energy, temperature)
@@ -134,3 +155,7 @@ function orbital_magnetization_response(
     end
     return result
 end
+
+"""Reject unsupported orthogonal projector traces for a metric spectral payload."""
+projector_magnetization_traces(::NonorthogonalSpectralResponseGeometry, completion, occupied) =
+    throw(ArgumentError("NONORTHOGONAL_PROJECTOR_RESPONSE_UNSUPPORTED"))

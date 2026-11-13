@@ -96,19 +96,18 @@ checked exactly rather than ignored.
 
 ## Persistence and migration
 
-New formal artifacts use:
+The locally revised 1.2.0 writers use:
 
 - star-gauge wire schema 1.0 with the complete former 1.11 contract;
-- SPN/uIu and uHu/sIu/sHu provenance wire schema 1.0, preserving their former
-  1.2 and 1.3 contracts, respectively;
-- packed operator HDF5 schema 1.1.
+- VASP/QE PAW-SPN, uIu, and uHu/sIu/sHu provenance wire schema 1.2;
+- packed operator HDF5 schema 1.2 and embedded operator qualification 1.4.
 
 Provenance records `band_frame_transform_sha256` and the complete frame-contract
-digest.  `band_gauge_rotation_sha256` is retained only as a clearly labelled legacy
-alias for diagnostic tooling.  Schema 1.0 records physical-metric type, isometry and
+digest. The former `band_gauge_rotation_*` aliases are absent from new artifacts.
+The frame contract records physical-metric type, isometry and
 replay residuals and thresholds, source/artifact/contract digests, Euclidean audit
 residuals, and per-operator and spin-family production status.
 
-Historical packed HDF5 6.x files require external migration and are rejected by
-the public 1.1 reader. Regenerate them from their original wavefunction and
-projector inputs when possible.
+The public reader requires the current packed mathematical format. Incomplete
+physical-frame definitions require reconstruction from the authoritative
+wavefunction and projector inputs.

@@ -45,12 +45,14 @@ end
             eig_file = eig,
             mmn_file = mmn,
             band_representation = nothing,
-            algorithm_profile = :custom,
-            localize = false,
-            max_iterations = 3,
-            convergence_window = 10,
+            stage_controls = WANNIERIZATION.WannierizationStageControls(
+                dis_num_iter = 3,
+                num_iter = 0,
+                dis_conv_tol = 1e-10,
+                dis_conv_window = 10,
+            ),
             tb_output_formats = (:packed_hdf5,),
-            write_wannier90_tb = false,
+            write_model_tb = false,
         )
         results = []
         for enabled in (false, true)
@@ -59,10 +61,15 @@ end
                 final_tb_symmetry_report_enabled = enabled,
                 checkpoint_hdf5 = joinpath(directory, string(enabled)*".wannierization.h5"),
             )
-            result=WANNIERIZATION.construct_symmetry_adapted_wannier_functions(cfg)
+            result=WANNIERIZATION.construct_wannier_functions(cfg)
             push!(results, result)
         end
         off, on=results
+        @test off.tb_symmetry_qualification.overall == "NOT_RUN"
+        @test all(
+            m -> m.status == "NOT_RUN" && m.value === nothing,
+            off.tb_symmetry_qualification.metrics,
+        )
         exporter = first(WANNIERIZATION._load_wannierization_extension!()).OperatorExport
         @testset "Standard numerical export checks preserve integrity" begin
             for code in (
@@ -126,16 +133,30 @@ end
         @show on.tb_symmetry_qualification.reason
         @show [(m.name, m.status, m.reason) for m in on.tb_symmetry_qualification.metrics]
         out_text = read(on.artifacts.wannierization_log, String)
-        @test occursin("identity_sewing_unitarity_residual", out_text)
+        # Human output summarizes validation; full numerical entries remain in JSON.
+        # The explicit expert report is checked below.
+        @test !occursin("identity_sewing_unitarity_residual", out_text)
+        json_path = replace(on.artifacts.wannierization_log, r"\.out$" => ".json")
+        model_report = JSON3.read(read(json_path, String))
+        frame_check = only(
+            filter(
+                entry -> entry.name == "ACCEPTED_FRAME_ISOMETRY",
+                model_report.validation.checks,
+            ),
+        )
+        @test frame_check.value !== nothing && isfinite(frame_check.value)
+        @test frame_check.threshold !== nothing && isfinite(frame_check.threshold)
+        @test occursin(basename(json_path) * " -> validation", out_text)
         @test !occursin("[SOLVER PROJECTOR COVARIANCE]", out_text)
         @test !occursin("[REPRESENTATION AND GROUP-LAW DIAGNOSTICS]", out_text)
         @test !occursin("projector_covariance_error", out_text)
         @test !occursin("little_group_residual", out_text)
-        @test occursin("FINAL TB SYMMETRY QUALIFICATION", out_text)
-        @test !occursin(
-            "FINAL TB SYMMETRY QUALIFICATION",
-            read(off.artifacts.wannierization_log, String),
-        )
+        @test occursin("[TB SYMMETRY]", out_text)
+        tb_section=match(r"(?s)\[TB SYMMETRY\](.*?)\[VALIDATION\]", out_text)
+        @test tb_section!==nothing
+        @test tb_section!==nothing && occursin(r"performed\s*:\s*true", tb_section.captures[1])
+        @test tb_section!==nothing && occursin(r"complete\s*:\s*true", tb_section.captures[1])
+        @test !occursin("[TB SYMMETRY]", read(off.artifacts.wannierization_log, String))
         report = exporter._ordinary_accepted_state_report(on, config)
         @test parse(Float64, report["ordinary_accepted_frame_isometry_residual"]) >= 0.0
         @test parse(Float64, report["ordinary_accepted_projector_idempotence_residual"]) >= 0.0
@@ -152,7 +173,15 @@ end
         @test exporter._ordinary_accepted_state_report(restored, config) == report
         @test on.input_summary["ordinary_accepted_frame_diagnostic_source"] ==
               "ACCEPTED_V_MATRIX_RECOMPUTED"
-        @test occursin("ordinary_accepted_projector_idempotence_residual", out_text)
+        @test !occursin("ordinary_accepted_projector_idempotence_residual", out_text)
+        drift_check = only(
+            filter(
+                entry -> entry.name == "FIXED_SUBSPACE_PROJECTOR_DRIFT",
+                model_report.validation.checks,
+            ),
+        )
+        @test drift_check.value !== nothing && isfinite(drift_check.value)
+        @test drift_check.threshold !== nothing && isfinite(drift_check.threshold)
         @test !occursin("ordinary_physical_band_sewing_status", out_text)
         @test on.v_matrix == off.v_matrix
         @test on.spreads_angstrom2 == off.spreads_angstrom2
@@ -164,7 +193,7 @@ end
         if on.artifacts.packed_hdf5 !== nothing && off.artifacts.packed_hdf5 !== nothing
             a=WANNIER_IO.read_real_space_operator_bundle(on.artifacts.packed_hdf5)
             b=WANNIER_IO.read_real_space_operator_bundle(off.artifacts.packed_hdf5)
-            @test a.manifest.scientific_content_sha256 == b.manifest.scientific_content_sha256
+            @test a.manifest.publication_identity != b.manifest.publication_identity
             @test a.lattice == b.lattice
             @test a.degeneracies == b.degeneracies
             for kind in keys(a.operators)
@@ -189,10 +218,20 @@ end
             public_mesh = diagnostic_public_band_representation(mesh)
             public_contract =
                 extension.SolverCheckpoint._no_symmetry_compatibility_contract(public_mesh, 1.0e-8)
+            # This deliberately non-authenticated identity diagnostic lacks
+            # physical sewing. Default authenticated writing must still reject it.
+            authenticated_path=joinpath(directory, "identity-auth-required.h5")
+            @test_throws ArgumentError WannierNLQG.SymmetryFoundation.write_band_representation_hdf5(
+                authenticated_path,
+                public_mesh;
+                validation = public_contract,
+            )
+            @test !isfile(authenticated_path)
             WannierNLQG.SymmetryFoundation.write_band_representation_hdf5(
                 rep_path,
                 public_mesh;
                 validation = public_contract,
+                content_authentication = false,
             )
             HDF5.h5open(rep_path, "r") do handle
                 attrs = HDF5.attributes(handle["compatibility"])
@@ -238,7 +277,7 @@ end
                 "final_wannier_centers_cartesian" => zeros(1, 3),
                 "final_wannier_centers_fractional" => zeros(1, 3),
                 "center_alignment_lattice_shifts" => zeros(Int, 1, 3),
-                "replica_mapping_sha256" => repeat("0", 64),
+                "replica_mapping_reference" => repeat("0", 64),
             )
             for (kind, metric) in (
                 (WannierNLQG.Core.REAL_SPACE_HAMILTONIAN, "hamiltonian_covariance_relative_max"),
@@ -265,8 +304,12 @@ end
                         copied;
                         profile = :hamiltonian_position,
                         geometry,
-                        eligibility = Dict(
-                            "authoritative_hamiltonian_sha256"=>context.representation.conventions["authoritative_hamiltonian_sha256"],
+                        # Preserve actual source policy/frame definitions while
+                        # perturbing only the selected H/r matrix element.
+                        provenance = Dict{String, Any}(
+                            "imported_mathematical_definitions" => deepcopy(
+                                a.manifest.operator_qualification["mathematical_definitions"],
+                            ),
                         ),
                     )
                     q=WANNIERIZATION.qualify_exported_wannierization_tb(
@@ -287,7 +330,18 @@ end
                 hamiltonian_covariance_threshold = config.input.representation_tolerance,
                 persist_hdf5 = false,
             )
-            @test repeat_qualification.payload_sha256 == on.tb_symmetry_qualification.payload_sha256
+            @test getfield.(
+                repeat_qualification.metrics,
+                :value,
+            )==getfield.(on.tb_symmetry_qualification.metrics, :value)
+            @test getfield.(
+                repeat_qualification.metrics,
+                :threshold,
+            )==getfield.(on.tb_symmetry_qualification.metrics, :threshold)
+            @test getfield.(
+                repeat_qualification.metrics,
+                :status,
+            )==getfield.(on.tb_symmetry_qualification.metrics, :status)
             @test bytes2hex(sha256(read(on.artifacts.packed_hdf5))) == before
             child = joinpath(directory, "readback.jl")
             write(
@@ -296,7 +350,7 @@ end
    using WannierNLQG, SHA
    W=WannierNLQG.Wannierization
    b=WannierNLQG.IO.read_real_space_operator_bundle(ARGS[1])
-   @assert b.manifest.scientific_content_sha256 == ARGS[2]
+   @assert b.manifest.publication_identity == ARGS[2]
    @assert bytes2hex(sha256(read(ARGS[1]))) == ARGS[3]
    restored = W.read_wannierization_checkpoint_hdf5(ARGS[4])
    @assert restored.input_summary["ordinary_physical_band_sewing_status"] == "NOT_RUN"
@@ -305,14 +359,14 @@ end
    """,
             )
             output = read(
-                `$(Base.julia_cmd()) --project=$(dirname(Base.active_project())) $child $(on.artifacts.packed_hdf5) $(a.manifest.scientific_content_sha256) $before $(on.checkpoint_file)`,
+                `$(Base.julia_cmd()) --project=$(dirname(Base.active_project())) $child $(on.artifacts.packed_hdf5) $(a.manifest.publication_identity) $before $(on.checkpoint_file)`,
                 String,
             )
             @test occursin("FRESH_PROCESS_READBACK_EXACT", output)
         end
         # An invalid crystal description is encountered only after ordinary solve/export.
         write(win, replace(read(win, String), "X 0 0 0"=>"X broken 0 0"))
-        bad=WANNIERIZATION.construct_symmetry_adapted_wannier_functions(
+        bad=WANNIERIZATION.construct_wannier_functions(
             modified_wannierization_config(
                 config;
                 final_tb_symmetry_report_enabled = true,

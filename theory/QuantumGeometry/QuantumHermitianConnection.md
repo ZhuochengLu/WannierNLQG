@@ -25,7 +25,7 @@ $$
 
 This quantity is complex, is not symmetrized in $b,c$, and contains no occupation factor, resonant delta function, or Brillouin-zone integral.
 
-## 3. Projector, Wilson Loop, and Geometric Loop formulations
+## 3. Projector and Wilson Loop formulations; unsupported method boundary
 
 ### Native orientation of the Projector formulation
 
@@ -62,7 +62,9 @@ $$
 
 For band groups, scalar links are replaced by subspace-overlap blocks. This expression is a covariant finite difference in the length gauge, and its continuum limit is the Conventional QHC.
 
-### $q=0$ Geometric Loop
+### $q=0$ Geometric Loop: unsupported in 1.2
+
+WN 1.2 does not support Geometric Loop QHC. Ordinary requests and retained expert entry points reject it explicitly, without a fallback. The velocity-loop expression below is a conceptual construction, not a supported release QHC prescription.
 
 A closed loop $\mathcal L_{nm}^{abc}(p)$ is formed from two optical velocity vertices and two displaced overlaps, and
 
@@ -72,7 +74,7 @@ $$
 \qquad D_p=i\partial_p.
 $$
 
-After division by the resonance factors that convert the two velocity vertices into position matrix elements, this expression corresponds to the length-gauge $\mathcal C$. Gauge invariance belongs to the complete closed Geometric Loop, not to any individual link.
+The release supplies no conversion of this velocity-loop expression into a supported length-gauge $\mathcal C$. Gauge invariance of a closed loop alone does not establish a release QHC contract. Supported Geometric Loop [Shift Current](../ShiftCurrent.md), [Photon Drag Shift Current](../PhotonDragShiftCurrent.md), and [Shift Vector](ShiftVector.md) are unaffected.
 
 ## 4. Symbols, tensor indices, and subspace normalization
 

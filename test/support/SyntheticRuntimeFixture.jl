@@ -8,6 +8,13 @@ const FIXTURE_ROOT = joinpath(ROOT, "examples", "fixtures", "synthetic_runtime")
 const TB_FILE = joinpath(FIXTURE_ROOT, "synthetic_tb.dat")
 const WSVEC_FILE = joinpath(FIXTURE_ROOT, "synthetic_wsvec.dat")
 const OPERATOR_BUNDLE_FILE = joinpath(FIXTURE_ROOT, "synthetic_operators.h5")
+include(joinpath(ROOT, "examples", "ExampleSupport.jl"))
+
+# Admit only this declared miniature fixture into an owned temporary directory.
+# TB-only callers keep the original lazy dependency boundary.
+function operator_bundle_file()
+    return ExampleSupport.synthetic_operator_bundle_file()
+end
 
 function verify()
     for line in eachline(joinpath(FIXTURE_ROOT, "SHA256SUMS"))
@@ -27,7 +34,7 @@ function response_config(output_root, task; backend = "direct", policy = "minimu
         tasks = [task],
         case_root = ROOT,
         model_file = TB_FILE,
-        real_space_operator_bundle_file = OPERATOR_BUNDLE_FILE,
+        real_space_operator_bundle_file = operator_bundle_file(),
         output_root = String(output_root),
         system_name = "synthetic_demo",
         k_mesh = (2, 2),

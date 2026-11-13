@@ -121,7 +121,7 @@ end
         plan;
         tolerance = 1.0e-10,
     )
-    config = MAGNETIC_WANNIERIZATION_API.SymmetryAdaptedWannierizationConfig(
+    config = MAGNETIC_WANNIERIZATION_API.WannierizationConfig(
         input = MAGNETIC_WANNIERIZATION_API.WannierizationInputConfig(
             wannierization_mode = :symmetry_adapted,
             win_file = "unused.win",
@@ -153,7 +153,7 @@ end
     )
     @test result.success
     @test length(result.evaluation.active_links) >= 2
-    @test length(result.evaluation.active_orbit_digests) == 2
+    @test length(result.evaluation.active_orbit_definitions) == 2
     stable_members = [
         MAGNETIC_WANNIERIZATION.MVPhaseBranchLink(2, 3, 1, -pi + 1.0e-8, 1.0e-8, 2pi),
         MAGNETIC_WANNIERIZATION.MVPhaseBranchLink(1, 4, 2, pi - 2.0e-8, 2.0e-8, -2pi),
@@ -171,18 +171,21 @@ end
         changed_side[1].margin,
         4pi,
     )
-    stable_digest = MAGNETIC_WANNIERIZATION._mv_branch_orbit_digest(stable_members)
-    @test stable_digest ==
-          MAGNETIC_WANNIERIZATION._mv_branch_orbit_digest(varied_fields_same_identity)
-    @test stable_digest != MAGNETIC_WANNIERIZATION._mv_branch_orbit_digest(changed_side)
-    @test MAGNETIC_WANNIERIZATION._u_branch_signature(["b", "a"]) ==
-          MAGNETIC_WANNIERIZATION._u_branch_signature(["a", "b"])
+    stable_definition = MAGNETIC_WANNIERIZATION._mv_branch_orbit_definition(stable_members)
+    @test stable_definition ==
+          MAGNETIC_WANNIERIZATION._mv_branch_orbit_definition(varied_fields_same_identity)
+    @test stable_definition != MAGNETIC_WANNIERIZATION._mv_branch_orbit_definition(changed_side)
+    branch_definition = MAGNETIC_WANNIERIZATION._u_branch_definition(["b", "a"])
+    @test branch_definition == "u-branch-input/1\n2\n1:a1:b"
+    @test branch_definition == MAGNETIC_WANNIERIZATION._u_branch_definition(["a", "b"])
+    @test branch_definition != MAGNETIC_WANNIERIZATION._u_branch_definition(["a", "c"])
+    @test branch_definition != MAGNETIC_WANNIERIZATION._u_branch_definition(["a", "a", "b"])
     target_at_k1 = MAGNETIC_WANNIERIZATION.target_representation(plan, representation, 2, 1)
     for jump in result.evaluation.branch_jump_full
         @test jump[2] ≈ target_at_k1 * conj(jump[1]) * target_at_k1' atol = 1.0e-12 rtol = 0.0
     end
 
-    capped_config = MAGNETIC_WANNIERIZATION_API.SymmetryAdaptedWannierizationConfig(
+    capped_config = MAGNETIC_WANNIERIZATION_API.WannierizationConfig(
         input = MAGNETIC_WANNIERIZATION_API.WannierizationInputConfig(
             wannierization_mode = :symmetry_adapted,
             win_file = "unused.win",
@@ -919,7 +922,7 @@ end
         tolerance = 1.0e-10,
     )
     target_at_k1 = MAGNETIC_WANNIERIZATION.target_representation(plan, representation, 2, 1)
-    evaluation_config = MAGNETIC_WANNIERIZATION_API.SymmetryAdaptedWannierizationConfig(
+    evaluation_config = MAGNETIC_WANNIERIZATION_API.WannierizationConfig(
         input = MAGNETIC_WANNIERIZATION_API.WannierizationInputConfig(
             wannierization_mode = :symmetry_adapted,
             win_file = "unused.win",
@@ -1024,7 +1027,7 @@ end
     )
     cut_weights =
         MAGNETIC_WANNIERIZATION._finite_difference_weights(representation, cut_mmn).weights
-    cut_config = MAGNETIC_WANNIERIZATION_API.SymmetryAdaptedWannierizationConfig(
+    cut_config = MAGNETIC_WANNIERIZATION_API.WannierizationConfig(
         input = MAGNETIC_WANNIERIZATION_API.WannierizationInputConfig(
             wannierization_mode = :symmetry_adapted,
             win_file = "unused.win",
@@ -1055,7 +1058,7 @@ end
     @test cut_result.success
     cut_evaluation = cut_result.evaluation
     @test !isempty(cut_evaluation.active_links)
-    @test !isempty(cut_evaluation.active_orbit_digests)
+    @test !isempty(cut_evaluation.active_orbit_definitions)
     for jump in cut_evaluation.branch_jump_full
         @test jump[2] ≈ target_at_k1 * conj(jump[1]) * target_at_k1' atol = 1.0e-12 rtol = 0.0
     end
@@ -1146,7 +1149,7 @@ end
     )
     @test multiple_result.success
     @test length(multiple_result.evaluation.active_links) >= 2
-    @test length(multiple_result.evaluation.active_orbit_digests) >= 1
+    @test length(multiple_result.evaluation.active_orbit_definitions) >= 1
 
     # Finite-cutoff sewing can put only a non-IBZ star member inside the phase
     # layer. The legacy IBZ objective then selects a different principal chart

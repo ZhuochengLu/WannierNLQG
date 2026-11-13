@@ -2,7 +2,11 @@
 # No solver, backend loader, file, MPI call, or persistent workspace is created.
 @compile_workload let
     if FIRST_USE_WORKLOAD_ENABLED
-        scope = SymmetryFoundation.BandRepresentationQualificationScope(trues(1, 1), trues(1, 1))
+        scope = SymmetryFoundation.BandRepresentationQualificationScope(
+            trues(1, 1),
+            trues(1, 1);
+            content_authentication = false,
+        )
         contract = Wannierization.TargetSubspaceQualificationContract(
             scope;
             outer_min_ev = -2.0,
@@ -34,11 +38,13 @@
             [1],
             [1];
             conventions = Dict(
-                "target_subspace_contract_sha256" => contract.contract_sha256,
-                "outer_mask_sha256" => scope.outer_mask_sha256,
-                "frozen_mask_sha256" => scope.frozen_mask_sha256,
+                "target_subspace_contract_definition" => contract.contract_definition,
+                "outer_mask_definition" => scope.outer_mask_definition,
+                "frozen_mask_definition" => scope.frozen_mask_definition,
             ),
-            input_sha256 = Dict("TARGET_SUBSPACE_CONTRACT_SHA256" => contract.contract_sha256),
+            input_sha256 = Dict(
+                "TARGET_SUBSPACE_CONTRACT_DEFINITION" => contract.contract_definition,
+            ),
         )
         spec = WannierProjection.ProjectionSpec(
             selector = "X",

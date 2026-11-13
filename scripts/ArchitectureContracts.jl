@@ -1,6 +1,9 @@
 module ArchitectureContracts
 
-export exported_symbols,
+export test_dependency_violations,
+    julia_boundary_source_inventory,
+    independent_architecture_boundary_violations,
+    exported_symbols,
     component_file_ownership_violations,
     component_private_reference_violations,
     component_qualified_reference_violations,
@@ -92,6 +95,54 @@ function _code_only(source::AbstractString)
     return String(output)
 end
 
+"""Parse intact Julia syntax and reject parser error nodes before an import audit."""
+function _import_source_ast(source::AbstractString)
+    expression = Meta.parseall(source)
+    complete(value) =
+        !(value isa Expr) || (!(value.head in (:error, :incomplete)) && all(complete, value.args))
+    complete(expression) ||
+        throw(ArgumentError("architecture import source is not valid Julia syntax"))
+    return expression
+end
+
+"""Report every external test import absent from the test project's direct dependencies.
+
+Parse Julia syntax so embedded Python, comments, strings and relative module imports
+cannot be mistaken for package dependencies. Package availability in the main
+project or a custom test harness does not make it a direct Pkg.test dependency.
+"""
+function test_dependency_violations(sources, declared; package_name = "WannierNLQG")
+    allowed = union(Set(String.(declared)), Set([package_name, "Base", "Core", "Main"]))
+    errors = String[]
+    for (path, source) in sort!(collect(sources); by = first)
+        packages = Set{String}()
+        function visit(expression)
+            expression isa Expr || return
+            expression.head == :quote && return
+            if expression.head in (:using, :import)
+                for argument in expression.args
+                    provider = argument
+                    if provider isa Expr && provider.head in (:(:), :as)
+                        provider = first(provider.args)
+                    end
+                    if provider isa Expr && provider.head == :.
+                        isempty(provider.args) && continue
+                        first(provider.args) == Symbol(".") && continue
+                        provider = first(provider.args)
+                    end
+                    provider isa Symbol && push!(packages, String(provider))
+                end
+            end
+            foreach(visit, expression.args)
+        end
+        visit(_import_source_ast(source))
+        for package in sort!(collect(setdiff(packages, allowed)))
+            push!(errors, "$(path) imports undeclared test dependency $(package)")
+        end
+    end
+    return errors
+end
+
 """Return the normalized provider name represented by an import-path expression."""
 function _import_provider_name(path)
     path isa Symbol && return string(path)
@@ -120,9 +171,8 @@ end
 Return exact direct-import records for one component root.
 
 Each provider record distinguishes a module binding (`import Foo`/`using Foo`)
-from named symbol imports (`import Foo: bar`).  Comments and strings are
-ignored before parsing, so the result is a source contract rather than a
-formatting convention.
+from named symbol imports (`import Foo: bar`).  Comments and string nodes are inert after parsing. Parse the intact source so
+string pairs and adjoints cannot invalidate otherwise valid surrounding syntax.
 """
 function direct_import_records(source::AbstractString)
     mutable_records =
@@ -152,7 +202,7 @@ function direct_import_records(source::AbstractString)
         end
         foreach(visit, expression.args)
     end
-    visit(Meta.parseall(_code_only(source)))
+    visit(_import_source_ast(source))
     return Dict(
         provider =>
             (module_binding = record.module_binding, symbols = sort!(collect(record.symbols))) for
@@ -270,19 +320,25 @@ function direct_using_providers(source::AbstractString)
         end
         foreach(visit, expression.args)
     end
-    visit(Meta.parseall(_code_only(source)))
+    visit(_import_source_ast(source))
     return sort!(collect(providers))
 end
 
-"""Reject root package uses outside explicit call and exact if-condition allowlists."""
+"""Reject root uses except exact calls, guards and explicitly declared project-module paths."""
 function root_module_usage_violations(
     source::AbstractString;
     allowed_functions = ("pkgversion",),
     allowed_guards = (),
+    allowed_module_paths = (),
 )
     violations = String[]
     allowed = Set(String.(allowed_functions))
     guards = Meta.parse.(String.(allowed_guards))
+    all(
+        path -> occursin(r"^WannierNLQG(?:\.[A-Za-z_][A-Za-z0-9_]*)+$", String(path)),
+        allowed_module_paths,
+    ) || throw(ArgumentError("project module allowlist must contain qualified module paths"))
+    project_modules = Meta.parse.(String.(allowed_module_paths))
     function is_allowed_callee(expression)
         expression isa Symbol && return String(expression) in allowed
         expression isa Expr && expression.head == :. || return false
@@ -295,6 +351,8 @@ function root_module_usage_violations(
         end
         expression isa Expr || return
         expression.head in (:using, :import) && return
+        # Skip only an exact declared project-module subtree, never its call arguments.
+        expression.head == :. && any(path -> expression == path, project_modules) && return
         if expression.head == :if &&
            length(expression.args) >= 2 &&
            any(guard -> first(expression.args) == guard, guards)
@@ -330,7 +388,7 @@ function typed_sawf_flat_config_reads(sources::AbstractDict, leaf_fields)
         return annotation_terminal_name(first(annotation.args))
     end
     function sawf_type_aliases(expression)
-        aliases = Set((:SymmetryAdaptedWannierizationConfig,))
+        aliases = Set((:WannierizationConfig,))
         changed = true
         while changed
             changed = false
@@ -974,4 +1032,53 @@ function missing_documented_paths(document::AbstractString, paths)
     )
 end
 
+end
+
+"""Collect independent boundary diagnostics without masking later categories.
+
+All five existing validators still run with their original inputs and rejection
+criteria. This collection does not catch parse/schema errors or authorize a
+consumer; callers must establish those prerequisite contracts first.
+"""
+function independent_architecture_boundary_violations(
+    boundary_sources::AbstractDict,
+    production_sources::AbstractDict,
+    sawf_leaf_fields,
+    expected_negative_sawf_flat_reads,
+)
+    reports=(
+        (
+            "typed SAWF top-level leaf reads",
+            exact_allowlist_violations(
+                "typed SAWF top-level leaf reads",
+                Set(typed_sawf_flat_config_reads(boundary_sources, sawf_leaf_fields)),
+                expected_negative_sawf_flat_reads,
+            ),
+        ),
+        ("Spglib ownership violations remain", production_spglib_violations(production_sources)),
+        (
+            "shared-layer private references remain",
+            private_shared_boundary_violations(boundary_sources),
+        ),
+        (
+            "production module-private cross-owner references remain",
+            private_module_boundary_violations(production_sources),
+        ),
+        ("semantic duplicate types remain", semantic_duplicate_type_violations(production_sources)),
+    )
+    errors=String[]
+    for (category, violations) in reports
+        append!(errors, [category*": "*message for message in violations])
+    end
+    return errors
+end
+
+"""Select Julia files for Julia-AST import and public-interface analysis.
+
+Other language files remain in their caller's original inventory for lexical
+private-reference and source-distribution checks. Invalid Julia is not caught
+or discarded by this selection.
+"""
+function julia_boundary_source_inventory(sources::AbstractDict{<:AbstractString, <:AbstractString})
+    return Dict(path=>source for (path, source) in sources if endswith(path, ".jl"))
 end

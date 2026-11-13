@@ -1,3 +1,22 @@
+# Shared wire fields: values consumed by frame restoration, not content hashes.
+# The no-authentication policy is stored at file level and in source_metadata.
+const _STAR_BAND_FRAME_ATTRIBUTE_KEYS = (
+    "band_frame_contract_schema",
+    "band_frame_contract_schema_version",
+    "band_frame_source_gauge",
+    "band_frame_target_gauge",
+    "band_frame_transform_definition",
+    "band_frame_contract_definition",
+    "band_frame_metric_kind",
+    "band_frame_physical_isometry_maximum",
+    "band_frame_physical_isometry_tolerance",
+    "band_frame_replay_maximum",
+    "band_frame_replay_tolerance",
+    "band_frame_euclidean_nonunitarity_maximum",
+    "band_frame_minimum_singular_value",
+    "band_frame_maximum_condition_number",
+)
+
 # Map a fail-closed exception to the declared root-cause taxonomy.
 function _star_root_cause(error)
     message = sprint(showerror, error)
@@ -47,90 +66,56 @@ function _star_root_cause(error)
     return :PAW_PROPAGATION_IMPLEMENTATION_HOLD
 end
 
-# Hash one dense Julia array together with element type and dimensions.
-function _star_array_sha256(values::AbstractArray)
-    buffer = IOBuffer()
-    write(buffer, codeunits(string(eltype(values))))
-    write(buffer, UInt8(0))
-    write(buffer, reinterpret(UInt8, Int64.(collect(size(values)))))
-    dense = collect(values)
-    if isbitstype(eltype(dense))
-        write(buffer, reinterpret(UInt8, vec(dense)))
-    else
-        write(buffer, codeunits(repr(dense)))
+# Compare the complete persisted metric definition, excluding file locations and
+# derived projector/cache values. Replay separately checks projectors at its
+# physical tolerance; this check compares the actual defining data exactly.
+_star_metric_definitions_equal(
+    left::_AbstractStrictSewingMetric,
+    right::_AbstractStrictSewingMetric,
+) = false
+
+# Compare actual strict-sewing metric values while excluding nonmathematical source filenames.
+function _star_metric_definitions_equal(left::_QEStrictSewingMetric, right::_QEStrictSewingMetric)
+    left.metric_kind == right.metric_kind && left.spinorbit == right.spinorbit || return false
+    keys(left.upf_data) == keys(right.upf_data) || return false
+    for label in keys(left.upf_data)
+        a, b = left.upf_data[label], right.upf_data[label]
+        for field in fieldnames(QEUPFData)
+            field === :filename && continue
+            isequal(getfield(a, field), getfield(b, field)) || return false
+        end
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    a, b = left.plan, right.plan
+    a.num_channels == b.num_channels &&
+    a.has_augmentation == b.has_augmentation &&
+    a.fully_relativistic == b.fully_relativistic || return false
+    length(a.atoms) == length(b.atoms) || return false
+    for (x, y) in zip(a.atoms, b.atoms)
+        x.atomic_type_label == y.atomic_type_label &&
+        x.element == y.element &&
+        isequal(x.position_fractional, y.position_fractional) &&
+        x.channel_range == y.channel_range &&
+        length(x.channels) == length(y.channels) || return false
+        for (u, v) in zip(x.channels, y.channels)
+            all(
+                field -> isequal(getfield(u, field), getfield(v, field)),
+                fieldnames(QEProjectorChannel),
+            ) || return false
+        end
+    end
+    return true
 end
 
-# Hash the parsed projector/Q contract independently of raw source paths.
-function _star_metric_sha256(metric::_QEStrictSewingMetric)
-    buffer = IOBuffer()
-    write(buffer, "qe\n", metric.metric_kind, '\n')
-    for label in sort!(collect(keys(metric.upf_data)))
-        dataset = metric.upf_data[label]
-        write(buffer, label, '\n', dataset.element, '\n', String(dataset.metric_kind), '\n')
-        for values in (
-            dataset.radial_grid_bohr,
-            dataset.radial_weights_bohr,
-            dataset.beta_radial,
-            dataset.beta_angular_momenta,
-            dataset.beta_total_angular_momenta,
-            dataset.dij,
-            dataset.q_integrals,
-            dataset.qfcoef,
-            dataset.rinner_bohr,
-        )
-            write(buffer, _star_array_sha256(values), '\n')
-        end
-        for key in sort!(collect(keys(dataset.q_radial_by_multipole)))
-            write(
-                buffer,
-                join(key, ','),
-                '=',
-                _star_array_sha256(dataset.q_radial_by_multipole[key]),
-                '\n',
-            )
-        end
-    end
-    for atom in metric.plan.atoms
-        write(
-            buffer,
-            atom.atomic_type_label,
-            '|',
-            atom.element,
-            '|',
-            join(atom.position_fractional, ','),
-            '|',
-            string(first(atom.channel_range)),
-            ':',
-            string(last(atom.channel_range)),
-            '\n',
-        )
-        for channel in atom.channels
-            write(
-                buffer,
-                string(channel.radial_index),
-                ',',
-                string(channel.angular_momentum),
-                ',',
-                string(channel.harmonic_row),
-                ';',
-            )
-        end
-        write(buffer, '\n')
-    end
-    return bytes2hex(SHA.sha256(take!(buffer)))
-end
-
-# Hash the VASP q=0 metric needed by the shared in-memory algorithm.
-function _star_metric_sha256(metric::_VASPStrictSewingMetric)
-    buffer = IOBuffer()
-    write(buffer, "vasp\n", string(metric.paw.num_channels), '\n')
-    write(buffer, _star_array_sha256(metric.paw.q0_augmentation), '\n')
-    for basis in metric.projector_bases
-        write(buffer, _star_array_sha256(basis), '\n')
-    end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+# Only q=0 augmentation and target-k bases define the persisted VASP metric;
+# source dataset paths and derived projector overlaps are not identities.
+function _star_metric_definitions_equal(
+    left::_VASPStrictSewingMetric,
+    right::_VASPStrictSewingMetric,
+)
+    return left.paw.num_channels == right.paw.num_channels &&
+           isequal(left.paw.cell_volume_angstrom3, right.paw.cell_volume_angstrom3) &&
+           isequal(left.paw.q0_augmentation, right.paw.q0_augmentation) &&
+           isequal(left.projector_bases, right.projector_bases)
 end
 
 """Return whether a payload carries symmetrized-DFT target-subspace authority."""
@@ -139,136 +124,23 @@ _star_target_scoped_symmetrized_payload(payload::_StarCovariantPAWPayload) =
     "symmetrized_dft_hamiltonian" &&
     get(payload.source_metadata, "qualification_scope", "") == "target_subspace"
 
-# Compute one logical payload identity that is stable across HDF5 library versions.
-function _star_payload_sha256(
-    payload::_StarCovariantPAWPayload;
-    schema_version::AbstractString = STAR_COVARIANT_PAW_GAUGE_SCHEMA_VERSION,
-    contract_version::AbstractString = schema_version == "1.0" ?
-                                       STAR_COVARIANT_PAW_GAUGE_CURRENT_CONTRACT_VERSION :
-                                       schema_version,
-)
+# Validate storage invariants independently of any content authentication.
+function _validate_star_payload_storage_contract(payload, schema_version, contract_version)
     _validate_star_wire_contract(schema_version, contract_version)
-    buffer = IOBuffer()
-    write(buffer, schema_version, '\n')
-    for (key, value) in sort!(collect(payload.input_sha256); by = first)
-        write(buffer, key, '=', value, '\n')
-    end
-    if contract_version in ("1.6", "1.7", "1.8", "1.9", "1.10", "1.11")
-        for (key, value) in sort!(collect(payload.source_metadata); by = first)
-            write(buffer, "source_metadata:", key, '=', value, '\n')
-        end
-    end
-    for values in (
-        payload.kpoint_map,
-        payload.reciprocal_shifts,
-        payload.representative_for_kpoint,
-        payload.canonical_operation_for_kpoint,
-        payload.star_representatives,
-        payload.extra_bands_per_star,
-        payload.rotations,
-        reduce(
-            hcat,
-            (
-                native_point_metadata(payload.native, k).energies_ev for
-                k in eachindex(payload.native.kpoints)
-            ),
-        ),
-    )
-        write(buffer, _star_array_sha256(values), '\n')
-    end
-    for operation in payload.operations
-        write(buffer, canonical_band_operation_key(operation), '\n')
-    end
-    for representative in payload.star_representatives
-        point = payload.native.kpoints[representative]
-        write(buffer, string(representative), ':', _star_array_sha256(point.g_vectors), ':')
-        write(buffer, _star_array_sha256(point.coefficients), '\n')
-    end
-    for point in payload.native.kpoints
-        write(buffer, _star_array_sha256(point.g_vectors), '\n')
-    end
-    if contract_version in ("1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "1.10", "1.11")
-        audit = payload.symmetrized_hamiltonian_audit
-        write(
-            buffer,
-            audit === nothing ? "NO_SYMMETRIZED_HAMILTONIAN_AUDIT\n" :
-            "HAS_SYMMETRIZED_HAMILTONIAN_AUDIT\n",
-        )
-        if audit !== nothing
-            for values in (
-                audit.native_energies_ev,
-                audit.symmetrized_energies_ev,
-                audit.native_to_symmetrized_rotations,
-                audit.representative_native_hamiltonians_ev,
-                audit.representative_symmetrized_hamiltonians_ev,
-                audit.representative_raw_transports,
-                audit.target_principal_angles_rad,
-                audit.target_projector_difference_operator,
-                audit.target_projector_difference_frobenius,
-                audit.native_to_symmetrized_band_assignment,
-            )
-                write(buffer, _star_array_sha256(values), '\n')
-            end
-            if contract_version in ("1.5", "1.6", "1.7", "1.8", "1.9", "1.10", "1.11")
-                write(buffer, _star_array_sha256(audit.target_energy_shifts_by_star_ev), '\n')
-                write(buffer, _star_array_sha256(audit.parent_energy_shifts_by_kpoint_ev), '\n')
-            end
-            if contract_version in ("1.8", "1.9", "1.10", "1.11")
-                if audit.target_anchor_sha256_by_star === nothing
-                    write(buffer, "NO_TARGET_COMPLEMENT_COMPLETION\n")
-                else
-                    write(buffer, join(something(audit.target_anchor_sha256_by_star), ','), '\n')
-                    for values in (
-                        something(audit.complement_bases),
-                        something(audit.complement_rotations),
-                        something(audit.target_complement_hamiltonians_ev),
-                        something(audit.complement_hamiltonians_ev),
-                    )
-                        write(buffer, _star_array_sha256(values), '\n')
-                    end
-                end
-            end
-        end
-    end
-    for (key, value) in sort!(collect(payload.maxima); by = first)
-        write(buffer, key, '=', repr(value), '\n')
-    end
     if contract_version in ("1.10", "1.11")
-        scope = payload.qualification_scope
-        write(
-            buffer,
-            scope === nothing ? "NO_TARGET_QUALIFICATION_SCOPE\n" :
-            "HAS_TARGET_QUALIFICATION_SCOPE\n",
-        )
-        if scope !== nothing
-            write(buffer, scope.outer_mask_sha256, '\n', scope.frozen_mask_sha256, '\n')
-            write(buffer, _star_array_sha256(UInt8.(scope.outer_mask)), '\n')
-            write(buffer, _star_array_sha256(UInt8.(scope.frozen_mask)), '\n')
-        end
         if _star_target_scoped_symmetrized_payload(payload)
             get(payload.source_metadata, "nonrepresentative_frame_storage", "") ==
             "local_native_source_plus_completed_rotation" || throw(
                 ArgumentError(
-                    "UNSUPPORTED_LEGACY_AUTHORITY: target-scoped symmetrized payload does not use local-source rotation replay",
+                    "UNSUPPORTED_LEGACY_AUTHORITY: completed local-source rotation replay is required",
                 ),
             )
-            payload.sealed_completed_frame_corrections === nothing || throw(
-                ArgumentError(
-                    "PAW_GAUGE_ARTIFACT_TAMPERED: local-source replay payload contains obsolete sealed-frame corrections",
-                ),
-            )
-            write(buffer, "LOCAL_NATIVE_SOURCE_PLUS_COMPLETED_ROTATION\n")
-        else
-            payload.sealed_completed_frame_corrections === nothing || throw(
-                ArgumentError(
-                    "PAW_GAUGE_ARTIFACT_TAMPERED: sealed-frame corrections appear outside target-scoped symmetrized authority",
-                ),
-            )
-            write(buffer, "NO_SEALED_COMPLETED_FRAME_CORRECTIONS\n")
         end
+        payload.sealed_completed_frame_corrections === nothing || throw(
+            ArgumentError("PAW_GAUGE_ARTIFACT_INVALID: obsolete sealed-frame corrections remain"),
+        )
     end
-    write(buffer, _star_metric_sha256(payload.metric), '\n')
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
 """Return the canonical persisted metadata for a fixed-gap block policy."""
@@ -314,13 +186,14 @@ function _star_block_partition_policy_metadata(policy::HamiltonianWeightedPAWBlo
     )
 end
 
-"""Hash canonical block-policy metadata for artifact identity binding."""
-function _star_block_partition_policy_sha256(metadata::AbstractDict)
+"""Encode the complete block-policy values for actual cross-artifact comparison."""
+function _star_block_partition_policy_definition(metadata::AbstractDict)
     buffer = IOBuffer()
-    for (key, value) in sort!(collect(metadata); by = first)
-        write(buffer, string(key), '=', string(value), '\n')
-    end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    IO.write_native_definition_value(
+        buffer,
+        Dict(String(key) => String(value) for (key, value) in metadata),
+    )
+    return bytes2hex(take!(buffer))
 end
 
 """Return canonical metadata for an unchanged native discrete Hamiltonian."""
@@ -350,9 +223,9 @@ function _star_hamiltonian_correction_metadata(correction::FarBandCovarianceCorr
     )
 end
 
-"""Hash the controlled-Hamiltonian correction contract for cross-artifact binding."""
-_star_hamiltonian_correction_sha256(correction::AbstractDiscreteHamiltonianCorrection) =
-    _star_block_partition_policy_sha256(_star_hamiltonian_correction_metadata(correction))
+"""Encode the complete controlled-Hamiltonian correction definition."""
+_star_hamiltonian_correction_definition(correction::AbstractDiscreteHamiltonianCorrection) =
+    _star_block_partition_policy_definition(_star_hamiltonian_correction_metadata(correction))
 
 """Return canonical metadata for one authoritative-Hamiltonian selection."""
 function _star_authoritative_hamiltonian_metadata(authority::AbstractAuthoritativeHamiltonian)
@@ -365,7 +238,7 @@ function _star_authoritative_hamiltonian_metadata(authority::AbstractAuthoritati
     )
 end
 
-"""Return the digest-bound contract for target-scoped symmetrized DFT authority."""
+"""Return the complete parameter contract for target-scoped symmetrized DFT authority."""
 function _star_authoritative_hamiltonian_metadata(authority::SymmetrizedDFTHamiltonian)
     completion = authority.completion
     return Dict(
@@ -385,14 +258,14 @@ function _star_authoritative_hamiltonian_metadata(authority::SymmetrizedDFTHamil
         "native_fidelity_scope" => "independent_audit",
         "global_production_eligible" => "false",
         "symmetrized_hamiltonian_is_pure_gauge" => "false",
-        "target_zero_drift_contract" => "array_max_abs_zero_and_sha256_identity",
+        "target_zero_drift_contract" => "array_max_abs_zero_and_literal_byte_equality",
         "parent_completion_band_gauge" => "diag_identity_target_complement_unitary",
     )
 end
 
-"""Hash the authoritative-Hamiltonian contract for cross-artifact binding."""
-_star_authoritative_hamiltonian_sha256(authority::AbstractAuthoritativeHamiltonian) =
-    _star_block_partition_policy_sha256(_star_authoritative_hamiltonian_metadata(authority))
+"""Encode the complete authoritative-Hamiltonian selection for value comparison."""
+_star_authoritative_hamiltonian_definition(authority::AbstractAuthoritativeHamiltonian) =
+    _star_block_partition_policy_definition(_star_authoritative_hamiltonian_metadata(authority))
 
 """Return the digest payload for one target-subspace qualification contract."""
 function _star_target_subspace_contract_metadata(contract::TargetSubspaceQualificationContract)
@@ -404,13 +277,13 @@ function _star_target_subspace_contract_metadata(contract::TargetSubspaceQualifi
         "frozen_min_ev" => repr(contract.frozen_min_ev),
         "frozen_max_ev" => repr(contract.frozen_max_ev),
         "num_wannier" => string(contract.num_wannier),
-        "outer_mask_sha256" => contract.qualification_scope.outer_mask_sha256,
-        "frozen_mask_sha256" => contract.qualification_scope.frozen_mask_sha256,
+        "outer_mask_definition" => contract.qualification_scope.outer_mask_definition,
+        "frozen_mask_definition" => contract.qualification_scope.frozen_mask_definition,
         "target_anchor_maximum_drift_ev" => repr(contract.target_anchor_maximum_drift_ev),
         "target_complement_maximum_element_ev" =>
             repr(contract.target_complement_maximum_element_ev),
         "target_leakage_semantics" => TARGET_LEAKAGE_WEIGHT_SEMANTICS,
-        "target_leakage_formula_sha256" => TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256,
+        "target_leakage_formula_definition" => TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION,
         "target_leakage_threshold" =>
             repr(contract.scoped_paw_thresholds.target_leakage_weight),
     )
@@ -434,8 +307,8 @@ function _star_scoped_paw_threshold(source_metadata::Dict{String, String}, field
 end
 
 """Hash the target-subspace qualification contract for artifact binding."""
-_star_target_subspace_contract_sha256(contract::TargetSubspaceQualificationContract) =
-    contract.contract_sha256
+_star_target_subspace_contract_definition(contract::TargetSubspaceQualificationContract) =
+    contract.contract_definition
 
 # Persist the complete parsed QE UPF/projector plan used by the gauge stage.
 function _star_write_metric(parent, metric::_QEStrictSewingMetric)
@@ -443,7 +316,7 @@ function _star_write_metric(parent, metric::_QEStrictSewingMetric)
     attributes["kind"] = "qe_upf_beta_q0"
     attributes["spinorbit"] = metric.spinorbit
     attributes["metric_kind"] = metric.metric_kind
-    attributes["metric_sha256"] = _star_metric_sha256(metric)
+    attributes["content_authentication"] = "NOT_PERFORMED"
     upf_group = HDF5.create_group(parent, "upf")
     for (ordinal, label) in enumerate(sort!(collect(keys(metric.upf_data))))
         dataset = metric.upf_data[label]
@@ -502,7 +375,7 @@ end
 function _star_write_metric(parent, metric::_VASPStrictSewingMetric)
     attributes = HDF5.attributes(parent)
     attributes["kind"] = "vasp_potcar_projector_q0"
-    attributes["metric_sha256"] = _star_metric_sha256(metric)
+    attributes["content_authentication"] = "NOT_PERFORMED"
     attributes["num_channels"] = metric.paw.num_channels
     attributes["cell_volume_angstrom3"] = metric.paw.cell_volume_angstrom3
     parent["q0_augmentation"] = metric.paw.q0_augmentation
@@ -551,8 +424,8 @@ function _star_read_vasp_metric(parent, native::NativeWavefunctionData)
         Float64(read(attributes["cell_volume_angstrom3"])),
     )
     metric = _VASPStrictSewingMetric(paw, projectors, bases)
-    String(read(attributes["metric_sha256"])) == _star_metric_sha256(metric) ||
-        throw(ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: VASP metric digest differs"))
+    String(read(attributes["content_authentication"])) == "NOT_PERFORMED" ||
+        throw(ArgumentError("PAW_METRIC_EXPLICIT_MIGRATION_REQUIRED"))
     return metric
 end
 
@@ -635,8 +508,8 @@ function _star_read_qe_metric(parent, native::NativeWavefunctionData)
         Dict{Tuple{String, NTuple{3, Float64}, Int, Bool}, Array{ComplexF64, 4}}(),
         String(read(HDF5.attributes(parent)["metric_kind"])),
     )
-    String(read(HDF5.attributes(parent)["metric_sha256"])) == _star_metric_sha256(metric) ||
-        throw(ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: parsed PAW metric digest differs"))
+    String(read(HDF5.attributes(parent)["content_authentication"])) == "NOT_PERFORMED" ||
+        throw(ArgumentError("PAW_METRIC_EXPLICIT_MIGRATION_REQUIRED"))
     return metric
 end
 
@@ -647,8 +520,9 @@ function _write_star_covariant_paw_gauge_hdf5(
     status::Symbol,
     root_cause::Symbol,
     diagnostics::Vector{String} = String[],
+    ordinary_calculation::Bool = false,
     schema_version::AbstractString = STAR_COVARIANT_PAW_GAUGE_SCHEMA_VERSION,
-    contract_version::AbstractString = schema_version == "1.0" ?
+    contract_version::AbstractString = schema_version in ("1.0", "2.0") ?
                                        STAR_COVARIANT_PAW_GAUGE_CURRENT_CONTRACT_VERSION :
                                        schema_version,
 )
@@ -659,71 +533,71 @@ function _write_star_covariant_paw_gauge_hdf5(
     if !haskey(payload.source_metadata, "block_partition_policy")
         metadata = _star_block_partition_policy_metadata(FixedGapPAWBlockPartition())
         merge!(payload.source_metadata, metadata)
-        payload.input_sha256["BLOCK_PARTITION_POLICY_SHA256"] =
-            _star_block_partition_policy_sha256(metadata)
+        payload.input_sha256["BLOCK_PARTITION_POLICY_DEFINITION"] =
+            _star_block_partition_policy_definition(metadata)
     end
     if !haskey(payload.source_metadata, "discrete_hamiltonian_correction")
         correction = NoDiscreteHamiltonianCorrection()
         merge!(payload.source_metadata, _star_hamiltonian_correction_metadata(correction))
-        payload.input_sha256["DISCRETE_HAMILTONIAN_CORRECTION_SHA256"] =
-            _star_hamiltonian_correction_sha256(correction)
+        payload.input_sha256["DISCRETE_HAMILTONIAN_CORRECTION_DEFINITION"] =
+            _star_hamiltonian_correction_definition(correction)
     end
     if !haskey(payload.source_metadata, "authoritative_hamiltonian")
         authority = NativeDFTHamiltonian()
         merge!(payload.source_metadata, _star_authoritative_hamiltonian_metadata(authority))
         payload.input_sha256["AUTHORITATIVE_HAMILTONIAN_SHA256"] =
-            _star_authoritative_hamiltonian_sha256(authority)
+            _star_authoritative_hamiltonian_definition(authority)
     end
-    band_frame_attribute_keys =
-        contract_version == "1.11" ?
-        (
-            "band_frame_contract_schema",
-            "band_frame_contract_schema_version",
-            "band_frame_contract_status",
-            "band_frame_source_gauge",
-            "band_frame_target_gauge",
-            "band_frame_transform_sha256",
-            "band_frame_contract_sha256",
-            "band_frame_metric_kind",
-            "band_frame_physical_isometry_maximum",
-            "band_frame_physical_isometry_tolerance",
-            "band_frame_replay_maximum",
-            "band_frame_replay_tolerance",
-            "band_frame_euclidean_nonunitarity_maximum",
-            "band_frame_minimum_singular_value",
-            "band_frame_maximum_condition_number",
-        ) : ()
+    band_frame_attribute_keys = contract_version == "1.11" ? _STAR_BAND_FRAME_ATTRIBUTE_KEYS : ()
     for key in band_frame_attribute_keys
         haskey(payload.source_metadata, key) ||
             throw(ArgumentError("BAND_FRAME_CONTRACT_REQUIRED: current payload omits $(key)"))
     end
     if contract_version == "1.11"
-        get(payload.input_sha256, "BAND_FRAME_TRANSFORM_SHA256", "") ==
-        payload.source_metadata["band_frame_transform_sha256"] ||
+        get(payload.input_sha256, "BAND_FRAME_TRANSFORM_DEFINITION", "") ==
+        payload.source_metadata["band_frame_transform_definition"] ||
             throw(ArgumentError("BAND_FRAME_TRANSFORM_DIGEST_MISMATCH"))
-        get(payload.input_sha256, "BAND_FRAME_CONTRACT_SHA256", "") ==
-        payload.source_metadata["band_frame_contract_sha256"] ||
+        get(payload.input_sha256, "BAND_FRAME_CONTRACT_DEFINITION", "") ==
+        payload.source_metadata["band_frame_contract_definition"] ||
             throw(ArgumentError("BAND_FRAME_CONTRACT_DIGEST_MISMATCH"))
     end
-    logical_digest = _star_payload_sha256(payload; schema_version, contract_version)
-    # The standalone star-gauge wire contract is intentionally unchanged.  Map the
-    # renamed public Standard route onto its historical non-production status and
-    # field names at this storage boundary.
-    wire_status = status == :STANDARD ? :DIAGNOSTIC_ONLY : status
+    if ordinary_calculation
+        status == :STANDARD && contract_version == "1.11" ||
+            throw(ArgumentError("ORDINARY_STAR_POLICY_CONTRACT_MISMATCH"))
+        metadata = copy(payload.source_metadata)
+        metadata["ordinary_calculation_policy_version"] = "1.0"
+        payload = _StarCovariantPAWPayload(
+            (
+                field == :source_metadata ? metadata : getfield(payload, field) for
+                field in fieldnames(_StarCovariantPAWPayload)
+            )...,
+        )
+    elseif haskey(payload.source_metadata, "ordinary_calculation_policy_version")
+        throw(ArgumentError("ORDINARY_STAR_POLICY_REQUIRES_EXPLICIT_WRITER_CONTRACT"))
+    end
+    schema_version == "2.0" || throw(ArgumentError("CURRENT_STAR_WRITER_REQUIRES_NONHASH_SCHEMA"))
+    _validate_star_payload_storage_contract(payload, schema_version, contract_version)
+    # Completion is established from the mathematical datasets, not a status label.
     return atomic_hdf5_write(filename) do temporary
         HDF5.h5open(temporary, "w") do handle
             attributes = HDF5.attributes(handle)
             attributes["schema"] = STAR_COVARIANT_PAW_GAUGE_SCHEMA
             attributes["schema_version"] = schema_version
-            attributes["status"] = String(wire_status)
+            ordinary_calculation && (attributes["ordinary_calculation_policy_version"] = "1.0")
             attributes["root_cause"] = String(root_cause)
-            attributes["production_eligible"] = wire_status == :PASS
-            attributes["diagnostic_only"] = wire_status == :DIAGNOSTIC_ONLY
-            attributes["scoped_production_eligible"] = wire_status == :PASS
-            attributes["global_production_eligible"] = false
             attributes["wavefunction_gauge_backend"] = "star_covariant_paw"
             attributes["sewing_backend"] = "augmentation_aware_paw_q0"
-            attributes["payload_sha256"] = logical_digest
+            attributes["content_authentication"] = "NOT_PERFORMED"
+            payload.native.source_definition === nothing && throw(
+                ArgumentError(
+                    "NATIVE_SOURCE_COMPLETE_DEFINITION_REQUIRED: digest-only legacy input requires explicit migration with original sources",
+                ),
+            )
+            write_scientific_input_reference_hdf5(
+                handle,
+                "native_source_definition",
+                payload.native.source_definition,
+            )
             attributes["target_band_start"] = first(payload.target_band_range)
             attributes["target_band_stop"] = last(payload.target_band_range)
             attributes["parent_band_start"] = first(payload.parent_band_range)
@@ -734,16 +608,16 @@ function _write_star_covariant_paw_gauge_hdf5(
             attributes["antiunitary_band_gauge_convention"] = "B_prime=U_gk_dagger*B*conj(U_k)"
             attributes["block_partition_policy"] =
                 get(payload.source_metadata, "block_partition_policy", "fixed_gap")
-            attributes["block_partition_policy_sha256"] = get(
+            attributes["block_partition_policy_definition"] = get(
                 payload.input_sha256,
-                "BLOCK_PARTITION_POLICY_SHA256",
+                "BLOCK_PARTITION_POLICY_DEFINITION",
                 "LEGACY_SCHEMA_FIELD_ABSENT",
             )
             attributes["discrete_hamiltonian_correction"] =
                 get(payload.source_metadata, "discrete_hamiltonian_correction", "none")
-            attributes["discrete_hamiltonian_correction_sha256"] = get(
+            attributes["discrete_hamiltonian_correction_definition"] = get(
                 payload.input_sha256,
-                "DISCRETE_HAMILTONIAN_CORRECTION_SHA256",
+                "DISCRETE_HAMILTONIAN_CORRECTION_DEFINITION",
                 "LEGACY_SCHEMA_FIELD_ABSENT",
             )
             attributes["controlled_symmetrization_qualification_mode"] = get(
@@ -797,29 +671,12 @@ function _write_star_covariant_paw_gauge_hdf5(
             )
                 attributes[key] = get(payload.source_metadata, key, default_value)
             end
-            native_residual = get(
-                payload.maxima,
-                "native_fidelity_projected_eigen_residual_ev",
-                get(payload.maxima, "projected_eigen_residual_ev", Inf),
-            )
-            attributes["native_fidelity_status"] =
-                native_residual <= 5.0e-6 ? "NATIVE_DFT_FIDELITY_PASS" : "NATIVE_DFT_FIDELITY_HOLD"
-            attributes["symmetrized_hamiltonian_status"] =
-                authority == "symmetrized_dft_hamiltonian" && status == :PASS ?
-                "SYMMETRIZED_DFT_HAMILTONIAN_PASS" : "NOT_SELECTED"
-            attributes["symmetrized_target_subspace_status"] =
-                authority == "symmetrized_dft_hamiltonian" && status == :PASS ?
-                "SYMMETRIZED_DFT_HAMILTONIAN_PASS" : "NOT_SELECTED"
-            attributes["auxiliary_parent_audit_status"] =
-                get(payload.source_metadata, "auxiliary_parent_audit_status", "NOT_APPLICABLE")
-            attributes["target_scope_production_eligible"] =
-                payload.qualification_scope !== nothing && status == :PASS
-            attributes["target_subspace_contract_sha256"] =
+            attributes["target_subspace_contract_definition"] =
                 get(payload.input_sha256, "TARGET_SUBSPACE_CONTRACT_SHA256", "NOT_APPLICABLE")
             attributes["target_leakage_semantics"] =
                 get(payload.source_metadata, "target_leakage_semantics", "NOT_APPLICABLE")
-            attributes["target_leakage_formula_sha256"] =
-                get(payload.source_metadata, "target_leakage_formula_sha256", "NOT_APPLICABLE")
+            attributes["target_leakage_formula_definition"] =
+                get(payload.source_metadata, "target_leakage_formula_definition", "NOT_APPLICABLE")
             attributes["target_leakage_threshold"] =
                 get(payload.source_metadata, "target_leakage_threshold", "NOT_APPLICABLE")
             for key in band_frame_attribute_keys
@@ -833,8 +690,9 @@ function _write_star_covariant_paw_gauge_hdf5(
                     get(payload.source_metadata, "target_authority", "outer_window")
                 HDF5.attributes(scope_group)["parent_audit_policy"] =
                     get(payload.source_metadata, "parent_audit_policy", "audit_only")
-                HDF5.attributes(scope_group)["outer_mask_sha256"] = scope.outer_mask_sha256
-                HDF5.attributes(scope_group)["frozen_mask_sha256"] = scope.frozen_mask_sha256
+                HDF5.attributes(scope_group)["outer_mask_definition"] = scope.outer_mask_definition
+                HDF5.attributes(scope_group)["frozen_mask_definition"] =
+                    scope.frozen_mask_definition
                 scope_group["outer_mask"] = UInt8.(scope.outer_mask)
                 scope_group["frozen_mask"] = UInt8.(scope.frozen_mask)
             end
@@ -897,9 +755,11 @@ function _write_star_covariant_paw_gauge_hdf5(
                     audit.native_to_symmetrized_band_assignment
                 group["target_energy_shifts_by_star_ev"] = audit.target_energy_shifts_by_star_ev
                 group["parent_energy_shifts_by_kpoint_ev"] = audit.parent_energy_shifts_by_kpoint_ev
-                if audit.target_anchor_sha256_by_star !== nothing
-                    group["target_anchor_sha256_by_star"] =
-                        something(audit.target_anchor_sha256_by_star)
+                if audit.target_anchor_checked_by_star !== nothing
+                    _write_target_anchor_checks(
+                        group,
+                        something(audit.target_anchor_checked_by_star),
+                    )
                     group["complement_bases"] = something(audit.complement_bases)
                     group["complement_rotations"] = something(audit.complement_rotations)
                     group["target_complement_hamiltonians_ev"] =
@@ -1064,15 +924,14 @@ the logical digest uses the producer's sealed bytes after that check passes.
 """
 function _read_star_covariant_paw_gauge_hdf5_impl(
     filename::AbstractString;
-    require_pass::Bool = true,
+    require_pass::Union{Nothing, Bool} = nothing,
     construction_policy::Union{Nothing, Symbol} = nothing,
     source::Union{Nothing, AbstractWavefunctionSource} = nothing,
 )
     construction_policy === nothing ||
         construction_policy in (:strict, :standard) ||
         throw(ArgumentError("construction_policy must be :strict or :standard"))
-    effective_require_pass =
-        construction_policy === nothing ? require_pass : construction_policy == :strict
+    # require_pass is a retained call argument, not a current-format certificate gate.
     HDF5.enable_complex_support()
     return HDF5.h5open(filename, "r") do handle
         attributes = HDF5.attributes(handle)
@@ -1081,17 +940,19 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
         schema_version = String(read(attributes["schema_version"]))
         schema_version in STAR_COVARIANT_PAW_GAUGE_SUPPORTED_SCHEMA_VERSIONS ||
             throw(ArgumentError("unsupported wavefunction-gauge HDF5 schema version"))
-        status = Symbol(String(read(attributes["status"])))
-        construction_policy == :standard &&
-            !(status in (:PASS, :DIAGNOSTIC_ONLY)) &&
-            throw(
-                ArgumentError(
-                    "PAW_SEWING_HOLD: gauge artifact has no usable completed state; status=$(status)",
-                ),
-            )
-        effective_require_pass &&
-            status != :PASS &&
-            throw(ArgumentError("PAW_SEWING_HOLD: gauge artifact status is $(status)"))
+        schema_version == "2.0" || throw(
+            ArgumentError(
+                "STAR_GAUGE_EXPLICIT_MIGRATION_REQUIRED: legacy content certification is not used by current reads",
+            ),
+        )
+        haskey(attributes, "content_authentication") &&
+        String(read(attributes["content_authentication"])) == "NOT_PERFORMED" ||
+            throw(ArgumentError("STAR_GAUGE_CONTENT_AUTHENTICATION_POLICY_MISMATCH"))
+        haskey(attributes, "payload_sha256") &&
+            throw(ArgumentError("STAR_GAUGE_OBSOLETE_CONTENT_CERTIFICATE"))
+        # Historical labels may be present in old current-version files, but do
+        # not authorize data. The complete source/frame replay below is required.
+        status = :NOT_EVALUATED
         String(read(attributes["wavefunction_gauge_backend"])) == "star_covariant_paw" ||
             throw(ArgumentError("WAVEFUNCTION_GAUGE_BACKEND_MISMATCH"))
         String(read(attributes["sewing_backend"])) == "augmentation_aware_paw_q0" ||
@@ -1123,6 +984,16 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
         source_metadata = read_string_dictionary(handle["source_metadata"])
         contract_version =
             _star_gauge_contract_version(schema_version, attributes, source_metadata, input_sha256)
+        policy_version = get(source_metadata, "ordinary_calculation_policy_version", nothing)
+        ordinary_intent =
+            policy_version !== nothing || haskey(attributes, "ordinary_calculation_policy_version")
+        if ordinary_intent
+            contract_version == "1.11" &&
+            policy_version == "1.0" &&
+            haskey(attributes, "ordinary_calculation_policy_version") &&
+            String(read(attributes["ordinary_calculation_policy_version"])) == "1.0" ||
+                throw(ArgumentError("ORDINARY_STAR_POLICY_CONTRACT_MISMATCH"))
+        end
         metadata_authority = get(source_metadata, "authoritative_hamiltonian", "native_dft")
         metadata_scope = get(source_metadata, "qualification_scope", "parent_full_audit")
         if contract_version == "1.9" && metadata_scope == "target_subspace"
@@ -1138,13 +1009,13 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
             haskey(attributes, "authoritative_hamiltonian") &&
             String(read(attributes["authoritative_hamiltonian"])) == metadata_authority || throw(
                 ArgumentError(
-                    "PAW_GAUGE_ARTIFACT_TAMPERED: root Hamiltonian authority differs from digest-bound metadata",
+                    "PAW_GAUGE_ARTIFACT_TAMPERED: root Hamiltonian authority differs from stored complete definition",
                 ),
             )
             haskey(attributes, "qualification_scope") &&
             String(read(attributes["qualification_scope"])) == metadata_scope || throw(
                 ArgumentError(
-                    "PAW_GAUGE_ARTIFACT_TAMPERED: root qualification scope differs from digest-bound metadata",
+                    "PAW_GAUGE_ARTIFACT_TAMPERED: root qualification scope differs from stored complete definition",
                 ),
             )
         end
@@ -1161,7 +1032,7 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
             get(source_metadata, "nonrepresentative_frame_storage", "") ==
             "local_native_source_plus_completed_rotation" || throw(
                 ArgumentError(
-                    "PAW_GAUGE_ARTIFACT_TAMPERED: frame storage attribute differs from digest-bound metadata",
+                    "PAW_GAUGE_ARTIFACT_TAMPERED: frame storage attribute differs from stored complete definition",
                 ),
             )
             haskey(handle, "sealed_completed_frame_corrections") && throw(
@@ -1220,9 +1091,7 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
                 assignment,
                 target_shifts,
                 parent_shifts,
-                contract_version in ("1.8", "1.9", "1.10", "1.11") &&
-                    haskey(group, "target_anchor_sha256_by_star") ?
-                String.(read(group["target_anchor_sha256_by_star"])) : nothing,
+                _read_target_anchor_checks(group),
                 contract_version in ("1.8", "1.9", "1.10", "1.11") &&
                     haskey(group, "complement_bases") ?
                 ComplexF64.(read(group["complement_bases"])) : nothing,
@@ -1304,6 +1173,9 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
         end
         sort!(collect(keys(representative_points))) == star_representatives ||
             throw(ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: representative inventory differs"))
+        haskey(handle, "native_source_definition") ||
+            throw(ArgumentError("NATIVE_SOURCE_COMPLETE_DEFINITION_REQUIRED"))
+        source_definition = read_scientific_input_reference_hdf5(handle, "native_source_definition")
         replayed_metric = nothing
         replayed_raw_native = nothing
         replayed_raw_metric = nothing
@@ -1321,23 +1193,20 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
                     "WAVEFUNCTION_GAUGE_ARTIFACT_MISMATCH: source band range differs from artifact",
                 ),
             )
-            for (key, value) in _star_current_source_hashes(replay_source)
-                get(input_sha256, key, "MISSING") == value || throw(
-                    ArgumentError("INPUT_PROVENANCE_HOLD: source digest differs for $(key)"),
-                )
-            end
+            IO.validate_scientific_source_collection(
+                _star_current_source_files(replay_source),
+                source_definition,
+            )
             parent_source = _star_source_with_band_range(replay_source, parent_band_range)
             raw_native = _read_augmentation_aware_native_source(parent_source)
-            strict_hashes = _strict_input_hashes(parent_source, raw_native)
-            for (key, value) in strict_hashes
-                get(input_sha256, key, "MISSING") == value || throw(
-                    ArgumentError("INPUT_PROVENANCE_HOLD: strict source digest differs for $(key)"),
-                )
-            end
-            get(source_metadata, "source_replay_resource_manifest_sha256", "") ==
-            _star_input_identity_sha256(strict_hashes) || throw(
-                ArgumentError("INPUT_PROVENANCE_HOLD: source replay resource manifest differs"),
+            raw_native.source_definition === nothing &&
+                throw(ArgumentError("NATIVE_SOURCE_COMPLETE_DEFINITION_REQUIRED"))
+            IO.validate_scientific_input_definitions_equal(
+                raw_native.source_definition,
+                source_definition;
+                mismatch_error = "INPUT_PROVENANCE_HOLD: replayed source values differ",
             )
+            get(source_metadata, "source_replay_content_authentication", "") == "NOT_PERFORMED" || throw(ArgumentError("SOURCE_REPLAY_EXPLICIT_MIGRATION_REQUIRED"))
             raw_native.spinor == Bool(read(attributes["spinor"])) || throw(
                 ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: source spinor identity differs"),
             )
@@ -1432,8 +1301,9 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
             mp_grid,
             Bool(read(attributes["spinor"])),
             points,
-            input_sha256,
-            source_metadata,
+            Dict{String, String}(),
+            source_metadata;
+            source_definition,
         )
         metric_group = handle["parsed_paw_metric"]
         metric_kind = String(read(HDF5.attributes(metric_group)["kind"]))
@@ -1447,9 +1317,12 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
         metric = if replayed_metric === nothing
             persisted_metric
         else
-            _star_metric_sha256(something(replayed_metric)) == _star_metric_sha256(persisted_metric) || throw(
-                ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: replayed PAW metric digest differs"),
-            )
+            _star_metric_definitions_equal(something(replayed_metric), persisted_metric) ||
+                throw(
+                    ArgumentError(
+                        "PAW_GAUGE_METRIC_MISMATCH: replayed PAW metric definition differs",
+                    ),
+                )
             threshold =
                 frame_replay_active ?
                 _band_frame_float(source_metadata, "band_frame_replay_tolerance") :
@@ -1510,8 +1383,11 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
                 BandRepresentationQualificationScope(
                     Bool.(read(group["outer_mask"])),
                     Bool.(read(group["frozen_mask"]));
-                    outer_mask_sha256 = String(read(group_attributes["outer_mask_sha256"])),
-                    frozen_mask_sha256 = String(read(group_attributes["frozen_mask_sha256"])),
+                    outer_mask_definition = String(read(group_attributes["outer_mask_definition"])),
+                    frozen_mask_definition = String(
+                        read(group_attributes["frozen_mask_definition"]),
+                    ),
+                    content_authentication = false,
                 )
             elseif contract_version in ("1.10", "1.11") &&
                    get(source_metadata, "qualification_scope", "") == "target_subspace"
@@ -1548,13 +1424,13 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
            ("1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "1.10", "1.11")
             haskey(attributes, "block_partition_policy") ||
                 throw(ArgumentError("modern gauge artifact is missing block_partition_policy"))
-            haskey(input_sha256, "BLOCK_PARTITION_POLICY_SHA256") ||
+            haskey(input_sha256, "BLOCK_PARTITION_POLICY_DEFINITION") ||
                 throw(ArgumentError("modern gauge artifact is missing its block-policy digest"))
             String(read(attributes["block_partition_policy"])) ==
             get(source_metadata, "block_partition_policy", "") ||
                 throw(ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: block policy metadata differs"))
-            String(read(attributes["block_partition_policy_sha256"])) ==
-            input_sha256["BLOCK_PARTITION_POLICY_SHA256"] ||
+            String(read(attributes["block_partition_policy_definition"])) ==
+            input_sha256["BLOCK_PARTITION_POLICY_DEFINITION"] ||
                 throw(ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: block policy digest differs"))
             if get(source_metadata, "block_partition_policy", "") == "hamiltonian_weighted_far_band"
                 contract_version in
@@ -1570,10 +1446,8 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
         if contract_version in ("1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "1.10", "1.11")
             for key in (
                 "discrete_hamiltonian_correction",
-                "discrete_hamiltonian_correction_sha256",
+                "discrete_hamiltonian_correction_definition",
                 "controlled_symmetrization_qualification_mode",
-                "production_eligible",
-                "diagnostic_only",
             )
                 haskey(attributes, key) ||
                     throw(ArgumentError("schema-1.3 gauge artifact is missing $(key)"))
@@ -1584,27 +1458,10 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
                     "PAW_GAUGE_ARTIFACT_TAMPERED: Hamiltonian-correction metadata differs",
                 ),
             )
-            String(read(attributes["discrete_hamiltonian_correction_sha256"])) ==
-            get(input_sha256, "DISCRETE_HAMILTONIAN_CORRECTION_SHA256", "") || throw(
+            String(read(attributes["discrete_hamiltonian_correction_definition"])) ==
+            get(input_sha256, "DISCRETE_HAMILTONIAN_CORRECTION_DEFINITION", "") || throw(
                 ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: Hamiltonian-correction digest differs"),
             )
-            status == :PASS &&
-                !Bool(read(attributes["production_eligible"])) &&
-                throw(
-                    ArgumentError(
-                        "PAW_GAUGE_ARTIFACT_TAMPERED: PASS artifact is not production eligible",
-                    ),
-                )
-            status == :DIAGNOSTIC_ONLY &&
-                (
-                    !Bool(read(attributes["diagnostic_only"])) ||
-                    Bool(read(attributes["production_eligible"]))
-                ) &&
-                throw(
-                    ArgumentError(
-                        "PAW_GAUGE_ARTIFACT_TAMPERED: diagnostic qualification flags disagree",
-                    ),
-                )
         elseif contract_version in ("1.1", "1.2")
             get!(source_metadata, "discrete_hamiltonian_correction", "none")
         end
@@ -1612,10 +1469,6 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
             for key in (
                 "authoritative_hamiltonian",
                 "authoritative_hamiltonian_sha256",
-                "native_fidelity_status",
-                "symmetrized_hamiltonian_status",
-                "scoped_production_eligible",
-                "global_production_eligible",
                 "has_symmetrized_hamiltonian_audit",
             )
                 haskey(attributes, key) ||
@@ -1627,9 +1480,6 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
             String(read(attributes["authoritative_hamiltonian_sha256"])) ==
             get(input_sha256, "AUTHORITATIVE_HAMILTONIAN_SHA256", "") || throw(
                 ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: Hamiltonian authority digest differs"),
-            )
-            Bool(read(attributes["global_production_eligible"])) && throw(
-                ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: global production cannot be granted"),
             )
             authority = validate_authoritative_hamiltonian_key(
                 String(read(attributes["authoritative_hamiltonian"])),
@@ -1719,12 +1569,12 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
             end
             if contract_version in ("1.10", "1.11") &&
                get(source_metadata, "qualification_scope", "") == "target_subspace"
-                haskey(attributes, "target_subspace_contract_sha256") || throw(
+                haskey(attributes, "target_subspace_contract_definition") || throw(
                     ArgumentError(
                         "schema-1.10 target-subspace gauge artifact omits its contract digest",
                     ),
                 )
-                String(read(attributes["target_subspace_contract_sha256"])) ==
+                String(read(attributes["target_subspace_contract_definition"])) ==
                 get(input_sha256, "TARGET_SUBSPACE_CONTRACT_SHA256", "") || throw(
                     ArgumentError(
                         "PAW_GAUGE_ARTIFACT_TAMPERED: target-subspace contract digest differs",
@@ -1737,7 +1587,7 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
                 )
                 for (key, expected) in (
                     ("target_leakage_semantics", TARGET_LEAKAGE_WEIGHT_SEMANTICS),
-                    ("target_leakage_formula_sha256", TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256),
+                    ("target_leakage_formula_definition", TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION),
                 )
                     haskey(attributes, key) && String(read(attributes[key])) == expected || throw(
                         ArgumentError(
@@ -1746,7 +1596,7 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
                     )
                     get(source_metadata, key, "") == expected || throw(
                         ArgumentError(
-                            "PAW_GAUGE_ARTIFACT_TAMPERED: $(key) differs from digest-bound metadata",
+                            "PAW_GAUGE_ARTIFACT_TAMPERED: $(key) differs from stored complete definition",
                         ),
                     )
                 end
@@ -1759,24 +1609,19 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
                 )
             end
             if contract_version in ("1.10", "1.11") && authority == "symmetrized_dft_hamiltonian"
-                for key in (
-                    "symmetrized_target_subspace_status",
-                    "auxiliary_parent_audit_status",
-                    "target_scope_production_eligible",
-                )
-                    haskey(attributes, key) || throw(
-                        ArgumentError(
-                            "schema-1.8 target-subspace gauge artifact is missing $(key)",
-                        ),
-                    )
-                end
                 get(source_metadata, "qualification_scope", "") == "target_subspace" || throw(
                     ArgumentError("HAMILTONIAN_REFERENCE_MISMATCH: target authority scope differs"),
                 )
                 symmetrized_audit !== nothing &&
-                symmetrized_audit.target_anchor_sha256_by_star !== nothing || throw(
+                symmetrized_audit.target_anchor_checked_by_star !== nothing || throw(
                     ArgumentError(
                         "PAW_GAUGE_ARTIFACT_TAMPERED: target completion audit is missing",
+                    ),
+                )
+                length(something(symmetrized_audit.target_anchor_checked_by_star)) ==
+                length(payload.star_representatives) || throw(
+                    ArgumentError(
+                        "PAW_GAUGE_ARTIFACT_TAMPERED: target anchor star inventory differs",
                     ),
                 )
                 get(source_metadata, "nonrepresentative_frame_storage", "") ==
@@ -1799,34 +1644,20 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
         else
             get!(source_metadata, "authoritative_hamiltonian", "native_dft")
         end
-        digest_payload =
-            target_scoped_symmetrized || frame_replay_active ?
-            _star_payload_with_sealed_representatives(payload, representative_points) : payload
-        String(read(attributes["payload_sha256"])) ==
-        _star_payload_sha256(digest_payload; schema_version, contract_version) ||
-            throw(ArgumentError("PAW_GAUGE_ARTIFACT_TAMPERED: logical payload digest differs"))
+        _validate_star_payload_storage_contract(payload, schema_version, contract_version)
         band_frame_contract = if contract_version == "1.11"
-            for key in (
-                "band_frame_contract_schema",
-                "band_frame_contract_schema_version",
-                "band_frame_contract_status",
-                "band_frame_source_gauge",
-                "band_frame_target_gauge",
-                "band_frame_transform_sha256",
-                "band_frame_contract_sha256",
-                "band_frame_metric_kind",
-                "band_frame_physical_isometry_maximum",
-                "band_frame_physical_isometry_tolerance",
-                "band_frame_replay_maximum",
-                "band_frame_replay_tolerance",
-                "band_frame_euclidean_nonunitarity_maximum",
-                "band_frame_minimum_singular_value",
-                "band_frame_maximum_condition_number",
-            )
+            # Older writers may duplicate this declaration at the root. It is
+            # not a mathematical frame field and current writers omit it.
+            # Reject a contradictory declaration without requiring duplication.
+            if haskey(attributes, "band_frame_content_authentication")
+                String(read(attributes["band_frame_content_authentication"])) == "NOT_PERFORMED" ||
+                    throw(ArgumentError("BAND_FRAME_CONTENT_AUTHENTICATION_POLICY_MISMATCH"))
+            end
+            for key in _STAR_BAND_FRAME_ATTRIBUTE_KEYS
                 haskey(attributes, key) &&
                 String(read(attributes[key])) == get(source_metadata, key, "") || throw(
                     ArgumentError(
-                        "PAW_GAUGE_ARTIFACT_TAMPERED: $(key) differs from digest-bound metadata",
+                        "PAW_GAUGE_ARTIFACT_TAMPERED: $(key) differs from stored complete definition",
                     ),
                 )
             end
@@ -1842,14 +1673,13 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
                 native,
                 metric,
                 rotations,
-                sha256_file(filename),
             )
         else
             nothing
         end
         return (
             payload = payload,
-            status = status == :DIAGNOSTIC_ONLY ? :STANDARD : status,
+            status = status,
             root_cause = Symbol(String(read(attributes["root_cause"]))),
             diagnostics = String.(read(handle["diagnostics"])),
             schema_version = schema_version,
@@ -1858,22 +1688,12 @@ function _read_star_covariant_paw_gauge_hdf5_impl(
     end
 end
 
-# Digest the complete native-source identity without embedding thousands of WFC hashes in
-# the compact audit manifest.  The hashes themselves remain persisted in the gauge capsule.
-function _star_input_identity_sha256(input_sha256::AbstractDict{String, String})
-    buffer = IOBuffer()
-    for key in sort!(collect(keys(input_sha256)))
-        write(buffer, key, '=', input_sha256[key], '\n')
-    end
-    return bytes2hex(SHA.sha256(take!(buffer)))
-end
-
 # Bind the frozen density/onsite audit to the exact WFC/XML/PAW source identity.  A
 # manifest is deliberately stricter than accepting an arbitrary JSON document which
 # happens not to contain the word "FAIL".
-function _star_input_audit_hash(
+function _star_input_audit_definition(
     config,
-    source_input_sha256::AbstractDict{String, String},
+    source_definition::IO.ScientificInputDefinition,
     operation_count::Int,
 )
     config.input_symmetry_audit_json === nothing && return Dict{String, String}()
@@ -1882,22 +1702,21 @@ function _star_input_audit_hash(
     required = (
         "schema",
         "schema_version",
-        "status",
         "operation_count",
         "maximum_residual",
         "qualification_threshold",
-        "source_input_sha256",
+        "source_reference_hdf5",
         "component_audits",
     )
     all(key -> haskey(payload, key), required) ||
         throw(ArgumentError("INPUT_PROVENANCE_HOLD: input-symmetry manifest is incomplete"))
     String(payload["schema"]) == "wanniernlqg.input-symmetry-audit-manifest" ||
         throw(ArgumentError("INPUT_PROVENANCE_HOLD: unsupported input-symmetry audit schema"))
-    String(payload["schema_version"]) == "1.0" || throw(
-        ArgumentError("INPUT_PROVENANCE_HOLD: unsupported input-symmetry audit schema version"),
+    String(payload["schema_version"]) == "2.0" || throw(
+        ArgumentError(
+            "INPUT_PROVENANCE_HOLD: input-symmetry audit requires explicit complete-data migration to version2.0",
+        ),
     )
-    uppercase(String(payload["status"])) == "PASS" ||
-        throw(ArgumentError("INPUT_SYMMETRY_HOLD: input-symmetry manifest status is not PASS"))
     Int(payload["operation_count"]) == operation_count ||
         throw(ArgumentError("INPUT_PROVENANCE_HOLD: input-symmetry operation count differs"))
     maximum_residual = Float64(payload["maximum_residual"])
@@ -1906,11 +1725,25 @@ function _star_input_audit_hash(
         throw(ArgumentError("INPUT_PROVENANCE_HOLD: invalid input-symmetry residual contract"))
     maximum_residual <= threshold ||
         throw(ArgumentError("INPUT_SYMMETRY_HOLD: input-symmetry residual exceeds its threshold"))
-    expected_source_digest = _star_input_identity_sha256(source_input_sha256)
-    String(payload["source_input_sha256"]) == expected_source_digest ||
-        throw(ArgumentError("INPUT_PROVENANCE_HOLD: input-symmetry audit source identity differs"))
+    stored_reference = String(payload["source_reference_hdf5"])
+    reference_path =
+        isabspath(stored_reference) ? normpath(stored_reference) :
+        normpath(joinpath(dirname(filename), stored_reference))
+    reference = HDF5.h5open(reference_path, "r") do handle
+        haskey(handle, "source_definition") || throw(
+            ArgumentError(
+                "INPUT_PROVENANCE_HOLD: complete source definition is missing; digest-only data cannot migrate",
+            ),
+        )
+        read_scientific_input_reference_hdf5(handle, "source_definition")
+    end
+    IO.validate_scientific_input_definitions_equal(
+        source_definition,
+        reference;
+        mismatch_error = "INPUT_PROVENANCE_HOLD: input-symmetry audit source values differ",
+    )
 
-    component_hashes = Dict{String, String}()
+    component_definitions = Dict{String, String}()
     component_kinds = Set{String}()
     component_records = payload["component_audits"]
     component_records isa AbstractVector && !isempty(component_records) ||
@@ -1918,7 +1751,7 @@ function _star_input_audit_hash(
     for untyped_record in component_records
         record = Dict{String, Any}(String(key) => value for (key, value) in pairs(untyped_record))
         component_required =
-            ("kind", "path", "sha256", "schema", "residual_field", "maximum_residual")
+            ("kind", "path", "definition", "schema", "residual_field", "maximum_residual")
         all(key -> haskey(record, key), component_required) ||
             throw(ArgumentError("INPUT_PROVENANCE_HOLD: component audit record is incomplete"))
         kind = String(record["kind"])
@@ -1934,13 +1767,10 @@ function _star_input_audit_hash(
                 "INPUT_PROVENANCE_HOLD: component audit does not exist: $(component_path)",
             ),
         )
-        digest = sha256_file(component_path)
-        digest == String(record["sha256"]) || throw(
-            ArgumentError("INPUT_PROVENANCE_HOLD: component audit digest differs for $(kind)"),
-        )
         component = JSON3.read(read(component_path, String), Dict{String, Any})
-        uppercase(String(get(component, "status", "MISSING"))) == "PASS" ||
-            throw(ArgumentError("INPUT_SYMMETRY_HOLD: component audit $(kind) is not PASS"))
+        isequal(component, record["definition"]) || throw(
+            ArgumentError("INPUT_PROVENANCE_HOLD: component audit definition differs for $(kind)"),
+        )
         Int(get(component, "operation_count", -1)) == operation_count || throw(
             ArgumentError("INPUT_PROVENANCE_HOLD: component audit $(kind) operation count differs"),
         )
@@ -1956,7 +1786,8 @@ function _star_input_audit_hash(
             throw(ArgumentError("INPUT_PROVENANCE_HOLD: component audit $(kind) residual differs"))
         component_residual <= threshold ||
             throw(ArgumentError("INPUT_SYMMETRY_HOLD: component audit $(kind) exceeds threshold"))
-        component_hashes["INPUT_SYMMETRY_COMPONENT:$(kind)"] = digest
+        component_definitions["INPUT_SYMMETRY_COMPONENT_DEFINITION:$(kind)"] =
+            JSON3.write(component)
     end
     required_kinds = Set(("smooth_density", "paw_onsite"))
     issubset(required_kinds, component_kinds) || throw(
@@ -1965,7 +1796,7 @@ function _star_input_audit_hash(
     maximum(Float64(record["maximum_residual"]) for record in component_records) ==
     maximum_residual ||
         throw(ArgumentError("INPUT_PROVENANCE_HOLD: manifest maximum residual is inconsistent"))
-    component_hashes["INPUT_SYMMETRY_AUDIT_JSON"] = sha256_file(filename)
-    component_hashes["INPUT_SYMMETRY_SOURCE_SHA256"] = expected_source_digest
-    return component_hashes
+    component_definitions["INPUT_SYMMETRY_AUDIT_DEFINITION"] = JSON3.write(payload)
+    component_definitions["INPUT_SYMMETRY_CONTENT_AUTHENTICATION"] = "NOT_PERFORMED"
+    return component_definitions
 end

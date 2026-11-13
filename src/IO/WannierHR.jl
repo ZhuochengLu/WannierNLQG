@@ -1,4 +1,4 @@
-"""Hamiltonian-only Wannier90 `_hr.dat` payload in R-last storage."""
+"""Hamiltonian-only Wannier `_hr.dat` payload in R-last storage."""
 struct WannierHR
     num_orbitals::Int
     num_r_vectors::Int
@@ -23,7 +23,7 @@ struct WannierHR
     end
 end
 
-# Print Wannier90 degeneracies in rows of at most fifteen entries.
+# Print Wannier degeneracies in rows of at most fifteen entries.
 function _write_hr_degeneracies(io::Base.IO, degeneracies::Vector{Int})
     for first_index in 1:15:length(degeneracies)
         last_index = min(first_index + 14, length(degeneracies))
@@ -35,7 +35,7 @@ function _write_hr_degeneracies(io::Base.IO, degeneracies::Vector{Int})
     return nothing
 end
 
-"""Atomically write a standard Hamiltonian-only Wannier90 `_hr.dat` file."""
+"""Atomically write a standard Hamiltonian-only Wannier `_hr.dat` file."""
 function write_wannier_hr(
     filename::AbstractString,
     hamiltonian::WannierHR;
@@ -78,7 +78,7 @@ function write_wannier_hr(
     return path
 end
 
-"""Read a complete standard Wannier90 `_hr.dat` file with indexed-row checks."""
+"""Read a complete standard Wannier `_hr.dat` file with indexed-row checks."""
 function read_wannier_hr(filename::AbstractString)
     isfile(filename) || throw(ArgumentError("HR file does not exist: $(filename)"))
     return open(filename, "r") do io

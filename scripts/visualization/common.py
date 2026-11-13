@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Any, Iterable
@@ -96,7 +97,55 @@ def validate_formats(formats: Iterable[str]) -> list[str]:
     return normalized
 
 
-def save_figure_atomic(fig: Any, stem: str | Path, dpi: int, formats: Iterable[str]) -> list[Path]:
+def _publish_output_set(items: list[tuple[Path, Path]], staging: Path) -> None:
+    """Rollback ordinary rename failures; report exact state if rollback fails.
+
+    This is not a crash-atomic multi-file filesystem transaction. Publication
+    consumers must still verify the final sidecar/manifest and every hash.
+    """
+    baseline = {destination: sha256_file(destination) if destination.is_file() else None
+                for _, destination in items}
+    backups: dict[Path, Path] = {}
+    backup_root = staging / "publication-backup"
+    def changed_paths() -> list[Path]:
+        return [path for path, digest in baseline.items()
+                if (sha256_file(path) if path.is_file() else None) != digest]
+    try:
+        backup_root.mkdir()
+        for index, (_, destination) in enumerate(items):
+            if baseline[destination] is not None:
+                backup = backup_root / str(index)
+                shutil.copy2(destination, backup)
+                if sha256_file(backup) != baseline[destination]:
+                    raise VisualizationError(f"publication backup identity mismatch: {destination}")
+                backups[destination] = backup
+        for source, destination in items:
+            os.replace(source, destination)
+    except Exception as error:
+        changed = changed_paths()
+        rollback_errors = []
+        for destination in reversed(changed):
+            try:
+                if baseline[destination] is None:
+                    destination.unlink(missing_ok=True)
+                else:
+                    os.replace(backups[destination], destination)
+            except Exception as rollback_error:
+                rollback_errors.append({"path": str(destination), "error": str(rollback_error)})
+        remaining = changed_paths()
+        state = {"status": "PARTIAL_PUBLICATION_FAILURE" if remaining else "ROLLED_BACK",
+                 "changed_before_rollback": [str(path) for path in changed],
+                 "remaining_changed": [str(path) for path in remaining],
+                 "rollback_errors": rollback_errors,
+                 "baseline_sha256": {str(path): digest for path, digest in baseline.items()}}
+        description = ("partial publication failure; remaining changed: " + ", ".join(map(str, remaining))
+                       if remaining else "publication failed; rollback verified; primary unchanged")
+        failure = VisualizationError(f"{description}; {error}")
+        failure.publication_state = state
+        raise failure from error
+
+
+def save_figure_atomic(fig: Any, stem: str | Path, dpi: int, formats: Iterable[str], *, bbox_inches: str | None = None) -> list[Path]:
     if not isinstance(dpi, int) or dpi <= 0:
         raise VisualizationError("dpi must be a positive integer")
     output_stem = Path(stem).resolve()
@@ -105,24 +154,56 @@ def save_figure_atomic(fig: Any, stem: str | Path, dpi: int, formats: Iterable[s
     temporary_directory = Path(tempfile.mkdtemp(prefix=".wanniernlqg-plot-", dir=output_stem.parent))
     temporary_outputs: list[Path] = []
     outputs: list[Path] = []
+    proofs: list[tuple[Path, Path]] = []
     try:
         for output_format in resolved_formats:
             temporary = temporary_directory / f"{output_stem.name}.{output_format}"
-            fig.savefig(temporary, dpi=dpi, format=output_format, facecolor="white")
+            fig.savefig(temporary, dpi=dpi, format=output_format, facecolor="white", bbox_inches=bbox_inches)
             if not temporary.is_file() or temporary.stat().st_size == 0:
                 raise VisualizationError(f"renderer produced an empty {output_format} file")
+            if output_format == "pdf":
+                from .pdf_validation import validate_native_pdf, render_pdf_previews, validate_readback_records
+                validation = validate_native_pdf(temporary)
+                previews = temporary_directory / "pdf-readback"
+                validation["renderers"] = render_pdf_previews(temporary, previews, dpi=180)
+                validate_readback_records(temporary, validation["renderers"])
+                proof_parent = output_stem.parent / (output_stem.name + ".pdf-qa") / validation["pdf"]["sha256"]
+                proof_parent.mkdir(parents=True, exist_ok=True)
+                # A fresh directory for every export, including byte-identical PDFs.
+                proof = Path(tempfile.mkdtemp(prefix="export-", dir=proof_parent))
+                shutil.copytree(previews, proof, dirs_exist_ok=True)
+                def relocate(node):
+                    if isinstance(node, dict):
+                        return {key: relocate(value) for key, value in node.items()}
+                    if isinstance(node, list):
+                        return [relocate(value) for value in node]
+                    if isinstance(node, str):
+                        return node.replace(str(previews), str(proof)).replace(str(temporary), str(output_stem.with_suffix(".pdf")))
+                    return node
+                validation = relocate(validation)
+                # Verify copied previews against the actual staged PDF, before publication.
+                validate_readback_records(temporary, validation["renderers"], published_pdf=output_stem.with_suffix(".pdf"))
+                validation["proof_schema"] = "wanniernlqg.native-pdf-proof/2"
+                temporary_proof = atomic_json(temporary_directory / "native-pdf.qa.json", validation)
+                proofs.append((temporary_proof, output_stem.with_suffix(".pdf.qa.json")))
             temporary_outputs.append(temporary)
             outputs.append(output_stem.with_suffix(f".{output_format}"))
-        for temporary, output in zip(temporary_outputs, outputs):
-            os.replace(temporary, output)
+        # Proof publishes last. Ordinary exceptions restore all prior output/proof bytes.
+        _publish_output_set(list(zip(temporary_outputs, outputs)) + proofs, temporary_directory)
+    except Exception as exc:
+        diagnostics = output_stem.parent / "diagnostics" / output_stem.name / temporary_directory.name
+        diagnostics.parent.mkdir(parents=True, exist_ok=True)
+        state = getattr(exc, "publication_state", {"status": "NOT_PUBLISHED", "remaining_changed": []})
+        if temporary_directory.exists():
+            atomic_json(temporary_directory / "publication-failure.json", state)
+            shutil.move(str(temporary_directory), str(diagnostics))
+        detail = str(exc) if hasattr(exc, "publication_state") else f"export validation failed; primary unchanged; {exc}"
+        failure = VisualizationError(f"{detail}; evidence: {diagnostics}")
+        failure.publication_state = state
+        raise failure from exc
     finally:
-        for temporary in temporary_outputs:
-            if temporary.exists():
-                temporary.unlink()
-        try:
-            temporary_directory.rmdir()
-        except OSError:
-            pass
+        if temporary_directory.exists():
+            shutil.rmtree(temporary_directory, ignore_errors=True)
     return outputs
 
 
@@ -152,7 +233,25 @@ def seal_plot_sidecar(
     notes: list[str] | None = None,
 ) -> Path:
     output_records = [audited_file(path, f"plot_{path.suffix[1:]}") for path in outputs]
+    pdf_outputs = [path for path in outputs if path.suffix == ".pdf"]
+    export_validation = []
+    for path in pdf_outputs:
+        proof_path = path.with_suffix(".pdf.qa.json")
+        if not proof_path.is_file():
+            raise VisualizationError(f"PDF validation proof missing: {proof_path}")
+        proof = load_json(proof_path)
+        if proof.get("status") != "PASS" or proof["pdf"]["sha256"] != sha256_file(path):
+            raise VisualizationError(f"PDF validation identity mismatch: {path}")
+        from .pdf_validation import validate_readback_records, PDFValidationError
+        if proof.get("proof_schema") != "wanniernlqg.native-pdf-proof/2":
+            raise VisualizationError(f"PDF readback identity mismatch: legacy/missing proof schema: {path}")
+        try:
+            validate_readback_records(path, proof["renderers"])
+        except (KeyError, PDFValidationError) as exc:
+            raise VisualizationError(f"PDF readback identity mismatch: {path}; {exc}") from exc
+        export_validation.append({"proof": audited_file(proof_path, "native_pdf_validation"), "record": proof})
     payload = {
+        "export_validation": export_validation,
         "schema": "wanniernlqg.presentation-plot",
         "schema_version": "1.0",
         "plot_kind": plot_kind,

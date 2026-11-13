@@ -3,6 +3,7 @@ using JSON3
 import WannierNLQG: run
 
 const ROOT = normpath(joinpath(@__DIR__, ".."))
+include(joinpath(ROOT, "examples", "ExampleSupport.jl"))
 const FIXTURE_ROOT = joinpath(ROOT, "examples", "fixtures", "synthetic_runtime")
 const MODEL_FILE = joinpath(FIXTURE_ROOT, "synthetic_tb.dat")
 const OPERATOR_BUNDLE_FILE = joinpath(FIXTURE_ROOT, "synthetic_operators.h5")
@@ -34,7 +35,9 @@ function run_capture_stdout(cfg)
     try
         open(stdout_path, "w") do io
             redirect_stdout(io) do
-                result_ref[] = run(cfg)
+                result_ref[] = ExampleSupport.with_synthetic_operator_bundle() do
+                    run(cfg)
+                end
             end
         end
         return result_ref[], read(stdout_path, String)
@@ -305,7 +308,9 @@ function check_failure_case(root::AbstractString)
     cfg = base_config(joinpath(root, "failure"); system_name = "bad/name")
     failed = false
     try
-        run(cfg)
+        ExampleSupport.with_synthetic_operator_bundle() do
+            run(cfg)
+        end
     catch
         failed = true
     end
@@ -342,7 +347,11 @@ function check_report_formatters()
 end
 
 function main()
-    root = mktempdir("/tmp"; prefix = "wanniernlqg-progress-check-", cleanup = false)
+    output_base = get(ENV, "WANNIERNLQG_TEST_OUTPUT_ROOT", "")
+    isempty(output_base) && (output_base = tempdir())
+    isabspath(output_base) || error("progress check requires an absolute output root")
+    mkpath(output_base)
+    root = mktempdir(output_base; prefix = "wanniernlqg-progress-check-", cleanup = false)
     check_report_formatters()
     check_percent_milestones()
     check_task_output_prefixing()

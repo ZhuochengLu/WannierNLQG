@@ -6,8 +6,7 @@ const TARGET_LEAKAGE_WEIGHT_FORMULAS =
     "W_state=max_i(R' S R)_ii;W_reconstruction=lambda_max(R' S R);" *
     "W_T_to_C=opnorm(B_CT,2)^2;W_C_to_T=opnorm(B_TC,2)^2;" *
     "rows=target;columns=source"
-const TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256 =
-    bytes2hex(sha256(codeunits(TARGET_LEAKAGE_WEIGHT_FORMULAS)))
+const TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION = TARGET_LEAKAGE_WEIGHT_FORMULAS
 
 """Private marker for one native augmentation-aware q=0 sewing metric."""
 abstract type _AbstractStrictSewingMetric end
@@ -69,7 +68,8 @@ function _read_augmentation_aware_native_source(source::QuantumEspressoWavefunct
             native.spinor,
             points,
             native.input_sha256,
-            native.source_metadata,
+            native.source_metadata;
+            source_definition = native.source_definition,
         )
     end
     return native
@@ -86,6 +86,7 @@ function _read_augmentation_aware_native_source(source::VASPWavefunctionSource)
         throw(ArgumentError("VASP_PAW_DATA_REQUIRED: strict sewing requires POTCAR"))
     native = read_vasp_wavefunctions(
         source;
+        content_authentication = false,
         point_provider = native_vasp_point_provider,
         normalize_coefficients = false,
     )
@@ -1239,18 +1240,19 @@ function _strict_little_group_spectrum_records(representation::BandRepresentatio
     return records
 end
 
-"""Add strict-backend source files not owned by the generic native reader."""
-function _strict_input_hashes(source::AbstractWavefunctionSource, native::NativeWavefunctionData)
-    return Dict{String, String}(native.input_sha256)
-end
+"""Validate the complete native source reference before PAW preparation.
 
-"""Extend strict VASP provenance with mandatory POTCAR and optional OUTCAR."""
-function _strict_input_hashes(source::VASPWavefunctionSource, native::NativeWavefunctionData)
-    hashes = Dict{String, String}(native.input_sha256)
-    hashes["POTCAR"] = sha256_file(something(source.potcar_file))
-    source.outcar_file === nothing ||
-        (hashes["OUTCAR"] = sha256_file(something(source.outcar_file)))
-    return hashes
+The reference includes declared POTCAR/OUTCAR inputs for VASP.  It provides
+actual-data comparison, not content-hash authentication.
+"""
+function _strict_source_definition(
+    source::AbstractWavefunctionSource,
+    native::NativeWavefunctionData,
+)
+    definition = native.source_definition
+    definition === nothing && throw(ArgumentError("NATIVE_SOURCE_COMPLETE_DEFINITION_REQUIRED"))
+    IO.validate_scientific_source_collection(_star_current_source_files(source), definition)
+    return definition
 end
 
 """
@@ -1932,6 +1934,7 @@ function build_augmentation_aware_band_representation(
         end
     end
 
+    _strict_source_definition(source, native)
     raw_representation = BandRepresentation(
         "1.5",
         native.source_code,
@@ -1949,8 +1952,11 @@ function build_augmentation_aware_band_representation(
         irreducible,
         full_to_irreducible,
         full_to_operation;
-        conventions = Dict("sewing_backend" => band_sewing_backend_key(backend)),
-        input_sha256 = _strict_input_hashes(source, native),
+        conventions = Dict(
+            "sewing_backend" => band_sewing_backend_key(backend),
+            "content_authentication" => "NOT_PERFORMED",
+        ),
+        input_sha256 = Dict{String, String}(),
     )
     product_table =
         build_representation_product_table(operations, native.spinor; tolerance = 1.0e-10)
@@ -2215,7 +2221,7 @@ function build_augmentation_aware_band_representation(
                 target_scope_active ? "four_independent_target_leakage_weights" :
                 weighted_partition ? "near_block_leakage" : "nondegenerate_block_leakage",
             "target_leakage_semantics" => TARGET_LEAKAGE_WEIGHT_SEMANTICS,
-            "target_leakage_formula_sha256" => TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256,
+            "target_leakage_formula_definition" => TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION,
             "target_leakage_threshold" => string(thresholds.target_leakage_weight),
             "far_band_coupling_qualification" =>
                 weighted_partition ? "report_only_post_gauge_covariance_authoritative" : "legacy",
@@ -2242,8 +2248,6 @@ function build_augmentation_aware_band_representation(
                 string(parent_reciprocal_cocycle_residual),
             "raw_little_group_spectrum_convention" => "unitary eigvals(B); antiunitary eigvals(B*conj(B)); raw pre-polar energy blocks",
             "raw_little_group_spectrum_record_count" => string(length(little_group_spectra)),
-            "raw_little_group_spectrum_sha256" =>
-                bytes2hex(sha256(codeunits(join(little_group_spectra, '\n')))),
             "paw_sewing_thresholds" => repr(thresholds),
         ),
     )
@@ -2275,6 +2279,7 @@ function build_augmentation_aware_band_representation(
             string(symmetry_inventory.antiunitary_operation_count)
         conventions["magnetic_symmetry_tolerance"] = string(symmetry_inventory.symmetry_tolerance)
     end
+    conventions["content_authentication"] = "NOT_PERFORMED"
     representation = BandRepresentation(
         "1.5",
         native.source_code,
@@ -2293,7 +2298,7 @@ function build_augmentation_aware_band_representation(
         full_to_irreducible,
         full_to_operation;
         conventions,
-        input_sha256 = _strict_input_hashes(source, native),
+        input_sha256 = Dict{String, String}(),
     )
     return (representation = representation, construction_diagnostics = raw_diagnostics)
 end

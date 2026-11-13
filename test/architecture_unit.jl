@@ -15,32 +15,53 @@ const WannierizationModule = WannierNLQG.Wannierization
     @test Set(names(WannierNLQG; all = false, imported = false)) == Set([
         :WannierNLQG,
         :TaskConfig,
+        :TaskInputResolution,
+        :read_task_input,
+        :resolve_task_input,
+        :explain_task_input,
+        :write_task_input_template,
+        :write_task_input_resolution,
+        :run_task_input,
         :TaskSpec,
         :RunResult,
         :ResponseQualificationResult,
         :run,
         :ModelInput,
+        :RealSpaceTBInput,
+        :AnalyticKInput,
+        :KRegion,
+        :PointOrbitalSymmetryOperation,
+        :write_native_response_symmetry,
         :BZMesh,
         :KSlice,
         :KPath,
+        :automatic_kpath,
         :ExecutionOptions,
+        :UniformIntegration,
+        :HAdaptiveCubature,
+        :IntegrationDomain,
+        :IntegrationDomain2D,
+        :integrate_response,
         :OutputOptions,
         :OpticalParameters,
         :SHGParameters,
-        :SHGNumerics,
+        :JerkParameters,
+        :THGParameters,
+        :Numerics,
         :SeparateRelaxation,
-        :FermiSurfaceBroadening,
         :LinearTransportParameters,
         :LinearOpticalResponseParameters,
         :OrbitalMagnetizationParameters,
-        :LinearResponseNumerics,
-        :OrbitalNumerics,
+        :Numerics,
+        :Numerics,
         :FiniteQOpticalParameters,
+        :IntrinsicHallParameters,
+        :BerryMultipoleParameters,
         :GeometryParameters,
         :BandParameters,
-        :OpticalNumerics,
-        :GeometryNumerics,
-        :BandNumerics,
+        :Numerics,
+        :Numerics,
+        :Numerics,
         :BandTargets,
         :Subspace,
         :Subspaces,
@@ -50,6 +71,7 @@ const WannierizationModule = WannierNLQG.Wannierization
         :InterbandGroups,
         :TripleGroups,
         :TensorComponent,
+        :TensorComponents,
         :FullTensor,
         :KSliceSelection,
         :read_linear_transport_result,
@@ -89,13 +111,13 @@ end
     )
     @test Set(names(WannierizationModule; all = false, imported = false)) == Set((
         :Wannierization,
-        :SymmetryAdaptedWannierizationConfig,
+        :WannierizationConfig,
         :WannierizationResult,
-        :construct_symmetry_adapted_wannier_functions,
+        :construct_wannier_functions,
     ))
 end
 
-@testset "IO-owned Packed HDF5 schema-6 bundle" begin
+@testset "IO-owned current mathematical HDF5 bundle" begin
     model = CoreModule.TightBindingModel(
         Matrix{Float64}(I, 3, 3),
         2,
@@ -125,7 +147,7 @@ end
             model.r_degeneracies,
             operators;
             profile = :hamiltonian_position,
-            paired_tb_sha256 = repeat("a", 64),
+            paired_tb_file = TEST_MODEL_FILE,
             geometry = test_operator_bundle_geometry(
                 model.lattice,
                 model.r_degeneracies,
@@ -145,23 +167,40 @@ end
         @test mapped.payload[1] == model.hamiltonian_r[1]
         HDF5.h5open(bundle_file, "r") do handle
             @test HDF5.iscontiguous(handle["payload/complex128"])
-            @test read(HDF5.attributes(handle)["symmetrization_status"]) == "not_provided"
+            @test !haskey(HDF5.attributes(handle), "symmetrization_status")
         end
 
         schema_two = joinpath(directory, "schema_two.h5")
         cp(bundle_file, schema_two)
+        chmod(schema_two, 0o600)
         HDF5.h5open(schema_two, "r+") do handle
-            write(HDF5.attributes(handle)["schema_version"], "2.0")
+            write(HDF5.attributes(handle)["schema_version"], "1.3")
         end
         @test_throws ArgumentError IOModule.read_real_space_operator_bundle_manifest(schema_two)
 
         tampered_payload = joinpath(directory, "tampered_payload.h5")
         cp(bundle_file, tampered_payload)
+        chmod(tampered_payload, 0o600)
         HDF5.h5open(tampered_payload, "r+") do handle
             dataset = handle["payload/complex128"]
-            dataset[1] = 1.0 + 2.0im
+            dataset[1] = 1.0 + 0.0im
         end
         requested = Dict(CoreModule.REAL_SPACE_HAMILTONIAN => [(Int8(0), Int8(0))])
+        changed = IOModule.read_operator_bundle_components(tampered_payload, requested)
+        @test changed.components[CoreModule.REAL_SPACE_HAMILTONIAN][(Int8(0), Int8(0))][1] ==
+              1.0 + 0.0im
+        # This fixture has one home-cell R: the changed real diagonal remains Hermitian.
+        @test ishermitian(
+            reshape(
+                changed.components[CoreModule.REAL_SPACE_HAMILTONIAN][(Int8(0), Int8(0))],
+                2,
+                2,
+            ),
+        )
+        # Nonfinite mathematical data still rejects.
+        HDF5.h5open(tampered_payload, "r+") do handle
+            handle["payload/complex128"][1] = ComplexF64(NaN, 0.0)
+        end
         @test_throws ArgumentError IOModule.read_operator_bundle_components(
             tampered_payload,
             requested,
@@ -169,6 +208,7 @@ end
 
         tampered_index = joinpath(directory, "tampered_index.h5")
         cp(bundle_file, tampered_index)
+        chmod(tampered_index, 0o600)
         HDF5.h5open(tampered_index, "r+") do handle
             offsets = read(handle["index/offset_elements"])
             offsets[2] += 1
@@ -394,7 +434,17 @@ end
         spatial_dimension = 2,
     )
     plan = MatrixElementModule.compile_matrix_plan(request)
-    batch = MatrixElementModule.KPointBatchWorkspace(model, plan)
+    # Explicit overlap tensor for this cache-ownership test; not a material fixture.
+    overlap = zeros(ComplexF64, model.num_orbitals, model.num_orbitals, 3, 3, model.num_r_vectors)
+    sources = MatrixElementModule.MatrixElementSources(;
+        derivative_overlap = MatrixElementModule.DerivativeOverlapRealSpaceData(overlap),
+    )
+    batch = MatrixElementModule.KPointBatchWorkspace(
+        model,
+        plan,
+        MatrixElementModule.KPointOffset[MatrixElementModule.KPointOffset()],
+        sources,
+    )
     matrix_workspace = batch.matrix_elements
     MatrixElementModule.prepare_real_space!(matrix_workspace, model)
     central = MatrixElementModule.matrix_data!(batch, MatrixElementModule.KPointOffset())

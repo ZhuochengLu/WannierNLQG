@@ -12,6 +12,7 @@ const OUTROOT = joinpath(
 )
 
 using WannierNLQG
+include(joinpath(ROOT, "examples", "ExampleSupport.jl"))
 import WannierNLQG: run
 import WannierNLQG.Runtime: mpi_process_rank
 
@@ -47,7 +48,9 @@ cfg = WannierNLQG.Runtime.EffectiveTaskConfig(
     system_name = "mpi_smoke",
 )
 
-result = run(cfg)
+result = ExampleSupport.with_synthetic_operator_bundle() do
+    run(cfg)
+end
 
 if mpi_process_rank() == 0
     for path in result.outputs

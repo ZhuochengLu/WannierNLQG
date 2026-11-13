@@ -26,6 +26,7 @@ function _representation_with_sewing_backend(
         representation.full_to_operation;
         conventions,
         input_sha256 = representation.input_sha256,
+        input_definitions = representation.input_definitions,
     )
 end
 
@@ -45,8 +46,7 @@ function _build_band_representation(
     return_diagnostics::Bool = false,
     construction_policy::Symbol = :standard,
 )
-    construction_policy in (:strict, :standard) ||
-        throw(ArgumentError("unknown construction policy"))
+    validate_ordinary_construction_policy(construction_policy)
     built = if sewing_backend isa CoefficientMappingSewing
         legacy = build_canonical_band_representation(
             native,
@@ -81,7 +81,7 @@ function _build_band_representation(
             diagnostic_outer_masks,
             diagnostic_frozen_masks,
             strict_metric,
-            enforce_thresholds = construction_policy == :strict,
+            enforce_thresholds = false,
         )
     end
     return return_diagnostics ? built : built.representation
@@ -163,19 +163,9 @@ function _generate_amn(native::NativeWavefunctionData, basis::WannierProjectionB
             throw(ArgumentError("FATAL_INTEGRITY: nonfinite native AMN block"))
         return block_amn
     end
-    identity_parts = [
-        "ordinary-native-amn-v1",
-        string(VERSION),
-        projection_basis_sha256(basis),
-        sha256_file(@__FILE__),
-        sha256_file(joinpath(@__DIR__, "NativeSourceDispatch.jl")),
-        sha256_file(joinpath(@__DIR__, "QuantumEspressoWavefunctions.jl")),
-    ]
-    append!(
-        identity_parts,
-        [key * "=" * native.input_sha256[key] for key in sort!(collect(keys(native.input_sha256)))],
-    )
-    contract = bytes2hex(sha256(join(identity_parts, "\n")))
+    # Do not reuse a persisted numerical block whose implementation provenance is
+    # only a retired digest. The actual basis and point inputs remain recorded.
+    contract = "ordinary-native-amn-input/3:" * projection_basis_definition(basis)
     foreach_preparation_block(
         point_amn,
         k -> native.kpoints[k],
@@ -183,14 +173,14 @@ function _generate_amn(native::NativeWavefunctionData, basis::WannierProjectionB
         nk;
         contract,
         label = "native-amn",
-        fingerprint = point -> join(
-            (
-                bytes2hex(sha256(reinterpret(UInt8, vec(point.coefficients)))),
-                bytes2hex(sha256(reinterpret(UInt8, vec(point.g_vectors)))),
-                repr(point.k_fractional),
-                repr(native.reciprocal_lattice),
-            ),
-            ":",
+        reuse_completed_blocks = false,
+        input_values = point -> (
+            coefficients = point.coefficients,
+            g_vectors = point.g_vectors,
+            k_fractional = point.k_fractional,
+            reciprocal_lattice = native.reciprocal_lattice,
+            real_lattice = native.structure.lattice,
+            spinor = native.spinor,
         ),
     )
     return amn
@@ -204,17 +194,15 @@ function _write_amn_provenance_hdf5(
     filename::AbstractString,
     amn::WannierAMN,
     basis::WannierProjectionBasis,
-    native::NativeWavefunctionData;
-    amn_sha256::AbstractString,
+    native::NativeWavefunctionData,
 )
     HDF5.enable_complex_support()
     return atomic_hdf5_write(filename) do temporary
         HDF5.h5open(temporary, "w") do handle
             attributes = HDF5.attributes(handle)
             attributes["schema"] = "WannierNLQG.amn_provenance"
-            attributes["schema_version"] = "1.0"
-            attributes["amn_sha256"] = String(amn_sha256)
-            attributes["basis_sha256"] = projection_basis_sha256(basis)
+            attributes["schema_version"] = "2.0"
+            attributes["content_authentication"] = "NOT_PERFORMED"
             attributes["source_code"] = String(native.source_code)
             attributes["spinor"] = basis.spinor
             attributes["num_bands"] = amn.num_bands
@@ -229,8 +217,6 @@ function _write_amn_provenance_hdf5(
             for (key, value) in pairs(radial_contract)
                 radial_attributes[String(key)] = value isa Symbol ? String(value) : value
             end
-            radial_attributes["implementation_digest"] =
-                bytes2hex(SHA.sha256(codeunits(repr(radial_contract))))
             expansion = HDF5.create_group(handle, "projection_expansion")
             for (block_index, block) in enumerate(basis.blocks)
                 group = HDF5.create_group(expansion, lpad(string(block_index), 6, '0'))
@@ -241,8 +227,13 @@ function _write_amn_provenance_hdf5(
                 group["indices"] = block.indices
                 group["local_bases"] = block.local_bases
             end
-            input_hashes = HDF5.create_group(handle, "input_sha256")
-            write_string_dictionary(input_hashes, native.input_sha256)
+            native.source_definition === nothing &&
+                throw(ArgumentError("NATIVE_SOURCE_COMPLETE_DEFINITION_REQUIRED"))
+            write_scientific_input_reference_hdf5(
+                handle,
+                "source_definition",
+                native.source_definition,
+            )
             environment = HDF5.create_group(handle, "environment")
             write_generation_environment(environment)
         end
@@ -276,7 +267,7 @@ function generate_wannier_amn(
         companion =
             provenance_hdf5 === nothing ? root * ".amn-provenance.h5" :
             abspath(something(provenance_hdf5))
-        _write_amn_provenance_hdf5(companion, amn, basis, native; amn_sha256 = sha256_file(output))
+        _write_amn_provenance_hdf5(companion, amn, basis, native)
     end
     return amn
 end

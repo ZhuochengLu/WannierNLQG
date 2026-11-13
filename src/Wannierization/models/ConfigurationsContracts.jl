@@ -524,7 +524,7 @@ Persisted qualification contract for an outer-window-authoritative target subspa
 
 The complete parent remains available for completion and audit, but its physical
 residuals do not override the scoped qualification. `qualification_scope` owns
-the ragged outer/frozen masks and their deterministic SHA-256 identities.
+the ragged outer/frozen masks and their complete actual-value definitions.
 """
 struct TargetSubspaceQualificationContract
     qualification_scope::SymmetryFoundation.BandRepresentationQualificationScope
@@ -538,7 +538,7 @@ struct TargetSubspaceQualificationContract
     scoped_paw_thresholds::PAWGaugeThresholds
     target_anchor_maximum_drift_ev::Float64
     target_complement_maximum_element_ev::Float64
-    contract_sha256::String
+    contract_definition::String
 
     function TargetSubspaceQualificationContract(
         qualification_scope::SymmetryFoundation.BandRepresentationQualificationScope;
@@ -576,12 +576,12 @@ struct TargetSubspaceQualificationContract
         )
         all((.!frozen_mask) .| outer_mask) ||
             throw(ArgumentError("target-subspace frozen mask must be contained in outer mask"))
-        SymmetryFoundation.qualification_mask_sha256(outer_mask) ==
-        qualification_scope.outer_mask_sha256 ||
-            throw(ArgumentError("target-subspace outer mask SHA-256 mismatch"))
-        SymmetryFoundation.qualification_mask_sha256(frozen_mask) ==
-        qualification_scope.frozen_mask_sha256 ||
-            throw(ArgumentError("target-subspace frozen mask SHA-256 mismatch"))
+        SymmetryFoundation.qualification_mask_definition(outer_mask) ==
+        qualification_scope.outer_mask_definition ||
+            throw(ArgumentError("target-subspace outer mask actual-definition mismatch"))
+        SymmetryFoundation.qualification_mask_definition(frozen_mask) ==
+        qualification_scope.frozen_mask_definition ||
+            throw(ArgumentError("target-subspace frozen mask actual-definition mismatch"))
         authority == :outer_window ||
             throw(ArgumentError("target-subspace authority must be :outer_window"))
         parent_audit_policy == :audit_only ||
@@ -592,7 +592,7 @@ struct TargetSubspaceQualificationContract
         complement_threshold = Float64(target_complement_maximum_element_ev)
         isfinite(complement_threshold) && complement_threshold > 0.0 ||
             throw(ArgumentError("target_complement_maximum_element_ev must be positive and finite"))
-        contract_sha256 = _target_subspace_qualification_contract_sha256(
+        contract_definition = _target_subspace_qualification_contract_definition(
             qualification_scope,
             bounds,
             nwann,
@@ -611,13 +611,13 @@ struct TargetSubspaceQualificationContract
             scoped_paw_thresholds,
             anchor_threshold,
             complement_threshold,
-            contract_sha256,
+            contract_definition,
         )
     end
 end
 
-# Hash the typed target contract independently of serializer or container layout.
-function _target_subspace_qualification_contract_sha256(
+# Retain every actual target-contract value, without a digest.
+function _target_subspace_qualification_contract_definition(
     qualification_scope,
     bounds,
     num_wannier,
@@ -627,30 +627,27 @@ function _target_subspace_qualification_contract_sha256(
     target_anchor_maximum_drift_ev,
     target_complement_maximum_element_ev,
 )
-    buffer = IOBuffer()
-    write(buffer, "WannierNLQG.target_subspace_qualification_contract/2.0", '\0')
-    write(buffer, "physical_paw_s_leakage_weight_v1", '\0')
-    write(
-        buffer,
-        "W_state=max_i(R' S R)_ii;W_reconstruction=lambda_max(R' S R);" *
-        "W_T_to_C=opnorm(B_CT,2)^2;W_C_to_T=opnorm(B_TC,2)^2;" *
-        "rows=target;columns=source",
-        '\0',
+    values = (
+        schema = "WannierNLQG.target_subspace_qualification_contract/3.0",
+        semantics = "physical_paw_s_leakage_weight_v1",
+        formulas = "W_state=max_i(R' S R)_ii;W_reconstruction=lambda_max(R' S R);" *
+                   "W_T_to_C=opnorm(B_CT,2)^2;W_C_to_T=opnorm(B_TC,2)^2;" *
+                   "rows=target;columns=source",
+        outer_mask = qualification_scope.outer_mask,
+        frozen_mask = qualification_scope.frozen_mask,
+        bounds = bounds,
+        num_wannier = num_wannier,
+        authority = authority,
+        parent_audit_policy = parent_audit_policy,
+        thresholds = NamedTuple{fieldnames(PAWGaugeThresholds)}(
+            Tuple(getfield(scoped_paw_thresholds, n) for n in fieldnames(PAWGaugeThresholds)),
+        ),
+        anchor = target_anchor_maximum_drift_ev,
+        complement = target_complement_maximum_element_ev,
     )
-    write(buffer, qualification_scope.outer_mask_sha256, '\0')
-    write(buffer, qualification_scope.frozen_mask_sha256, '\0')
-    for value in bounds
-        write(buffer, reinterpret(UInt8, [Float64(value)]))
-    end
-    write(buffer, reinterpret(UInt8, [Int64(num_wannier)]))
-    write(buffer, String(authority), '\0', String(parent_audit_policy), '\0')
-    for name in fieldnames(PAWGaugeThresholds)
-        write(buffer, String(name), '\0')
-        write(buffer, reinterpret(UInt8, [getfield(scoped_paw_thresholds, name)]))
-    end
-    write(buffer, reinterpret(UInt8, [Float64(target_anchor_maximum_drift_ev)]))
-    write(buffer, reinterpret(UInt8, [Float64(target_complement_maximum_element_ev)]))
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    buffer = IOBuffer()
+    IO.write_native_definition_value(buffer, values)
+    return bytes2hex(take!(buffer))
 end
 
 """Construct a PAW-S-orthogonal, symmetry-transported k-star gauge."""
@@ -733,7 +730,7 @@ struct SymmetryCovariantWavefunctionPreparationResult
     status::Symbol
     root_cause::Symbol
     output_hdf5::Union{Nothing, String}
-    artifact_sha256::Union{Nothing, String}
+    content_authentication::String
     target_band_range::UnitRange{Int}
     parent_band_range::UnitRange{Int}
     star_representatives::Vector{Int}
@@ -779,7 +776,7 @@ struct PAWBlockPartitionAuditResult
     maximum_gap_ev::Float64
     maximum_coupling::Float64
     pattern_classification::Symbol
-    input_sha256::Dict{String, String}
+    input_definitions::Dict{String, String}
     diagnostics::Vector{String}
     far_residual_count::Int
     tolerated_far_residual_count::Int
@@ -789,6 +786,68 @@ struct PAWBlockPartitionAuditResult
     maximum_far_normalized_frobenius_residual_ev::Float64
     maximum_far_frobenius_residual_ev::Float64
     maximum_cancellation_condition::Float64
+end
+
+"""Owned geometry for WIN-free workflows; lattice rows are Angstrom, k points are rows.
+
+Point and atom order are preserved. This object does not infer missing wavefunctions
+or assert that an irreducible point list is a full physical mesh.
+"""
+struct WannierizationGeometry
+    structure::SymmetryFoundation.CrystalStructure
+    mp_grid::NTuple{3, Int}
+    kpoints_fractional::Matrix{Float64}
+    function WannierizationGeometry(
+        structure::SymmetryFoundation.CrystalStructure,
+        mp_grid,
+        kpoints_fractional,
+    )
+        length(mp_grid) == 3 || throw(ArgumentError("mesh must have three dimensions"))
+        dims = Tuple(Int.(mp_grid))
+        all(>(0), dims) || throw(ArgumentError("mesh dimensions must be positive"))
+        points = Matrix{Float64}(kpoints_fractional)
+        size(points, 2) == 3 || throw(ArgumentError("k points must have three columns"))
+        prod(BigInt.(dims)) == size(points, 1) ||
+            throw(ArgumentError("full k-point count disagrees with mesh"))
+        all(isfinite, points) || throw(ArgumentError("nonfinite k points"))
+        mesh = SymmetryFoundation.DiagonalKMesh(dims, Tuple(points[1, :]))
+        SymmetryFoundation.classify_diagonal_mesh_points(mesh, permutedims(points))
+        owned = SymmetryFoundation.CrystalStructure(
+            copy(structure.lattice),
+            copy(structure.species),
+            copy(structure.positions_fractional);
+            magnetic_moments_cartesian = structure.magnetic_moments_cartesian === nothing ?
+                                         nothing : copy(structure.magnetic_moments_cartesian),
+        )
+        new(owned, dims, copy(points))
+    end
+end
+
+# Require exactly one geometry source and an explicit basis for normalized geometry.
+function validate_wannierization_geometry_source(input)
+    (input.geometry === nothing) != (input.win_file === nothing) ||
+        throw(ArgumentError("provide exactly one normalized geometry or explicit legacy WIN"))
+    input.geometry === nothing ||
+        input.projection_basis !== nothing ||
+        throw(ArgumentError("normalized geometry requires an explicit projection basis"))
+    return nothing
+end
+
+# Explicit values, not object addresses or caller paths, bind new restart provenance.
+function wannierization_geometry_definition(geometry::WannierizationGeometry)
+    structure = geometry.structure
+    values = (
+        "wannierization-geometry/1",
+        structure.lattice,
+        structure.species,
+        structure.positions_fractional,
+        structure.magnetic_moments_cartesian,
+        geometry.mp_grid,
+        geometry.kpoints_fractional,
+    )
+    buffer = IOBuffer()
+    IO.write_native_definition_value(buffer, values)
+    return bytes2hex(take!(buffer))
 end
 
 """Read-only configuration for preparing a qualified band representation."""
@@ -801,7 +860,7 @@ Base.@kwdef struct BandRepresentationPreparationConfig
     wavefunction_gauge_backend::AbstractWavefunctionGaugeBackend = NativeEigenstateGauge()
     authoritative_hamiltonian::AbstractAuthoritativeHamiltonian = NativeDFTHamiltonian()
     wavefunction_gauge_hdf5::Union{Nothing, String} = nothing
-    win_file::String
+    win_file::Union{Nothing, String} = nothing
     eig_file::String
     projection_basis::Union{Nothing, WannierProjection.WannierProjectionBasis} = nothing
     band_representation::Union{Nothing, SymmetryFoundation.BandRepresentation} = nothing
@@ -818,7 +877,17 @@ Base.@kwdef struct BandRepresentationPreparationConfig
     representation_tolerance::Float64 = 1.0e-8
     target_center_matching_tolerance::Float64 = 1.0e-8
     compatibility_policy::Symbol = :warn
+    geometry::Union{Nothing, WannierizationGeometry} = nothing
+    operation_indices::Union{Nothing, Vector{Int}} = nothing
 end
+
+# Preserve the older 25-argument preparation constructor by supplying the new optional field.
+BandRepresentationPreparationConfig(args::Vararg{Any, 25}) =
+    BandRepresentationPreparationConfig(args..., nothing)
+
+# Preserve the old explicit positional preparation configuration.
+BandRepresentationPreparationConfig(args::Vararg{Any, 24}) =
+    BandRepresentationPreparationConfig(args..., nothing)
 
 """Complete three-dimensional MMN finite-difference stencil used by SAWF."""
 struct WannierizationFiniteDifferenceStencil
@@ -827,7 +896,6 @@ struct WannierizationFiniteDifferenceStencil
     weights::Vector{Float64}
     target_moment::Matrix{Float64}
     completeness_residual::Float64
-    digest::String
 
     function WannierizationFiniteDifferenceStencil(
         vectors_cartesian,
@@ -835,7 +903,6 @@ struct WannierizationFiniteDifferenceStencil
         weights,
         target_moment,
         completeness_residual,
-        digest,
     )
         vectors = Matrix{Float64}(vectors_cartesian)
         shells = Int.(shell_ids)
@@ -851,7 +918,7 @@ struct WannierizationFiniteDifferenceStencil
         all(isfinite, weight_values) &&
         all(isfinite, target) &&
         isfinite(residual) || throw(ArgumentError("stencil contains non-finite values"))
-        return new(vectors, shells, weight_values, target, residual, String(digest))
+        return new(vectors, shells, weight_values, target, residual)
     end
 end
 
@@ -883,7 +950,7 @@ end
 """
 Expert-only, read-only gauge-chain diagnostic configuration.
 
-The routine verifies checkpoint, EIG, MMN, representation, and optional W90
+The routine verifies checkpoint, EIG, MMN, representation, and optional reference checkpoint
 CHK identity before comparing projectors, links, direct Hamiltonians, replica
 policies, and finite-mesh Fourier reconstruction. It never changes a solver
 state or grants production qualification.
@@ -957,13 +1024,13 @@ struct AMNExactFrozenInitialization <: AbstractWannierInitializationBackend end
 struct PAWSCDMInitialization <: AbstractWannierInitializationBackend end
 
 """
-Self-contained, digest-bound PAW-S SCDM seed consumed by the Z-only stage.
+Self-contained PAW-S SCDM seed with complete source references consumed by the Z-only stage.
 
 `frames` and `projectors` use the current band basis.  The selected real-space
 coordinates are chosen from PAW-S-whitened completed wavefunctions; the
 physical metric, native WFC, cutoff, k-map, spinor, atom/projector plan, Q, and
 authority identities remain bound through `source_identity` and
-`payload_sha256`.  MMN/AMN data are never used to reconstruct this payload.
+complete source-reference datasets; no content authentication is claimed.  MMN/AMN data are never used to reconstruct this payload.
 """
 struct PAWSCDMInputArtifact
     schema_version::String
@@ -980,13 +1047,13 @@ struct PAWSCDMInputArtifact
     kpoints_fractional::Matrix{Float64}
     mp_grid::NTuple{3, Int}
     spinor::Bool
-    source_gauge_sha256::String
-    strict_representation_sha256::String
+    source_gauge_reference::IO.ScientificInputDefinition
+    strict_representation_reference::IO.ScientificInputDefinition
     authoritative_hamiltonian::String
-    authoritative_hamiltonian_sha256::String
-    metric_sha256::String
+    authoritative_hamiltonian_definition::String
+    gauge_frame_definition::String
     source_identity::Dict{String, String}
-    payload_sha256::String
+    content_authentication::String
 end
 
 """Use projectability disentanglement after an orthonormal-projector Gram audit."""
@@ -1024,10 +1091,9 @@ end
 
 # Store the single effective stage schedule and localization line-search controls.
 struct WannierizationAccelerationConfig
-    # Select fixed, adaptive, or safeguarded Anderson-Z iteration controls.
+    # Only the fixed SMV/FR route is supported.
     strategy::Symbol
     schedule::Symbol
-    localization_algorithm::Symbol
     u_acceptance::Symbol
     u_initial_step::Float64
     u_armijo_c1::Float64
@@ -1042,55 +1108,33 @@ struct WannierizationAccelerationConfig
     z_projector_tolerance::Float64
     z_stability_window::Int
     localization_max_condition::Float64
-    polar_warm_start_max_steps::Int
     u_inner_sweeps::Int
     u_inner_tolerance::Float64
-    adaptive_z_bounds::Tuple{Float64, Float64}
-    adaptive_u_bounds::Tuple{Float64, Float64}
-    adaptive_growth::Float64
-    adaptive_shrink::Float64
-    adaptive_improvement_ratio::Float64
-    adaptive_reject_ratio::Float64
-    adaptive_patience::Int
-    anderson_depth::Int
-    anderson_start_iteration::Int
-    anderson_regularization::Float64
     u_cg_restart_interval::Int
     u_cg_beta_cap::Float64
     u_cg_minimum_descent_cosine::Float64
     # Schema-2.8 expert controls are append-only to preserve legacy restart
     # struct representations and their scientific digests.
     disentanglement_limit_policy::Symbol
-    joint_z_backtracking_factor::Float64
-    joint_z_backtracking_max_steps::Int
     # Schema-2.9 selects the operation subgroup used by the U/Z constraints.
     # The full magnetic group remains the default and is bitwise unchanged.
     constraint_operation_scope::Symbol
     # Schema-2.10 expert controls for a chart-consistent MV U optimizer.
     u_phase_branch_tolerance::Float64
     u_branch_active_set_max_orbits::Int
-    u_lbfgs_history::Int
-    u_lbfgs_curvature_tolerance::Float64
     u_wolfe_c2::Float64
     u_line_search_max_trials::Int
     # Schema-2.21 expert controls. The established SMV-Z and U defaults remain
     # unchanged; every alternative is an explicit opt-in.
-    disentanglement_algorithm::Symbol
     subspace_gauge_policy::Symbol
-    u_w90_restart_interval::Int
-    u_w90_trial_step::Float64
-    trust_radius_initial::Float64
-    trust_radius_maximum::Float64
-    trust_acceptance_threshold::Float64
-    trust_shrink_threshold::Float64
-    trust_expand_threshold::Float64
+    u_recursive_localization_restart_interval::Int
+    u_recursive_localization_trial_step::Float64
     hot_storage_backend::Symbol
 end
 
 const _WANNIERIZATION_ACCELERATION_DEFAULTS = (
     strategy = :fixed,
     schedule = :two_stage,
-    localization_algorithm = :symmetry_projected_gradient,
     u_acceptance = :armijo,
     u_initial_step = 1.0,
     u_armijo_c1 = 1.0e-4,
@@ -1105,41 +1149,20 @@ const _WANNIERIZATION_ACCELERATION_DEFAULTS = (
     z_projector_tolerance = 1.0e-10,
     z_stability_window = 3,
     disentanglement_limit_policy = :standard_continue,
-    joint_z_backtracking_factor = 0.5,
-    joint_z_backtracking_max_steps = 12,
     constraint_operation_scope = :full,
     u_phase_branch_tolerance = 1.0e-6,
     u_branch_active_set_max_orbits = 64,
-    u_lbfgs_history = 8,
-    u_lbfgs_curvature_tolerance = 1.0e-12,
     u_wolfe_c2 = 0.9,
     u_line_search_max_trials = 24,
     localization_max_condition = 1.0e10,
-    polar_warm_start_max_steps = 20,
     u_inner_sweeps = 1,
     u_inner_tolerance = 1.0e-10,
-    adaptive_z_bounds = (0.2, 0.95),
-    adaptive_u_bounds = (0.1, 1.0),
-    adaptive_growth = 1.15,
-    adaptive_shrink = 0.5,
-    adaptive_improvement_ratio = 0.90,
-    adaptive_reject_ratio = 1.05,
-    adaptive_patience = 3,
-    anderson_depth = 5,
-    anderson_start_iteration = 6,
-    anderson_regularization = 1.0e-12,
     u_cg_restart_interval = 20,
     u_cg_beta_cap = 10.0,
     u_cg_minimum_descent_cosine = 1.0e-3,
-    disentanglement_algorithm = :smv_fixed_point,
     subspace_gauge_policy = :boundary_cluster_procrustes,
-    u_w90_restart_interval = 5,
-    u_w90_trial_step = 2.0,
-    trust_radius_initial = 0.25,
-    trust_radius_maximum = 1.0,
-    trust_acceptance_threshold = 0.1,
-    trust_shrink_threshold = 0.25,
-    trust_expand_threshold = 0.75,
+    u_recursive_localization_restart_interval = 5,
+    u_recursive_localization_trial_step = 2.0,
     hot_storage_backend = :legacy_vector,
 )
 
@@ -1148,6 +1171,8 @@ Normalize and validate public solver controls while rejecting removed legacy key
 """
 function WannierizationAccelerationConfig(; kwargs...)
     supplied = Dict{Symbol, Any}(kwargs)
+    get(supplied, :schedule, :two_stage) == :two_stage ||
+        throw(ArgumentError("REMOVED_SOLVER_SCHEDULE: only :two_stage is supported"))
     if get(supplied, :schedule, nothing) == :nested ||
        any(startswith(String(key), "nested_") for key in keys(supplied))
         throw(
@@ -1172,7 +1197,6 @@ function WannierizationAccelerationConfig(; kwargs...)
     return WannierizationAccelerationConfig(
         Symbol(values.strategy),
         Symbol(values.schedule),
-        Symbol(values.localization_algorithm),
         Symbol(values.u_acceptance),
         Float64(values.u_initial_step),
         Float64(values.u_armijo_c1),
@@ -1187,59 +1211,27 @@ function WannierizationAccelerationConfig(; kwargs...)
         Float64(values.z_projector_tolerance),
         Int(values.z_stability_window),
         Float64(values.localization_max_condition),
-        Int(values.polar_warm_start_max_steps),
         Int(values.u_inner_sweeps),
         Float64(values.u_inner_tolerance),
-        Tuple(Float64.(values.adaptive_z_bounds)),
-        Tuple(Float64.(values.adaptive_u_bounds)),
-        Float64(values.adaptive_growth),
-        Float64(values.adaptive_shrink),
-        Float64(values.adaptive_improvement_ratio),
-        Float64(values.adaptive_reject_ratio),
-        Int(values.adaptive_patience),
-        Int(values.anderson_depth),
-        Int(values.anderson_start_iteration),
-        Float64(values.anderson_regularization),
         Int(values.u_cg_restart_interval),
         Float64(values.u_cg_beta_cap),
         Float64(values.u_cg_minimum_descent_cosine),
         Symbol(values.disentanglement_limit_policy),
-        Float64(values.joint_z_backtracking_factor),
-        Int(values.joint_z_backtracking_max_steps),
         Symbol(values.constraint_operation_scope),
         Float64(values.u_phase_branch_tolerance),
         Int(values.u_branch_active_set_max_orbits),
-        Int(values.u_lbfgs_history),
-        Float64(values.u_lbfgs_curvature_tolerance),
         Float64(values.u_wolfe_c2),
         Int(values.u_line_search_max_trials),
-        Symbol(values.disentanglement_algorithm),
         Symbol(values.subspace_gauge_policy),
-        Int(values.u_w90_restart_interval),
-        Float64(values.u_w90_trial_step),
-        Float64(values.trust_radius_initial),
-        Float64(values.trust_radius_maximum),
-        Float64(values.trust_acceptance_threshold),
-        Float64(values.trust_shrink_threshold),
-        Float64(values.trust_expand_threshold),
+        Int(values.u_recursive_localization_restart_interval),
+        Float64(values.u_recursive_localization_trial_step),
         Symbol(values.hot_storage_backend),
     )
 end
 
 @doc """
-Opt-in controls for fixed, adaptive, or safeguarded Anderson-Z updates and the
-localization algorithms. Frozen bands constrain only the selected Bloch
-subspace; the U-localization tangent contains no target-space frozen block.
-`:symmetry_projected_gradient` is the formal default. `:polar_then_gradient`
-is a bounded diagnostic warm start and cannot remain a polar-only optimizer.
-`:riemannian_cg` is an expert-only Polak--Ribiere+ search on the same
-symmetry-reduced real-linear tangent, with polar retraction and fail-closed
-restart to the default projected steepest descent.
-`:riemannian_lbfgs` is an expert-only limited-memory search on that tangent.
-Both accelerated algorithms use strong-Wolfe trials in smooth charts and
-generalized Armijo trials when a Type-IV phase-cut orbit is active.
-`constraint_operation_scope=:full` applies the complete unitary and
-antiunitary operation set. The expert-only `:unitary` and `:identity` scopes
-are causal ablations: they rebuild the corresponding k-star partition and are
-always standard, never production-qualified.
+Numerical protection and execution controls for the fixed ordinary or symmetry-constrained
+SMV–Fletcher–Reeves algorithms. Algorithm choice follows the actual constraint mode;
+there is no public free optimizer selector. Frozen bands constrain the Z subspace,
+while the U tangent retains the accepted fixed-Z invariant.
 """ WannierizationAccelerationConfig

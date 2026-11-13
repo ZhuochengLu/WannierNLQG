@@ -1,7 +1,7 @@
 const QE_PAW_MATRIX_ELEMENT_SCHEMA = "WannierNLQG.qe_paw_matrix_elements"
-const QE_PAW_MATRIX_ELEMENT_SCHEMA_VERSION = "1.1"
+const QE_PAW_MATRIX_ELEMENT_SCHEMA_VERSION = "2.0"
 const QE_PAW_ORACLE_PROVENANCE_SCHEMA = "WannierNLQG.qe_paw_oracle_provenance"
-const QE_PAW_ORACLE_PROVENANCE_SCHEMA_VERSION = "1.0"
+const QE_PAW_ORACLE_PROVENANCE_SCHEMA_VERSION = "2.0"
 const QE_UPF_RECIPROCAL_GRID_STEP = 0.01
 
 # Four-point cubic interpolation on QE's nonnegative reciprocal radial grid.
@@ -43,15 +43,15 @@ function _qe_real_spherical_harmonics(degree::Int, cartesian_vectors::AbstractMa
     return output
 end
 
-# Wannier90 trial orbitals use the same row order but cancel the
+# Wannier trial orbitals use the same row order but cancel the
 # Condon--Shortley phase. Keep this convention separate from QE beta/Q rows.
-function _qe_wannier90_real_spherical_harmonics(
+function _projection_real_spherical_harmonics(
     degree::Int,
     cartesian_vectors::AbstractMatrix{<:Real},
 )
-    degree >= 0 || throw(ArgumentError("Wannier90 spherical-harmonic degree must be nonnegative"))
+    degree >= 0 || throw(ArgumentError("Wannier spherical-harmonic degree must be nonnegative"))
     size(cartesian_vectors, 2) == 3 ||
-        throw(ArgumentError("Wannier90 Cartesian vectors must have three columns"))
+        throw(ArgumentError("Wannier Cartesian vectors must have three columns"))
     output = zeros(Float64, 2 * degree + 1, size(cartesian_vectors, 1))
     for vector_index in axes(cartesian_vectors, 1)
         x, y, z = Float64.(cartesian_vectors[vector_index, :])
@@ -199,7 +199,8 @@ function _qe_select_nnkp_bands(native::NativeWavefunctionData, nnkp::WannierNNKP
         native.spinor,
         points,
         native.input_sha256,
-        merge(native.source_metadata, Dict("nnkp_selected_bands" => join(selected, ","))),
+        merge(native.source_metadata, Dict("nnkp_selected_bands" => join(selected, ",")));
+        source_definition = native.source_definition,
     )
 end
 
@@ -709,7 +710,7 @@ function _qe_generate_mmn(
     )
 end
 
-# Ordered base-orbital expansion for every Wannier90 NNKP angular code.
+# Ordered base-orbital expansion for every Wannier NNKP angular code.
 function _qe_nnkp_orbital_terms(code::Int, index::Int)
     s = (0, 1)
     pz, px, py = (1, 1), (1, 2), (1, 3)
@@ -753,7 +754,7 @@ function _qe_nnkp_orbital_terms(code::Int, index::Int)
     return tables[code][index]
 end
 
-# QE/Wannier90 hydrogenic radial transform, with no per-k trial normalization.
+# QE/Wannier hydrogenic radial transform, with no per-k trial normalization.
 function _qe_trial_radial_transform(
     radial_index::Int,
     alpha_bohr_inverse::Float64,
@@ -827,7 +828,7 @@ function _qe_trial_matrix(
             term in _qe_nnkp_orbital_terms(projection.angular_code, projection.angular_index)
         )
         harmonics = Dict(
-            degree => _qe_wannier90_real_spherical_harmonics(degree, local_vectors) for
+            degree => _projection_real_spherical_harmonics(degree, local_vectors) for
             degree in degrees
         )
         spinor = _qe_trial_spinor(projection)
@@ -971,32 +972,34 @@ function _qe_oracle_provenance_file(
     return isempty(existing) ? nothing : first(existing)
 end
 
-# Verify every source hash recorded by the generator against the oracle companion.
+# Oracle qualification requires complete historical source values; old digest-only companions cannot authenticate them.
 function _qe_validate_oracle_provenance(
     filename::Union{Nothing, AbstractString},
-    expected_hashes::Dict{String, String},
+    expected_source::IO.ScientificInputDefinition,
+    topology_definition::AbstractString,
 )
     filename === nothing && return false, "QE_ORACLE_PROVENANCE_MISSING"
     return try
-        observed = HDF5.h5open(something(filename), "r") do handle
-            attributes = HDF5.attributes(handle)
-            schema = String(read(attributes["schema"]))
-            version = String(read(attributes["schema_version"]))
-            schema == QE_PAW_ORACLE_PROVENANCE_SCHEMA ||
-                throw(ArgumentError("oracle provenance schema is $(schema)"))
-            version == QE_PAW_ORACLE_PROVENANCE_SCHEMA_VERSION ||
-                throw(ArgumentError("oracle provenance version is $(version)"))
-            haskey(handle, "input_sha256") ||
-                throw(ArgumentError("oracle provenance omits input_sha256"))
-            read_string_dictionary(handle["input_sha256"])
-        end
-        for key in sort!(collect(keys(expected_hashes)))
-            get(observed, key, "MISSING") == expected_hashes[key] ||
-                return false, "QE_ORACLE_INPUT_HASH_MISMATCH:$(key)"
+        HDF5.h5open(something(filename), "r") do handle
+            attrs=HDF5.attributes(handle)
+            String(read(attrs["schema"]))==QE_PAW_ORACLE_PROVENANCE_SCHEMA ||
+                throw(ArgumentError("oracle provenance schema differs"))
+            String(read(attrs["schema_version"]))==QE_PAW_ORACLE_PROVENANCE_SCHEMA_VERSION ||
+                throw(ArgumentError("QE_ORACLE_COMPLETE_SOURCE_MIGRATION_REQUIRED"))
+            String(read(attrs["content_authentication"]))=="NOT_PERFORMED" ||
+                throw(ArgumentError("oracle authentication policy differs"))
+            String(read(attrs["topology_definition"]))==topology_definition ||
+                throw(ArgumentError("QE_ORACLE_TOPOLOGY_MISMATCH"))
+            observed=read_scientific_input_reference_hdf5(handle, "source_definition")
+            IO.validate_scientific_input_definitions_equal(
+                expected_source,
+                observed;
+                mismatch_error = "QE_ORACLE_SOURCE_MISMATCH",
+            )
         end
         true, "PASS"
     catch error
-        false, "QE_ORACLE_PROVENANCE_INVALID:$(sprint(showerror, error))"
+        false, "QE_ORACLE_PROVENANCE_INVALID:$(sprint(showerror,error))"
     end
 end
 
@@ -1013,6 +1016,7 @@ function _write_qe_paw_provenance(
     amn_component_norms::Dict{String, Float64},
     oracle_provenance::Union{Nothing, AbstractString},
     require_oracle::Bool;
+    source_definition::IO.ScientificInputDefinition,
     qualification_scope = nothing,
     parent_generalized_norm_max_absolute::Real = result.generalized_norm_max_absolute,
     parent_mmn_parity = result.mmn_parity,
@@ -1050,13 +1054,15 @@ function _write_qe_paw_provenance(
             attributes["operator_target_contract_sha256"] = String(target_contract_sha256)
             attributes["amn_max_principal_angle_rad"] = result.amn_max_principal_angle_rad
             attributes["amn_projector_max_absolute"] = result.amn_projector_max_absolute
-            attributes["qe_convention_reference"] = "https://gitlab.com/QEF/q-e/-/blob/ca08e747430dca8f4bf4e83abfc4d1391ffcb642/PP/src/pw2wannier90.f90"
+            attributes["spin_contraction_definition"] = "dimensionless-pauli-full-cutoff-plus-q0-augmentation"
             attributes["upflib_reference"] = "https://gitlab.com/QEF/q-e/-/blob/develop/upflib/README.md"
             attributes["qe_license_reference"] = "https://gitlab.com/QEF/q-e/-/blob/develop/License"
             attributes["oracle_provenance"] =
                 oracle_provenance === nothing ? "NOT_PROVIDED" :
                 abspath(something(oracle_provenance))
-            input_group = HDF5.create_group(handle, "input_sha256")
+            attributes["content_authentication"]="NOT_PERFORMED"
+            write_scientific_input_reference_hdf5(handle, "source_definition", source_definition)
+            input_group = HDF5.create_group(handle, "input_definitions")
             write_string_dictionary(input_group, result.input_sha256)
             threshold_group = HDF5.create_group(handle, "thresholds")
             for field in fieldnames(QEPAWParityThresholds)
@@ -1085,8 +1091,10 @@ function _write_qe_paw_provenance(
             if qualification_scope !== nothing
                 scope_group = HDF5.create_group(handle, "qualification_scope")
                 scope_attributes = HDF5.attributes(scope_group)
-                scope_attributes["outer_mask_sha256"] = qualification_scope.outer_mask_sha256
-                scope_attributes["frozen_mask_sha256"] = qualification_scope.frozen_mask_sha256
+                scope_attributes["outer_mask_definition"] =
+                    qualification_scope.outer_mask_definition
+                scope_attributes["frozen_mask_definition"] =
+                    qualification_scope.frozen_mask_definition
                 scope_group["outer_mask"] = UInt8.(qualification_scope.outer_mask)
                 scope_group["frozen_mask"] = UInt8.(qualification_scope.frozen_mask)
             end
@@ -1163,7 +1171,7 @@ function _write_qe_paw_provenance(
                 amn_subspace_applicable ? "ORACLE_SUBSPACE" : "ORACLE_NOT_AVAILABLE",
             )
             topology_group = HDF5.create_group(handle, "nnkp")
-            HDF5.attributes(topology_group)["source_sha256"] = nnkp.source_sha256
+            HDF5.attributes(topology_group)["source_sha256"] = IO.wannier_topology_definition(nnkp)
             HDF5.attributes(topology_group)["num_kpoints"] = size(nnkp.kpoints_fractional, 1)
             HDF5.attributes(topology_group)["num_neighbors"] = size(nnkp.neighbors, 1)
             HDF5.attributes(topology_group)["num_projections"] = length(nnkp.projections)
@@ -1214,14 +1222,15 @@ end
 """
 Generate deterministic, augmentation-aware QE MMN and AMN matrices.
 
-The NNKP file is the sole topology, band-exclusion, and projection authority.
+The NNKP file or owned native topology is the sole topology, band-exclusion,
+and projection authority. Owned inputs receive a fresh semantic digest.
 Oracle matrices enter only after native construction and write/readback. A
 missing or failed required oracle returns standard artifacts with
 `passed=false`; it never exposes a physical overlap to SAWF.
 """
 function generate_qe_paw_matrix_elements(
     source::QuantumEspressoWavefunctionSource,
-    nnkp_file::AbstractString;
+    nnkp_input::Union{AbstractString, WannierNNKP};
     artifact_dir::AbstractString,
     oracle_mmn_file::Union{Nothing, AbstractString} = nothing,
     oracle_amn_file::Union{Nothing, AbstractString} = nothing,
@@ -1238,7 +1247,10 @@ function generate_qe_paw_matrix_elements(
     output_amn = joinpath(artifact_dir, "native_qe_paw.amn")
     provenance_hdf5 = joinpath(artifact_dir, "native_qe_paw.provenance.h5")
 
-    nnkp = read_wannier_nnkp(nnkp_file)
+    nnkp =
+        nnkp_input isa AbstractString ?
+        read_wannier_nnkp(nnkp_input; content_authentication = false) :
+        owned_wannier_topology(nnkp_input; content_authentication = false)
     metadata = read_qe_xml(source)
     raw_native = read_qe_raw_wavefunctions(source, metadata)
     _qe_validate_nnkp_contract(raw_native, nnkp)
@@ -1262,11 +1274,11 @@ function generate_qe_paw_matrix_elements(
             throw(ArgumentError("QE_PAW_TARGET_AUTHORITY_MISMATCH"))
         target_contract.parent_audit_policy == "audit_only" ||
             throw(ArgumentError("QE_PAW_PARENT_AUDIT_POLICY_MISMATCH"))
-        _operator_qualification_mask_sha256(qualification_scope.outer_mask) ==
-        qualification_scope.outer_mask_sha256 ||
+        _operator_qualification_mask_definition(qualification_scope.outer_mask) ==
+        qualification_scope.outer_mask_definition ||
             throw(ArgumentError("QE_PAW_OUTER_MASK_DIGEST_MISMATCH"))
-        _operator_qualification_mask_sha256(qualification_scope.frozen_mask) ==
-        qualification_scope.frozen_mask_sha256 ||
+        _operator_qualification_mask_definition(qualification_scope.frozen_mask) ==
+        qualification_scope.frozen_mask_definition ||
             throw(ArgumentError("QE_PAW_FROZEN_MASK_DIGEST_MISMATCH"))
     end
     generalized_norm, generalized_norm_worst =
@@ -1291,6 +1303,21 @@ function generate_qe_paw_matrix_elements(
     mmn, mmn_components =
         _qe_generate_mmn(native, nnkp, beta_overlaps, upf_data, plan, metadata.spinorbit)
 
+    # Energies come from exactly the selected native bands used above, in the
+    # same actual point order; no second reader or external EIG authority.
+    energies = Matrix{Float64}(undef, mmn.num_bands, mmn.num_kpts)
+    for kpoint in 1:mmn.num_kpts
+        energies[:, kpoint] .= native_point_metadata(native, kpoint).energies_ev
+    end
+    all(isfinite, energies) || throw(ArgumentError("QE_NATIVE_EIG_NONFINITE"))
+    eig_path = write_wannier_eig(
+        joinpath(artifact_dir, "native_qe_paw.eig"),
+        WannierEIG(mmn.num_bands, mmn.num_kpts, energies);
+        roundtrip = true,
+    )
+    isequal(read_wannier_eig(eig_path).data, energies) ||
+        throw(ArgumentError("QE_NATIVE_WRITE_READBACK_FAILED: EIG differs after readback"))
+
     mmn_path = write_wannier_mmn(
         output_mmn,
         mmn;
@@ -1312,22 +1339,21 @@ function generate_qe_paw_matrix_elements(
 
     oracle_mmn_available = oracle_mmn_file !== nothing && isfile(something(oracle_mmn_file))
     oracle_amn_available = oracle_amn_file !== nothing && isfile(something(oracle_amn_file))
-    input_hashes = merge(
-        native.input_sha256,
-        Dict(
-            "NNKP" => nnkp.source_sha256,
-            "ORACLE_MMN" =>
-                oracle_mmn_file === nothing ? "NOT_PROVIDED" :
-                oracle_mmn_available ? sha256_file(something(oracle_mmn_file)) : "MISSING",
-            "ORACLE_AMN" =>
-                oracle_amn_file === nothing ? "NOT_PROVIDED" :
-                oracle_amn_available ? sha256_file(something(oracle_amn_file)) : "MISSING",
-        ),
+    input_hashes = Dict(
+        "NNKP"=>IO.wannier_topology_definition(nnkp),
+        "ORACLE_MMN_STATUS"=>oracle_mmn_file===nothing ? "NOT_PROVIDED" :
+                             oracle_mmn_available ? "PROVIDED" : "MISSING",
+        "ORACLE_AMN_STATUS"=>oracle_amn_file===nothing ? "NOT_PROVIDED" :
+                             oracle_amn_available ? "PROVIDED" : "MISSING",
     )
-    source_hashes = merge(native.input_sha256, Dict("NNKP" => nnkp.source_sha256))
+    native.source_definition===nothing &&
+        throw(ArgumentError("NATIVE_SOURCE_COMPLETE_DEFINITION_REQUIRED"))
     oracle_provenance = _qe_oracle_provenance_file(oracle_mmn_file, oracle_amn_file)
-    provenance_pass, provenance_reason =
-        _qe_validate_oracle_provenance(oracle_provenance, source_hashes)
+    provenance_pass, provenance_reason = _qe_validate_oracle_provenance(
+        oracle_provenance,
+        native.source_definition,
+        IO.wannier_topology_definition(nnkp),
+    )
     parent_mmn_parity = nothing
     mmn_parity, mmn_oracle_reason = if oracle_mmn_file === nothing
         nothing, "NOT_PROVIDED"
@@ -1420,6 +1446,7 @@ function generate_qe_paw_matrix_elements(
     (amn_raw_pass && amn_subspace_pass) || push!(diagnostics, "QE_PAW_AMN_PARITY_FAILED")
     passed = norm_pass && provenance_pass && mmn_pass && amn_raw_pass && amn_subspace_pass
     artifacts = Dict(
+        "eig" => abspath(eig_path),
         "mmn" => abspath(mmn_path),
         "amn" => abspath(amn_path),
         "provenance_hdf5" => abspath(provenance_hdf5),
@@ -1452,12 +1479,13 @@ function generate_qe_paw_matrix_elements(
         amn_components,
         oracle_provenance,
         require_oracle,
+        source_definition = native.source_definition,
         qualification_scope = qualification_scope,
         parent_generalized_norm_max_absolute = parent_generalized_norm,
         parent_mmn_parity = parent_mmn_parity,
         parent_amn_parity = parent_amn_parity,
         target_contract_sha256 = target_contract === nothing ? "LEGACY_NOT_RECORDED" :
-                                 target_contract.contract_sha256,
+                                 target_contract.definition,
     )
     return result
 end

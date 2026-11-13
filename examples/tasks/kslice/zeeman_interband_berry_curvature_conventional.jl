@@ -34,7 +34,7 @@ function build_config(;
                 quantity = "ZIBCK",
                 method = "Conventional",
                 physics = GeometryParameters(),
-                numerics = GeometryNumerics(
+                numerics = Numerics(
                     denominator_regularization = 0.001,
                     degeneracy_threshold = 0.002,
                 ),

@@ -15,37 +15,30 @@ const _LOCALIZATION_SWEEP_ENTRY_COUNT = Threads.Atomic{Int}(0)
 """Return whether one Z backend uses the relative SMV objective seal."""
 @inline _is_smv_fletcher_reeves_disentanglement(algorithm::Symbol) =
     algorithm in (:smv_fletcher_reeves_two_stage, :symmetry_projected_smv_fletcher_reeves_two_stage)
-const _WANNIER90_REFERENCE_LP64_LAPACK = let
-    configured = strip(get(ENV, "WANNIERNLQG_W90_REFERENCE_LP64_LAPACK", ""))
+const _RECURSIVE_LOCALIZATION_LP64_LAPACK = let
+    configured = strip(get(ENV, "WANNIERNLQG_LOCALIZATION_LP64_LAPACK", ""))
     candidates =
         isempty(configured) ? ["/opt/homebrew/opt/openblas/lib/libopenblas.0.dylib"] : [configured]
     found = findfirst(isfile, candidates)
     found === nothing ? nothing : candidates[something(found)]
 end
 
-"""Return the LAPACK ABI used by the strict Wannier90-reference eigensolvers."""
-_wannier90_reference_lapack_backend() =
-    _WANNIER90_REFERENCE_LP64_LAPACK === nothing ? "LIBBLASTRAMPOLINE_ILP64_FALLBACK" :
-    "EXTERNAL_LP64:" * something(_WANNIER90_REFERENCE_LP64_LAPACK)
-
-"""Return the digest of the selected external LP64 LAPACK library."""
-_wannier90_reference_lapack_sha256() =
-    _WANNIER90_REFERENCE_LP64_LAPACK === nothing ? "NOT_APPLICABLE_FALLBACK" :
-    open(something(_WANNIER90_REFERENCE_LP64_LAPACK), "r") do io
-        bytes2hex(SHA.sha256(io))
-    end
+"""Return the LAPACK ABI used by the strict Wannier-reference eigensolvers."""
+_recursive_localization_lapack_backend() =
+    _RECURSIVE_LOCALIZATION_LP64_LAPACK === nothing ? "LIBBLASTRAMPOLINE_ILP64_FALLBACK" :
+    "EXTERNAL_LP64:" * something(_RECURSIVE_LOCALIZATION_LP64_LAPACK)
 
 # gfortran's `aimag(log(z))` is evaluated by the platform libm `atan2`.
 # Julia's `atan` and complex `log` use libopenlibm and differ by a few ulps for
 # the frozen Cr links; the parabolic FR step amplifies that harmless local
 # difference into a failed five-step parity audit.
-const _WANNIER90_REFERENCE_SYSTEM_LIBM =
+const _RECURSIVE_LOCALIZATION_SYSTEM_LIBM =
     Sys.isapple() ? "/usr/lib/libSystem.B.dylib" :
     Sys.islinux() ? "libm.so.6" : Sys.iswindows() ? "msvcrt.dll" : Base.Math.libm
 
 """Evaluate gfortran's complex phase through the platform `atan2`."""
-_wannier90_reference_phase(value::Complex) = ccall(
-    (:atan2, _WANNIER90_REFERENCE_SYSTEM_LIBM),
+_recursive_localization_phase(value::Complex) = ccall(
+    (:atan2, _RECURSIVE_LOCALIZATION_SYSTEM_LIBM),
     Cdouble,
     (Cdouble, Cdouble),
     imag(value),
@@ -53,12 +46,12 @@ _wannier90_reference_phase(value::Complex) = ccall(
 )
 
 """Evaluate gfortran's complex `exp` through the same platform libm."""
-_wannier90_reference_complex_exponential(value::ComplexF64) =
-    ccall((:cexp, _WANNIER90_REFERENCE_SYSTEM_LIBM), ComplexF64, (ComplexF64,), value)
+_recursive_localization_complex_exponential(value::ComplexF64) =
+    ccall((:cexp, _RECURSIVE_LOCALIZATION_SYSTEM_LIBM), ComplexF64, (ComplexF64,), value)
 
-"""Return Wannier90's ordered `wbtot` accumulation for the reference path."""
-function _wannier90_reference_weight_total(weights::Vector{Float64})
-    isempty(weights) && throw(ArgumentError("Wannier90 neighbor weights are empty"))
+"""Return Wannier's ordered `wbtot` accumulation for the reference path."""
+function _recursive_localization_weight_total(weights::Vector{Float64})
+    isempty(weights) && throw(ArgumentError("Wannier neighbor weights are empty"))
     # Preserve the scalar left-to-right contract. `sum` may use a different
     # reduction tree and change the later parabolic-step trajectory.
     weight_total = 0.0
@@ -66,7 +59,7 @@ function _wannier90_reference_weight_total(weights::Vector{Float64})
         weight_total += weight
     end
     isfinite(weight_total) && weight_total > 0.0 ||
-        throw(ArgumentError("Wannier90 neighbor weight total is invalid"))
+        throw(ArgumentError("Wannier neighbor weight total is invalid"))
     return weight_total
 end
 
@@ -101,7 +94,7 @@ end
 
 """Resolve frozen indices from the grouped solver input contract."""
 @inline function _frozen_indices(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     representation::BandRepresentation,
     kpoint::Int,
 )
@@ -162,41 +155,6 @@ function _record_hermitian_spectrum_audit!(
     summary["hermitian_spectrum_minimum_gap_context"] =
         isempty(audit.minimum_gap_context) ? "NOT_APPLICABLE" : audit.minimum_gap_context
     return summary
-end
-
-# Hash a k-resolved complex field in deterministic matrix order.
-function _complex_field_sha256(field::Vector{Matrix{ComplexF64}})
-    buffer = IOBuffer()
-    for matrix in field
-        write(buffer, reinterpret(UInt8, Int64[size(matrix)...]))
-        write(buffer, reinterpret(UInt8, vec(matrix)))
-    end
-    return bytes2hex(SHA.sha256(take!(buffer)))
-end
-
-# Bind the complete sealed Z-stage authority independently of the later U gauge.
-function _disentanglement_state_sha256(state::DisentanglementState)
-    buffer = IOBuffer()
-    for values in (
-        state.projectors,
-        state.frames,
-        state.z_field,
-        state.outer_mask,
-        state.frozen_mask,
-        state.objective_history,
-    )
-        write(buffer, reinterpret(UInt8, Int64[size(values)...]))
-        if values isa BitArray
-            write(buffer, UInt8.(vec(values)))
-        else
-            write(buffer, reinterpret(UInt8, vec(values)))
-        end
-    end
-    write(
-        buffer,
-        reinterpret(UInt8, [state.omega_i, state.projector_residual, Float64(state.converged)]),
-    )
-    return bytes2hex(SHA.sha256(take!(buffer)))
 end
 
 # Accumulate one validated Hermitian decomposition in the shared audit.
@@ -473,14 +431,14 @@ function _orthonormalize_columns(arguments...; keywords...)
     return result.success ? result.matrix : nothing
 end
 
-"""Wannier90 4.0.1 packed-Hermitian `ZHPEVX` eigensystem.
+"""Wannier 4.0.1 packed-Hermitian `ZHPEVX` eigensystem.
 
 The SMV reference path diagonalizes the upper packed triangle with
 `JOBZ='V'`, `RANGE='A'`, and `ABSTOL=-1`.  Replacing that call by a different
 Hermitian driver produces measurably different projectors after many Cr Z
 iterations even when Omega_I agrees to nearly machine precision.
 """
-function _wannier90_reference_zhpevx(
+function _recursive_localization_zhpevx(
     matrix::AbstractMatrix{<:Complex};
     leading_dimension::Int = size(matrix, 1),
 )
@@ -512,7 +470,7 @@ function _wannier90_reference_zhpevx(
         packed[offset] = matrix[row, column]
         offset += 1
     end
-    use_external_lp64 = _WANNIER90_REFERENCE_LP64_LAPACK !== nothing
+    use_external_lp64 = _RECURSIVE_LOCALIZATION_LP64_LAPACK !== nothing
     integer_type = use_external_lp64 ? Cint : LinearAlgebra.BlasInt
     blas_dimension = integer_type(dimension)
     value_lower = 0.0
@@ -521,7 +479,7 @@ function _wannier90_reference_zhpevx(
     index_upper = integer_type(0)
     absolute_tolerance = -1.0
     found = Ref{integer_type}(0)
-    # Wannier90 allocates every ZHPEVX work/output array at num_bands even
+    # Wannier allocates every ZHPEVX work/output array at num_bands even
     # when the active packed matrix is only ndimwin/ndimk.  Preserve that
     # leading dimension and workspace contract: changing only the storage
     # stride can select a different vector in a nearly degenerate boundary.
@@ -537,7 +495,7 @@ function _wannier90_reference_zhpevx(
     upper = UInt8('U')
     if use_external_lp64
         ccall(
-            (:zhpevx_, _WANNIER90_REFERENCE_LP64_LAPACK),
+            (:zhpevx_, _RECURSIVE_LOCALIZATION_LP64_LAPACK),
             Cvoid,
             (
                 Ref{UInt8},
@@ -638,14 +596,14 @@ function _wannier90_reference_zhpevx(
     )
 end
 
-"""Wannier90 4.0.1 `ZHEEV('V','U')` for localization rotations.
+"""Wannier 4.0.1 `ZHEEV('V','U')` for localization rotations.
 
 The reference optimizer exponentiates each anti-Hermitian search direction by
 diagonalizing `im * cdq` with this exact driver and workspace length.  Julia's
 generic `eigen(Hermitian(...))` may choose a different LAPACK ABI/driver; that
 difference is small after one step but compounds through Fletcher--Reeves.
 """
-function _wannier90_reference_zheev(matrix::AbstractMatrix{<:Complex})
+function _recursive_localization_zheev(matrix::AbstractMatrix{<:Complex})
     dimension = size(matrix, 1)
     size(matrix, 2) == dimension || return (
         success = false,
@@ -659,7 +617,7 @@ function _wannier90_reference_zheev(matrix::AbstractMatrix{<:Complex})
     values = zeros(Float64, dimension)
     work = zeros(ComplexF64, 4dimension)
     real_work = zeros(Float64, max(1, 3dimension - 2))
-    use_external_lp64 = _WANNIER90_REFERENCE_LP64_LAPACK !== nothing
+    use_external_lp64 = _RECURSIVE_LOCALIZATION_LP64_LAPACK !== nothing
     integer_type = use_external_lp64 ? Cint : LinearAlgebra.BlasInt
     n = integer_type(dimension)
     lwork = integer_type(length(work))
@@ -668,7 +626,7 @@ function _wannier90_reference_zheev(matrix::AbstractMatrix{<:Complex})
     upper = UInt8('U')
     if use_external_lp64
         ccall(
-            (:zheev_, _WANNIER90_REFERENCE_LP64_LAPACK),
+            (:zheev_, _RECURSIVE_LOCALIZATION_LP64_LAPACK),
             Cvoid,
             (
                 Ref{UInt8},
@@ -724,8 +682,8 @@ function _wannier90_reference_zheev(matrix::AbstractMatrix{<:Complex})
     return (success = info[] == 0, values, vectors, info = Int(info[]))
 end
 
-"""Wannier90-linked LP64 `ZGEMM` used by the recursive U/M reference state."""
-function _wannier90_reference_zgemm(
+"""Wannier-linked LP64 `ZGEMM` used by the recursive U/M reference state."""
+function _recursive_localization_zgemm(
     left::AbstractMatrix{<:Complex},
     trans_left::Char,
     right::AbstractMatrix{<:Complex},
@@ -741,7 +699,7 @@ function _wannier90_reference_zgemm(
     right_columns = trans_right == 'N' ? size(right_matrix, 2) : size(right_matrix, 1)
     inner_left == inner_right || throw(DimensionMismatch("ZGEMM inner dimensions disagree"))
     result = zeros(ComplexF64, left_rows, right_columns)
-    if _WANNIER90_REFERENCE_LP64_LAPACK === nothing
+    if _RECURSIVE_LOCALIZATION_LP64_LAPACK === nothing
         op_left = trans_left == 'N' ? left_matrix : left_matrix'
         op_right = trans_right == 'N' ? right_matrix : right_matrix'
         mul!(result, op_left, op_right)
@@ -758,7 +716,7 @@ function _wannier90_reference_zgemm(
     alpha = ComplexF64(1.0, 0.0)
     beta = ComplexF64(0.0, 0.0)
     ccall(
-        (:zgemm_, _WANNIER90_REFERENCE_LP64_LAPACK),
+        (:zgemm_, _RECURSIVE_LOCALIZATION_LP64_LAPACK),
         Cvoid,
         (
             Ref{UInt8},
@@ -793,7 +751,7 @@ function _wannier90_reference_zgemm(
 end
 
 """Execute an LP64 ZGEMM with explicit logical dimensions and physical LDs."""
-function _wannier90_reference_zgemm_storage!(
+function _recursive_localization_zgemm_storage!(
     result::Matrix{ComplexF64},
     left::Matrix{ComplexF64},
     trans_left::Char,
@@ -820,7 +778,7 @@ function _wannier90_reference_zgemm_storage!(
 
     fill!(result, 0.0 + 0.0im)
     (logical_m == 0 || logical_n == 0) && return result
-    if _WANNIER90_REFERENCE_LP64_LAPACK === nothing
+    if _RECURSIVE_LOCALIZATION_LP64_LAPACK === nothing
         left_view = @view left[1:left_rows, 1:left_columns]
         right_view = @view right[1:right_rows, 1:right_columns]
         op_left = trans_left == 'N' ? left_view : adjoint(left_view)
@@ -840,7 +798,7 @@ function _wannier90_reference_zgemm_storage!(
     alpha = ComplexF64(1.0, 0.0)
     beta = ComplexF64(0.0, 0.0)
     ccall(
-        (:zgemm_, _WANNIER90_REFERENCE_LP64_LAPACK),
+        (:zgemm_, _RECURSIVE_LOCALIZATION_LP64_LAPACK),
         Cvoid,
         (
             Ref{UInt8},
@@ -874,7 +832,7 @@ function _wannier90_reference_zgemm_storage!(
     return result
 end
 
-"""Form Wannier90's logical-window `C_AA = U_opt^H A` product.
+"""Form Wannier's logical-window `C_AA = U_opt^H A` product.
 
 `internal_find_u` compacts the active outer-window rows at the top of arrays
 whose physical leading dimension remains `num_bands`, then calls LP64 ZGEMM
@@ -884,7 +842,7 @@ blocking and the last bits of the Z-to-U initializer.  This helper preserves
 the registered 4.0.1 storage and arithmetic contract without importing any
 observer state.
 """
-function _wannier90_reference_logical_window_caa(
+function _recursive_localization_logical_window_caa(
     subspace_frame::AbstractMatrix{<:Complex},
     reference_frame::AbstractMatrix{<:Complex},
     outer_indices::AbstractVector{<:Integer},
@@ -905,7 +863,7 @@ function _wannier90_reference_logical_window_caa(
     left_storage[1:num_outer, :] .= @view subspace_frame[outer_indices, :]
     right_storage[1:num_outer, :] .= @view reference_frame[outer_indices, :]
     result = zeros(ComplexF64, num_wannier, num_wannier)
-    if _WANNIER90_REFERENCE_LP64_LAPACK === nothing
+    if _RECURSIVE_LOCALIZATION_LP64_LAPACK === nothing
         mul!(
             result,
             adjoint(@view(left_storage[1:num_outer, :])),
@@ -925,7 +883,7 @@ function _wannier90_reference_logical_window_caa(
     alpha = ComplexF64(1.0, 0.0)
     beta = ComplexF64(0.0, 0.0)
     ccall(
-        (:zgemm_, _WANNIER90_REFERENCE_LP64_LAPACK),
+        (:zgemm_, _RECURSIVE_LOCALIZATION_LP64_LAPACK),
         Cvoid,
         (
             Ref{UInt8},
@@ -959,17 +917,56 @@ function _wannier90_reference_logical_window_caa(
     return result
 end
 
-"""Wannier90-linked LP64 norm/dot reduction in flattened Fortran mesh order."""
-function _wannier90_reference_zdot(
+# Scratch belongs to one active solve, is overwritten before every reduction,
+# and never enters an accepted state or checkpoint.
+struct ReferenceDotWorkspace
+    left::Vector{ComplexF64}
+    right::Vector{ComplexF64}
+end
+# Create reusable empty complex buffers for the ordered reference-field dot product.
+ReferenceDotWorkspace() = ReferenceDotWorkspace(ComplexF64[], ComplexF64[])
+
+# Copy each reference matrix in its existing column-major order into the resized contiguous buffer.
+function _flatten_reference_field!(buffer::Vector{ComplexF64}, field, total::Int)
+    resize!(buffer, total)
+    offset = 0
+    for matrix in field
+        copyto!(buffer, offset + 1, vec(matrix), 1, length(matrix))
+        offset += length(matrix)
+    end
+    return buffer
+end
+
+"""Wannier-linked LP64 norm/dot reduction in flattened Fortran mesh order."""
+function _recursive_localization_zdot(
     left::Vector{Matrix{ComplexF64}},
     right::Vector{Matrix{ComplexF64}},
+    workspace::Union{Nothing, ReferenceDotWorkspace} = nothing,
 )
     length(left) == length(right) || throw(DimensionMismatch("tangent meshes disagree"))
-    left_flat = reduce(vcat, vec.(left); init = ComplexF64[])
-    right_flat = reduce(vcat, vec.(right); init = ComplexF64[])
+    # A private caller can supply aliased scratch; retain the allocating path
+    # instead of overwriting either source while flattening.
+    safe =
+        workspace !== nothing &&
+        !any(
+            matrix ->
+                Base.mightalias(matrix, workspace.left) || Base.mightalias(matrix, workspace.right),
+            Iterators.flatten((left, right)),
+        ) &&
+        !Base.mightalias(workspace.left, workspace.right)
+    if safe
+        left_size = sum(length, left; init = 0)
+        right_size = sum(length, right; init = 0)
+        left_size == right_size || throw(DimensionMismatch("tangent sizes disagree"))
+        left_flat = _flatten_reference_field!(workspace.left, left, left_size)
+        right_flat = _flatten_reference_field!(workspace.right, right, right_size)
+    else
+        left_flat = reduce(vcat, vec.(left); init = ComplexF64[])
+        right_flat = reduce(vcat, vec.(right); init = ComplexF64[])
+    end
     length(left_flat) == length(right_flat) || throw(DimensionMismatch("tangent sizes disagree"))
     isempty(left_flat) && return 0.0
-    if _WANNIER90_REFERENCE_LP64_LAPACK === nothing
+    if _RECURSIVE_LOCALIZATION_LP64_LAPACK === nothing
         return real(dot(left_flat, right_flat))
     end
     m = Cint(length(left_flat))
@@ -978,7 +975,7 @@ function _wannier90_reference_zdot(
     alpha = ComplexF64(1.0, 0.0)
     beta = ComplexF64(0.0, 0.0)
     ccall(
-        (:zgemv_, _WANNIER90_REFERENCE_LP64_LAPACK),
+        (:zgemv_, _RECURSIVE_LOCALIZATION_LP64_LAPACK),
         Cvoid,
         (
             Ref{UInt8},
@@ -1008,13 +1005,13 @@ function _wannier90_reference_zdot(
     return real(result[])
 end
 
-"""Select the exact Wannier90 SMV frozen-plus-leading Z eigenspace."""
-function _wannier90_reference_maximum_subspace_result(
+"""Select the exact Wannier SMV frozen-plus-leading Z eigenspace."""
+function _recursive_localization_maximum_subspace_result(
     z_matrix::Matrix{ComplexF64},
     outer_indices::Vector{Int},
     frozen_indices::Vector{Int},
     num_wannier::Int;
-    context::AbstractString = "wannier90_reference_maximum_subspace",
+    context::AbstractString = "recursive_localization_maximum_subspace",
     audit::Union{Nothing, HermitianSpectrumAudit} = nothing,
 )
     nb = size(z_matrix, 1)
@@ -1026,7 +1023,7 @@ function _wannier90_reference_maximum_subspace_result(
         code = :SUBSPACE_RANK_DEFICIENT,
         frame = nothing,
         gap = NaN,
-        backend = :wannier90_zhpevx,
+        backend = :packed_selected_eigensolve,
     )
     frozen_local = [outer_position[index] for index in frozen_indices]
     frozen_set = Set(frozen_local)
@@ -1037,16 +1034,16 @@ function _wannier90_reference_maximum_subspace_result(
         code = :SUBSPACE_RANK_DEFICIENT,
         frame = nothing,
         gap = NaN,
-        backend = :wannier90_zhpevx,
+        backend = :packed_selected_eigensolve,
     )
     local_z = @view z_matrix[outer_indices[free_local], outer_indices[free_local]]
-    eigensystem = _wannier90_reference_zhpevx(local_z; leading_dimension = nb)
+    eigensystem = _recursive_localization_zhpevx(local_z; leading_dimension = nb)
     eigensystem.success || return (
         success = false,
         code = eigensystem.code,
         frame = nothing,
         gap = NaN,
-        backend = :wannier90_zhpevx,
+        backend = :packed_selected_eigensolve,
     )
     selected = zeros(ComplexF64, length(outer_indices), num_wannier)
     column = 1
@@ -1064,14 +1061,14 @@ function _wannier90_reference_maximum_subspace_result(
         code = :SUBSPACE_RANK_DEFICIENT,
         frame = nothing,
         gap = NaN,
-        backend = :wannier90_zhpevx,
+        backend = :packed_selected_eigensolve,
     )
     all(isfinite, selected) || return (
         success = false,
         code = :NONFINITE_ORTHONORMALIZATION,
         frame = nothing,
         gap = NaN,
-        backend = :wannier90_zhpevx,
+        backend = :packed_selected_eigensolve,
     )
     output = zeros(ComplexF64, nb, num_wannier)
     output[outer_indices, :] .= selected
@@ -1092,15 +1089,15 @@ function _wannier90_reference_maximum_subspace_result(
         code = :OK,
         frame = output,
         gap,
-        backend = :wannier90_zhpevx,
-        selection_method = :wannier90_leading_eigenspace,
+        backend = :packed_selected_eigensolve,
+        selection_method = :leading_eigenspace,
         boundary_cluster_size = needed == 0 ? 0 : 1,
         reference_overlap_minimum_singular_value = NaN,
         reference_overlap_condition = NaN,
     )
 end
 
-"""Apply Wannier90 4.0.1's post-SMV Hamiltonian gauge.
+"""Apply Wannier 4.0.1's post-SMV Hamiltonian gauge.
 
 After the last disentanglement iteration, `dis_extract` diagonalizes the
 diagonal band Hamiltonian inside every selected subspace and replaces
@@ -1110,14 +1107,14 @@ floating-point SVD path at the Z-to-U boundary and eventually changes the FR
 step sequence.  It is therefore part of the reference state machine, not an
 optional localization gauge repair.
 """
-function _wannier90_reference_post_smv_hamiltonian_gauge(
+function _recursive_localization_post_smv_hamiltonian_gauge(
     frames::Vector{Matrix{ComplexF64}},
     energies_ev::AbstractMatrix{<:Real},
     outer_indices::Vector{Vector{Int}},
 )
     length(frames) == size(energies_ev, 2) == length(outer_indices) || return (
         success = false,
-        code = :WANNIER90_REFERENCE_POST_SMV_DIMENSION_MISMATCH,
+        code = :RECURSIVE_LOCALIZATION_POST_SMV_DIMENSION_MISMATCH,
         frames = deepcopy(frames),
         energies = Vector{Vector{Float64}}(),
         maximum_projector_drift = Inf,
@@ -1135,7 +1132,7 @@ function _wannier90_reference_post_smv_hamiltonian_gauge(
         num_bands, num_wannier = size(frame)
         size(energies_ev, 1) == num_bands && length(outer) >= num_wannier || return (
             success = false,
-            code = :WANNIER90_REFERENCE_POST_SMV_DIMENSION_MISMATCH,
+            code = :RECURSIVE_LOCALIZATION_POST_SMV_DIMENSION_MISMATCH,
             frames = output,
             energies = selected_energies[1:(kpoint - 1)],
             maximum_projector_drift,
@@ -1144,15 +1141,15 @@ function _wannier90_reference_post_smv_hamiltonian_gauge(
         )
         hamiltonian = zeros(ComplexF64, num_wannier, num_wannier)
         # Match the i,j,l scalar loops used to build CHAM.  Only the active
-        # outer-window rows participate in Wannier90's slim band frame.
+        # outer-window rows participate in Wannier's slim band frame.
         for column in 1:num_wannier, row in 1:num_wannier
-            hamiltonian[row, column] = _wannier90_reference_gfortran_weighted_conjugate_dot(
+            hamiltonian[row, column] = _recursive_localization_ordered_weighted_conjugate_dot(
                 @view(frame[outer, row]),
                 @view(frame[outer, column]),
                 @view(energies_ev[outer, kpoint]),
             )
         end
-        eigensystem = _wannier90_reference_zhpevx(hamiltonian; leading_dimension = num_bands)
+        eigensystem = _recursive_localization_zhpevx(hamiltonian; leading_dimension = num_bands)
         eigensystem.success || return (
             success = false,
             code = eigensystem.code,
@@ -1166,7 +1163,7 @@ function _wannier90_reference_post_smv_hamiltonian_gauge(
         # Match `ceamp(i,j) += cz(l,j)*u_matrix_opt(i,l)` exactly.  This is
         # intentionally not expressed as a generic matrix multiplication.
         for column in 1:num_wannier, band in outer, inner in 1:num_wannier
-            rotated[band, column] += _wannier90_reference_gfortran_complex_product(
+            rotated[band, column] += _recursive_localization_ordered_complex_product(
                 eigensystem.vectors[inner, column],
                 frame[band, inner],
             )

@@ -26,18 +26,7 @@ function spectral_response_geometry(
     issorted(energy) || throw(ArgumentError("Spectrum must be sorted"))
     all(isfinite, energy) || throw(ArgumentError("Nonfinite spectrum"))
     count = length(energy)
-    blocks = UnitRange{Int}[]
-    start = 1
-    exact = 32eps(Float64) * max(1.0, maximum(abs, energy))
-    for n in 2:count
-        gap = energy[n] - energy[n - 1]
-        if gap > exact
-            gap > gap_tolerance || error("SPECTRAL_CROSS_BLOCK_GAP_UNRESOLVED: gap=$gap eV")
-            push!(blocks, start:(n - 1))
-            start = n
-        end
-    end
-    push!(blocks, start:count)
+    blocks = spectral_subspace_blocks(energy; gap_tolerance)
     for a in 1:3
         maximum(abs, hamiltonian_derivatives[:, :, a]-hamiltonian_derivatives[:, :, a]')<=1e-8 ||
             error("SPECTRAL_HAMILTONIAN_DERIVATIVE_NOT_HERMITIAN")
@@ -51,12 +40,7 @@ function spectral_response_geometry(
     end
     # Only cross-block position entries are needed; block interiors stay in the
     # velocity vertex, including possible non-scalar velocities at a crossing.
-    for left in blocks, right in blocks
-        left == right && continue
-        for a in 1:3, m in right, n in left
-            physical_connection[n, m, a] = -im * vertex[n, m, a] / (energy[n]-energy[m])
-        end
-    end
+    solve_subspace_position!(physical_connection, energy, vertex, blocks; gap_tolerance)
     return SpectralResponseGeometry(
         energy,
         ComplexF64.(eigenvectors),
@@ -67,15 +51,27 @@ function spectral_response_geometry(
     )
 end
 
-"""Read unregularized first-order capabilities from the interpolation payload."""
+"""Borrow prepared regularized r_eta, complete V and curvature for one endpoint.
+
+This adapter does not solve another position equation or regularize physical
+transition denominators. Array aliases expire at the next workspace evaluation.
+The OM response builds its own finite-width tangent from complete V.
+The array-based expert constructor retains its independent exact spectral role.
+"""
 function spectral_response_geometry(data::KPointMatrixData; gap_tolerance = 1e-10)
-    return spectral_response_geometry(
+    _has_capability(data.computed_mask, BERRY_CONNECTION) ||
+        throw(ArgumentError("SPECTRAL_REGULARIZED_POSITION_NOT_COMPUTED"))
+    _has_capability(data.computed_mask, WANNIER_CURVATURE) ||
+        throw(ArgumentError("SPECTRAL_CURVATURE_NOT_COMPUTED"))
+    isfinite(data.position_regularization_ev) && data.position_regularization_ev > 0 ||
+        throw(ArgumentError("spectral position regularization must be finite and positive"))
+    return SpectralResponseGeometry(
         data.spectrum.energies,
         data.spectrum.eigenvectors,
-        data.hamiltonian.derivatives,
-        data.position.internal_connection,
-        data.position.hamiltonian_curvature;
-        gap_tolerance,
+        data.position.berry_connection,
+        physical_velocity_vertices(data),
+        data.position.hamiltonian_curvature,
+        spectral_subspace_blocks(data.spectrum.energies; gap_tolerance),
     )
 end
 
@@ -98,11 +94,7 @@ function projector_spectral_pair(geometry::SpectralResponseGeometry, left, right
         derivative=zeros(ComplexF64, length(geometry.energies), length(geometry.energies))
         for m in eachindex(geometry.energies), n in left
             m in left && continue
-            value=geometry.covariant_hamiltonian[
-                m,
-                n,
-                a,
-            ]/(geometry.energies[n]-geometry.energies[m])
+            value=-im * geometry.connection[m, n, a]
             derivative[m, n]=value
             derivative[n, m]=conj(value)
         end
@@ -145,3 +137,68 @@ function projector_block_curvature(geometry::SpectralResponseGeometry, block)
     p=u[:, block]*u[:, block]'
     return [real(tr(p*u*geometry.curvature[:, :, a, b]*u')) for a in 1:3, b in 1:3]
 end
+
+"""Metric scalar response geometry; its vectors are S-normalized, not Euclidean projectors.
+
+This wrapper prevents accidental use of the orthogonal C*C' projector helpers.
+Connection and velocity retain the same D_eta and physical-velocity contract.
+"""
+struct NonorthogonalSpectralResponseGeometry{G}
+    base::G
+    denominator_regularization_ev::Float64
+end
+"""Expose the scalar payload while preserving metric backend identity."""
+function Base.getproperty(geometry::NonorthogonalSpectralResponseGeometry, name::Symbol)
+    name in (:base, :denominator_regularization_ev) && return getfield(geometry, name)
+    return getproperty(getfield(geometry, :base), name)
+end
+"""Read planned metric geometry without recomputing or overwriting A_eta."""
+function spectral_response_geometry(
+    data::KPointMatrixData{H, P};
+    gap_tolerance = 1e-10,
+) where {H, P <: NonorthogonalPositionMatrixData}
+    isfinite(gap_tolerance) && gap_tolerance>=0 ||
+        throw(ArgumentError("Invalid spectral reporting tolerance"))
+    all(
+        x->x!==nothing,
+        (data.berry_connection, data.velocity_vertices, data.hamiltonian_curvature),
+    ) || throw(
+        ArgumentError(
+            "metric spectral geometry requires planned A_eta, physical velocity and ambient curvature",
+        ),
+    )
+    e=copy(data.spectrum.energies)
+    # Equal-energy intervals only; a small nonzero gap is not rejected or averaged.
+    blocks=spectral_subspace_blocks(e; gap_tolerance = 0.0)
+    base=SpectralResponseGeometry(
+        e,
+        copy(data.spectrum.eigenvectors),
+        copy(data.berry_connection),
+        copy(data.velocity_vertices),
+        copy(data.hamiltonian_curvature),
+        blocks,
+    )
+    all(x->all(isfinite, x), (base.connection, base.covariant_hamiltonian, base.curvature)) ||
+        throw(ArgumentError("nonfinite metric spectral geometry"))
+    # Recover eta from the inverse-gap channel is impossible at a zero gap.
+    # The planned parameter is attached to the position payload explicitly.
+    return NonorthogonalSpectralResponseGeometry(base, data.position.denominator_regularization_ev)
+end
+"""Contract the prepared metric band connection without constructing orbital projectors.
+
+The borrowed base already contains the S-normalized scalar-frame connection in Å.
+Use its existing ordered block-pair contraction unchanged: no extra S factor,
+Euclidean C*C' projector, energy averaging or denominator regularization is added.
+"""
+conventional_spectral_pair(geometry::NonorthogonalSpectralResponseGeometry, left, right) =
+    conventional_spectral_pair(geometry.base, left, right)
+
+"""Reject Euclidean projector pair contractions for metric-normalized vectors."""
+projector_spectral_pair(::NonorthogonalSpectralResponseGeometry, left, right) =
+    throw(ArgumentError("NONORTHOGONAL_PROJECTOR_RESPONSE_UNSUPPORTED"))
+"""Reject Euclidean projector velocity contractions for metric-normalized vectors."""
+projector_block_velocity(::NonorthogonalSpectralResponseGeometry, block) =
+    throw(ArgumentError("NONORTHOGONAL_PROJECTOR_RESPONSE_UNSUPPORTED"))
+"""Reject Euclidean projector curvature contractions for metric-normalized vectors."""
+projector_block_curvature(::NonorthogonalSpectralResponseGeometry, block) =
+    throw(ArgumentError("NONORTHOGONAL_PROJECTOR_RESPONSE_UNSUPPORTED"))

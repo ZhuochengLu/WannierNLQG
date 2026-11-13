@@ -149,7 +149,9 @@ end
     block_bytes = sum(MF_MATRIX._mixed_entry_bytes(grid, model, plan, group) for group in groups)
     limit = 2 * block_bytes
     workspace = MF_MATRIX.prepare_real_space!(MF_MATRIX.MatrixElementWorkspace(model, plan), model)
+    @test !MF_MATRIX.has_mixed_fourier_provider(workspace)
     MF_MATRIX.enable_mixed_fourier!(workspace, model, grid; memory_limit_bytes = limit)
+    @test MF_MATRIX.has_mixed_fourier_provider(workspace)
     points = ([0.0, 0.0, 0.0], [0.125, 0.0, 0.0], [0.0, 0.125, 0.0])
     try
         for point in (points[1], points[2])
@@ -160,12 +162,20 @@ end
         @test first_pass.fft_calls == 2 * length(groups)
         @test first_pass.cache_hits == 0
         @test first_pass.allocated_bytes == limit
+        @test first_pass.current_allocated_bytes == limit
+        @test first_pass.peak_allocated_bytes == first_pass.allocated_bytes
+        @test first_pass.buffer_allocations == 2 * length(groups)
+        @test first_pass.plan_builds == first_pass.buffer_allocations
+        @test first_pass.repack_seconds >= first_pass.pack_seconds
 
         MF_MATRIX.begin_mixed_kpoint!(workspace, points[1])
         MF_MATRIX.compute_kpoint!(workspace, model, points[1])
         repeated = MF_MATRIX.mixed_fourier_stats(workspace)
         @test repeated.fft_calls == first_pass.fft_calls
         @test repeated.cache_hits == length(groups)
+        @test repeated.plan_builds == first_pass.plan_builds
+        @test repeated.buffer_allocations == first_pass.buffer_allocations
+        @test repeated.repack_seconds == first_pass.repack_seconds
 
         MF_MATRIX.begin_mixed_kpoint!(workspace, points[3])
         MF_MATRIX.compute_kpoint!(workspace, model, points[3])
@@ -174,6 +184,10 @@ end
         @test evicted.fft_calls == 3 * length(groups)
         @test evicted.allocated_bytes <= limit
         @test evicted.cache_entries == 2 * length(groups)
+        @test evicted.current_allocated_bytes == limit
+        @test evicted.plan_builds == first_pass.plan_builds
+        @test evicted.buffer_allocations == first_pass.buffer_allocations
+        @test evicted.repack_seconds > first_pass.repack_seconds
 
         MF_MATRIX.begin_mixed_kpoint!(workspace, points[2])
         MF_MATRIX.compute_kpoint!(workspace, model, points[2])
@@ -183,6 +197,7 @@ end
     finally
         MF_MATRIX.disable_mixed_fourier!(workspace)
     end
+    @test !MF_MATRIX.has_mixed_fourier_provider(workspace)
 
     offset_workspace =
         MF_MATRIX.prepare_real_space!(MF_MATRIX.MatrixElementWorkspace(model, plan), model)

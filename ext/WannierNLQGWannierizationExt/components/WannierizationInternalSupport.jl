@@ -6,6 +6,7 @@ import HDF5
 import LinearAlgebra: dot
 import SHA
 import WannierNLQG
+import WannierNLQG.IO
 import WannierNLQG.SymmetryFoundation
 import WannierNLQG.Wannierization:
     AbstractBandSewingBackend,
@@ -39,7 +40,7 @@ import WannierNLQG.Wannierization:
     REPRESENTATION_VALIDATION_UNDETERMINED,
     RepresentationCompatibilityReport,
     RepresentationProductTable,
-    ExternalWannier90Matrices,
+    ExternalOverlapProjectionMatrices,
     FixedGapPAWBlockPartition,
     FarBandCovarianceCorrection,
     FrozenTargetComplementCompletion,
@@ -58,7 +59,7 @@ import WannierNLQG.Wannierization:
     PAWSCDMInputArtifact,
     PAWSCDMInitialization,
     ProjectionCandidateSpec,
-    ProjectionRepresentationCompatibilityInfo,
+    ProjectionRepresentationAlgorithmInfo,
     ProjectionRepresentationEmbeddingCertificate,
     ProjectionRepresentationProblem,
     ProjectionRepresentationSearchConfig,
@@ -82,7 +83,7 @@ import WannierNLQG.Wannierization:
     QEPAWMatrixElementResult,
     QEPAWParityThresholds,
     QEPAWSPNResult,
-    SymmetryAdaptedWannierizationConfig,
+    WannierizationConfig,
     WannierizationInputConfig,
     WannierizationSolverConfig,
     WannierizationCheckpointConfig,
@@ -133,8 +134,8 @@ import WannierNLQG.Wannierization:
     WannierUIUParityMetrics,
     WannierHamiltonianOperatorGenerationConfig,
     WannierHamiltonianOperatorGenerationResult,
-    ExactWannierOperatorBundleConfig,
-    ExactWannierOperatorBundleResult,
+    FullUIUDerivativeOperatorBundleConfig,
+    FullUIUDerivativeOperatorBundleResult,
     SMVFletcherReevesTwoStageAuditThresholds,
     SMV_FLETCHER_REEVES_TWO_STAGE_AUDIT_SCHEMA,
     SMV_FLETCHER_REEVES_TWO_STAGE_AUDIT_SCHEMA_VERSION,
@@ -148,7 +149,7 @@ import WannierNLQG.Wannierization:
     _wavefunction_gauge_backend_key,
     _tb_symmetry_not_run,
     _empty_group_law_worst_cases,
-    _projection_basis_sha256,
+    _projection_basis_definition,
     _replace_wannierization_config,
     _eligibility_list_decode
 export AbstractBandSewingBackend,
@@ -182,7 +183,7 @@ export AbstractBandSewingBackend,
     REPRESENTATION_VALIDATION_UNDETERMINED,
     RepresentationCompatibilityReport,
     RepresentationProductTable,
-    ExternalWannier90Matrices,
+    ExternalOverlapProjectionMatrices,
     FixedGapPAWBlockPartition,
     FarBandCovarianceCorrection,
     FrozenTargetComplementCompletion,
@@ -201,7 +202,7 @@ export AbstractBandSewingBackend,
     PAWSCDMInputArtifact,
     PAWSCDMInitialization,
     ProjectionCandidateSpec,
-    ProjectionRepresentationCompatibilityInfo,
+    ProjectionRepresentationAlgorithmInfo,
     ProjectionRepresentationEmbeddingCertificate,
     ProjectionRepresentationProblem,
     ProjectionRepresentationSearchConfig,
@@ -225,7 +226,7 @@ export AbstractBandSewingBackend,
     QEPAWMatrixElementResult,
     QEPAWParityThresholds,
     QEPAWSPNResult,
-    SymmetryAdaptedWannierizationConfig,
+    WannierizationConfig,
     WannierizationInputConfig,
     WannierizationSolverConfig,
     WannierizationCheckpointConfig,
@@ -276,8 +277,8 @@ export AbstractBandSewingBackend,
     WannierUIUParityMetrics,
     WannierHamiltonianOperatorGenerationConfig,
     WannierHamiltonianOperatorGenerationResult,
-    ExactWannierOperatorBundleConfig,
-    ExactWannierOperatorBundleResult,
+    FullUIUDerivativeOperatorBundleConfig,
+    FullUIUDerivativeOperatorBundleResult,
     SMVFletcherReevesTwoStageAuditThresholds,
     SMV_FLETCHER_REEVES_TWO_STAGE_AUDIT_SCHEMA,
     SMV_FLETCHER_REEVES_TWO_STAGE_AUDIT_SCHEMA_VERSION,
@@ -298,14 +299,13 @@ import WannierNLQG.SymmetryFoundation:
     validate_canonical_antiunitary_channel,
     infer_mp_grid,
     is_identity_group_representation,
-    qualification_mask_sha256,
+    qualification_mask_definition,
     plane_wave_energy_ev,
     read_band_representation_preparation_hdf5,
     read_vasp_wavecar_header,
     read_vasp_wavefunctions,
     row_major_matrix,
     selected_band_range,
-    sha256_file,
     spin_action_matrix,
     validate_authoritative_hamiltonian_key
 export BOHR_TO_ANGSTROM,
@@ -319,7 +319,7 @@ export BOHR_TO_ANGSTROM,
     validate_canonical_antiunitary_channel,
     infer_mp_grid,
     is_identity_group_representation,
-    qualification_mask_sha256,
+    qualification_mask_definition,
     plane_wave_energy_ev,
     read_band_representation_preparation_hdf5,
     read_vasp_wavecar_header,
@@ -329,6 +329,13 @@ export BOHR_TO_ANGSTROM,
     sha256_file,
     spin_action_matrix,
     validate_authoritative_hamiltonian_key
+# Retain an explicit legacy error at the WN expert boundary; shared IO hashing
+# remains available to unrelated consumers with their original contracts.
+sha256_file(arguments...; keywords...) = throw(
+    ArgumentError(
+        "CONTENT_HASH_AUTHENTICATION_REMOVED: Wannierization uses actual input definitions",
+    ),
+)
 include("../support/HDF5Operations.jl")
 include("../support/SupportLinearAlgebra.jl")
 include("../support/RepresentationHelpers.jl")
@@ -351,7 +358,7 @@ const paw_block_partition_policy_key = _paw_block_partition_policy_key
 const wavefunction_gauge_backend_key = _wavefunction_gauge_backend_key
 const tb_symmetry_not_run = _tb_symmetry_not_run
 const empty_group_law_worst_cases = _empty_group_law_worst_cases
-const projection_basis_sha256 = _projection_basis_sha256
+const projection_basis_definition = _projection_basis_definition
 const replace_wannierization_config = _replace_wannierization_config
 
 const WANNIERIZATION_INTERNAL_SUPPORT_INTEGRATION_API = (
@@ -362,8 +369,11 @@ const WANNIERIZATION_INTERNAL_SUPPORT_INTEGRATION_API = (
     :SAWF_COMPLETED_NATIVE_DFT_BAND_GAUGE,
     :SYMMETRIZED_DFT_BAND_GAUGE,
     :atomic_hdf5_write,
+    :write_scientific_input_reference_hdf5,
+    :read_scientific_input_reference_hdf5,
     :band_frame_contract_metadata,
-    :band_frame_contract_sha256,
+    :band_frame_contract_definition,
+    :band_frame_transform_definition,
     :band_frame_contract_summary,
     :write_string_dictionary,
     :read_string_dictionary,
@@ -386,7 +396,7 @@ const WANNIERIZATION_INTERNAL_SUPPORT_INTEGRATION_API = (
     :wavefunction_gauge_backend_key,
     :tb_symmetry_not_run,
     :empty_group_law_worst_cases,
-    :projection_basis_sha256,
+    :projection_basis_definition,
     :replace_wannierization_config,
     :sha256_file,
     :write_band_frame_contract_attributes!,
@@ -408,7 +418,8 @@ export BAND_FRAME_TRANSFORM_CONTRACT_SCHEMA,
     SYMMETRIZED_DFT_BAND_GAUGE,
     atomic_hdf5_write,
     band_frame_contract_metadata,
-    band_frame_contract_sha256,
+    band_frame_contract_definition,
+    band_frame_transform_definition,
     band_frame_contract_summary,
     write_string_dictionary,
     read_string_dictionary,
@@ -431,7 +442,7 @@ export BAND_FRAME_TRANSFORM_CONTRACT_SCHEMA,
     wavefunction_gauge_backend_key,
     tb_symmetry_not_run,
     empty_group_law_worst_cases,
-    projection_basis_sha256,
+    projection_basis_definition,
     replace_wannierization_config,
     write_band_frame_contract_attributes!
 

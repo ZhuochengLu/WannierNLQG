@@ -327,7 +327,7 @@ def _kslice_parser(subparsers: Any) -> None:
     parser.add_argument("--panel-manifest")
     parser.add_argument("--part", choices=("real", "imag", "abs", "phase"))
     parser.add_argument("--coordinate", choices=("fractional", "centered", "cartesian"))
-    parser.add_argument("--model-file")
+    parser.add_argument("--model-file", help="Historical relocation belongs to migrate_kslice_metadata.py; captured Geometry rejects model overrides")
     parser.add_argument("--projection", choices=("intrinsic-plane", "kx-ky", "kx-kz", "ky-kz", "explicit"))
     parser.add_argument("--periodic-centered", action="store_true", default=None)
     parser.add_argument("--norm", choices=("linear", "diverging", "positive-log", "signed-log", "phase", "auto"))

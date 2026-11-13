@@ -9,10 +9,10 @@ The checked files are:
 
 - `inputs/synthetic.win`: authoritative lattice, atom, projection, spinor, and
   `mp_grid` metadata;
-- `inputs/synthetic_tb.dat`: Wannier90-compatible Hamiltonian/position model;
+- `inputs/synthetic_tb.dat`: Wannier-compatible Hamiltonian/position model;
 - `inputs/synthetic.chk`: little-endian Fortran-unformatted checkpoint subset
   consumed by WannierNLQG;
-- `inputs/synthetic.eig`: Wannier90 eigenvalue table;
+- `inputs/synthetic.eig`: Wannier eigenvalue table;
 - `inputs/synthetic.mmn`: formatted neighbor-overlap table;
 - `inputs/synthetic.spn`: little-endian Fortran-unformatted spin matrix.
 

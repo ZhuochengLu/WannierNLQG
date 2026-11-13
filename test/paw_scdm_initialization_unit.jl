@@ -12,7 +12,8 @@ function copied_paw_scdm_artifact(
     mp_grid = artifact.mp_grid,
     spinor = artifact.spinor,
     authoritative_hamiltonian = artifact.authoritative_hamiltonian,
-    authoritative_hamiltonian_sha256 = artifact.authoritative_hamiltonian_sha256,
+    authoritative_hamiltonian_definition = artifact.authoritative_hamiltonian_definition,
+    source_identity = artifact.source_identity,
 )
     return PAW_SCDM_W.PAWSCDMInputArtifact(
         artifact.schema_version,
@@ -29,13 +30,13 @@ function copied_paw_scdm_artifact(
         kpoints_fractional,
         mp_grid,
         spinor,
-        artifact.source_gauge_sha256,
-        artifact.strict_representation_sha256,
+        artifact.source_gauge_reference,
+        artifact.strict_representation_reference,
         authoritative_hamiltonian,
-        authoritative_hamiltonian_sha256,
-        artifact.metric_sha256,
-        artifact.source_identity,
-        artifact.payload_sha256,
+        authoritative_hamiltonian_definition,
+        artifact.gauge_frame_definition,
+        source_identity,
+        artifact.content_authentication,
     )
 end
 
@@ -121,12 +122,7 @@ end
         source_metadata = Dict{String, String}(),
     )
     cutoff_error = try
-        Base.invokelatest(
-            extension._paw_scdm_source_identity,
-            incomplete_payload,
-            repeat("a", 64),
-            repeat("b", 64),
-        )
+        Base.invokelatest(extension._paw_scdm_source_identity, incomplete_payload)
         nothing
     catch exception
         exception
@@ -159,12 +155,7 @@ end
         source_metadata = Dict{String, String}(),
     )
     projector_error = try
-        Base.invokelatest(
-            extension._paw_scdm_source_identity,
-            empty_payload,
-            repeat("a", 64),
-            repeat("b", 64),
-        )
+        Base.invokelatest(extension._paw_scdm_source_identity, empty_payload)
         nothing
     catch exception
         exception
@@ -189,12 +180,7 @@ end
     )
     malformed_q_payload = merge(empty_payload, (metric = malformed_q_metric,))
     q_error = try
-        Base.invokelatest(
-            extension._paw_scdm_source_identity,
-            malformed_q_payload,
-            repeat("a", 64),
-            repeat("b", 64),
-        )
+        Base.invokelatest(extension._paw_scdm_source_identity, malformed_q_payload)
         nothing
     catch exception
         exception
@@ -220,40 +206,26 @@ end
     conditions = ones(2)
     residuals = zeros(2)
     kpoints = [0.0 0.0 0.0; 0.5 0.0 0.0]
+    authority_definition = Base.invokelatest(
+        extension._star_authoritative_hamiltonian_definition,
+        PAW_SCDM_W.NativeDFTHamiltonian(),
+    )
+    # This is an algebra/codec fixture, not a source-qualified PAW producer.
     source_identity = Dict(
-        "metric_kind" => "paw",
-        "metric_sha256" => repeat("d", 64),
-        "source_gauge_sha256" => repeat("a", 64),
-        "strict_representation_sha256" => repeat("b", 64),
-        "authoritative_hamiltonian" => "native_dft",
-        "authoritative_hamiltonian_sha256" => "LEGACY_NATIVE_DFT",
-        "augmentation_source" => "parsed_upf_or_potcar_q0_not_mmn_amn",
+        "fixture_scope" => "synthetic_algebra_codec",
         "sampling_contract" => "pseudo_coordinate_columns_after_paw_s_lowdin_whitening",
+        "authoritative_hamiltonian" => "native_dft",
+        "authoritative_hamiltonian_definition" => authority_definition,
     )
-    digest = Base.invokelatest(
-        extension._paw_scdm_payload_sha256,
-        frames,
-        projectors_field,
-        selected,
-        (1, 1, 1),
-        singular_values,
-        ranks,
-        conditions,
-        residuals,
-        residuals,
-        residuals,
-        kpoints,
-        (2, 1, 1),
-        false,
-        repeat("a", 64),
-        repeat("b", 64),
-        "native_dft",
-        "LEGACY_NATIVE_DFT",
-        repeat("d", 64),
-        source_identity,
-    )
+    source_gauge_reference = WannierNLQG.IO.scientific_input_definition_bytes() do stream
+        WannierNLQG.IO.write_native_definition_value(stream, (frames, projectors_field, kpoints))
+    end
+    representation_reference = WannierNLQG.IO.scientific_input_definition_bytes() do stream
+        WannierNLQG.IO.write_native_definition_value(stream, (kpoints, (2, 1, 1), false))
+    end
+    gauge_frame = Base.invokelatest(extension._identity_band_frame_contract, 2, 2)
     artifact = PAW_SCDM_W.PAWSCDMInputArtifact(
-        "1.0",
+        "2.0",
         frames,
         projectors_field,
         selected,
@@ -267,25 +239,25 @@ end
         kpoints,
         (2, 1, 1),
         false,
-        repeat("a", 64),
-        repeat("b", 64),
+        source_gauge_reference,
+        representation_reference,
         "native_dft",
-        "LEGACY_NATIVE_DFT",
-        repeat("d", 64),
+        authority_definition,
+        gauge_frame.contract_definition,
         source_identity,
-        digest,
+        "NOT_PERFORMED",
     )
     mktempdir() do directory
         filename = joinpath(directory, "paw-scdm.h5")
         Base.invokelatest(extension._paw_scdm_write, filename, artifact)
         restored = PAW_SCDM_W.read_paw_scdm_input_artifact(filename)
-        @test restored.payload_sha256 == artifact.payload_sha256
+        @test restored.content_authentication == artifact.content_authentication
         @test restored.frames == artifact.frames
         @test restored.projectors == artifact.projectors
 
         HDF5.h5open(filename, "r+") do handle
             values = read(handle["frames"])
-            values[1] += 1.0e-3
+            values[1] = ComplexF64(NaN)
             write(handle["frames"], values)
         end
         error_value = try
@@ -295,10 +267,13 @@ end
             exception
         end
         @test error_value isa ArgumentError
-        @test occursin("payload digest differs", sprint(showerror, error_value))
+        @test occursin("nonfinite SCDM payload", sprint(showerror, error_value))
     end
 
     fixture = synthetic_wannierization_fixture()
+    # This local algebra fixture declares its actual selected authority, not a digest.
+    fixture.representation.conventions["authoritative_hamiltonian"] = "native_dft"
+    fixture.representation.conventions["authoritative_hamiltonian_sha256"] = authority_definition
     config = modified_wannierization_config(
         fixture.config;
         initialization_backend = PAW_SCDM_W.PAWSCDMInitialization(),
@@ -321,7 +296,6 @@ end
     ordinary_config = modified_wannierization_config(
         config;
         wannierization_mode = :ordinary,
-        algorithm_profile = :custom,
         band_representation = nothing,
         sewing_backend = PAW_SCDM_W.AugmentationAwareSewing(),
         wavefunction_gauge_backend = PAW_SCDM_W.NativeEigenstateGauge(),
@@ -340,6 +314,52 @@ end
     @test ordinary_result.input_summary["paw_scdm_authority_usage"] == "input_provenance_only"
     @test ordinary_result.input_summary["covariance_qualification"] == "STANDARD"
     @test ordinary_result.input_summary["symmetry_constraints_applied"] == "false"
+
+    for definition_key in ("AUTHORITATIVE_HAMILTONIAN_SHA256", "authoritative_hamiltonian_sha256")
+        @test Base.invokelatest(
+            extension._paw_scdm_authority_definition,
+            Dict(definition_key => authority_definition),
+            definition_key,
+        ) == authority_definition
+        for values in
+            (Dict{String, String}(), Dict(definition_key => ""), Dict(definition_key => "MISSING"))
+            @test_throws ArgumentError Base.invokelatest(
+                extension._paw_scdm_authority_definition,
+                values,
+                definition_key,
+            )
+        end
+    end
+    different_definition = Base.invokelatest(
+        extension._star_authoritative_hamiltonian_definition,
+        PAW_SCDM_W.SymmetrizedDFTHamiltonian(),
+    )
+    for variant in (:missing, :empty, :sentinel, :different, :old_key_only)
+        changed_identity = copy(artifact.source_identity)
+        if variant in (:missing, :old_key_only)
+            delete!(changed_identity, "authoritative_hamiltonian_definition")
+            variant == :old_key_only &&
+                (changed_identity["authoritative_hamiltonian_sha256"] = authority_definition)
+        else
+            changed_identity["authoritative_hamiltonian_definition"] =
+                variant == :empty ? "" : variant == :sentinel ? "MISSING" : different_definition
+        end
+        rejected = PAW_SCDM_W._solve_symmetry_adapted_wannierization(
+            ordinary_config,
+            fixture.representation,
+            fixture.eig,
+            fixture.mmn,
+            fixture.plan;
+            paw_scdm_input = copied_paw_scdm_artifact(artifact; source_identity = changed_identity),
+        )
+        @test rejected.status == PAW_SCDM_W.INVALID_INPUT
+        @test any(
+            diagnostic ->
+                diagnostic.code == :SCDM_INPUT_PRECONDITION &&
+                occursin("source authority definition provenance differs", diagnostic.message),
+            rejected.diagnostics,
+        )
+    end
 
     bad_spinor = copied_paw_scdm_artifact(artifact; spinor = true)
     spinor_result = PAW_SCDM_W._solve_symmetry_adapted_wannierization(
@@ -369,7 +389,7 @@ end
     bad_authority = copied_paw_scdm_artifact(
         artifact;
         authoritative_hamiltonian = "symmetrized_dft_hamiltonian",
-        authoritative_hamiltonian_sha256 = repeat("f", 64),
+        authoritative_hamiltonian_definition = different_definition,
     )
     authority_result = PAW_SCDM_W._solve_symmetry_adapted_wannierization(
         config,
@@ -410,5 +430,66 @@ end
             joinpath(directory, "output.h5");
             num_wannier = 1,
         )
+    end
+end
+
+@testset "PAW-SCDM normalized FFT samples and band/spin scratch reuse" begin
+    PAW_SCDM_W._load_wannierization_extension!()
+    extension = Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).PAWMatrixElements
+    fft = extension.FFTW
+    g_vectors = [0 0 0; -1 0 0; 0 1 -1; 1 -2 1; 1 1 0]
+    lowdin = ComplexF64[1 0.1im 0; -0.1im 0.8 0.05; 0 0.05 1.2]
+    for spin_count in (1, 2), grid in ((3, 5, 3), (5, 5, 5))
+        coefficients = [
+            ComplexF64((band + 2grow + spin) / 23, (2band - grow + 3spin) / 29) for
+            band in 1:3, grow in 1:5, spin in 1:spin_count
+        ]
+        point = Base.invokelatest(
+            WannierNLQG.SymmetryFoundation.PlaneWaveKPoint,
+            zeros(3),
+            g_vectors,
+            coefficients,
+            [-1.0, 0.0, 1.0];
+            normalize_coefficients = false,
+        )
+        original_coefficients = copy(point.coefficients)
+        original_g_vectors = copy(point.g_vectors)
+        original_lowdin = copy(lowdin)
+        actual = Base.invokelatest(extension._paw_scdm_anchor_samples, point, lowdin, grid)
+        # Retain the old allocation/ifft algorithm as the exact regression oracle.
+        rotated = zeros(ComplexF64, size(coefficients))
+        for spin in 1:spin_count
+            rotated[:, :, spin] .= transpose(lowdin) * coefficients[:, :, spin]
+        end
+        old_samples = zeros(ComplexF64, 3, prod(grid) * spin_count)
+        dft_samples = similar(old_samples)
+        for spin in 1:spin_count, band in 1:3
+            old_buffer = zeros(ComplexF64, grid)
+            for grow in 1:5
+                index = ntuple(axis -> mod(g_vectors[grow, axis], grid[axis]) + 1, 3)
+                old_buffer[index...] = rotated[band, grow, spin]
+            end
+            values = Base.invokelatest(fft.ifft, old_buffer)
+            offset = (spin - 1) * prod(grid)
+            old_samples[band, (offset + 1):(offset + prod(grid))] .= vec(values)
+            # Independent positive-exponent, volume-normalized inverse DFT.
+            for (linear, index) in enumerate(CartesianIndices(grid))
+                value = zero(ComplexF64)
+                for grow in 1:5
+                    phase =
+                        sum(g_vectors[grow, axis] * (index[axis] - 1) / grid[axis] for axis in 1:3)
+                    value += rotated[band, grow, spin] * cis(2pi * phase)
+                end
+                dft_samples[band, offset + linear] = value / prod(grid)
+            end
+        end
+        @test size(actual) == (3, prod(grid) * spin_count)
+        @test all(isfinite, actual)
+        @test !all(iszero, actual)
+        @test isequal(actual, old_samples)
+        @test actual ≈ dft_samples atol = 2e-14 rtol = 2e-14
+        @test isequal(point.coefficients, original_coefficients)
+        @test isequal(point.g_vectors, original_g_vectors)
+        @test isequal(lowdin, original_lowdin)
     end
 end

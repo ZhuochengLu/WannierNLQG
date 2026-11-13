@@ -42,7 +42,7 @@ function projector_test_bundle_geometry(model, operators)
         "final_wannier_centers_cartesian" => centers,
         "final_wannier_centers_fractional" => fractional,
         "center_alignment_lattice_shifts" => zeros(Int, size(centers)),
-        "replica_mapping_sha256" => repeat("0", 64),
+        "replica_mapping_reference" => repeat("0", 64),
     )
 end
 
@@ -100,9 +100,9 @@ function write_exact_projector_test_bundle(directory, model_file)
         model.r_degeneracies,
         operators;
         profile = :derivative,
-        paired_tb_sha256 = PRP_RUNTIME.checksum_file(model_file),
+        paired_tb_file = model_file,
         provenance = Dict(
-            "derivative_overlap_source" => "wannier90_uIu",
+            "derivative_overlap_source" => "neighbor_pair_overlap",
             "derivative_overlap_completeness" => "full_hilbert_space",
             "derivative_overlap_source_sha256" => repeat("a", 64),
             "derivative_overlap_algorithm_version" =>

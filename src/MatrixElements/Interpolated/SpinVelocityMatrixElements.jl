@@ -48,27 +48,36 @@ end
 # offset before forming integer coordinates.  Do not silently snap a distorted
 # or incomplete list: every component must share one offset and the resulting
 # modulo-mesh keys must cover the product mesh exactly once.
-function _spin_velocity_kpt_grid_int(chk::WannierCHK)
-    chk.num_kpts == prod(chk.mp_grid) ||
-        error("CHK k-point count $(chk.num_kpts) does not cover mp_grid $(chk.mp_grid).")
-    grid = Matrix{Int}(undef, chk.num_kpts, 3)
-    mp = collect(chk.mp_grid)
+_spin_velocity_kpt_grid_int(chk::WannierCHK) = _spin_velocity_kpt_grid_int(chk.kpt_red, chk.mp_grid)
+
+# Map a complete finite k-point mesh to integer grid coordinates without accepting missing or duplicate points.
+function _spin_velocity_kpt_grid_int(kpoints::Matrix{Float64}, mp_grid::NTuple{3, Int})
+    all(>(0), mp_grid) && size(kpoints, 2) == 3 && all(isfinite, kpoints) || throw(
+        ArgumentError(
+            "finite-difference mesh requires finite N x 3 points and positive dimensions",
+        ),
+    )
+    num_kpts = size(kpoints, 1)
+    num_kpts == prod(mp_grid) ||
+        error("CHK k-point count $(num_kpts) does not cover mp_grid $(mp_grid).")
+    grid = Matrix{Int}(undef, num_kpts, 3)
+    mp = collect(mp_grid)
     @inbounds for a in 1:3
-        scaled_origin = chk.kpt_red[1, a] * mp[a]
+        scaled_origin = kpoints[1, a] * mp[a]
         offset = mod(scaled_origin, 1.0)
         offset >= 1.0 - 1.0e-6 && (offset = 0.0)
-        for kpoint_index in 1:chk.num_kpts
-            scaled = chk.kpt_red[kpoint_index, a] * mp[a]
+        for kpoint_index in 1:num_kpts
+            scaled = kpoints[kpoint_index, a] * mp[a]
             value = round(Int, scaled - offset)
             abs(scaled - offset - value) <= 1e-6 || error(
                 "CHK k-point $(kpoint_index), component $(a) does not share a uniform " *
-                "MP offset on mp_grid $(chk.mp_grid).",
+                "MP offset on mp_grid $(mp_grid).",
             )
             grid[kpoint_index, a] = value
         end
     end
     keys = Set{NTuple{3, Int}}()
-    for kpoint_index in 1:chk.num_kpts
+    for kpoint_index in 1:num_kpts
         key = (
             mod(grid[kpoint_index, 1], mp[1]),
             mod(grid[kpoint_index, 2], mp[2]),
@@ -77,7 +86,7 @@ function _spin_velocity_kpt_grid_int(chk::WannierCHK)
         key in keys && error("Duplicate CHK k-point modulo mp_grid at key=$(key).")
         push!(keys, key)
     end
-    length(keys) == prod(mp) || error("CHK k-points do not cover mp_grid $(chk.mp_grid).")
+    length(keys) == prod(mp) || error("CHK k-points do not cover mp_grid $(mp_grid).")
     return grid
 end
 
@@ -196,10 +205,24 @@ function _spin_velocity_find_reciprocal_shifts_and_neighbors(
     chk::WannierCHK,
     displacement_grid::Matrix{Int},
 )
-    k_grid = _spin_velocity_kpt_grid_int(chk)
-    mp = collect(chk.mp_grid)
+    return _spin_velocity_find_reciprocal_shifts_and_neighbors(
+        chk.kpt_red,
+        chk.mp_grid,
+        displacement_grid,
+    )
+end
+
+# Resolve each integer-grid displacement to its periodic neighbor and reciprocal shift.
+function _spin_velocity_find_reciprocal_shifts_and_neighbors(
+    kpoints::Matrix{Float64},
+    mp_grid::NTuple{3, Int},
+    displacement_grid::Matrix{Int},
+)
+    k_grid = _spin_velocity_kpt_grid_int(kpoints, mp_grid)
+    num_kpts = size(kpoints, 1)
+    mp = collect(mp_grid)
     key_to_ik = Dict{NTuple{3, Int}, Int}()
-    for kpoint_index in 1:chk.num_kpts
+    for kpoint_index in 1:num_kpts
         key = (
             mod(k_grid[kpoint_index, 1], mp[1]),
             mod(k_grid[kpoint_index, 2], mp[2]),
@@ -209,9 +232,9 @@ function _spin_velocity_find_reciprocal_shifts_and_neighbors(
         key_to_ik[key] = kpoint_index
     end
     num_neighbors = size(displacement_grid, 1)
-    neighbors = Matrix{Int}(undef, num_neighbors, chk.num_kpts)
-    reciprocal_shifts = Array{Int, 3}(undef, 3, num_neighbors, chk.num_kpts)
-    for kpoint_index in 1:chk.num_kpts
+    neighbors = Matrix{Int}(undef, num_neighbors, num_kpts)
+    reciprocal_shifts = Array{Int, 3}(undef, 3, num_neighbors, num_kpts)
+    for kpoint_index in 1:num_kpts
         for ib in 1:num_neighbors
             target = k_grid[kpoint_index, :] .+ displacement_grid[ib, :]
             wrapped = (mod(target[1], mp[1]), mod(target[2], mp[2]), mod(target[3], mp[3]))
@@ -243,8 +266,41 @@ function build_finite_difference_stencil(
     stencil_completeness_tolerance::Float64 = 1e-5,
     search_supercell::Int = 2,
 )
+    return build_finite_difference_stencil(
+        chk.recip_lattice,
+        chk.mp_grid,
+        chk.kpt_red;
+        k_mesh_tolerance,
+        stencil_completeness_tolerance,
+        search_supercell,
+    )
+end
+
+"""Build the same stencil directly from actual ordered mesh points, without a CHK artifact.
+
+This is the shared topology mechanism for native matrix generation. It neither
+loads a wavefunction nor changes shell selection, weights or point ordering.
+"""
+function build_finite_difference_stencil(
+    reciprocal_lattice::Matrix{Float64},
+    mp_grid::NTuple{3, Int},
+    kpoints::Matrix{Float64};
+    k_mesh_tolerance::Float64 = 1e-7,
+    stencil_completeness_tolerance::Float64 = 1e-5,
+    search_supercell::Int = 2,
+)
+    size(reciprocal_lattice) == (3, 3) &&
+    all(isfinite, reciprocal_lattice) &&
+    abs(det(reciprocal_lattice)) > 0 ||
+        throw(ArgumentError("finite-difference reciprocal lattice must be finite and nonsingular"))
+    isfinite(k_mesh_tolerance) &&
+    k_mesh_tolerance > 0 &&
+    isfinite(stencil_completeness_tolerance) &&
+    stencil_completeness_tolerance > 0 &&
+    search_supercell > 0 || throw(ArgumentError("invalid finite-difference search controls"))
+    _spin_velocity_kpt_grid_int(kpoints, mp_grid)
     shells_grid, shells_cart =
-        _spin_velocity_shells(chk.recip_lattice, chk.mp_grid, k_mesh_tolerance, search_supercell)
+        _spin_velocity_shells(reciprocal_lattice, mp_grid, k_mesh_tolerance, search_supercell)
     selected_grid = Matrix{Int}[]
     selected_cart = Matrix{Float64}[]
     for ishell in 1:length(shells_grid)
@@ -263,9 +319,12 @@ function build_finite_difference_stencil(
             push!(selected_cart, shells_cart[ishell])
             continue
         else
-            neighbors, reciprocal_shifts =
-                _spin_velocity_find_reciprocal_shifts_and_neighbors(chk, result.displacement_grid)
-            reorder = zeros(Int, length(result.weights), chk.num_kpts)
+            neighbors, reciprocal_shifts = _spin_velocity_find_reciprocal_shifts_and_neighbors(
+                kpoints,
+                mp_grid,
+                result.displacement_grid,
+            )
+            reorder = zeros(Int, length(result.weights), size(kpoints, 1))
             return FiniteDifferenceStencil(
                 result.weights,
                 result.displacement_grid,
@@ -618,7 +677,7 @@ Preserve leading orbital/Cartesian axes and units, validate shapes, optionally a
 function spin_velocity_q_to_r_diagnostics(
     reciprocal_space_values::Array{ComplexF64, N},
     chk::WannierCHK,
-    model::TightBindingModel;
+    model::AbstractResponseModel;
     atol::Float64 = 1e-8,
     check_roundtrip::Bool = true,
     label::AbstractString = "input_matrix",
@@ -696,7 +755,7 @@ Cartesian axes and operator units pass through unchanged; the last dimension cha
 function spin_velocity_q_to_r(
     reciprocal_space_values::Array{ComplexF64, N},
     chk::WannierCHK,
-    model::TightBindingModel;
+    model::AbstractResponseModel;
     atol::Float64 = 1e-8,
     check_roundtrip::Bool = true,
     label::AbstractString = "input_matrix",
@@ -714,7 +773,7 @@ end
 # Store the established TB-block spin q-to-R policy used by public MatrixElements APIs.
 struct _TBSpinQToRTransform
     chk::WannierCHK
-    model::TightBindingModel
+    model::AbstractResponseModel
     atol::Float64
     check_roundtrip::Bool
 end
@@ -737,7 +796,7 @@ end
 
 # Construct all in-memory spin-family q arrays and dispatch each through one typed transform.
 function _compute_spin_velocity_real_space_with_transform(
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     spn::WannierSPN,
     chk::WannierCHK,
     eig::WannierEIG,
@@ -799,7 +858,7 @@ do not carry a local Wannier-center phase. Centered/WCC Convention I is not
 implemented by this API.
 """
 function compute_spin_velocity_real_space(
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     spn::WannierSPN,
     chk::WannierCHK,
     eig::WannierEIG,
@@ -826,7 +885,7 @@ end
 
 # Construct streaming spin-family q arrays and dispatch each through one typed transform.
 function _compute_spin_velocity_real_space_streaming_with_transform(
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     spn::WannierSPN,
     chk::WannierCHK,
     eig::WannierEIG,
@@ -891,7 +950,7 @@ end
 Compute spin velocity real space streaming.
 """
 function compute_spin_velocity_real_space_streaming(
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     spn::WannierSPN,
     chk::WannierCHK,
     eig::WannierEIG,
@@ -919,7 +978,7 @@ end
 function _fourier_operator!(
     output::Array{ComplexF64, N},
     real_space_values::AbstractArray{ComplexF64, M},
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     fourier_factors::Vector{ComplexF64},
     plan::MatrixElementPlan,
     kind::MatrixElementKind,
@@ -1028,19 +1087,24 @@ function _compute_spin_velocity_gauge!(workspace::MatrixElementWorkspace)
     data = workspace.data
     spin_velocity = data.spin_velocity
     energy_differences = data.hamiltonian.energy_differences
-    threshold = workspace.plan.degeneracy_threshold
+    eta = workspace.plan.denominator_regularization
+    isfinite(eta) && eta > 0 || throw(
+        ArgumentError(
+            "SPIN_CURRENT_REGULARIZATION_POSITIVE_REQUIRED: denominator_regularization must be finite and positive for SPIN_VELOCITY.",
+        ),
+    )
     @inbounds for orbital_row in axes(energy_differences, 1)
         for orbital_column in axes(energy_differences, 2)
             difference = energy_differences[orbital_row, orbital_column]
             spin_velocity.inverse_energy_differences[orbital_row, orbital_column] =
-                abs(difference) < threshold ? 0.0 : 1.0 / difference
+                regularized_energy_inverse(difference, eta)
         end
     end
     derivatives = data.hamiltonian.derivatives
     for direction in axes(derivatives, 3)
         _axis_required(workspace.plan, HAMILTONIAN_DERIVATIVES, direction) || continue
         @views spin_velocity.gauge_correction[:, :, direction] .=
-            -derivatives[:, :, direction] .* spin_velocity.inverse_energy_differences
+            data.position.gauge_correction[:, :, direction]
         @inbounds for band in axes(derivatives, 1)
             spin_velocity.energy_derivatives[band, direction] =
                 real(derivatives[band, band, direction])
@@ -1056,7 +1120,7 @@ Reuse prepared sources and scratch, preserve ordered velocity/spin axes and inpu
 """
 function compute_spin_velocity_capabilities!(
     workspace::MatrixElementWorkspace,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
 )
     plan = workspace.plan
     needs_component =
@@ -1280,7 +1344,33 @@ function compute_spin_velocity_capabilities!(
                                 velocity_direction,
                                 spin_direction,
                             ]
+                        # Complement the shared smooth D with w=eta^2/(Delta^2+eta^2).
+                        # Retain the real diagonal once; w=1 at exact degeneracy
+                        # restores the complete block Hamiltonian derivative.
+                        spin_projected_energy_derivative =
+                            spin_velocity.energy_derivatives[orbital_column, velocity_direction] *
+                            data.spin.hamiltonian_gauge[orbital_row, orbital_column, spin_direction]
                         for intermediate_band in 1:model.num_orbitals
+                            if intermediate_band != orbital_column
+                                spin_projected_energy_derivative +=
+                                    data.spin.hamiltonian_gauge[
+                                        orbital_row,
+                                        intermediate_band,
+                                        spin_direction,
+                                    ] *
+                                    data.hamiltonian.derivatives[
+                                        intermediate_band,
+                                        orbital_column,
+                                        velocity_direction,
+                                    ] *
+                                    regularized_energy_weight(
+                                        data.hamiltonian.energy_differences[
+                                            intermediate_band,
+                                            orbital_column,
+                                        ],
+                                        plan.denominator_regularization,
+                                    )
+                            end
                             connection_value +=
                                 data.spin.hamiltonian_gauge[
                                     orbital_row,
@@ -1320,12 +1410,8 @@ function compute_spin_velocity_capabilities!(
                             velocity_direction,
                             spin_direction,
                         ] =
-                            spin_velocity.energy_derivatives[orbital_column, velocity_direction] *
-                            data.spin.hamiltonian_gauge[
-                                orbital_row,
-                                orbital_column,
-                                spin_direction,
-                            ] + data.spectrum.energies[orbital_column] * connection_value -
+                            spin_projected_energy_derivative +
+                            data.spectrum.energies[orbital_column] * connection_value -
                             hamiltonian_connection_value
                     end
                 end

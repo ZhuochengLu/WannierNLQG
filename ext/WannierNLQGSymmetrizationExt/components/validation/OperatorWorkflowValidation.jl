@@ -130,7 +130,7 @@ end
 # Load exactly one explicitly selected magnetic-moment provider.
 function _configured_magnetic_moments(
     magnetic::Union{Nothing, MagneticMomentConfig},
-    input::WannierWinData,
+    input::Union{WannierWinData, CrystalStructure},
 )
     magnetic === nothing && return nothing
     axis =
@@ -154,6 +154,12 @@ function _configured_magnetic_moments(
         ArgumentError("explicit magnetic source contains only zero moments; omit magnetic instead"),
     )
     return moments
+end
+
+# Reuse the same validated physical provider for WIN-free owned structures.
+function _owned_projection_magnetic_moments(magnetic, structure::CrystalStructure)
+    _validate_magnetic_config(magnetic)
+    return _configured_magnetic_moments(magnetic, structure)
 end
 
 # Infer one complete operator profile from explicitly supplied auxiliary inputs.
@@ -216,8 +222,32 @@ function _validate_output_paths(config::SymmetrizationConfig, input_paths, outpu
 end
 
 # Validate the complete unified workflow before reading scientific input files.
-function _validate_symmetrization_config(config::SymmetrizationConfig)
+# Validate only immutable configuration choices; no input materialization or output mutation.
+function _validate_symmetrization_options(config::SymmetrizationConfig)
+    (config.tb_file === nothing) != (config.input_operator_bundle_file === nothing) ||
+        throw(ArgumentError("projection requires exactly one TB or Packed input"))
+    if config.input_operator_bundle_file !== nothing
+        all(isnothing, (config.chk_file, config.eig_file, config.mmn_file, config.spn_file)) ||
+            throw(
+                ArgumentError("Packed input cannot be combined with operator regeneration inputs"),
+            )
+    end
     families = _configured_operator_families(config)
+    if config.win_file === nothing
+        config.structure !== nothing &&
+        config.projection_basis !== nothing &&
+        config.mp_grid !== nothing || throw(
+            ArgumentError("WIN-free projection requires structure, projection basis and mp_grid"),
+        )
+        all(>(0), config.mp_grid) || throw(ArgumentError("mp_grid must be positive"))
+        config.magnetic === nothing ||
+            throw(ArgumentError("owned structure already contains magnetic moments"))
+    else
+        config.structure === nothing &&
+        config.projection_basis === nothing &&
+        config.mp_grid === nothing ||
+            throw(ArgumentError("legacy WIN and owned projection geometry cannot be mixed"))
+    end
     _positive_tolerance(config.symmetry_tolerance, "symmetry_tolerance")
     _positive_tolerance(config.projection_tolerance, "projection_tolerance")
     _positive_tolerance(config.representation_tolerance, "representation_tolerance")
@@ -237,17 +267,29 @@ function _validate_symmetrization_config(config::SymmetrizationConfig)
     _validate_configured_operation_indices(config.operation_indices)
     _validate_magnetic_config(config.magnetic)
 
-    win_path = _required_workflow_path(config.win_file, "win_file")
-    tb_path = _required_workflow_path(config.tb_file, "tb_file")
-    isfile(win_path) || throw(ArgumentError("win_file does not exist: $(win_path)"))
-    isfile(tb_path) || throw(ArgumentError("tb_file does not exist: $(tb_path)"))
+    return families
+end
+
+# Add the existing input/output availability guards after the shared immutable option checks.
+function _validate_symmetrization_config(config::SymmetrizationConfig)
+    families = _validate_symmetrization_options(config)
+    win_path = _optional_workflow_path(config.win_file, "win_file")
+    tb_path = _optional_workflow_path(config.tb_file, "tb_file")
+    packed_path =
+        _optional_workflow_path(config.input_operator_bundle_file, "input_operator_bundle_file")
+    win_path === nothing ||
+        isfile(win_path) ||
+        throw(ArgumentError("win_file does not exist: $(win_path)"))
+    tb_path === nothing ||
+        isfile(tb_path) ||
+        throw(ArgumentError("tb_file does not exist: $(tb_path)"))
     output_tb = _required_workflow_path(config.output_tb_file, "output_tb_file")
     bundle_path = _required_workflow_path(
         config.output_real_space_operator_bundle_file,
         "output_real_space_operator_bundle_file",
     )
     report = if config.report_json_file === nothing
-        joinpath(dirname(bundle_path), "wannier90_symmetrization.json")
+        joinpath(dirname(bundle_path), "wannier_symmetrization.json")
     else
         _required_workflow_path(config.report_json_file, "report_json_file")
     end
@@ -287,7 +329,10 @@ function _validate_symmetrization_config(config::SymmetrizationConfig)
     magnetic_input =
         config.magnetic === nothing ? nothing :
         _optional_workflow_path(config.magnetic.file, "magnetic.file")
-    input_paths = [win_path, tb_path]
+    input_paths = String[state.path for state in config.geometry_source_states]
+    tb_path === nothing || push!(input_paths, tb_path)
+    packed_path === nothing || push!(input_paths, packed_path)
+    win_path === nothing || push!(input_paths, win_path)
     chk_path === nothing || push!(input_paths, chk_path)
     eig_path === nothing || push!(input_paths, eig_path)
     mmn_path === nothing || push!(input_paths, mmn_path)
@@ -302,6 +347,7 @@ function _validate_symmetrization_config(config::SymmetrizationConfig)
         families = families,
         win = win_path,
         tb = tb_path,
+        packed = packed_path,
         chk = chk_path,
         eig = eig_path,
         mmn = mmn_path,
@@ -328,12 +374,58 @@ end
 
 # Build WIN, model, operations, basis, and representation once for one config.
 function _build_symmetrization_context(config::SymmetrizationConfig, paths)
-    input = read_wannier_win(paths.win)
-    input.mp_grid === nothing && throw(ArgumentError("WIN input must define mp_grid"))
-    model = read_wannier_tb(paths.tb)
-    _validate_tb_against_win(model, input; tolerance = config.projection_tolerance)
-    magnetic_moments = _configured_magnetic_moments(config.magnetic, input)
-    structure = crystal_structure(input; magnetic_moments_cartesian = magnetic_moments)
+    model = if paths.packed === nothing
+        read_wannier_tb(paths.tb)
+    else
+        packed = read_real_space_operator_bundle(paths.packed)
+        Set(packed.manifest.inventory) == Set((REAL_SPACE_HAMILTONIAN, REAL_SPACE_POSITION)) ||
+            throw(
+                ArgumentError(
+                    "Packed projection currently supports exactly H/r; other inventory is not projected or dropped",
+                ),
+            )
+        packed.manifest.mp_grid === nothing ||
+            config.mp_grid === nothing ||
+            packed.manifest.mp_grid == config.mp_grid ||
+            throw(ArgumentError("Packed generation grid differs from requested geometry"))
+        # Packed payloads use the same serialized-degeneracy convention as TB.
+        # Existing normalization and center handling therefore remain authoritative.
+        TightBindingModel(
+            packed.lattice,
+            packed.manifest.num_orbitals,
+            size(packed.manifest.r_vectors, 2),
+            packed.degeneracies,
+            packed.manifest.r_vectors,
+            packed.operators[REAL_SPACE_HAMILTONIAN].data,
+            packed.operators[REAL_SPACE_POSITION].data,
+        )
+    end
+    input, structure, basis = if paths.win === nothing
+        structure = something(config.structure)
+        basis = something(config.projection_basis)
+        model.num_orbitals == basis.num_wannier ||
+            throw(ArgumentError("TB orbital count differs from expanded basis"))
+        isapprox(model.lattice, structure.lattice; atol = config.projection_tolerance, rtol = 0) || throw(ArgumentError("TB lattice differs from owned structure"))
+        (
+            (
+                lattice = structure.lattice,
+                mp_grid = something(config.mp_grid),
+                source_path = nothing,
+            ),
+            structure,
+            basis,
+        )
+    else
+        legacy = read_wannier_win(paths.win)
+        legacy.mp_grid === nothing && throw(ArgumentError("WIN input must define mp_grid"))
+        _validate_tb_against_win(model, legacy; tolerance = config.projection_tolerance)
+        moments = _configured_magnetic_moments(config.magnetic, legacy)
+        (
+            legacy,
+            crystal_structure(legacy; magnetic_moments_cartesian = moments),
+            build_wannier_projection_basis(legacy; tolerance = config.projection_tolerance),
+        )
+    end
     operations = detect_tb_compatibility_symmetry_operations(
         structure;
         include_time_reversal = config.include_time_reversal,
@@ -344,7 +436,6 @@ function _build_symmetrization_context(config::SymmetrizationConfig, paths)
         length(operations);
         prevalidated = true,
     )
-    basis = build_wannier_projection_basis(input; tolerance = config.projection_tolerance)
     plan = build_wannier_symmetry_plan(
         basis,
         operations;

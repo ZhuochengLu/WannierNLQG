@@ -1,3 +1,6 @@
+isdefined(@__MODULE__, :SyntheticRuntimeFixture) ||
+    include(joinpath(@__DIR__, "support", "SyntheticRuntimeFixture.jl"))
+
 # Read only numerical rows; task identity and path metadata are deliberately separate.
 function task_instance_payload(result)
     return Dict(
@@ -19,7 +22,7 @@ function task_instance_config(
     return WannierNLQG.TaskConfig(
         model = WannierNLQG.ModelInput(
             model_file = joinpath(fixture, "synthetic_tb.dat"),
-            real_space_operator_bundle_file = joinpath(fixture, "synthetic_operators.h5"),
+            real_space_operator_bundle_file = SyntheticRuntimeFixture.operator_bundle_file(),
             real_space_replica_policy = "minimum_distance",
             wsvec_file = joinpath(fixture, "synthetic_wsvec.dat"),
             mp_grid = (2, 1, 1),
@@ -56,7 +59,7 @@ function task_instance_sc(
             fermi_energy = mu,
             temperature = temperature,
         ),
-        numerics = WannierNLQG.OpticalNumerics(
+        numerics = WannierNLQG.Numerics(
             broadening = width,
             denominator_regularization = eta,
             band_window_size = window,
@@ -93,7 +96,7 @@ end
         @test sum(stat.spectrum_hits for stat in together.sharing.worker_statistics) > 0
         @test isfile(together.metadata_path)
         @test all(isfile(result.metadata_path) for result in together.task_results)
-        @test together.qualification.qualification_status=="DIAGNOSTIC_ONLY"
+        @test together.qualification.qualification_status=="COMPUTATION_READY"
         @test !together.qualification.production_eligible
         @test all(result.qualification.execution_eligible for result in together.task_results)
         @test occursin("[Qualification]", read(together.metadata_path, String))
@@ -200,6 +203,13 @@ end
     joined = w.run(task_instance_config([a, b]; sampling))
     @test task_instance_payload(one) == task_instance_payload(joined.task_results[1])
     @test task_instance_payload(two) == task_instance_payload(joined.task_results[2])
+    # This setting limits Fourier caches only. Direct scalar geometry/current
+    # point scratch must not acquire a new cache-budget admission requirement.
+    withenv("WANNIERNLQG_MIXED_MEMORY_LIMIT_BYTES" => "1") do
+        uncached = w.run(task_instance_config([a, b]; sampling))
+        @test task_instance_payload(one) == task_instance_payload(uncached.task_results[1])
+        @test task_instance_payload(two) == task_instance_payload(uncached.task_results[2])
+    end
 end
 
 @testset "task-local stencils and finite momentum" begin
@@ -215,7 +225,7 @@ end
                     fermi_energy = 0.0,
                     temperature = 0.0,
                 ),
-                numerics = w.OpticalNumerics(
+                numerics = w.Numerics(
                     finite_difference_step = step,
                     degeneracy_threshold = step == 0.0001 ? 0.002 : 0.01,
                 ),
@@ -270,4 +280,42 @@ end
     @test components == [[1, 2], [3, 4]]
     @test [only(v)[2] for v in visits] == [1, 3, 2, 4]
     @test_throws ErrorException rt.sampling_components([task, task])
+end
+
+@testset "Shared scheduling collection preserves points, visits and rejection" begin
+    rt = WannierNLQG.Runtime
+    first_task = rt.PreparedResponseTask(
+        [(4, 40, 2), (1, 10, 1), (3, 30, 1)],
+        (worker, point, lane) -> nothing,
+        () -> nothing,
+        () -> nothing,
+    )
+    second_task = rt.PreparedResponseTask(
+        [(2, 20, 1), (3, 31, 2), (4, 41, 1)],
+        (worker, point, lane) -> 0,
+        () -> 0,
+        () -> 0,
+    )
+    # Production intentionally erases callback types in this shared task vector.
+    tasks = rt.PreparedResponseTask[first_task, second_task]
+    components, visits = rt.sampling_components(tasks)
+    @test components == [[1, 3], [2, 4]]
+    @test visits == [[(1, 10, 1)], [(2, 20, 1)], [(1, 30, 1), (2, 31, 2)], [(1, 40, 2), (2, 41, 1)]]
+    duplicate = rt.PreparedResponseTask(
+        [(1, 7, 1), (1, 8, 2)],
+        (args...) -> nothing,
+        () -> nothing,
+        () -> nothing,
+    )
+    @test rt.sampling_components(rt.PreparedResponseTask[duplicate]) ==
+          ([[1]], [[(1, 7, 1), (1, 8, 2)]])
+    empty_components, empty_visits = rt.sampling_components(rt.PreparedResponseTask[])
+    @test isempty(empty_components) && isempty(empty_visits)
+    reversed_lane = rt.PreparedResponseTask(
+        [(2, 2, 1), (1, 1, 1)],
+        (args...) -> nothing,
+        () -> nothing,
+        () -> nothing,
+    )
+    @test_throws ErrorException rt.sampling_components(rt.PreparedResponseTask[reversed_lane])
 end

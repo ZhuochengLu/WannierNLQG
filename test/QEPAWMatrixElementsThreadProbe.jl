@@ -1,5 +1,11 @@
 using WannierNLQG
 using SHA
+using HDF5, EzXML, Spglib, LinearAlgebra
+# Load extension before helper and top-level fixture callbacks are defined.
+const QE_THREAD_EXTENSION = first(WannierNLQG.Wannierization._load_wannierization_extension!())
+Threads.nthreads() == parse(Int, ENV["JULIA_NUM_THREADS"]) || error("QE thread count differs")
+BLAS.get_num_threads() == 1 || error("QE BLAS thread count differs")
+println("QE_THREAD_ACTUAL=", Threads.nthreads())
 
 include(joinpath(@__DIR__, "QEPAWMatrixElementsTestSupport.jl"))
 using .QEPAWMatrixElementsTestSupport
@@ -30,13 +36,29 @@ mktempdir() do directory
         )
         diagnostic.passed || error("$(lane.label) standard construction failed")
         oracle = copy_qe_paw_oracles(diagnostic, joinpath(lane_directory, "oracle"))
-        write_qe_paw_oracle_provenance(dirname(oracle.mmn), diagnostic.input_sha256)
+        write_qe_paw_oracle_provenance(dirname(oracle.mmn), diagnostic)
         qualified = W.generate_qe_paw_matrix_elements(
             source,
             fixture.nnkp_file;
             artifact_dir = joinpath(lane_directory, "qualified"),
             oracle_mmn_file = oracle.mmn,
             oracle_amn_file = oracle.amn,
+        )
+        println(
+            "QE_ORACLE lane=",
+            lane.label,
+            " mmn=",
+            qualified.mmn_parity,
+            " amn=",
+            qualified.amn_parity,
+            " angle=",
+            qualified.amn_max_principal_angle_rad,
+            " projector=",
+            qualified.amn_projector_max_absolute,
+            " norm=",
+            qualified.generalized_norm_max_absolute,
+            " diagnostics=",
+            repr(qualified.diagnostics),
         )
         qualified.passed || error("$(lane.label) oracle qualification failed")
         IO_API.read_wannier_mmn(qualified.artifacts["mmn"]).data == qualified.mmn.data ||

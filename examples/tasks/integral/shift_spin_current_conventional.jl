@@ -32,12 +32,11 @@ function build_config(;
                     fermi_energy = 0.0,
                     temperature = 0.0,
                 ),
-                numerics = OpticalNumerics(
+                numerics = Numerics(
                     broadening = 0.060,
                     broadening_type = "Gaussian",
                     transition_window_factor = 5.0,
                     denominator_regularization = 0.001,
-                    degeneracy_threshold = 0.002,
                     band_window_size = -1,
                 ),
                 observable = FullTensor(),

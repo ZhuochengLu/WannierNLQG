@@ -1,0 +1,1 @@
+One k-point, one scalar band native QE engineering fixtures for public PAW block-partition audit precompilation. These bytes come from the qualified fixed/weighted tiny public audit fixture builder; they are not converged QE physics or metal/DC oracles. The workload reads them without modifying them and creates automatically cleaned temporary output. See SHA256SUMS.

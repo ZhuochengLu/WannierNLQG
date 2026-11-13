@@ -6,6 +6,9 @@ struct KPathPlan
     kpoints::Matrix{Float64}
     cumulative_distances::Vector{Float64}
     node_indices::Vector{Int}
+    branches::Vector{UnitRange{Int}}
+    segment_nodes::Vector{Tuple{Int, Int}}
+    provenance::Dict{String, Any}
 end
 
 """Collected k-resolved values and diagnostics in deterministic global path order."""
@@ -18,38 +21,58 @@ end
 
 """Build an unfurled fractional path using the package row-lattice convention."""
 function make_kpath_plan(cfg::EffectiveTaskConfig, lattice::AbstractMatrix{<:Real})
+    if haskey(cfg.kpath_provenance, "input_lattice_angstrom")
+        declared = reduce(vcat, permutedims.(cfg.kpath_provenance["input_lattice_angstrom"]))
+        maximum(abs, declared - lattice) <= 1.0e-8 || throw(
+            ArgumentError(
+                "automatic path structure lattice disagrees with the actual model lattice; provide the structure in the model cell",
+            ),
+        )
+    end
     reciprocal = reciprocal_lattice(lattice)
     labels = first.(cfg.kpath_nodes)
     nodes = last.(cfg.kpath_nodes)
-    point_count = sum(cfg.kpoints_per_segment) - length(cfg.kpoints_per_segment) + 1
+    point_count =
+        sum(cfg.kpoints_per_segment) - length(cfg.kpoints_per_segment) + length(cfg.kpath_branches)
     kpoints = Matrix{Float64}(undef, point_count, 3)
     node_indices = Vector{Int}(undef, length(nodes))
+    distances = zeros(Float64, point_count)
+    branches = UnitRange{Int}[]
+    segment_nodes = Tuple{Int, Int}[]
     cursor = 0
-    for segment in eachindex(cfg.kpoints_per_segment)
-        start_node = nodes[segment]
-        stop_node = nodes[segment + 1]
-        count = cfg.kpoints_per_segment[segment]
-        node_indices[segment] = segment == 1 ? 1 : cursor
-        for local_index in 1:count
-            segment > 1 && local_index == 1 && continue
-            cursor += 1
-            fraction = (local_index - 1) / (count - 1)
-            for axis in 1:3
-                kpoints[cursor, axis] =
-                    (1.0 - fraction) * start_node[axis] + fraction * stop_node[axis]
+    segment = 0
+    for branch in cfg.kpath_branches
+        branch_start = cursor + 1
+        for node in first(branch):(last(branch) - 1)
+            segment += 1
+            push!(segment_nodes, (node, node + 1))
+            start_node, stop_node = nodes[node], nodes[node + 1]
+            count = cfg.kpoints_per_segment[segment]
+            node_indices[node] = node == first(branch) ? cursor + 1 : cursor
+            for local_index in 1:count
+                node > first(branch) && local_index == 1 && continue
+                cursor += 1
+                fraction = (local_index - 1) / (count - 1)
+                for axis in 1:3
+                    kpoints[cursor, axis] =
+                        (1.0 - fraction) * start_node[axis] + fraction * stop_node[axis]
+                end
+                if cursor > 1
+                    distances[cursor] = distances[cursor - 1]
+                    if cursor != branch_start
+                        delta = @view(kpoints[cursor, :]) .- @view(kpoints[cursor - 1, :])
+                        distances[cursor] += norm(delta' * reciprocal)
+                    end
+                end
             end
         end
+        node_indices[last(branch)] = cursor
+        push!(branches, branch_start:cursor)
     end
-    node_indices[end] = point_count
     cursor == point_count || error("internal KPath point-count mismatch")
     for node in eachindex(nodes)
         maximum(abs, @view(kpoints[node_indices[node], :]) .- collect(nodes[node])) <= 1.0e-14 ||
             error("normalized KPath is discontinuous at node $(node)")
-    end
-    distances = zeros(Float64, point_count)
-    for point in 2:point_count
-        delta = @view(kpoints[point, :]) .- @view(kpoints[point - 1, :])
-        distances[point] = distances[point - 1] + norm(delta' * reciprocal)
     end
     all(isfinite, distances) || error("KPath distances are non-finite")
     return KPathPlan(
@@ -59,6 +82,9 @@ function make_kpath_plan(cfg::EffectiveTaskConfig, lattice::AbstractMatrix{<:Rea
         kpoints,
         distances,
         node_indices,
+        branches,
+        segment_nodes,
+        copy(cfg.kpath_provenance),
     )
 end
 
@@ -75,16 +101,21 @@ function _kpath_payload(plan::KPathPlan)
     segments = [
         (
             segment_index_one_based = index,
-            start_node_index_one_based = index,
-            end_node_index_one_based = index + 1,
-            start_point_index_one_based = plan.node_indices[index],
-            end_point_index_one_based = plan.node_indices[index + 1],
+            start_node_index_one_based = plan.segment_nodes[index][1],
+            end_node_index_one_based = plan.segment_nodes[index][2],
+            start_point_index_one_based = plan.node_indices[plan.segment_nodes[index][1]],
+            end_point_index_one_based = plan.node_indices[plan.segment_nodes[index][2]],
             kpoints_including_endpoints = plan.kpoints_per_segment[index],
         ) for index in eachindex(plan.kpoints_per_segment)
     ]
     return (
         schema = "wanniernlqg.kpath",
-        schema_version = "1.0",
+        schema_version = "2.0",
+        connected_branches = [
+            (start_point_index_one_based = first(branch), end_point_index_one_based = last(branch))
+            for branch in plan.branches
+        ],
+        path_provenance = plan.provenance,
         node_chain = nodes,
         segments = segments,
         total_kpoints = size(plan.kpoints, 1),
@@ -172,5 +203,6 @@ function execute_kpath_driver(kernel::K, plan::KPathPlan, model, comm) where {K}
     end
     isempty(failures) ||
         error("KPath task failed before output publication:\n" * join(failures, "\n"))
+    model isa NonorthogonalLocalizedModel && progress_localized_run_diagnostics!(workers, comm)
     return KPathExecutionResult(values, residuals, mpi_size, worker_count)
 end

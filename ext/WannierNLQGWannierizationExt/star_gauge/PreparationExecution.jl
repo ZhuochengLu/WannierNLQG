@@ -17,6 +17,7 @@ function _preparation_source_files(source::VASPWavefunctionSource)
     files = Dict("POSCAR" => source.poscar_file, "WAVECAR" => source.wavecar_file)
     source.incar_file === nothing || (files["INCAR"] = something(source.incar_file))
     source.potcar_file === nothing || (files["POTCAR"] = something(source.potcar_file))
+    source.outcar_file === nothing || (files["OUTCAR"] = something(source.outcar_file))
     return files
 end
 
@@ -42,9 +43,8 @@ function prepare_symmetry_covariant_wavefunctions(
     1 <= execution.max_workers <= 4 || throw(ArgumentError("INVALID_PREPARATION_WORKER_COUNT"))
     execution.memory_budget_bytes > 0 || throw(ArgumentError("INVALID_PREPARATION_MEMORY_BUDGET"))
     validate_symmetry_covariant_wavefunction_preparation_config(config)
-    _, implementation_paths = _preparation_implementation_paths()
     files = _preparation_source_files(config.source)
-    return with_verified_file_digests(vcat(collect(values(files)), implementation_paths)) do
+    return with_native_source_lifetime(collect(values(files))) do
         if execution.mode == :dense_reference
             return _prepare_symmetry_covariant_wavefunctions_impl(config)
         end
@@ -97,33 +97,80 @@ end
 """Reuse immutable VASP projector data without adding a mutable cache."""
 _preparation_private_metric(metric::_VASPStrictSewingMetric) = metric
 
-"""Bind private restart records to the numerical configuration, source, and implementation."""
-function _preparation_contract(config, common)
-    buffer = IOBuffer()
-    write(buffer, "preparation-star-v1\n", string(VERSION), '\n')
-    for name in fieldnames(typeof(config))
-        name in (
-            :execution,
-            :output_hdf5,
-            :preflight_diagnostics_jsonl,
-            :maximum_star_count,
-            :selected_star_indices,
-        ) && continue
-        write(buffer, string(name), '=', repr(getfield(config, name)), '\n')
-    end
-    for (name, digest) in sort!(collect(common.raw_native.input_sha256); by = first)
-        write(buffer, name, '=', digest, '\n')
-    end
-    # Every stage depends on the PAW source files, including VASP POTCAR,
-    # which is not part of the raw WAVECAR reader's input dictionary.
-    for (name, path) in sort!(collect(_preparation_source_files(config.source)); by = first)
-        write(buffer, "source_file:", name, '=', sha256_file(path), '\n')
-    end
+"""Retain complete preparation inputs for value-checked stage recovery.
+
+Dense execution has no reusable stage records and does not construct a cache
+identity.  Streaming records store complete configuration/source/implementation
+values, not their hashes; an old digest cannot be promoted to this definition.
+Reusable numerical stages omit only the star execution cap; completed payloads
+and final representation records retain it. Old unequal definitions remain a
+closed failure and are never rewritten by this contract selection.
+"""
+function _preparation_contract(config, common; reusable_stage::Bool = false)
+    config.execution.mode == :dense_reference && return nothing
+    directory = something(
+        config.execution.checkpoint_directory,
+        splitext(config.output_hdf5)[1] * ".preparation",
+    )
+    definitions = joinpath(directory, "definitions")
+    mkpath(definitions)
+    files =
+        Dict("source:" * name => path for (name, path) in _preparation_source_files(config.source))
     root, paths = _preparation_implementation_paths()
-    for path in sort!(paths)
-        write(buffer, relpath(path, root), '\0', sha256_file(path), '\n')
+    for path in paths
+        files["implementation:" * relpath(path, root)] = path
     end
-    return bytes2hex(sha256(take!(buffer)))
+    return IO.scientific_input_definition_bytes(; directory = definitions) do stream
+        write(
+            stream,
+            reusable_stage ? "preparation-star-values/2:reusable-stage\n" :
+            "preparation-star-values/1\n",
+            string(VERSION),
+            '\n',
+        )
+        for name in fieldnames(typeof(config))
+            name in (:execution, :output_hdf5, :preflight_diagnostics_jsonl) && continue
+            # The stopping cap changes the execution envelope, not a completed
+            # individual star/metric. Whole-payload records retain the cap.
+            reusable_stage && name == :maximum_star_count && continue
+            value = repr(getfield(config, name))
+            write(stream, string(name), '=', string(ncodeunits(value)), ':', value, '\n')
+        end
+        IO.write_scientific_source_collection(stream, files)
+    end
+end
+
+# Compare a saved complete definition before adopting any stored numerical state.
+function _read_preparation_value_checkpoint(path, definition, label)
+    isfile(path) || return nothing
+    cached = read_preparation_checkpoint(path, "star-preparation-values/1:" * label)
+    cached === nothing && throw(
+        ArgumentError(
+            "PREPARATION_VALUE_MIGRATION_REQUIRED: select a new workspace; the existing record is not a current committed value record",
+        ),
+    )
+    cached isa NamedTuple &&
+    keys(cached) == (:definition, :payload) &&
+    cached.definition isa IO.ScientificInputDefinition ||
+        throw(ArgumentError("PREPARATION_COMPLETE_DEFINITION_REQUIRED"))
+    IO.validate_scientific_input_definitions_equal(
+        definition,
+        cached.definition;
+        mismatch_error = "PREPARATION_INPUT_DEFINITION_MISMATCH",
+    )
+    return cached.payload
+end
+
+# Preserve existing records on incompatible input or missing historical definitions.
+function _write_preparation_value_checkpoint(path, definition, label, payload)
+    definition isa IO.ScientificInputDefinition ||
+        throw(ArgumentError("PREPARATION_COMPLETE_DEFINITION_REQUIRED"))
+    isfile(path) && _read_preparation_value_checkpoint(path, definition, label)
+    return write_preparation_checkpoint(
+        path,
+        "star-preparation-values/1:" * label,
+        (; definition, payload),
+    )
 end
 
 """Conservative star workspace estimate; the external RSS guard remains authoritative."""
@@ -171,7 +218,7 @@ function _preparation_star_execution(config, common, stars)
         indices = indices,
         workers = workers,
         directory = directory,
-        contract = _preparation_contract(config, common),
+        contract = _preparation_contract(config, common; reusable_stage = true),
         pending = Dict{Int, Task}(),
         launched = Set{Int}(),
     )
@@ -181,9 +228,9 @@ end
 function _run_preparation_star(state, index)
     config = state.config
     path = joinpath(state.directory, "stars", "star-$(index).bin")
-    contract = state.contract * ":$(index)"
+    label = "star:$(index)"
     if config.execution.mode != :dense_reference && config.execution.resume
-        cached = read_preparation_checkpoint(path, contract)
+        cached = _read_preparation_value_checkpoint(path, state.contract, label)
         cached === nothing || return merge(cached, (reused = true,))
     end
     records = Any[]
@@ -192,7 +239,7 @@ function _run_preparation_star(state, index)
     end
     result = (payload = payload, records = records, reused = false)
     if config.execution.mode != :dense_reference
-        write_preparation_checkpoint(path, contract, result)
+        _write_preparation_value_checkpoint(path, state.contract, label, result)
     end
     return result
 end
@@ -277,9 +324,8 @@ function _preparation_cached_stage(f::Function, config, contract, label::String)
         splitext(config.output_hdf5)[1] * ".preparation",
     )
     path = joinpath(directory, "stages", label * ".bin")
-    key = contract * ":" * label
     if config.execution.resume
-        cached = read_preparation_checkpoint(path, key)
+        cached = _read_preparation_value_checkpoint(path, contract, label)
         if cached !== nothing && preparation_restore_vectors!(cached)
             _preparation_stage!(config, label * "_resumed")
             return cached
@@ -287,7 +333,7 @@ function _preparation_cached_stage(f::Function, config, contract, label::String)
     end
     result = f()
     preparation_release!()
-    write_preparation_checkpoint(path, key, result)
+    _write_preparation_value_checkpoint(path, contract, label, result)
     _preparation_stage!(config, label * "_committed")
     return result
 end

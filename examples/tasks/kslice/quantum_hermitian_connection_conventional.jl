@@ -34,7 +34,7 @@ function build_config(;
                 quantity = "QHCK",
                 method = "Conventional",
                 physics = GeometryParameters(),
-                numerics = GeometryNumerics(denominator_regularization = 0.001),
+                numerics = Numerics(denominator_regularization = 0.001),
                 observable = KSliceSelection(
                     component = TensorComponent(2, 2, 2),
                     bands = Transition(conduction = [3, 4], valence = [1, 2]),

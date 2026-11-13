@@ -10,7 +10,7 @@ end
         append!(files, joinpath.(root, filter(name -> endswith(name, ".jl"), names)))
     end
     sort!(files)
-    @test length(files) == 52
+    @test length(files) == 63
     mktempdir() do directory
         for (index, path) in enumerate(files)
             @testset "$(basename(path))" begin

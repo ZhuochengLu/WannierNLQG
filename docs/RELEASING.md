@@ -1,9 +1,11 @@
 # Release procedure
 
-This document defines the reusable public release procedure for WannierNLQG.
-The current locally promoted maintenance version is 1.1.1; no remote release is
-asserted. This procedure is not a historical checklist or evidence that a
-future candidate has passed any gate.
+Current local software identity: **1.2.0**. This is the public source profile; remote publication is separate.
+
+This document defines the reusable public release procedure used for the
+WannierNLQG v1 release line. The current feature release is 1.2.0. It is not a
+historical checklist and does not assert that an unfinished candidate has
+passed any gate.
 
 ## Identities
 

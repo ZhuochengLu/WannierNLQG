@@ -1,3 +1,6 @@
+if !isdefined(@__MODULE__, :CurrentScientificValues)
+    include(joinpath(@__DIR__, "support/CurrentScientificValues.jl"))
+end
 using HDF5
 using LinearAlgebra
 using SHA
@@ -39,42 +42,15 @@ const SPN_W = WannierNLQG.Wannierization
         restored_formatted = SPN_IO.read_wannier_spn(formatted; formatted = true)
         @test restored_formatted.data == spn.data
 
-        extension = first(SPN_W._load_wannierization_extension!()).PAWMatrixElements
-        provenance = joinpath(directory, "synthetic.spn.provenance.h5")
-        HDF5.h5open(provenance, "w") do handle
-            attributes = HDF5.attributes(handle)
-            attributes["schema"] = "wanniernlqg.vasp-paw-spn"
-            attributes["schema_version"] = "1.0"
-            attributes["passed"] = true
-            input_group = HDF5.create_group(handle, "input_sha256")
-            HDF5.attributes(input_group)["WAVECAR"] = repeat("a", 64)
-            artifacts_group = HDF5.create_group(handle, "artifacts")
-            HDF5.attributes(artifacts_group)["spn"] = binary
-            HDF5.attributes(artifacts_group)["spn_sha256"] = bytes2hex(SHA.sha256(read(binary)))
-            handle["diagnostics"] = ["synthetic=true"]
-            attributes["payload_sha256"] =
-                Base.invokelatest(extension._vasp_paw_spn_provenance_payload_sha256, handle)
+        # Digest-only provenance lacks the current residual/source data contract.
+        # Retain it as an explicit rejection fixture, not a fabricated current PASS.
+        legacy = joinpath(directory, "legacy.spn.provenance.h5")
+        HDF5.h5open(legacy, "w") do handle
+            HDF5.attributes(handle)["schema"] = "wanniernlqg.vasp-paw-spn"
+            HDF5.attributes(handle)["schema_version"] = "1.2"
+            HDF5.attributes(handle)["payload_sha256"] = repeat("0", 64)
         end
-        verified = SPN_W.read_vasp_paw_spn_provenance(provenance)
-        @test verified.passed
-        @test verified.artifacts["spn_sha256"] == bytes2hex(SHA.sha256(read(binary)))
-        probe = joinpath(@__DIR__, "VASPPawSPNProvenanceFreshReadProbe.jl")
-        command =
-            `$(Base.julia_cmd()) --startup-file=no --compiled-modules=no --project=$(dirname(@__DIR__)) $(probe) $(provenance)`
-        fresh = read(command, String)
-        @test occursin(r"VASP_PAW_SPN_FRESH_READ_DIGEST=[0-9a-f]{64}", fresh)
-        HDF5.h5open(provenance, "r+") do handle
-            handle["diagnostics"][1] = "tampered=true"
-        end
-        @test_throws ArgumentError SPN_W.read_vasp_paw_spn_provenance(
-            provenance;
-            verify_spn = false,
-        )
-        @test_throws ArgumentError SPN_IO.write_wannier_spn(
-            joinpath(directory, "unicode.spn"),
-            spn;
-            comment = "non-ASCII-é",
-        )
+        @test_throws ArgumentError SPN_W.read_vasp_paw_spn_provenance(legacy)
         invalid = copy(data)
         invalid[1, 2, 1, 1] += 0.2
         @test_throws ArgumentError SPN_IO.write_wannier_spn(
@@ -90,8 +66,8 @@ end
     contract = Base.invokelatest(extension._identity_band_frame_contract, 2, 1)
     identity_transforms = zeros(ComplexF64, 2, 2, 1)
     identity_transforms[:, :, 1] .= Matrix{ComplexF64}(I, 2, 2)
-    @test contract.transform_sha256 ==
-          Base.invokelatest(extension._star_array_sha256, identity_transforms)
+    @test contract.transform_definition ==
+          Base.invokelatest(support.band_frame_transform_definition, identity_transforms)
     mktempdir() do directory
         filename = joinpath(directory, "frame-contract.h5")
         HDF5.h5open(filename, "w") do handle
@@ -103,7 +79,7 @@ end
             @test String(read(attributes["schema"])) == contract.schema
             @test String(read(attributes["schema_version"])) == contract.schema_version
             @test String(read(attributes["status"])) == "PASS"
-            @test String(read(attributes["transform_sha256"])) == contract.transform_sha256
+            @test String(read(attributes["transform_definition"])) == contract.transform_definition
             @test read(attributes["physical_isometry_maximum"]) == 0.0
             @test read(attributes["minimum_singular_value"]) == 1.0
         end
@@ -174,7 +150,7 @@ end
                 extension._vasp_spn_blocks!,
                 left,
                 right,
-                _ -> error("completed spin block reloaded coefficients"),
+                loader,
                 "spin-fixture";
                 execution,
             )
@@ -193,7 +169,7 @@ end
                 "spin-fixture";
                 execution,
             )
-            @test loads[] == 1
+            @test loads[] == 7
             @test left == expected_pseudo && right == expected_augmentation
         end
     end
@@ -261,7 +237,22 @@ end
     mktempdir() do directory
         poscar, wavecar, _ = write_bounded_vasp_fixture(directory, 2, ComplexF64)
         potcar = joinpath(directory, "POTCAR")
-        write(potcar, synthetic_potcar_block("X"; q0 = 0.02))
+        # Match the existing native-resolver fixture: identical AE/pseudo waves
+        # imply q=0, and orthonormal spinors give the exact Pauli matrices. This
+        # is a native publication/readback fixture, not a nonzero-Q PAW oracle;
+        # that independent oracle is retained in the preceding testset.
+        write(
+            potcar,
+            replace(synthetic_potcar_block("X"; q0 = 0.0), "0.12 0.22 0.32" => "0.10 0.20 0.30"),
+        )
+        open(wavecar, "r+") do stream
+            for kpoint in 1:2, band in 1:2
+                coefficients = zeros(ComplexF64, 2kpoint)
+                coefficients[1 + (band - 1) * kpoint] = 1
+                seek(stream, 512 * (2 + (kpoint - 1) * 3 + band))
+                write(stream, coefficients)
+            end
+        end
         source = WannierNLQG.SymmetryFoundation.VASPWavefunctionSource(
             poscar,
             wavecar;
@@ -278,13 +269,83 @@ end
         )
         output = joinpath(directory, "native.spn")
         provenance = joinpath(directory, "native.spn.h5")
-        SPN_W.generate_vasp_paw_spn(
+        generated = SPN_W.generate_vasp_paw_spn(
             source;
             output_spn_file = output,
             provenance_hdf5 = provenance,
             spin_channel = 1,
             execution,
         )
+        @test generated.radial_q_max_absolute == 0.0
+        @test generated.generalized_norm_max_absolute == 0.0
+        @test generated.hermiticity_max_absolute == 0.0
+        @test generated.diagonal_imaginary_max_absolute == 0.0
+        pauli = (ComplexF64[0 1; 1 0], ComplexF64[0 -im; im 0], ComplexF64[1 0; 0 -1])
+        published_spin = SPN_IO.read_wannier_spn(output).data
+        @test size(published_spin) == (2, 2, 3, 2)
+        for kpoint in 1:2, component in 1:3
+            @test published_spin[:, :, component, kpoint] == pauli[component]
+        end
+        verified = SPN_W.read_vasp_paw_spn_provenance(provenance)
+        # Every numerical residual remains mandatory even when byte reference
+        # verification is disabled. Use independent copies and reopen after the
+        # mutation so an old attribute handle cannot mask a failed write.
+        limits = SPN_W.VASPPAWSPNThresholds()
+        for field in (
+            :radial_q_max_absolute,
+            :generalized_norm_max_absolute,
+            :hermiticity_max_absolute,
+            :diagonal_imaginary_max_absolute,
+        )
+            key = String(field)
+            bad_value = 2 * getfield(limits, field)
+            bad_path = joinpath(directory, "invalid-" * key * ".h5")
+            cp(provenance, bad_path)
+            HDF5.h5open(bad_path, "r+") do handle
+                @test read(HDF5.attributes(handle)[key]) == 0.0
+                HDF5.delete_attribute(handle, key)
+                HDF5.attributes(handle)[key] = bad_value
+            end
+            HDF5.h5open(bad_path, "r") do handle
+                @test read(HDF5.attributes(handle)[key]) == bad_value
+            end
+            for verify_spn in (true, false)
+                failure = try
+                    SPN_W.read_vasp_paw_spn_provenance(bad_path; verify_spn)
+                    nothing
+                catch exception
+                    exception
+                end
+                @test failure isa ArgumentError
+                @test failure isa ArgumentError &&
+                      occursin("SPN_RESIDUAL_EXCEEDED: " * key, sprint(showerror, failure))
+            end
+        end
+        HDF5.h5open(provenance, "r") do handle
+            for field in (
+                :radial_q_max_absolute,
+                :generalized_norm_max_absolute,
+                :hermiticity_max_absolute,
+                :diagonal_imaginary_max_absolute,
+            )
+                @test read(HDF5.attributes(handle)[String(field)]) == 0.0
+            end
+        end
+        @test verified.content_authentication == "NOT_PERFORMED"
+        @test verified.num_bands == 2
+        @test verified.num_kpoints == SPN_IO.read_wannier_spn(output).num_kpts
+        probe = joinpath(@__DIR__, "VASPPawSPNProvenanceFreshReadProbe.jl")
+        fresh = read(
+            `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(@__DIR__)) $(probe) $(provenance)`,
+            String,
+        )
+        @test occursin("VASP_PAW_SPN_FRESH_READ_PASS", fresh)
+        tampered = joinpath(directory, "native-spn-tampered.h5")
+        cp(provenance, tampered)
+        HDF5.h5open(tampered, "r+") do handle
+            HDF5.delete_attribute(handle, "band_frame_contract_definition")
+        end
+        @test_throws ArgumentError SPN_W.read_vasp_paw_spn_provenance(tampered; verify_spn = false)
         original = SPN_IO.read_wannier_spn(output).data
         digest = bytes2hex(open(SHA.sha256, output))
         input = joinpath(directory, "resume.bin")
@@ -297,18 +358,14 @@ end
             raw"""
 using WannierNLQG, Serialization, SHA
 WannierNLQG.Wannierization._load_wannierization_extension!()
-@eval WannierNLQG.SymmetryFoundation begin
-    function _read_vasp_coefficient_record(path, header, bands, record, spin_transform;
-        normalize_coefficients::Bool)
-        error("completed public SPN recovery decoded WAVECAR coefficients")
-    end
-end
+# Current publication owns fresh point blocks. This is a full native recompute,
+# not adoption of the removed digest-only compact publication receipt.
 input = open(Serialization.deserialize, ARGS[1])
 WannierNLQG.Wannierization.generate_vasp_paw_spn(input.source;
     output_spn_file = input.output, provenance_hdf5 = input.provenance,
     spin_channel = 1, execution = input.execution)
 @assert bytes2hex(open(SHA.sha256, input.output)) == input.digest
-println("PUBLIC_VASP_SPN_RESUME_PASS ", input.digest)
+println("PUBLIC_VASP_SPN_FRESH_PUBLICATION_PASS ", input.digest)
 """,
         )
         resumed = read(
@@ -316,81 +373,114 @@ println("PUBLIC_VASP_SPN_RESUME_PASS ", input.digest)
             String,
         )
         print(resumed)
-        @test occursin("PUBLIC_VASP_SPN_RESUME_PASS", resumed)
+        @test occursin("PUBLIC_VASP_SPN_FRESH_PUBLICATION_PASS", resumed)
         @test SPN_IO.read_wannier_spn(output).data == original
         @test bytes2hex(open(SHA.sha256, output)) == digest
     end
 end
 
-@testset "SPN publication receipts preserve original full tensors through block references" begin
-    SPN_W._load_wannierization_extension!()
-    extension = Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).PAWMatrixElements
-    pseudo = reshape(ComplexF64.(collect(1:24) ./ 7, reverse(collect(1:24)) ./ 11), 2, 2, 3, 2)
-    augmentation = reverse(pseudo; dims = 1) ./ 13
-    total, hermiticity, diagonal, norms = extension._vasp_paw_spn_diagnostics(pseudo, augmentation)
+@testset "SPN fresh block ownership preserves full tensors without compact receipts" begin
+    extension=first(SPN_W._load_wannierization_extension!()).PAWMatrixElements
+    pseudo=reshape(ComplexF64.(collect(1:24) ./ 7, reverse(collect(1:24)) ./ 11), 2, 2, 3, 2)
+    augmentation=reverse(pseudo; dims = 1) ./ 13
+    total, hermiticity, diagonal, norms=extension._vasp_paw_spn_diagnostics(pseudo, augmentation)
     for kind in (:qe, :vasp)
         mktempdir() do directory
-            blocks = (
-                kind = kind,
-                directory = directory,
-                label = "spin",
-                contract = "exact-spin-blocks",
-                count = 2,
+            # Pure ownership/storage fixture: no native source or DFT generation
+            # is represented by this generic wrapper test. Native public routes
+            # remain exercised by the real generator tests above and QE tests.
+            config=(source = nothing,)
+            paths=(
+                output = joinpath(directory, "spin.spn"),
+                provenance = joinpath(directory, "spin.h5"),
             )
-            for k in 1:2
-                payload =
-                    kind == :qe ?
-                    (total[:, :, :, k], pseudo[:, :, :, k], augmentation[:, :, :, k]) :
-                    (pseudo[:, :, :, k], augmentation[:, :, :, k])
-                SPN_IO.write_preparation_checkpoint(
-                    joinpath(directory, "spin", "block-$k.bin"),
-                    "exact-spin-blocks:$k",
-                    payload,
-                )
-            end
-            spn = SPN_IO.WannierSPN(2, 2, total)
-            result =
-                kind == :qe ?
-                SPN_W.QEPAWSPNResult(
-                    spn,
-                    nothing,
-                    0.0,
-                    hermiticity,
-                    diagonal,
-                    false,
-                    "codec-fixture",
-                    Dict{String, String}(),
-                    Dict{String, String}(),
-                    ["codec-fixture"],
-                ) :
-                SPN_W.VASPPAWSPNResult(
-                    spn,
-                    nothing,
-                    0.0,
-                    0.0,
-                    hermiticity,
-                    diagonal,
-                    false,
-                    ["codec-fixture"],
-                    norms,
-                    Dict{String, String}(),
-                    Dict{String, String}(),
-                )
-            packed = extension._pack_spn_publication_result(result, (slot = Ref(blocks),))
-            @test !hasproperty(packed, :spn)
-            restored = extension._restore_spn_publication_result(packed)
-            @test maximum(abs.(restored.spn.data .- total)) == 0.0
-            @test extension._star_array_sha256(restored.spn.data) ==
-                  extension._star_array_sha256(total)
-            @test !restored.passed
-            @test restored.diagnostics == result.diagnostics
-            @test_throws ArgumentError extension._restore_spn_publication_result(
-                merge(packed, (array_sha256 = repeat("0", 64),)),
+            execution=SPN_W.WavefunctionPreparationExecutionConfig(
+                mode = :streaming_serial,
+                max_workers = 1,
+                memory_budget_bytes = 64*1024^2,
+                checkpoint_directory = directory,
+                resume = true,
             )
-            open(joinpath(directory, "spin", "block-1.bin"), "a") do stream
-                write(stream, "corrupted")
+            result=kind==:qe ?
+                   SPN_W.QEPAWSPNResult(
+                SPN_IO.WannierSPN(2, 2, total),
+                nothing,
+                0.0,
+                hermiticity,
+                diagonal,
+                false,
+                "codec-fixture",
+                Dict{String, String}(),
+                Dict{String, String}(),
+                ["codec-fixture"],
+            ) :
+                   SPN_W.VASPPAWSPNResult(
+                SPN_IO.WannierSPN(2, 2, total),
+                nothing,
+                0.0,
+                0.0,
+                hermiticity,
+                diagonal,
+                false,
+                ["codec-fixture"],
+                norms,
+                Dict{String, String}(),
+                Dict{String, String}(),
+            )
+            roots=String[];
+            calls=Ref(0)
+            for _ in 1:2
+                restored=extension._with_spn_publication_receipt(
+                    config,
+                    paths,
+                    String[];
+                    execution,
+                ) do effective
+                    calls[]+=1
+                    @test effective.resume===false
+                    push!(roots, effective.checkpoint_directory)
+                    for k in 1:2
+                        payload=kind==:qe ?
+                                (total[:, :, :, k], pseudo[:, :, :, k], augmentation[:, :, :, k]) :
+                                (pseudo[:, :, :, k], augmentation[:, :, :, k])
+                        SPN_IO.write_preparation_checkpoint(
+                            joinpath(effective.checkpoint_directory, "spin", "block-$k.bin"),
+                            "actual-spin-values:$k",
+                            payload,
+                        )
+                    end
+                    extension._record_spn_publication_blocks(
+                        kind,
+                        effective,
+                        "spin",
+                        "actual-spin-values",
+                        2,
+                    )
+                    return result
+                end
+                @test reinterpret(UInt8, vec(restored.spn.data))==reinterpret(UInt8, vec(total))
+                @test restored.diagnostics==result.diagnostics && !restored.passed
             end
-            @test extension._restore_spn_publication_result(packed) === nothing
+            @test calls[]==2 && roots[1]!=roots[2]
+            for root in roots
+                blocks=[
+                    SPN_IO.read_preparation_checkpoint(
+                        joinpath(root, "spin", "block-$k.bin"),
+                        "actual-spin-values:$k",
+                    ) for k in 1:2
+                ]
+                recovered=if kind==:qe
+                    cat((block[1] for block in blocks)...; dims = 4)
+                else
+                    left=cat((block[1] for block in blocks)...; dims = 4)
+                    right=cat((block[2] for block in blocks)...; dims = 4)
+                    first(extension._vasp_paw_spn_diagnostics(left, right))
+                end
+                @test reinterpret(UInt8, vec(recovered))==reinterpret(UInt8, vec(total))
+                path=joinpath(root, "spin", "block-1.bin")
+                open(io->write(io, "corrupted"), path, "a")
+                @test SPN_IO.read_preparation_checkpoint(path, "actual-spin-values:1")===nothing
+            end
         end
     end
 end

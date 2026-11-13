@@ -1,4 +1,10 @@
 module OperatorExport
+import WannierNLQG.Wannierization:
+    TB_TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256, TB_TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION
+
+import WannierNLQG.MatrixElements
+
+import WannierNLQG.Core: validate_ordinary_construction_policy
 
 import Dates: UTC, now
 import HDF5
@@ -8,6 +14,7 @@ import SHA
 import JSON3
 import WannierNLQG
 import WannierNLQG.Core:
+    OperatorTask,
     REAL_SPACE_AXIAL_DERIVATIVE_OVERLAP,
     REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR,
     REAL_SPACE_HAMILTONIAN,
@@ -54,7 +61,7 @@ import WannierNLQG.SymmetryFoundation:
     BandRepresentationQualificationScope,
     WannierSymmetryPlan,
     maximum_real_space_covariance_error,
-    qualification_mask_sha256,
+    qualification_mask_definition,
     read_band_representation_hdf5,
     sha256_file,
     symmetrize_real_space_operator,
@@ -63,15 +70,17 @@ import WannierNLQG.SymmetryFoundation
 import WannierNLQG.Wannierization:
     COMPLETED,
     COMPLETED_WITH_WARNINGS,
-    ExactWannierOperatorBundleConfig,
-    ExactWannierOperatorBundleResult,
+    FullUIUDerivativeOperatorBundleConfig,
+    FullUIUDerivativeOperatorBundleResult,
     IN_PROGRESS_CHECKPOINT,
+    INVALID_INPUT,
+    IO_FAILURE,
     LOCALIZATION_FAILED,
     MAX_ITERATIONS,
     NativeDFTHamiltonian,
     SMV_FLETCHER_REEVES_TWO_STAGE_ALGORITHM_CONTRACT_VERSION,
     SymmetrizedDFTHamiltonian,
-    SymmetryAdaptedWannierizationConfig,
+    WannierizationConfig,
     TB_SYMMETRY_QUALIFICATION_SCHEMA,
     TB_SYMMETRY_QUALIFICATION_SCHEMA_VERSION,
     TBSymmetryMetric,
@@ -91,15 +100,18 @@ import WannierNLQG.Wannierization:
     wannierization_eligibility_from_summary,
     not_evaluated_wannierization_eligibility,
     authoritative_hamiltonian_key,
-    tb_symmetry_payload_sha256,
-    wannier_operator_target_contract_sha256
+    same_tb_symmetry_qualification,
+    wannier_operator_target_definition
 import ..WannierizationInternalSupport:
+    replace_wannierization_config,
+    read_scientific_input_reference_hdf5,
+    write_scientific_input_reference_hdf5,
     SYMMETRIZED_DFT_BAND_GAUGE,
     atomic_hdf5_write,
-    band_frame_contract_sha256,
+    band_frame_contract_definition,
     band_frame_contract_summary,
     canonical_band_block_labels,
-    projection_basis_sha256,
+    projection_basis_definition,
     read_tb_symmetry_qualification_group,
     required_attribute,
     tb_symmetry_not_run,
@@ -116,6 +128,7 @@ import ..RepresentationPreparation:
     symmetry_constraints_applied,
     wannier_gauge_link_diagnostics
 import ..PAWMatrixElements:
+    with_native_source_lifetime,
     with_operator_publication_receipt,
     with_vasp_operator_artifacts,
     with_generation_gauge_reuse,
@@ -128,9 +141,9 @@ import ..PAWMatrixElements:
     native_hamiltonian_gauge_covariance_residual,
     read_and_validate_spn_provenance,
     read_star_covariant_paw_gauge_hdf5,
-    rotate_generation_link,
-    rotate_generation_single,
-    star_authoritative_hamiltonian_sha256,
+    transform_generation_link,
+    transform_generation_single,
+    star_authoritative_hamiltonian_definition,
     uiu_atomic_json,
     uiu_center_neighbor_block,
     uiu_source_state,
@@ -148,15 +161,15 @@ import ..SolverCheckpoint:
     is_symmetry_projected_smv_fr,
     orthonormalize_columns,
     projector_covariance_tolerance,
-    restart_config_sha256,
-    wannierization_checkpoint_sha256_v2_5,
     wannierization_production_eligible,
     wannierization_result_is_finite,
     read_wannierization_checkpoint_hdf5,
+    validate_restart_scientific_inputs,
+    read_checkpoint_publication,
     write_wannierization_checkpoint_hdf5
 
-include("../ExactWannierDerivativeOperators.jl")
-include("../ExactWannierOperatorBundle.jl")
+include("../FullUIUWannierDerivativeOperators.jl")
+include("../FullUIUDerivativeOperatorBundle.jl")
 include("../AuthoritativeBandHamiltonian.jl")
 include("../WannierHamiltonianOperatorGeneration.jl")
 include("../TightBindingConstruction.jl")
@@ -164,15 +177,18 @@ include("../OperatorProfileAssembly.jl")
 include("../WannierGaugeChainDiagnostics.jl")
 include("../WannierizationOutputs.jl")
 include("../TBSymmetryQualification.jl")
+include("../WannierModelReport.jl")
 
 # Stable, non-private names form the only cross-component export surface.
 const atomic_checkpoint_copy = _atomic_checkpoint_copy
-const bind_packed_checkpoint_sha256! = _bind_packed_checkpoint_sha256!
+const bind_packed_checkpoint_publication! = _bind_packed_checkpoint_publication!
 const accepted_state_tb_export_allowed = _accepted_state_tb_export_allowed
 const accepted_state_tb_export_gate = _accepted_state_tb_export_gate
 const export_wannierization_tb = _export_wannierization_tb
 const open_wannierization_log = _open_wannierization_log
 const preflight_wannierization_operator_profile = _preflight_wannierization_operator_profile
+const validate_completed_operator_pair = _validate_completed_operator_pair
+const validate_completed_operator_set = _validate_completed_operator_set
 const wannier_operator_target_contract = _wannier_operator_target_contract
 const real_space_hermiticity_error = _real_space_hermiticity_error
 const wannierization_observer = _wannierization_observer
@@ -190,12 +206,14 @@ const OPERATOR_EXPORT_INTEGRATION_API = (
     :operator_output_requires_target_contract,
     :AuthoritativeBandHamiltonian,
     :atomic_checkpoint_copy,
-    :bind_packed_checkpoint_sha256!,
+    :bind_packed_checkpoint_publication!,
     :accepted_state_tb_export_allowed,
     :accepted_state_tb_export_gate,
     :export_wannierization_tb,
     :open_wannierization_log,
     :preflight_wannierization_operator_profile,
+    :validate_completed_operator_pair,
+    :validate_completed_operator_set,
     :wannier_operator_target_contract,
     :real_space_hermiticity_error,
     :wannierization_observer,
@@ -210,7 +228,7 @@ const OPERATOR_EXPORT_INTEGRATION_API = (
     :generate_wannier_shu,
     :generate_wannier_siu,
     :generate_wannier_uhu,
-    :prepare_exact_wannier_operator_bundle,
+    :prepare_full_uiu_derivative_operator_bundle,
     :qualify_exported_wannierization_tb,
 )
 

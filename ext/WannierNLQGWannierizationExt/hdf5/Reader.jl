@@ -1,22 +1,261 @@
-"""Read one strict SAWF checkpoint and reconstruct its `WannierCHK` view when present."""
-function read_wannierization_checkpoint_hdf5(filename::AbstractString)
-    isfile(filename) ||
-        throw(ArgumentError("wannierization checkpoint does not exist: $(filename)"))
-    HDF5.enable_complex_support()
-    return HDF5.h5open(filename, "r") do handle
-        String(required_attribute(handle, "schema")) == WANNIERIZATION_CHECKPOINT_SCHEMA ||
-            throw(ArgumentError("HDF5 file is not a WannierNLQG wannierization checkpoint"))
-        stored_version = String(required_attribute(handle, "schema_version"))
-        stored_version in WANNIERIZATION_CHECKPOINT_READABLE_SCHEMA_VERSIONS || throw(
+# Current files omit obsolete state; explicit legacy conversion accepts only empty
+# removed histories. Active removed optimizers cannot be silently resumed as FR.
+function _check_removed_optimizer_history(
+    group;
+    legacy::Bool = false,
+    require_complete::Bool = false,
+)
+    names=(
+        "anderson_z_history",
+        "anderson_residual_history",
+        "u_lbfgs_s_history",
+        "u_lbfgs_y_history",
+        "u_lbfgs_rho_history",
+    )
+    attrs=HDF5.attributes(group)
+    if legacy
+        if require_complete
+            all(name->haskey(group, name), names) && haskey(attrs, "u_lbfgs_restart_count") ||
+                throw(ArgumentError("LEGACY_OPTIMIZER_HISTORY_INCOMPLETE"))
+        end
+        String(required_attribute(group, "strategy"))=="fixed" ||
+            throw(ArgumentError("REMOVED_OPTIMIZER_MIGRATION_UNSUPPORTED"))
+        for name in names
+            if haskey(group, name)
+                dataset=group[name]
+                try
+                    isempty(dataset) ||
+                        throw(ArgumentError("REMOVED_OPTIMIZER_HISTORY_NOT_EMPTY: $name"))
+                finally
+                    close(dataset)
+                end
+            end
+        end
+        haskey(attrs, "u_lbfgs_restart_count") &&
+            Int(read_hdf5_attribute_value(attrs["u_lbfgs_restart_count"], HDF5))!=0 &&
+            throw(ArgumentError("REMOVED_OPTIMIZER_HISTORY_NOT_EMPTY: restart count"))
+    else
+        any(name->haskey(group, name), names) &&
+            throw(ArgumentError("OBSOLETE_OPTIMIZER_STATE_IN_CURRENT_WIRE"))
+        haskey(attrs, "u_lbfgs_restart_count") &&
+            throw(ArgumentError("OBSOLETE_OPTIMIZER_STATE_IN_CURRENT_WIRE"))
+    end
+    return nothing
+end
+
+# A declaration names an immutable artifact; it never proves numerical equality.
+function _checkpoint_publication_declaration(
+    handle;
+    expected_identity = nothing,
+    expected_version = nothing,
+)
+    String(required_attribute(handle, "schema")) == WANNIERIZATION_CHECKPOINT_SCHEMA ||
+        throw(ArgumentError("HDF5 file is not a WannierNLQG wannierization checkpoint"))
+    version = String(required_attribute(handle, "schema_version"))
+    (
+        expected_version === nothing ?
+        version in (
+            WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION,
+            WANNIERIZATION_REFERENCED_CHECKPOINT_SCHEMA_VERSION,
+        ) : version == expected_version
+    ) || throw(
+        ArgumentError(
+            "CHECKPOINT_SCHEMA_UNSUPPORTED: schema $version is not the current checkpoint format",
+        ),
+    )
+    haskey(HDF5.attributes(handle), "checkpoint_sha256") &&
+        throw(ArgumentError("LEGACY_CHECKPOINT_CONTENT_CERTIFICATE_NOT_ALLOWED"))
+    if version in (
+        WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION,
+        WANNIERIZATION_REFERENCED_CHECKPOINT_SCHEMA_VERSION,
+    )
+        String(required_attribute(handle, "content_authentication")) == "NOT_PERFORMED" ||
+            throw(ArgumentError("CHECKPOINT_CONTENT_AUTHENTICATION_POLICY_MISMATCH"))
+    end
+    identity = String(required_attribute(handle, "publication_identity"))
+    !isempty(strip(identity)) && ncodeunits(identity) <= 1024 && !occursin('\0', identity) ||
+        throw(ArgumentError("CHECKPOINT_PUBLICATION_DECLARATION_INVALID"))
+    expected_identity === nothing ||
+        identity == expected_identity ||
+        throw(ArgumentError("CHECKPOINT_PUBLICATION_DECLARATION_MISMATCH"))
+    return identity
+end
+
+# Missing records may not silently adopt old or relocated scientific inputs.
+function _checkpoint_receipt_path(source, receipt_path)
+    receipt = receipt_path === nothing ? source * ".commit.toml" : abspath(receipt_path)
+    if !isfile(receipt)
+        HDF5.h5open(source, "r") do handle
+            _checkpoint_publication_declaration(handle)
+        end
+        throw(
             ArgumentError(
-                "CHECKPOINT_MIGRATION_REQUIRED: checkpoint schema $(stored_version) is not readable by schema 1.2",
+                "CHECKPOINT_PUBLICATION_RECORD_REQUIRED: explicitly adopt current-format input",
             ),
         )
-        # Public 1.1 preserves the complete 2.28 numerical layout while binding
-        # the new Standard construction names and wire identity; public 1.2
-        # additionally binds the typed WannierizationEligibility block.
-        contract_version =
-            stored_version == "1.1" ? "2.28" : stored_version == "1.2" ? "2.29" : stored_version
+    end
+    return receipt
+end
+
+"""Run a checkpoint reader within both source and publication receipt lifetimes."""
+function _with_checkpoint_publication(
+    reader,
+    filename;
+    expected_publication = nothing,
+    receipt_path = nothing,
+)
+    isfile(filename) || throw(ArgumentError("wannierization checkpoint does not exist: $filename"))
+    observed =
+        with_scientific_source(realpath(filename); expected_record = expected_publication) do source
+            receipt = _checkpoint_receipt_path(source, receipt_path)
+            wire_version = HDF5.h5open(source, "r") do handle
+                _checkpoint_publication_declaration(handle)
+                String(required_attribute(handle, "schema_version"))
+            end
+            with_scientific_file_publication(
+                source;
+                artifact_schema = WANNIERIZATION_CHECKPOINT_SCHEMA,
+                artifact_version = wire_version,
+                receipt_path = receipt,
+            ) do path, identity
+                reader(path, identity)
+            end
+        end
+    return observed.value
+end
+
+"""Read current checkpoint data under its complete immutable publication lifetime."""
+function read_wannierization_checkpoint_hdf5(
+    filename::AbstractString;
+    expected_publication = nothing,
+    receipt_path = nothing,
+    reference_root = nothing,
+)
+    observed =
+        _with_checkpoint_publication(filename; expected_publication, receipt_path) do path, identity
+            _read_wannierization_checkpoint_from_source(
+                path;
+                expected_identity = identity,
+                reference_root,
+            )
+        end
+    return observed.value
+end
+
+"""Explicitly adopt relocated current-format data; never convert a legacy format.
+
+The complete decoder and its domain checks run before the local receipt is
+published. Adoption grants neither prior scientific qualification nor equality
+with another file. A private receipt path supports read-only source assets.
+"""
+function adopt_wannierization_checkpoint_hdf5(
+    filename::AbstractString;
+    receipt_path = nothing,
+    reference_root = nothing,
+)
+    isfile(filename) || throw(ArgumentError("wannierization checkpoint does not exist: $filename"))
+    observed = with_scientific_source(realpath(filename)) do source
+        _read_wannierization_checkpoint_from_source(source; reference_root)
+    end
+    write_scientific_file_publication(
+        observed.state.path;
+        artifact_schema = WANNIERIZATION_CHECKPOINT_SCHEMA,
+        artifact_version = observed.value.input_summary["checkpoint_schema_version"],
+        publication_identity = observed.value.input_summary["checkpoint_publication_identity"],
+        receipt_path,
+        expected_state = observed.state,
+    )
+    return observed.value
+end
+
+"""Read only the current checkpoint reference and existing TB qualification report."""
+function read_checkpoint_publication(filename::AbstractString; receipt_path = nothing)
+    observed = _with_checkpoint_publication(filename; receipt_path) do source, identity
+        HDF5.h5open(source, "r") do handle
+            _checkpoint_publication_declaration(handle; expected_identity = identity)
+            (; identity, qualification = read_tb_symmetry_qualification_group(handle))
+        end
+    end
+    return observed.value
+end
+
+# Explicit older-wire payload reading is not optimizer continuation. Older
+# accepted-state-only records retain their original metadata verbatim so the
+# archived complete-definition oracle remains meaningful; no digest is promoted
+# to an actual input/mask definition or scientific qualification.
+function _checkpoint_target_input_keys(summary, wire_version)
+    current = (
+        "disentanglement_outer_mask_definition",
+        "disentanglement_frozen_mask_definition",
+        "target_subspace_contract_definition",
+        "target_leakage_formula_definition",
+    )
+    if wire_version in ("1.4", "1.5", "1.6") && !all(key -> haskey(summary, key), current)
+        get(summary, "restart_eligible", "")=="false" &&
+        get(summary, "restart_input_definition_status", "")=="NOT_RECORDED" || throw(
+            ArgumentError(
+                "LEGACY_COMPLETE_INPUT_DEFINITIONS_REQUIRED: digest-only checkpoint cannot qualify optimizer continuation",
+            ),
+        )
+        return (
+            "disentanglement_outer_mask_sha256",
+            "disentanglement_frozen_mask_sha256",
+            "target_subspace_contract_sha256",
+            "target_leakage_formula_sha256",
+        )
+    end
+    return current
+end
+
+# Validate current persisted target-subspace definitions or the explicitly retained legacy declaration mirrors.
+function _validate_checkpoint_target_input(summary, keys)
+    if first(keys)=="disentanglement_outer_mask_definition"
+        return _validate_persisted_target_subspace_contract(summary)
+    end
+    # Validate the old recorded declaration and mirror consistency only. The
+    # actual missing mathematical input definitions are deliberately not filled.
+    validate_persisted_authority_key(summary["authoritative_hamiltonian"])
+    get(summary, "qualification_scope", "")=="target_subspace" &&
+    get(summary, "target_authority", "")=="outer_window" &&
+    get(summary, "parent_audit_policy", "")=="audit_only" || throw(
+        ArgumentError("TARGET_SUBSPACE_CONTRACT_MISMATCH: invalid archived target declaration"),
+    )
+    all(key -> occursin(r"^[0-9a-f]{64}$", get(summary, key, "")), keys[1:3]) || throw(
+        ArgumentError("TARGET_SUBSPACE_CONTRACT_MISMATCH: malformed archived target metadata"),
+    )
+    get(summary, "target_leakage_semantics", "")==TARGET_LEAKAGE_WEIGHT_SEMANTICS &&
+    get(summary, last(keys), "")==TB_TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256 || throw(
+        ArgumentError("UNSUPPORTED_LEGACY_TARGET_LEAKAGE_SEMANTICS: archived formula differs"),
+    )
+    threshold=tryparse(Float64, get(summary, "target_leakage_threshold", ""))
+    threshold !== nothing && isfinite(threshold) && threshold>0 || throw(
+        ArgumentError("TARGET_SUBSPACE_CONTRACT_MISMATCH: invalid archived leakage threshold"),
+    )
+    return nothing
+end
+
+# Keep the complete decoder and its numerical/domain checks within one observation.
+function _read_wannierization_checkpoint_from_source(
+    filename::AbstractString;
+    expected_identity = nothing,
+    wire_version = nothing,
+    reference_root = nothing,
+)
+    HDF5.enable_complex_support()
+    return HDF5.h5open(filename, "r") do handle
+        publication_identity = _checkpoint_publication_declaration(
+            handle;
+            expected_identity,
+            expected_version = wire_version,
+        )
+        wire_version = String(required_attribute(handle, "schema_version"))
+        stored_version = wire_version
+        wire_version == WANNIERIZATION_REFERENCED_CHECKPOINT_SCHEMA_VERSION &&
+            reference_root === nothing &&
+            throw(ArgumentError("SCIENTIFIC_REFERENCE_ROOT_REQUIRED"))
+        # Wire1.4 preserves the complete2.29 physical decoder; current input
+        # references are separate from its historical qualification/audit fields.
+        contract_version = "2.29"
         # Schema 2.21 is a strict semantic extension of the 2.20 payload.  Reuse
         # the mature 2.20 field decoder, then validate the new scientific hash
         # and Z/U contract independently below.
@@ -60,6 +299,37 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
             ) && haskey(history_group, "iteration_diagnostic_values")
         diagnostic_values =
             has_iteration_diagnostics ? read(history_group["iteration_diagnostic_values"]) : nothing
+        frame_distances = Dict{Int, Float64}()
+        if wire_version in (
+            WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION,
+            WANNIERIZATION_REFERENCED_CHECKPOINT_SCHEMA_VERSION,
+        ) && has_iteration_diagnostics
+            size(diagnostic_values, 1) == 24 ||
+                throw(ArgumentError("CHECKPOINT_DIAGNOSTIC_LAYOUT_INVALID"))
+            haskey(history_group, "frame_distances") ==
+            haskey(history_group, "frame_distance_iterations") ||
+                throw(ArgumentError("CHECKPOINT_FRAME_DISTANCE_INCOMPLETE"))
+            if haskey(history_group, "frame_distances")
+                indices = Int.(read(history_group["frame_distance_iterations"]))
+                distances = Float64.(read(history_group["frame_distances"]))
+                length(indices) == length(distances) &&
+                length(unique(indices)) == length(indices) &&
+                all(i -> 1 <= i <= length(iterations), indices) ||
+                    throw(ArgumentError("CHECKPOINT_FRAME_DISTANCE_INDEX_INVALID"))
+                for (index, distance) in zip(indices, distances)
+                    frame_distances[index] = distance
+                end
+            end
+        end
+        diagnostic_value(row, index) =
+            wire_version in (
+                WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION,
+                WANNIERIZATION_REFERENCED_CHECKPOINT_SCHEMA_VERSION,
+            ) ?
+            (
+                row == 4 ? get(frame_distances, index, nothing) :
+                diagnostic_values[row > 4 ? row-1 : row, index]
+            ) : diagnostic_values[row, index]
         diagnostic_integers =
             has_iteration_diagnostics ? read(history_group["iteration_diagnostic_integers"]) :
             nothing
@@ -166,144 +436,144 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                     )
                         WannierizationIterationDiagnostics(
                             omega_directional,
-                            diagnostic_values[1, index],
-                            diagnostic_values[2, index],
-                            diagnostic_values[3, index],
-                            diagnostic_values[4, index],
-                            diagnostic_values[5, index],
-                            diagnostic_values[6, index],
-                            diagnostic_values[7, index],
-                            diagnostic_values[8, index],
-                            diagnostic_values[9, index],
-                            diagnostic_values[10, index],
+                            diagnostic_value(1, index),
+                            diagnostic_value(2, index),
+                            diagnostic_value(3, index),
+                            diagnostic_value(4, index),
+                            diagnostic_value(5, index),
+                            diagnostic_value(6, index),
+                            diagnostic_value(7, index),
+                            diagnostic_value(8, index),
+                            diagnostic_value(9, index),
+                            diagnostic_value(10, index),
                             diagnostic_integers[1, index],
                             Bool(diagnostic_flags[1, index]),
                             Bool(diagnostic_flags[2, index]),
                             diagnostic_integers[2, index],
-                            diagnostic_values[11, index],
-                            diagnostic_values[12, index],
+                            diagnostic_value(11, index),
+                            diagnostic_value(12, index),
                             diagnostic_integers[3, index],
-                            diagnostic_values[13, index],
-                            diagnostic_values[14, index],
-                            diagnostic_values[15, index],
-                            diagnostic_values[16, index],
-                            diagnostic_values[17, index],
+                            diagnostic_value(13, index),
+                            diagnostic_value(14, index),
+                            diagnostic_value(15, index),
+                            diagnostic_value(16, index),
+                            diagnostic_value(17, index),
                             Symbol(anderson_reasons[index]),
-                            diagnostic_values[18, index],
+                            diagnostic_value(18, index),
                             diagnostic_integers[5, index],
                             diagnostic_integers[6, index],
                             diagnostic_integers[7, index],
-                            diagnostic_values[19, index],
+                            diagnostic_value(19, index),
                             Bool(diagnostic_flags[3, index]),
                             Symbol(cg_restart_reasons[index]),
-                            diagnostic_values[20, index],
-                            diagnostic_values[21, index],
+                            diagnostic_value(20, index),
+                            diagnostic_value(21, index),
                             diagnostic_integers[8, index],
-                            diagnostic_values[22, index],
-                            diagnostic_values[23, index],
+                            diagnostic_value(22, index),
+                            diagnostic_value(23, index),
                             diagnostic_integers[9, index],
                             diagnostic_integers[10, index],
-                            diagnostic_values[24, index],
-                            diagnostic_values[25, index],
+                            diagnostic_value(24, index),
+                            diagnostic_value(25, index),
                             Symbol(joint_acceptance_reasons[index]),
                         )
                     elseif version in ("2.6", "2.7")
                         WannierizationIterationDiagnostics(
                             omega_directional,
-                            diagnostic_values[1, index],
-                            diagnostic_values[2, index],
-                            diagnostic_values[3, index],
-                            diagnostic_values[4, index],
-                            diagnostic_values[5, index],
-                            diagnostic_values[6, index],
-                            diagnostic_values[7, index],
-                            diagnostic_values[8, index],
-                            diagnostic_values[9, index],
-                            diagnostic_values[10, index],
+                            diagnostic_value(1, index),
+                            diagnostic_value(2, index),
+                            diagnostic_value(3, index),
+                            diagnostic_value(4, index),
+                            diagnostic_value(5, index),
+                            diagnostic_value(6, index),
+                            diagnostic_value(7, index),
+                            diagnostic_value(8, index),
+                            diagnostic_value(9, index),
+                            diagnostic_value(10, index),
                             diagnostic_integers[1, index],
                             Bool(diagnostic_flags[1, index]),
                             Bool(diagnostic_flags[2, index]),
                             diagnostic_integers[2, index],
-                            diagnostic_values[11, index],
-                            diagnostic_values[12, index],
+                            diagnostic_value(11, index),
+                            diagnostic_value(12, index),
                             diagnostic_integers[3, index],
-                            diagnostic_values[13, index],
-                            diagnostic_values[14, index],
-                            diagnostic_values[15, index],
-                            diagnostic_values[16, index],
-                            diagnostic_values[17, index],
+                            diagnostic_value(13, index),
+                            diagnostic_value(14, index),
+                            diagnostic_value(15, index),
+                            diagnostic_value(16, index),
+                            diagnostic_value(17, index),
                             Symbol(anderson_reasons[index]),
-                            diagnostic_values[18, index],
+                            diagnostic_value(18, index),
                             diagnostic_integers[5, index],
                             diagnostic_integers[6, index],
                             diagnostic_integers[7, index],
-                            diagnostic_values[19, index],
+                            diagnostic_value(19, index),
                             Bool(diagnostic_flags[3, index]),
                             Symbol(cg_restart_reasons[index]),
-                            diagnostic_values[20, index],
-                            diagnostic_values[21, index],
+                            diagnostic_value(20, index),
+                            diagnostic_value(21, index),
                             diagnostic_integers[8, index],
                         )
                     elseif version in ("2.4", "2.5")
                         WannierizationIterationDiagnostics(
                             omega_directional,
-                            diagnostic_values[1, index],
-                            diagnostic_values[2, index],
-                            diagnostic_values[3, index],
-                            diagnostic_values[4, index],
-                            diagnostic_values[5, index],
-                            diagnostic_values[6, index],
-                            diagnostic_values[7, index],
-                            diagnostic_values[8, index],
-                            diagnostic_values[9, index],
-                            diagnostic_values[10, index],
+                            diagnostic_value(1, index),
+                            diagnostic_value(2, index),
+                            diagnostic_value(3, index),
+                            diagnostic_value(4, index),
+                            diagnostic_value(5, index),
+                            diagnostic_value(6, index),
+                            diagnostic_value(7, index),
+                            diagnostic_value(8, index),
+                            diagnostic_value(9, index),
+                            diagnostic_value(10, index),
                             diagnostic_integers[1, index],
                             Bool(diagnostic_flags[1, index]),
                             Bool(diagnostic_flags[2, index]),
                             diagnostic_integers[2, index],
-                            diagnostic_values[11, index],
-                            diagnostic_values[12, index],
+                            diagnostic_value(11, index),
+                            diagnostic_value(12, index),
                             diagnostic_integers[3, index],
-                            diagnostic_values[13, index],
-                            diagnostic_values[14, index],
-                            diagnostic_values[15, index],
-                            diagnostic_values[16, index],
-                            diagnostic_values[17, index],
+                            diagnostic_value(13, index),
+                            diagnostic_value(14, index),
+                            diagnostic_value(15, index),
+                            diagnostic_value(16, index),
+                            diagnostic_value(17, index),
                         )
                     elseif version in ("2.2", "2.3")
                         WannierizationIterationDiagnostics(
                             omega_directional,
-                            diagnostic_values[1, index],
-                            diagnostic_values[2, index],
-                            diagnostic_values[3, index],
-                            diagnostic_values[4, index],
-                            diagnostic_values[5, index],
-                            diagnostic_values[6, index],
-                            diagnostic_values[7, index],
-                            diagnostic_values[8, index],
-                            diagnostic_values[9, index],
-                            diagnostic_values[10, index],
+                            diagnostic_value(1, index),
+                            diagnostic_value(2, index),
+                            diagnostic_value(3, index),
+                            diagnostic_value(4, index),
+                            diagnostic_value(5, index),
+                            diagnostic_value(6, index),
+                            diagnostic_value(7, index),
+                            diagnostic_value(8, index),
+                            diagnostic_value(9, index),
+                            diagnostic_value(10, index),
                             diagnostic_integers[1, index],
                             Bool(diagnostic_flags[1, index]),
                             Bool(diagnostic_flags[2, index]),
                             diagnostic_integers[2, index],
-                            diagnostic_values[11, index],
-                            diagnostic_values[12, index],
+                            diagnostic_value(11, index),
+                            diagnostic_value(12, index),
                             diagnostic_integers[3, index],
                         )
                     else
                         WannierizationIterationDiagnostics(
                             omega_directional,
-                            diagnostic_values[1, index],
-                            diagnostic_values[2, index],
-                            diagnostic_values[3, index],
-                            diagnostic_values[4, index],
-                            diagnostic_values[5, index],
-                            diagnostic_values[6, index],
-                            diagnostic_values[7, index],
-                            diagnostic_values[8, index],
-                            diagnostic_values[9, index],
-                            diagnostic_values[10, index],
+                            diagnostic_value(1, index),
+                            diagnostic_value(2, index),
+                            diagnostic_value(3, index),
+                            diagnostic_value(4, index),
+                            diagnostic_value(5, index),
+                            diagnostic_value(6, index),
+                            diagnostic_value(7, index),
+                            diagnostic_value(8, index),
+                            diagnostic_value(9, index),
+                            diagnostic_value(10, index),
                             diagnostic_integers[1, index],
                             Bool(diagnostic_flags[1, index]),
                             Bool(diagnostic_flags[2, index]),
@@ -329,13 +599,14 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
         for key in sort!(String.(collect(keys(diagnostics_group))))
             group = diagnostics_group[key]
             group_attributes = HDF5.attributes(group)
-            code = Symbol(String(read(group_attributes["code"])))
-            severity = Symbol(String(read(group_attributes["severity"])))
-            message = String(read(group_attributes["message"]))
+            code = Symbol(String(read_hdf5_attribute_value(group_attributes["code"], HDF5)))
+            severity = Symbol(String(read_hdf5_attribute_value(group_attributes["severity"], HDF5)))
+            message = String(read_hdf5_attribute_value(group_attributes["message"], HDF5))
             context = Dict{String, String}()
             for attribute_name in keys(group_attributes)
                 String(attribute_name) in ("code", "severity", "message") && continue
-                context[String(attribute_name)] = String(read(group_attributes[attribute_name]))
+                context[String(attribute_name)] =
+                    String(read_hdf5_attribute_value(group_attributes[attribute_name], HDF5))
             end
             push!(diagnostics, WannierizationDiagnostic(code, severity, message; context))
         end
@@ -389,12 +660,36 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                     read(stencil_group["weights"]),
                     read(stencil_group["target_moment"]),
                     Float64(required_attribute(stencil_group, "completeness_residual")),
-                    String(required_attribute(stencil_group, "digest")),
                 )
                 optimizer_group = restart_group["optimizer"]
+                _check_removed_optimizer_history(
+                    optimizer_group;
+                    legacy = wire_version=="1.4",
+                    require_complete = wire_version=="1.4",
+                )
                 residual_reference_values = Float64.(read(optimizer_group["residual_reference"]))
-                length(residual_reference_values) == 4 ||
-                    throw(ArgumentError("optimizer residual reference must have length four"))
+                if wire_version in (
+                    WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION,
+                    WANNIERIZATION_REFERENCED_CHECKPOINT_SCHEMA_VERSION,
+                )
+                    fields = String(
+                        required_attribute(optimizer_group["residual_reference"], "field_order"),
+                    )
+                    if fields == "projector,z,spread" && length(residual_reference_values) == 3
+                        residual_reference_values = (
+                            residual_reference_values[1],
+                            residual_reference_values[2],
+                            nothing,
+                            residual_reference_values[3],
+                        )
+                    elseif fields != "projector,z,frame_distance,spread" ||
+                           length(residual_reference_values) != 4
+                        throw(ArgumentError("CHECKPOINT_RESIDUAL_REFERENCE_LAYOUT_INVALID"))
+                    end
+                else
+                    length(residual_reference_values) == 4 ||
+                        throw(ArgumentError("optimizer residual reference must have length four"))
+                end
                 optimizer =
                     if version in (
                         "2.0",
@@ -427,8 +722,6 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                             Int(required_attribute(optimizer_group, "rejected_steps")),
                             Tuple(residual_reference_values),
                             Float64(required_attribute(optimizer_group, "previous_merit")),
-                            Matrix{Float64}(read(optimizer_group["anderson_z_history"])),
-                            Matrix{Float64}(read(optimizer_group["anderson_residual_history"])),
                             Symbol(String(required_attribute(optimizer_group, "phase"))),
                             Int(required_attribute(optimizer_group, "z_stability_count")),
                             Int(required_attribute(optimizer_group, "u_stability_count")),
@@ -454,8 +747,6 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                             Int(required_attribute(optimizer_group, "rejected_steps")),
                             Tuple(residual_reference_values),
                             Float64(required_attribute(optimizer_group, "previous_merit")),
-                            Matrix{Float64}(read(optimizer_group["anderson_z_history"])),
-                            Matrix{Float64}(read(optimizer_group["anderson_residual_history"])),
                         )
                     end
                 if version in (
@@ -487,8 +778,6 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                         legacy_optimizer.rejected_steps,
                         legacy_optimizer.residual_reference,
                         legacy_optimizer.previous_merit,
-                        legacy_optimizer.anderson_z_history,
-                        legacy_optimizer.anderson_residual_history,
                         legacy_optimizer.phase,
                         legacy_optimizer.z_stability_count,
                         legacy_optimizer.u_stability_count,
@@ -644,8 +933,6 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                         legacy_optimizer.rejected_steps,
                         legacy_optimizer.residual_reference,
                         legacy_optimizer.previous_merit,
-                        legacy_optimizer.anderson_z_history,
-                        legacy_optimizer.anderson_residual_history,
                         legacy_optimizer.phase,
                         legacy_optimizer.z_stability_count,
                         legacy_optimizer.u_stability_count,
@@ -703,8 +990,6 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                         legacy_optimizer.rejected_steps,
                         legacy_optimizer.residual_reference,
                         legacy_optimizer.previous_merit,
-                        legacy_optimizer.anderson_z_history,
-                        legacy_optimizer.anderson_residual_history,
                         legacy_optimizer.phase,
                         legacy_optimizer.z_stability_count,
                         legacy_optimizer.u_stability_count,
@@ -737,13 +1022,8 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                         legacy_optimizer.last_cg_restart_reason,
                         legacy_optimizer.last_anderson_reason,
                         String(required_attribute(optimizer_group, "u_phase_contract")),
-                        String(required_attribute(optimizer_group, "u_active_orbit_sha256")),
                         Int(required_attribute(optimizer_group, "u_active_orbit_count")),
                         Float64(required_attribute(optimizer_group, "u_generalized_gradient_rms")),
-                        Array{ComplexF64, 4}(read(optimizer_group["u_lbfgs_s_history"])),
-                        Array{ComplexF64, 4}(read(optimizer_group["u_lbfgs_y_history"])),
-                        Vector{Float64}(read(optimizer_group["u_lbfgs_rho_history"])),
-                        Int(required_attribute(optimizer_group, "u_lbfgs_restart_count")),
                         Symbol(
                             String(
                                 required_attribute(
@@ -756,17 +1036,21 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                 end
                 if contract_version in
                    ("2.22", "2.23", "2.24", "2.25", "2.26", "2.27", "2.28", "2.29") &&
-                   haskey(optimizer_group, "wannier90_reference_overlaps") &&
-                   haskey(optimizer_group, "wannier90_reference_unitaries") &&
-                   haskey(HDF5.attributes(optimizer_group), "wannier90_reference_omega_i")
-                    legacy_fields = ntuple(index -> getfield(optimizer, index), 49)
+                   haskey(optimizer_group, "recursive_localization_overlaps") &&
+                   haskey(optimizer_group, "recursive_localization_unitaries") &&
+                   haskey(HDF5.attributes(optimizer_group), "recursive_localization_omega_i")
+                    legacy_fields = ntuple(index -> getfield(optimizer, index), 42)
                     optimizer = WannierizationOptimizerState(
                         legacy_fields...,
-                        Array{ComplexF64, 4}(read(optimizer_group["wannier90_reference_overlaps"])),
-                        Array{ComplexF64, 3}(
-                            read(optimizer_group["wannier90_reference_unitaries"]),
+                        Array{ComplexF64, 4}(
+                            read(optimizer_group["recursive_localization_overlaps"]),
                         ),
-                        Float64(required_attribute(optimizer_group, "wannier90_reference_omega_i")),
+                        Array{ComplexF64, 3}(
+                            read(optimizer_group["recursive_localization_unitaries"]),
+                        ),
+                        Float64(
+                            required_attribute(optimizer_group, "recursive_localization_omega_i"),
+                        ),
                     )
                 end
                 has_fixed_subspace =
@@ -809,6 +1093,12 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                         "2.19",
                         "2.20",
                     ) && Bool(read(restart_group["has_localization_initial_frames"]))
+                input_definition=_read_restart_input_definition_hdf5(restart_group; reference_root)
+                optimizer=_read_restart_branch_definition_hdf5(
+                    optimizer_group,
+                    optimizer;
+                    qualified = input_definition!==nothing,
+                )
                 WannierizationRestartState(
                     Int(required_attribute(restart_group, "iteration")),
                     Array{ComplexF64, 3}(read(restart_group["frames"])),
@@ -819,11 +1109,7 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                     Matrix{Float64}(read(restart_group["convergence_values"])),
                     BitMatrix(Bool.(read(restart_group["included_bands"]))),
                     Float64(required_attribute(restart_group, "elapsed_seconds")),
-                    String(required_attribute(restart_group, "config_sha256")),
-                    String(required_attribute(restart_group, "representation_sha256")),
                     stencil,
-                    String(required_attribute(restart_group, "projection_basis_sha256")),
-                    String(required_attribute(restart_group, "amn_sha256")),
                     optimizer,
                     has_fixed_subspace ?
                     Array{ComplexF64, 3}(read(restart_group["fixed_subspace_projectors"])) :
@@ -833,17 +1119,28 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                     has_localization_initial_frames ?
                     Array{ComplexF64, 3}(read(restart_group["localization_initial_frames"])) :
                     nothing,
+                    input_definition,
                 )
             else
                 nothing
             end
         input_summary = read_string_dictionary(handle["input_summary"])
+        get(input_summary, "checkpoint_publication_identity", "") == publication_identity &&
+        get(input_summary, "checkpoint_schema_version", "") == stored_version ||
+            throw(ArgumentError("CHECKPOINT_PUBLICATION_DECLARATION_MISMATCH"))
+
         get!(input_summary, "construction_policy", "strict")
         input_summary["construction_policy"] in ("strict", "standard") ||
             throw(ArgumentError("CONSTRUCTION_POLICY_INVALID: unsupported persisted policy"))
         if haskey(input_summary, "construction_policy_contract")
-            input_summary["construction_policy_contract"] == "standard_construction_v1" ||
+            policy_contract = input_summary["construction_policy_contract"]
+            policy_contract in ("standard_construction_v1", "ordinary_construction_v2") ||
                 throw(ArgumentError("CONSTRUCTION_POLICY_CONTRACT_UNSUPPORTED"))
+            if policy_contract == "ordinary_construction_v2"
+                input_summary["construction_policy"] == "standard" &&
+                get(input_summary, "ordinary_calculation_policy_version", "") == "1.0" ||
+                    throw(ArgumentError("ORDINARY_CALCULATION_POLICY_CONTRACT_MISMATCH"))
+            end
         elseif input_summary["construction_policy"] != "strict"
             throw(
                 ArgumentError(
@@ -853,7 +1150,7 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
         end
         deleted_tag_present =
             haskey(input_summary, "symmetry_mode") || any(
-                value -> value in ("ordinary_no_symmetry", "wannier90_reference"),
+                value -> value in ("ordinary_no_symmetry", "recursive_localization"),
                 values(input_summary),
             )
         deleted_tag_present && throw(
@@ -868,7 +1165,7 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                 "representation_source",
                 "symmetry_constraints_applied",
                 "effective_algorithm_profile",
-                "wannier90_reference_algorithm_contract_version",
+                "recursive_localization_algorithm_contract_version",
             )
                 haskey(input_summary, key) ||
                     throw(ArgumentError("schema-2.25 checkpoint is missing $(key)"))
@@ -896,6 +1193,7 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                 ),
             )
         end
+        target_input_keys = _checkpoint_target_input_keys(input_summary, wire_version)
         if contract_version in ("2.28", "2.29")
             for key in (
                 "authoritative_hamiltonian",
@@ -909,18 +1207,18 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
             end
             if input_summary["qualification_scope"] == "target_subspace"
                 for key in (
-                    "disentanglement_outer_mask_sha256",
-                    "disentanglement_frozen_mask_sha256",
-                    "target_subspace_contract_sha256",
+                    target_input_keys[1],
+                    target_input_keys[2],
+                    target_input_keys[3],
                     "target_leakage_semantics",
-                    "target_leakage_formula_sha256",
+                    target_input_keys[4],
                     "target_leakage_threshold",
                 )
                     haskey(input_summary, key) || throw(
                         ArgumentError("schema-$(stored_version) checkpoint is missing $(key)"),
                     )
                 end
-                _validate_persisted_target_subspace_contract(input_summary)
+                _validate_checkpoint_target_input(input_summary, target_input_keys)
             else
                 validate_persisted_authority_key(input_summary["authoritative_hamiltonian"])
             end
@@ -930,9 +1228,9 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
         get!(input_summary, "paw_sewing_thresholds", "NOT_APPLICABLE")
         get!(input_summary, "strict_sewing_diagnostics_sha256", "NOT_RECORDED")
         get!(input_summary, "wavefunction_gauge_backend", "native_eigenstate")
-        get!(input_summary, "wavefunction_gauge_hdf5_sha256", "NOT_APPLICABLE")
+        get!(input_summary, "wavefunction_gauge_definition", "NOT_APPLICABLE")
         get!(input_summary, "block_partition_policy", "NOT_APPLICABLE")
-        get!(input_summary, "block_partition_policy_sha256", "NOT_APPLICABLE")
+        get!(input_summary, "block_partition_policy_definition", "NOT_APPLICABLE")
         get!(input_summary, "authoritative_hamiltonian", "native_dft")
         validate_persisted_authority_key(input_summary["authoritative_hamiltonian"])
         !(contract_version in ("2.28", "2.29")) &&
@@ -971,27 +1269,31 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
         target_leakage_threshold_default =
             contract_version in ("2.28", "2.29") ? "NOT_APPLICABLE" : "NOT_RECORDED"
         get!(input_summary, "target_leakage_semantics", target_leakage_semantics_default)
-        get!(input_summary, "target_leakage_formula_sha256", "NOT_RECORDED")
+        get!(input_summary, "target_leakage_formula_definition", "NOT_RECORDED")
         get!(input_summary, "target_leakage_threshold", target_leakage_threshold_default)
-        get!(input_summary, "wannier90_reference_algorithm_contract_version", "legacy")
-        get!(input_summary, "wannier90_reference_parity_standard_version", "legacy")
-        get!(input_summary, "wannier90_reference_parity_semantic", "legacy")
-        get!(input_summary, "wannier90_reference_accepted_step_combination_rule", "NOT_APPLICABLE")
+        get!(input_summary, "recursive_localization_algorithm_contract_version", "legacy")
+        get!(input_summary, "recursive_localization_validation_standard_version", "legacy")
+        get!(input_summary, "recursive_localization_validation_semantic", "legacy")
         get!(
             input_summary,
-            "wannier90_reference_accepted_step_absolute_tolerance",
+            "recursive_localization_accepted_step_combination_rule",
             "NOT_APPLICABLE",
         )
         get!(
             input_summary,
-            "wannier90_reference_accepted_step_relative_tolerance",
+            "recursive_localization_accepted_step_absolute_tolerance",
             "NOT_APPLICABLE",
         )
-        get!(input_summary, "wannier90_reference_parity_contract_sha256", "NOT_APPLICABLE")
-        get!(input_summary, "wannier90_reference_default_qualification_status", "NOT_QUALIFIED")
         get!(
             input_summary,
-            "wannier90_reference_default_qualification_manifest_sha256",
+            "recursive_localization_accepted_step_relative_tolerance",
+            "NOT_APPLICABLE",
+        )
+        get!(input_summary, "recursive_localization_validation_contract_sha256", "NOT_APPLICABLE")
+        get!(input_summary, "recursive_localization_default_qualification_status", "NOT_QUALIFIED")
+        get!(
+            input_summary,
+            "recursive_localization_default_qualification_manifest_sha256",
             "NOT_AVAILABLE",
         )
         get!(input_summary, "smv_fletcher_reeves_two_stage_algorithm_contract_version", "legacy")
@@ -1006,7 +1308,14 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
         get!(input_summary, "global_production_eligible", "false")
         input_summary["checkpoint_schema_version"] = stored_version
         # Public 1.0 and legacy 2.28 carry the same leakage-weight restart contract.
-        input_summary["restart_eligible"] = string(contract_version in ("2.28", "2.29"))
+        definition_status=_restart_input_definition_status(restart_state)
+        get(input_summary, "restart_input_definition_status", "")==definition_status ||
+            throw(ArgumentError("RESTART_INPUT_DEFINITION_STATUS_MISMATCH"))
+        declared_eligible=get(input_summary, "restart_eligible", "")
+        declared_eligible in ("true", "false") && (
+            declared_eligible=="false" ||
+            (contract_version in ("2.28", "2.29") && definition_status=="COMPLETE")
+        ) || throw(ArgumentError("RESTART_INPUT_ELIGIBILITY_MISMATCH"))
         contract_version in ("2.28", "2.29") ||
             (input_summary["restart_rejection_code"] = "RESTART_SEMANTICS_INCOMPATIBLE")
         version in (
@@ -1073,11 +1382,23 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
         )
             input_summary["checkpoint_constraint_operation_scope"] =
                 String(required_attribute(handle, "constraint_operation_scope"))
-            input_summary["checkpoint_constraint_operation_parent_representation_sha256"] = String(
-                required_attribute(handle, "constraint_operation_parent_representation_sha256"),
-            )
-            input_summary["checkpoint_constraint_operation_subgroup_sha256"] =
-                String(required_attribute(handle, "constraint_operation_subgroup_sha256"))
+            # Current recovery binds the complete representation in the saved
+            # input definition. Scope and actual parent indices remain explicit;
+            # removed content certificates are neither required nor trusted.
+            # Older accepted-state-only wires persisted actual indices in the
+            # summary, not a second root mirror. Do not fabricate absent indices.
+            if wire_version in ("1.4", "1.5", "1.6") &&
+               !haskey(HDF5.attributes(handle), "constraint_operation_parent_indices")
+                haskey(input_summary, "constraint_operation_parent_indices") || throw(
+                    ArgumentError(
+                        "CHECKPOINT_DEFINITION_MISSING: constraint_operation_parent_indices",
+                    ),
+                )
+                # Preserve the old summary verbatim for the archived byte oracle.
+            else
+                input_summary["checkpoint_constraint_operation_parent_indices"] =
+                    String(required_attribute(handle, "constraint_operation_parent_indices"))
+            end
         end
         if version == "2.0"
             accepted = restart_state === nothing ? -1 : restart_state.iteration
@@ -1144,8 +1465,16 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                 "2.18",
                 "2.19",
                 "2.20",
-            ) ? read_tb_symmetry_qualification_group(handle) :
-            tb_symmetry_not_run("LEGACY_SCHEMA_FIELD_ABSENT")
+            ) ?
+            read_tb_symmetry_qualification_group(
+                handle;
+                explicit_legacy_migration = !(
+                    wire_version in (
+                        WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION,
+                        WANNIERIZATION_REFERENCED_CHECKPOINT_SCHEMA_VERSION,
+                    )
+                ),
+            ) : tb_symmetry_not_run("LEGACY_SCHEMA_FIELD_ABSENT")
         result = WannierizationResult(
             status,
             v_matrix,
@@ -1185,83 +1514,8 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
             "2.20",
         )
             attributes = HDF5.attributes(handle)
-            stored_checkpoint_sha256 = String(required_attribute(handle, "checkpoint_sha256"))
-            computed_checkpoint_sha256 = if stored_version == "1.2"
-                _wannierization_checkpoint_sha256_v2_29(result)
-            elseif stored_version == "1.1"
-                _wannierization_checkpoint_sha256_v1_1(result)
-            elseif stored_version == "2.28"
-                _wannierization_checkpoint_sha256_v2_28(result)
-            elseif stored_version == "2.27"
-                _wannierization_checkpoint_sha256_v2_27(result)
-            elseif stored_version == "2.26"
-                _wannierization_checkpoint_sha256_v2_26(result)
-            elseif stored_version == "2.25"
-                _wannierization_checkpoint_sha256_v2_25(result)
-            elseif stored_version == "2.24"
-                _wannierization_checkpoint_sha256_v2_24(result)
-            elseif stored_version == "2.23"
-                _wannierization_checkpoint_sha256_v2_23(result)
-            elseif stored_version == "2.22"
-                _wannierization_checkpoint_sha256_v2_22(result)
-            elseif stored_version == "2.21"
-                _wannierization_checkpoint_sha256_v2_21(result)
-            elseif version == "2.0"
-                _wannierization_checkpoint_sha256_v1_3(result)
-            elseif version == "2.1"
-                _wannierization_checkpoint_sha256_v2_1(result)
-            elseif version == "2.2"
-                _wannierization_checkpoint_sha256_v2_2(result)
-            elseif version == "2.3"
-                _wannierization_checkpoint_sha256_v2_3(result)
-            elseif version == "2.4"
-                _wannierization_checkpoint_sha256_v2_4(result)
-            elseif version == "2.5"
-                _wannierization_checkpoint_sha256_v2_5(result)
-            elseif version == "2.6"
-                _wannierization_checkpoint_sha256_v2_6(result)
-            elseif version == "2.7"
-                _wannierization_checkpoint_sha256_v2_7(result)
-            elseif version == "2.8"
-                _wannierization_checkpoint_sha256_v2_8(result)
-            elseif version == "2.9"
-                _wannierization_checkpoint_sha256_v2_9(result)
-            elseif version == "2.10"
-                _wannierization_checkpoint_sha256_v2_10(result)
-            elseif version == "2.11"
-                _wannierization_checkpoint_sha256_v2_11(result)
-            elseif version == "2.12"
-                _wannierization_checkpoint_sha256_v2_12(result)
-            elseif version == "2.16"
-                _wannierization_checkpoint_sha256_v2_16(result)
-            elseif version == "2.17"
-                _wannierization_checkpoint_sha256_v2_17(result)
-            elseif version == "2.18"
-                _wannierization_checkpoint_sha256_v2_18(result)
-            elseif version == "2.19"
-                _wannierization_checkpoint_sha256_v2_19(result)
-            elseif version == "2.20"
-                _wannierization_checkpoint_sha256_v2_20(result)
-            else
-                _wannierization_checkpoint_sha256_v2_13(result)
-            end
-            if stored_checkpoint_sha256 != computed_checkpoint_sha256
-                stored_summary = read_string_dictionary(handle["input_summary"])
-                added_keys = sort!(collect(setdiff(keys(input_summary), keys(stored_summary))))
-                changed_keys = sort!([
-                    key for key in intersect(keys(input_summary), keys(stored_summary)) if
-                    input_summary[key] != stored_summary[key]
-                ])
-                throw(
-                    ArgumentError(
-                        "wannierization checkpoint scientific SHA-256 mismatch; " *
-                        "stored=$(stored_checkpoint_sha256), computed=$(computed_checkpoint_sha256), " *
-                        "reader_added=$(join(added_keys, ',')), reader_changed=$(join(changed_keys, ','))",
-                    ),
-                )
-            end
-            if stored_version == "1.2"
-                # Wire 1.2 mirrors the typed eligibility block as root
+            if stored_version == "1.3"
+                # Wire1.3 mirrors the typed eligibility block as root
                 # attributes; they must agree with the summary group verbatim.
                 for key in WANNIERIZATION_ELIGIBILITY_SUMMARY_KEYS
                     String(required_attribute(handle, key)) == get(result.input_summary, key, "") ||
@@ -1291,7 +1545,7 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                 for key in (
                     "algorithm_profile",
                     "effective_algorithm_profile",
-                    "wannier90_reference_protocol",
+                    "recursive_localization_protocol",
                 )
                     String(required_attribute(handle, key)) == input_summary[key] || throw(
                         ArgumentError("RESTART_SEMANTICS_INCOMPATIBLE: checkpoint $(key) differs"),
@@ -1318,11 +1572,11 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                     "qualification_scope",
                     "target_authority",
                     "parent_audit_policy",
-                    "disentanglement_outer_mask_sha256",
-                    "disentanglement_frozen_mask_sha256",
-                    "target_subspace_contract_sha256",
+                    target_input_keys[1],
+                    target_input_keys[2],
+                    target_input_keys[3],
                     "target_leakage_semantics",
-                    "target_leakage_formula_sha256",
+                    target_input_keys[4],
                     "target_leakage_threshold",
                 )
                     String(required_attribute(handle, key)) == input_summary[key] || throw(
@@ -1332,7 +1586,7 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                     )
                 end
                 input_summary["qualification_scope"] == "target_subspace" &&
-                    _validate_persisted_target_subspace_contract(input_summary)
+                    _validate_checkpoint_target_input(input_summary, target_input_keys)
                 if input_summary["authoritative_hamiltonian"] == "symmetrized_dft_hamiltonian"
                     String(required_attribute(handle, "auxiliary_parent_qualification")) ==
                     input_summary["auxiliary_parent_qualification"] || throw(
@@ -1344,15 +1598,15 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
             end
             if stored_version in ("2.23", "2.24", "2.25")
                 for key in (
-                    "wannier90_reference_algorithm_contract_version",
-                    "wannier90_reference_parity_standard_version",
-                    "wannier90_reference_parity_semantic",
-                    "wannier90_reference_accepted_step_combination_rule",
-                    "wannier90_reference_accepted_step_absolute_tolerance",
-                    "wannier90_reference_accepted_step_relative_tolerance",
-                    "wannier90_reference_parity_contract_sha256",
-                    "wannier90_reference_default_qualification_status",
-                    "wannier90_reference_default_qualification_manifest_sha256",
+                    "recursive_localization_algorithm_contract_version",
+                    "recursive_localization_validation_standard_version",
+                    "recursive_localization_validation_semantic",
+                    "recursive_localization_accepted_step_combination_rule",
+                    "recursive_localization_accepted_step_absolute_tolerance",
+                    "recursive_localization_accepted_step_relative_tolerance",
+                    "recursive_localization_validation_contract_sha256",
+                    "recursive_localization_default_qualification_status",
+                    "recursive_localization_default_qualification_manifest_sha256",
                 )
                     String(required_attribute(handle, key)) == input_summary[key] || throw(
                         ArgumentError("RESTART_SEMANTICS_INCOMPATIBLE: checkpoint $(key) differs"),
@@ -1429,55 +1683,8 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                     end
                 end
             end
-            for (attribute_name, summary_name) in (
-                ("input_sha256", "input_sha256"),
-                ("config_sha256", "restart_config_sha256"),
-                ("representation_sha256", "representation_sha256"),
-            )
-                String(read(attributes[attribute_name])) ==
-                get(result.input_summary, summary_name, "") ||
-                    throw(ArgumentError("wannierization checkpoint $(attribute_name) mismatch"))
-            end
-            if result.restart_state !== nothing
-                state = something(result.restart_state)
-                state.config_sha256 == get(result.input_summary, "restart_config_sha256", "") ||
-                    throw(ArgumentError("restart-state config SHA-256 mismatch"))
-                state.representation_sha256 ==
-                get(result.input_summary, "representation_sha256", "") ||
-                    throw(ArgumentError("restart-state representation SHA-256 mismatch"))
-                if version in (
-                    "2.0",
-                    "2.1",
-                    "2.2",
-                    "2.3",
-                    "2.4",
-                    "2.5",
-                    "2.6",
-                    "2.7",
-                    "2.8",
-                    "2.9",
-                    "2.10",
-                    "2.11",
-                    "2.12",
-                    "2.13",
-                    "2.14",
-                    "2.15",
-                    "2.16",
-                    "2.17",
-                    "2.18",
-                    "2.19",
-                    "2.20",
-                )
-                    state.projection_basis_sha256 ==
-                    get(result.input_summary, "projection_basis_sha256", "") ||
-                        throw(ArgumentError("restart-state projection basis SHA-256 mismatch"))
-                    state.amn_sha256 == get(result.input_summary, "amn_sha256", "") ||
-                        throw(ArgumentError("restart-state AMN SHA-256 mismatch"))
-                    something(state.stencil).digest ==
-                    get(result.input_summary, "finite_difference_stencil_sha256", "") ||
-                        throw(ArgumentError("restart-state stencil SHA-256 mismatch"))
-                end
-            end
+            # Content labels do not authenticate accepted state. Complete input
+            # definitions and numerical/domain checks govern current recovery.
             if version in (
                 "2.7",
                 "2.8",
@@ -1511,12 +1718,11 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                 get(result.input_summary, "localization_gradient_contract", "") ==
                 expected_contract ||
                     throw(ArgumentError("wannierization checkpoint gradient contract mismatch"))
-                String(read(attributes["localization_gradient_contract"])) == expected_contract ||
-                    throw(
-                        ArgumentError(
-                            "wannierization checkpoint gradient-contract attribute mismatch",
-                        ),
-                    )
+                String(
+                    read_hdf5_attribute_value(attributes["localization_gradient_contract"], HDF5),
+                ) == expected_contract || throw(
+                    ArgumentError("wannierization checkpoint gradient-contract attribute mismatch"),
+                )
             end
             if version in (
                 "2.8",
@@ -1536,13 +1742,11 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                 expected_joint_contract = JOINT_UPDATE_CONTRACT
                 get(result.input_summary, "joint_update_contract", "") == expected_joint_contract ||
                     throw(ArgumentError("wannierization checkpoint joint contract mismatch"))
-                String(read(attributes["joint_update_contract"])) == expected_joint_contract ||
-                    throw(
-                        ArgumentError(
-                            "wannierization checkpoint joint-contract attribute mismatch",
-                        ),
-                    )
-                String(read(attributes["z_seal_class"])) ==
+                String(read_hdf5_attribute_value(attributes["joint_update_contract"], HDF5)) ==
+                expected_joint_contract || throw(
+                    ArgumentError("wannierization checkpoint joint-contract attribute mismatch"),
+                )
+                String(read_hdf5_attribute_value(attributes["z_seal_class"], HDF5)) ==
                 get(result.input_summary, "z_seal_class", "") ||
                     throw(ArgumentError("wannierization checkpoint Z-seal attribute mismatch"))
             end
@@ -1562,18 +1766,21 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
             )
                 for (attribute_name, summary_name) in (
                     ("constraint_operation_scope", "constraint_operation_scope"),
-                    (
-                        "constraint_operation_parent_representation_sha256",
-                        "constraint_operation_parent_representation_sha256",
-                    ),
-                    (
-                        "constraint_operation_subgroup_sha256",
-                        "constraint_operation_subgroup_sha256",
-                    ),
+                    ("constraint_operation_parent_indices", "constraint_operation_parent_indices"),
                 )
-                    String(read(attributes[attribute_name])) ==
-                    get(result.input_summary, summary_name, "") ||
-                        throw(ArgumentError("wannierization checkpoint $(attribute_name) mismatch"))
+                    if wire_version in ("1.4", "1.5", "1.6") &&
+                       attribute_name=="constraint_operation_parent_indices" &&
+                       !haskey(attributes, attribute_name)
+                        recorded=get(result.input_summary, summary_name, "")
+                        !isempty(recorded) || throw(
+                            ArgumentError("CHECKPOINT_DEFINITION_MISSING: archived parent indices"),
+                        )
+                    else
+                        String(read_hdf5_attribute_value(attributes[attribute_name], HDF5)) ==
+                        get(result.input_summary, summary_name, "") || throw(
+                            ArgumentError("wannierization checkpoint $(attribute_name) mismatch"),
+                        )
+                    end
                 end
             end
             if version in
@@ -1581,13 +1788,8 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                 for (attribute_name, summary_name, default_value) in (
                     ("sewing_backend", "sewing_backend", "coefficient_mapping"),
                     ("sewing_metric", "sewing_metric", "pseudo_coefficient_linear_map"),
-                    (
-                        "strict_sewing_diagnostics_sha256",
-                        "strict_sewing_diagnostics_sha256",
-                        "NOT_RECORDED",
-                    ),
                 )
-                    String(read(attributes[attribute_name])) ==
+                    String(read_hdf5_attribute_value(attributes[attribute_name], HDF5)) ==
                     get(result.input_summary, summary_name, default_value) ||
                         throw(ArgumentError("wannierization checkpoint $(attribute_name) mismatch"))
                 end
@@ -1600,23 +1802,42 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                         "native_eigenstate",
                     ),
                     (
-                        "wavefunction_gauge_hdf5_sha256",
-                        "wavefunction_gauge_hdf5_sha256",
+                        "wavefunction_gauge_definition",
+                        "wavefunction_gauge_definition",
                         "NOT_APPLICABLE",
                     ),
                 )
-                    String(read(attributes[attribute_name])) ==
-                    get(result.input_summary, summary_name, default_value) ||
+                    observed = if haskey(attributes, attribute_name)
+                        String(read_hdf5_attribute_value(attributes[attribute_name], HDF5))
+                    elseif attribute_name == "wavefunction_gauge_definition" &&
+                           String(required_attribute(handle, "wavefunction_gauge_backend")) ==
+                           "native_eigenstate" &&
+                           get(result.input_summary, summary_name, default_value) ==
+                           "NOT_APPLICABLE"
+                        # Native eigenstates have no applied gauge transformation.
+                        "NOT_APPLICABLE"
+                    else
+                        throw(ArgumentError("CHECKPOINT_DEFINITION_MISSING: $(attribute_name)"))
+                    end
+                    observed == get(result.input_summary, summary_name, default_value) ||
                         throw(ArgumentError("wannierization checkpoint $(attribute_name) mismatch"))
                 end
             end
             if version in ("2.13", "2.14", "2.15", "2.16", "2.17", "2.18", "2.19", "2.20")
                 for (attribute_name, summary_name) in (
                     ("block_partition_policy", "block_partition_policy"),
-                    ("block_partition_policy_sha256", "block_partition_policy_sha256"),
+                    ("block_partition_policy_definition", "block_partition_policy_definition"),
                 )
-                    String(read(attributes[attribute_name])) ==
-                    get(result.input_summary, summary_name, "NOT_APPLICABLE") ||
+                    observed = if haskey(attributes, attribute_name)
+                        String(read_hdf5_attribute_value(attributes[attribute_name], HDF5))
+                    elseif attribute_name == "block_partition_policy_definition" &&
+                           String(required_attribute(handle, "block_partition_policy")) ==
+                           "NOT_APPLICABLE"
+                        "NOT_APPLICABLE"
+                    else
+                        throw(ArgumentError("CHECKPOINT_DEFINITION_MISSING: $(attribute_name)"))
+                    end
+                    observed == get(result.input_summary, summary_name, "NOT_APPLICABLE") ||
                         throw(ArgumentError("wannierization checkpoint $(attribute_name) mismatch"))
                 end
             end
@@ -1657,6 +1878,9 @@ function read_wannierization_checkpoint_hdf5(filename::AbstractString)
                 result.tb_symmetry_qualification,
             )
         end
+        # The decoder and producer share the same physical continuation checks.
+        # Replacing a content seal must not admit an invalid optimizer/subspace.
+        _validate_checkpoint_fixed_subspace(result)
         return result
     end
 end

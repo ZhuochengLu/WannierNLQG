@@ -28,6 +28,11 @@
     QUANTITY_LINEAR_TRANSPORT
     QUANTITY_LINEAR_OPTICAL_RESPONSE
     QUANTITY_ORBITAL_MAGNETIZATION
+    QUANTITY_JERK_CURRENT
+    QUANTITY_THIRD_HARMONIC_GENERATION
+    QUANTITY_INTRINSIC_AHC
+    QUANTITY_BERRY_CURVATURE_DIPOLE_CONDUCTIVITY
+    QUANTITY_BERRY_CURVATURE_QUADRUPOLE_CONDUCTIVITY
 end
 
 @enum MethodID::UInt8 begin
@@ -87,6 +92,10 @@ end
     MATRIX_LINEAR_TRANSPORT
     MATRIX_LINEAR_OPTICAL_RESPONSE
     MATRIX_ORBITAL_MAGNETIZATION
+    MATRIX_JERK_CURRENT
+    MATRIX_THIRD_HARMONIC
+    MATRIX_INTRINSIC_AHC
+    MATRIX_BERRY_MULTIPOLE_DC
 end
 
 @enum BandPolicy::UInt8 begin
@@ -148,6 +157,12 @@ end
 
 # Map a normalized public quantity symbol to its typed enum, rejecting unsupported symbols.
 quantity_id(q::Symbol) =
+    q == :berry_curvature_dipole_conductivity ? QUANTITY_BERRY_CURVATURE_DIPOLE_CONDUCTIVITY :
+    q == :berry_curvature_quadrupole_conductivity ?
+    QUANTITY_BERRY_CURVATURE_QUADRUPOLE_CONDUCTIVITY :
+    q == :intrinsic_ahc ? QUANTITY_INTRINSIC_AHC :
+    q == :jerk_current ? QUANTITY_JERK_CURRENT :
+    q == :third_harmonic_generation ? QUANTITY_THIRD_HARMONIC_GENERATION :
     q == :linear_transport ? QUANTITY_LINEAR_TRANSPORT :
     q == :linear_optical_response ? QUANTITY_LINEAR_OPTICAL_RESPONSE :
     q == :orbital_magnetization ? QUANTITY_ORBITAL_MAGNETIZATION :
@@ -177,6 +192,12 @@ quantity_id(q::Symbol) =
 
 # Recover the public quantity symbol from a typed quantity enum, rejecting unmapped values.
 quantity_symbol(q::QuantityID) =
+    q == QUANTITY_BERRY_CURVATURE_DIPOLE_CONDUCTIVITY ? :berry_curvature_dipole_conductivity :
+    q == QUANTITY_BERRY_CURVATURE_QUADRUPOLE_CONDUCTIVITY ?
+    :berry_curvature_quadrupole_conductivity :
+    q == QUANTITY_INTRINSIC_AHC ? :intrinsic_ahc :
+    q == QUANTITY_JERK_CURRENT ? :jerk_current :
+    q == QUANTITY_THIRD_HARMONIC_GENERATION ? :third_harmonic_generation :
     q == QUANTITY_LINEAR_TRANSPORT ? :linear_transport :
     q == QUANTITY_LINEAR_OPTICAL_RESPONSE ? :linear_optical_response :
     q == QUANTITY_ORBITAL_MAGNETIZATION ? :orbital_magnetization :
@@ -267,6 +288,45 @@ const TASK_DEFINITIONS = (
     (
         _task_definition(
             quantity,
+            :conventional,
+            calculation,
+            Symbol(quantity, "_", calculation),
+            calculation == :integral ? EXECUTOR_INTEGRAL_CONVENTIONAL :
+            EXECUTOR_KSLICE_CONVENTIONAL,
+            MATRIX_BERRY_MULTIPOLE_DC,
+            BAND_ALL,
+            calculation == :integral ? OUTPUT_INTEGRAL : OUTPUT_KSLICE_COMPLEX,
+            FOURIER_CONVENTIONAL_GEOMETRY,
+            quantity == :berry_curvature_dipole_conductivity ? 3 : 4,
+            (quantity == :berry_curvature_dipole_conductivity ? "bcdc" : "bcqc") *
+            (calculation == :kslice ? "k" : ""),
+        ) for quantity in
+        (:berry_curvature_dipole_conductivity, :berry_curvature_quadrupole_conductivity) for
+        calculation in (:integral, :kslice)
+    )...,
+    (
+        _task_definition(
+            :intrinsic_ahc,
+            method,
+            calculation,
+            Symbol("intrinsic_ahc_", method, "_", calculation),
+            calculation == :integral ?
+            (
+                method == :conventional ? EXECUTOR_INTEGRAL_CONVENTIONAL :
+                EXECUTOR_INTEGRAL_PROJECTOR
+            ) :
+            (method == :conventional ? EXECUTOR_KSLICE_CONVENTIONAL : EXECUTOR_KSLICE_PROJECTOR),
+            MATRIX_INTRINSIC_AHC,
+            BAND_ALL,
+            calculation == :integral ? OUTPUT_INTEGRAL : OUTPUT_KSLICE_COMPLEX,
+            FOURIER_CONVENTIONAL_Q0,
+            2,
+            calculation == :integral ? "ahc" : "ahck",
+        ) for method in (:conventional, :projector) for calculation in (:integral, :kslice)
+    )...,
+    (
+        _task_definition(
+            quantity,
             method,
             calculation,
             Symbol(quantity, "_", method, "_", calculation),
@@ -286,6 +346,23 @@ const TASK_DEFINITIONS = (
             )*(calculation==:kslice ? "k" : ""),
         ) for quantity in (:linear_transport, :linear_optical_response, :orbital_magnetization)
         for method in (:conventional, :projector) for calculation in (:integral, :kslice)
+    )...,
+    (
+        _task_definition(
+            quantity,
+            :conventional,
+            calculation,
+            calculation==:integral ? Symbol(quantity, "_integral") : Symbol(quantity, "_kslice"),
+            calculation==:integral ? EXECUTOR_INTEGRAL_CONVENTIONAL : EXECUTOR_KSLICE_CONVENTIONAL,
+            quantity==:jerk_current ? MATRIX_JERK_CURRENT : MATRIX_THIRD_HARMONIC,
+            BAND_ALL,
+            calculation==:integral ? OUTPUT_INTEGRAL : OUTPUT_KSLICE_COMPLEX,
+            FOURIER_CONVENTIONAL_Q0,
+            4,
+            quantity==:jerk_current ? (calculation==:integral ? "jc" : "jck") :
+            (calculation==:integral ? "thg" : "thgk"),
+        ) for quantity in (:jerk_current, :third_harmonic_generation) for
+        calculation in (:integral, :kslice)
     )...,
     (
         _task_definition(
@@ -369,7 +446,7 @@ const TASK_DEFINITIONS = (
             method == :geometric_loop ? FOURIER_GEOMETRIC_Q0 : FOURIER_WILSON,
             3,
             "qhck",
-        ) for method in (:conventional, :projector, :geometric_loop, :wilson_loop)
+        ) for method in (:conventional, :projector, :wilson_loop)
     )...,
     _task_definition(
         :hermitian_curvature_tensor,
@@ -661,12 +738,18 @@ function _quantity_short_label_definition(
 end
 
 const QUANTITY_SHORT_LABELS = (
+    _quantity_short_label_definition(:intrinsic_ahc, :integral, "AHC"),
+    _quantity_short_label_definition(:intrinsic_ahc, :kslice, "AHCK"),
     _quantity_short_label_definition(:linear_transport, :integral, "LT"),
     _quantity_short_label_definition(:linear_transport, :kslice, "LTK"),
     _quantity_short_label_definition(:linear_optical_response, :integral, "LOR"),
     _quantity_short_label_definition(:linear_optical_response, :kslice, "LORK"),
     _quantity_short_label_definition(:orbital_magnetization, :integral, "OM"),
     _quantity_short_label_definition(:orbital_magnetization, :kslice, "OMK"),
+    _quantity_short_label_definition(:jerk_current, :integral, "JC"),
+    _quantity_short_label_definition(:jerk_current, :kslice, "JCK"),
+    _quantity_short_label_definition(:third_harmonic_generation, :integral, "THG"),
+    _quantity_short_label_definition(:third_harmonic_generation, :kslice, "THGK"),
     _quantity_short_label_definition(:second_harmonic_generation, :integral, "SHG"),
     _quantity_short_label_definition(:second_harmonic_generation, :kslice, "SHGK"),
     _quantity_short_label_definition(:band_structure, :kpath, "BAND"),
@@ -682,6 +765,10 @@ const QUANTITY_SHORT_LABELS = (
     _quantity_short_label_definition(:berry_curvature, :kslice, "BCK"),
     _quantity_short_label_definition(:berry_curvature_dipole, :kslice, "BCDK"),
     _quantity_short_label_definition(:berry_curvature_quadrupole, :kslice, "BCQK"),
+    _quantity_short_label_definition(:berry_curvature_dipole_conductivity, :integral, "BCDC"),
+    _quantity_short_label_definition(:berry_curvature_dipole_conductivity, :kslice, "BCDCK"),
+    _quantity_short_label_definition(:berry_curvature_quadrupole_conductivity, :integral, "BCQC"),
+    _quantity_short_label_definition(:berry_curvature_quadrupole_conductivity, :kslice, "BCQCK"),
     _quantity_short_label_definition(:quantum_metric, :kslice, "QMK"),
     _quantity_short_label_definition(:interband_berry_curvature, :kslice, "IBCK"),
     _quantity_short_label_definition(:interband_quantum_metric, :kslice, "IQMK"),
@@ -800,10 +887,16 @@ end
 # Choose the report label for a task's matrix policy, including finite-momentum configuration where required.
 function matrix_family_label(definition::TaskDefinition, cfg::EffectiveTaskConfig)
     policy = definition.matrix_policy
-    policy in
-    (MATRIX_LINEAR_TRANSPORT, MATRIX_LINEAR_OPTICAL_RESPONSE, MATRIX_ORBITAL_MAGNETIZATION) &&
-        return string(quantity_symbol(definition.quantity))
-    return policy == MATRIX_SECOND_HARMONIC ? "second_harmonic_generation" :
+    policy in (
+        MATRIX_BERRY_MULTIPOLE_DC,
+        MATRIX_INTRINSIC_AHC,
+        MATRIX_LINEAR_TRANSPORT,
+        MATRIX_LINEAR_OPTICAL_RESPONSE,
+        MATRIX_ORBITAL_MAGNETIZATION,
+    ) && return string(quantity_symbol(definition.quantity))
+    return policy == MATRIX_JERK_CURRENT ? "jerk_current" :
+           policy == MATRIX_THIRD_HARMONIC ? "third_harmonic_generation" :
+           policy == MATRIX_SECOND_HARMONIC ? "second_harmonic_generation" :
            policy == MATRIX_CONVENTIONAL_Q0_CURRENT ? "conventional_q0_current" :
            policy == MATRIX_SPECTRUM ? "spectrum" :
            policy == MATRIX_CONVENTIONAL_INJECTION_CURRENT ? "conventional_q0_current" :
@@ -832,7 +925,11 @@ function matrix_family_label(definition::TaskDefinition, cfg::EffectiveTaskConfi
            policy == MATRIX_PROJECTOR_QHC ? "projector_response_qhc" :
            policy == MATRIX_GEOMETRIC_SHIFT_CURRENT_Q0 ? "geometric_loop_shift_current_q0" :
            policy == MATRIX_GEOMETRIC_SHIFT_CURRENT_FINITE_Q ?
-           "geometric_loop_shift_current_q=$(cfg.photon_momentum)" :
+           (
+        cfg.photon_momentum_path === nothing ?
+        "geometric_loop_shift_current_q=$(cfg.photon_momentum)" :
+        "geometric_loop_shift_current_paired_q"
+    ) :
            policy == MATRIX_GEOMETRIC_QHC ? "geometric_loop_qhc_q=$(cfg.photon_momentum)" :
            policy == MATRIX_GEOMETRIC_SHIFT_VECTOR ?
            "geometric_loop_shift_vector_q=$(cfg.photon_momentum)" :

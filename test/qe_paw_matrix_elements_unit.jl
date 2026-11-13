@@ -70,7 +70,7 @@ end
         @test QE_PAW_IO.read_wannier_amn(diagnostic.artifacts["amn"]).data == diagnostic.amn.data
 
         oracle = copy_qe_paw_oracles(diagnostic, joinpath(directory, "oracle"))
-        provenance = write_qe_paw_oracle_provenance(dirname(oracle.mmn), diagnostic.input_sha256)
+        provenance = write_qe_paw_oracle_provenance(dirname(oracle.mmn), diagnostic)
         qualified = QE_PAW_WANNIERIZATION.generate_qe_paw_matrix_elements(
             source,
             fixture.nnkp_file;
@@ -85,15 +85,46 @@ end
         @test qualified.amn_max_principal_angle_rad <= 2.0e-8
         @test qualified.amn_projector_max_absolute <= 1.0e-12
         @test qualified.artifacts["oracle_provenance_hdf5"] == abspath(provenance)
+        support = first(QE_PAW_WANNIERIZATION._load_wannierization_extension!()).PAWMatrixElements
+        expected_topology =
+            QE_PAW_IO.read_wannier_nnkp(fixture.nnkp_file; content_authentication = false)
+        expected_topology_definition = QE_PAW_IO.wannier_topology_definition(expected_topology)
+        source_metadata = Base.invokelatest(support.read_qe_xml, source)
+        expected_native =
+            Base.invokelatest(support.read_qe_raw_wavefunctions, source, source_metadata)
+        @test expected_native.source_definition !== nothing
+        @test qualified.input_sha256["NNKP"] == expected_topology_definition
+        @test qualified.input_sha256["ORACLE_MMN_STATUS"] == "PROVIDED"
+        @test qualified.input_sha256["ORACLE_AMN_STATUS"] == "PROVIDED"
         HDF5.h5open(qualified.artifacts["provenance_hdf5"], "r") do handle
             attributes = HDF5.attributes(handle)
             @test String(read(attributes["schema"])) == "WannierNLQG.qe_paw_matrix_elements"
-            @test String(read(attributes["schema_version"])) == "1.1"
+            @test String(read(attributes["schema_version"])) == "2.0"
             @test Bool(read(attributes["passed"]))
             @test Bool(read(attributes["physical_overlap_available"]))
             @test haskey(handle, "thresholds")
             @test haskey(handle, "qualification")
-            @test haskey(handle, "input_sha256")
+            @test haskey(handle, "input_definitions")
+            @test haskey(handle, "source_definition")
+            observed_source = Base.invokelatest(
+                support.read_scientific_input_reference_hdf5,
+                handle,
+                "source_definition",
+            )
+            @test QE_PAW_IO.validate_scientific_input_definitions_equal(
+                something(expected_native.source_definition),
+                observed_source;
+                mismatch_error = "TEST_QE_COMPLETE_SOURCE_DIFFERS",
+            ) === nothing
+            @test HDF5.read_attribute(handle["input_definitions"], "NNKP") ==
+                  expected_topology_definition
+            @test HDF5.read_attribute(handle["nnkp"], "source_sha256") ==
+                  expected_topology_definition
+            @test read(handle["nnkp/neighbors"]) == expected_topology.neighbors
+            @test read(handle["nnkp/reciprocal_shifts"]) == expected_topology.reciprocal_shifts
+            @test read(handle["nnkp/excluded_bands"]) == expected_topology.excluded_bands
+            @test HDF5.read_attribute(handle, "content_authentication") == "NOT_PERFORMED"
+            @test !haskey(handle, "input_sha256")
             @test haskey(handle, "parity_metrics/mmn")
             @test haskey(handle, "parity_metrics/amn")
             @test String(
@@ -112,7 +143,10 @@ end
         )
         @test !missing_provenance.passed
         @test !missing_provenance.physical_overlap_available
+        # Retain the legacy diagnostic code, but establish the actual missing
+        # complete-source companion reason rather than treating a digest as proof.
         @test any(contains("QE_ORACLE_INPUT_HASH_MISMATCH"), missing_provenance.diagnostics)
+        @test "oracle_provenance=QE_ORACLE_PROVENANCE_MISSING" in missing_provenance.diagnostics
 
         missing_files = QE_PAW_WANNIERIZATION.generate_qe_paw_matrix_elements(
             source,
@@ -123,8 +157,12 @@ end
         )
         @test !missing_files.passed
         @test !missing_files.physical_overlap_available
-        @test missing_files.input_sha256["ORACLE_MMN"] == "MISSING"
-        @test missing_files.input_sha256["ORACLE_AMN"] == "MISSING"
+        @test missing_files.input_sha256["ORACLE_MMN_STATUS"] == "MISSING"
+        @test missing_files.input_sha256["ORACLE_AMN_STATUS"] == "MISSING"
+        @test !haskey(missing_files.input_sha256, "ORACLE_MMN")
+        @test !haskey(missing_files.input_sha256, "ORACLE_AMN")
+        @test missing_files.mmn_parity === nothing
+        @test missing_files.amn_parity === nothing
         @test any(contains("QE_ORACLE_MMN_MISSING"), missing_files.diagnostics)
         @test any(contains("QE_ORACLE_AMN_MISSING"), missing_files.diagnostics)
 
@@ -180,7 +218,7 @@ end
                 @test diagnostic.generalized_norm_max_absolute == 0.0
 
                 oracle = copy_qe_paw_oracles(diagnostic, joinpath(directory, "oracle"))
-                write_qe_paw_oracle_provenance(dirname(oracle.mmn), diagnostic.input_sha256)
+                write_qe_paw_oracle_provenance(dirname(oracle.mmn), diagnostic)
                 qualified = QE_PAW_WANNIERIZATION.generate_qe_paw_matrix_elements(
                     source,
                     fixture.nnkp_file;
@@ -221,15 +259,15 @@ end
     @test y00 ≈ inv(sqrt(4.0 * pi)) atol = 1.0e-14 rtol = 0.0
     p_x_qe =
         Base.invokelatest(extension._qe_real_spherical_harmonics, 1, reshape([1.0, 0.0, 0.0], 1, 3))
-    p_x_wannier90 = Base.invokelatest(
-        extension._qe_wannier90_real_spherical_harmonics,
+    p_x_projection = Base.invokelatest(
+        extension._projection_real_spherical_harmonics,
         1,
         reshape([1.0, 0.0, 0.0], 1, 3),
     )
     p_x_normalization = sqrt(3.0 / (4.0 * pi))
     @test p_x_qe[2, 1] ≈ -p_x_normalization atol = 1.0e-14 rtol = 0.0
-    @test p_x_wannier90[2, 1] ≈ p_x_normalization atol = 1.0e-14 rtol = 0.0
-    @test p_x_qe[2, 1] == -p_x_wannier90[2, 1]
+    @test p_x_projection[2, 1] ≈ p_x_normalization atol = 1.0e-14 rtol = 0.0
+    @test p_x_qe[2, 1] == -p_x_projection[2, 1]
     gaunt000 = Base.invokelatest(extension._qe_real_gaunt, 0, 1, 0, 1, 0, 1)
     @test gaunt000 ≈ inv(sqrt(4.0 * pi)) atol = 2.0e-13 rtol = 0.0
 

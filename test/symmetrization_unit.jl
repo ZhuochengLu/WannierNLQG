@@ -8,10 +8,37 @@ const SymmetryCore = WannierNLQG.Core
 const SymmetryModule = WannierNLQG.Symmetrization
 
 const EXPECTED_MATRIX_ELEMENTS_INTEGRATION_API = Set((
-    :REAL_SPACE_REPLICA_MAP_DIGEST_SCHEME,
+    :intrinsic_hall_position_between_occupations,
+    # Approved analytic geometry cross-layer contracts: keep this independent
+    # literal snapshot exact; never derive its expected values from the provider.
+    :regularized_orbital_geometry,
+    :validate_orthogonal_band_derivatives,
+    :OrthogonalGeometryJets,
+    :OrthogonalBandDerivativeWorkspace,
+    :geometry_derivative_order,
+    :geometry_hamiltonian_derivative_source,
+    :geometry_position_derivative_source,
+    :geometry_isolated_spectrum_minimum_gap,
+    :geometry_position_channel,
+    :orthogonal_band_first_derivative!,
+    :orthogonal_band_second_derivative!,
+    :orthogonal_band_third_derivative!,
+    :orthogonal_geometry_storage_bytes,
+    :prepare_orthogonal_band_derivatives!,
+    :prepare_orthogonal_geometry_jets!,
+    :wannier_pair_wigner_seitz_plan_from_images,
+    :has_mixed_fourier_provider,
+    :ActiveVelocityInsertionWorkspace,
+    :supports_active_velocity_insertions,
+    :active_velocity_gradient,
+    :active_velocity_insertions!,
+    :active_velocity_paired_insertions!,
+    :spectral_subspace_blocks,
+    :mark_wilson_response_groups!,
+    :REAL_SPACE_REPLICA_MAP_REFERENCE_SCHEMA,
     :MatrixElementDirectionRequirements,
     :RealSpaceReplicaMap,
-    :SerializedWannier90ReplicaValues,
+    :RawReplicaValues,
     :SharedInterpolationCache,
     :begin_shared_interpolation!,
     :with_shared_interpolation,
@@ -20,10 +47,11 @@ const EXPECTED_MATRIX_ELEMENTS_INTEGRATION_API = Set((
     :compute_spin_velocity_real_space_streaming_with_transform,
     :compute_spin_velocity_real_space_with_transform,
     :compute_loop_overlap!,
+    :compute_optical_momentum_overlap!,
     :derive_axial_and_symmetric_derivative_overlaps,
     :hermitianize_real_space_pairs,
     :input_real_space_replica_map,
-    :input_real_space_replica_mapping_sha256,
+    :input_real_space_support_definition,
     :matrix_element_axis_required,
     :matrix_element_pair_required,
     :materialize_replica_component,
@@ -36,6 +64,7 @@ const EXPECTED_MATRIX_ELEMENTS_INTEGRATION_API = Set((
     :real_space_replica_map_from_wsvec,
     :require_matrix_element_axes,
     :require_matrix_element_pairs,
+    :extend_matrix_element_directions,
     :transform_pair_wigner_seitz_spin_q_to_r,
     :unit_degeneracy_roundtrip_error,
     :wannier_centers_fractional,
@@ -112,6 +141,14 @@ function symmetry_replace_manifest(manifest; replacements...)
         haskey(replacements, field) ? replacements[field] : getfield(manifest, field)
     end
     return typeof(manifest)(values...)
+end
+
+@testset "named project ports retain exact callable identity" begin
+    extension = symmetrization_extension()
+    @test extension.validate_scientific_source_state ===
+          WannierNLQG.IO.validate_scientific_source_state
+    @test extension.projection_basis_input_values ===
+          WannierNLQG.WannierProjection.projection_basis_input_values
 end
 
 @testset "MatrixElements Symmetrization integration boundary" begin
@@ -324,7 +361,7 @@ end
     @test transform_plan.retained_target_indices[1, 1, 1] == [1]
 end
 
-@testset "Wannier90 get_FF_R uIu construction oracle" begin
+@testset "Wannier get_FF_R uIu construction oracle" begin
     wannierization_extension = exact_wannierization_extension()
     chk = WannierNLQG.IO.WannierCHK(
         2,
@@ -363,7 +400,7 @@ end
                 symmetry_write_fortran_record(io, transpose(direct[(second, first)]))
             end
         end
-        actual = wannierization_extension._construct_exact_full_derivative_overlap_tensor_q(
+        actual = wannierization_extension._construct_full_uiu_derivative_overlap_tensor_q(
             chk,
             stencil,
             chk.wannier_centers_cart,
@@ -504,7 +541,7 @@ end
     @test size(result.generated_r_vectors, 2) > 0
 end
 
-@testset "Wannier90 center-major multi-set projection ordering" begin
+@testset "Wannier center-major multi-set projection ordering" begin
     input = WannierNLQG.WannierProjection.WannierWinData(
         "synthetic.win",
         16,
@@ -544,9 +581,8 @@ end
           getfield.(basis.blocks, :positions_fractional)
     @test getfield.(public_basis.blocks, :local_bases) == getfield.(basis.blocks, :local_bases)
     test_momentum = [1.0, 2.0, 0.5]
-    compatibility_transform = WannierNLQG.WannierProjection.ProjectionRadialTransformConfig(;
-        method = :wannierberri_compatible,
-    )
+    compatibility_transform =
+        WannierNLQG.WannierProjection.ProjectionRadialTransformConfig(; method = :mixed_grid_cubic)
     @test WannierNLQG.WannierProjection.projection_orbital_values(
         basis.blocks[1],
         test_momentum;
@@ -581,8 +617,8 @@ end
     analytic_s = 4.0pi * bohr_radius^(3 / 2) * 4.0 / (1.0 + scaled_momentum^2)^2 / (2.0 * sqrt(pi))
     @test high_precision_s ≈ analytic_s atol = 2.0e-13 rtol = 0.0
     @test abs(high_precision_s - 0.8945817582555411) > 5.0e-8
-    @test WannierNLQG.Wannierization._projection_basis_sha256(public_basis) !=
-          WannierNLQG.Wannierization._projection_basis_sha256(compatibility_basis)
+    @test WannierNLQG.Wannierization._projection_basis_definition(public_basis) !=
+          WannierNLQG.Wannierization._projection_basis_definition(compatibility_basis)
     @test_throws ArgumentError WannierNLQG.WannierProjection.ProjectionRadialTransformConfig(;
         method = :bad,
     )
@@ -879,17 +915,21 @@ end
     end
 end
 
-@testset "task TOML surface removed" begin
+@testset "task TOML parser is centralized in IO" begin
     package_root = normpath(joinpath(@__DIR__, ".."))
     project_text = read(joinpath(package_root, "Project.toml"), String)
-    @test !occursin(r"(?m)^TOML\s*=", project_text)
+    @test occursin(r"(?m)^TOML\s*=\s*\"fa267f1f-6049-4f14-aa54-33bafae1ed76\"$", project_text)
     for directory in ("src", "ext")
         for (root, _, files) in walkdir(joinpath(package_root, directory))
             for file in files
                 endswith(file, ".jl") || continue
                 source = read(joinpath(root, file), String)
                 @test !occursin("TOML.parsefile", source)
-                @test !occursin(r"(?m)^using TOML$", source)
+                if normpath(joinpath(root, file)) == joinpath(package_root, "src", "IO", "IO.jl")
+                    @test occursin(r"(?m)^using TOML$", source)
+                else
+                    @test !occursin(r"(?m)^using TOML$", source)
+                end
             end
         end
     end
@@ -952,31 +992,47 @@ end
         @test roundtrip.operators[SymmetryModule.REAL_SPACE_HAMILTONIAN].data == hamiltonian
         @test roundtrip.operators[SymmetryModule.REAL_SPACE_POSITION].data == position
 
-        exact_metadata_path = joinpath(directory, "operators-exact-uIu-provenance.h5")
-        exact_source_sha256 = repeat("a", 64)
+        # The current mathematical format retains the tensor and its algorithm
+        # definition; an obsolete content digest is neither persisted nor a gate.
+        tensor_kind = SymmetryModule.REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR
+        tensor = reshape(ComplexF64.(1:72), 2, 2, 3, 3, 2)
+        full_operators = copy(operators)
+        full_operators[tensor_kind] = SymmetryModule.RealSpaceOperator(
+            SymmetryModule.RealSpaceOperatorSymmetrySpec(tensor_kind, 2, 1, 1),
+            r_vectors,
+            tensor,
+        )
+        definition = Dict(
+            "derivative_overlap_source" => "neighbor_pair_overlap",
+            "derivative_overlap_completeness" => "full_hilbert_space",
+            "derivative_overlap_algorithm_version" =>
+                WannierNLQG.IO.FULL_DERIVATIVE_OVERLAP_ALGORITHM_VERSION,
+        )
+        exact_metadata_path = joinpath(directory, "operators-exact-uIu-definition.h5")
         WannierNLQG.IO.write_real_space_operator_bundle(
             exact_metadata_path,
             Matrix{Float64}(I, 3, 3),
             [1, 1],
-            operators;
-            profile = :hamiltonian_position,
-            provenance = Dict(
-                "derivative_overlap_source" => "wannier90_uIu",
-                "derivative_overlap_completeness" => "full_hilbert_space",
-                "derivative_overlap_source_sha256" => exact_source_sha256,
-                "derivative_overlap_algorithm_version" =>
-                    WannierNLQG.IO.FULL_DERIVATIVE_OVERLAP_ALGORITHM_VERSION,
-            ),
+            full_operators;
+            profile = nothing,
+            provenance = definition,
             geometry = test_operator_bundle_geometry(Matrix{Float64}(I, 3, 3), [1, 1], operators),
         )
-        exact_manifest =
-            WannierNLQG.IO.read_real_space_operator_bundle_manifest(exact_metadata_path)
-        @test exact_manifest.schema_version == WannierNLQG.IO.OPERATOR_BUNDLE_SCHEMA_VERSION
-        @test exact_manifest.derivative_overlap_source == "wannier90_uIu"
-        @test exact_manifest.derivative_overlap_completeness == "full_hilbert_space"
-        @test exact_manifest.derivative_overlap_source_sha256 == exact_source_sha256
+        loaded_exact = WannierNLQG.IO.read_real_space_operator_bundle(exact_metadata_path)
+        exact_manifest = loaded_exact.manifest
+        @test exact_manifest.schema_version == "3.0"
+        @test exact_manifest.derivative_overlap_source == definition["derivative_overlap_source"]
+        @test exact_manifest.derivative_overlap_completeness ==
+              definition["derivative_overlap_completeness"]
         @test exact_manifest.derivative_overlap_algorithm_version ==
-              WannierNLQG.IO.FULL_DERIVATIVE_OVERLAP_ALGORITHM_VERSION
+              definition["derivative_overlap_algorithm_version"]
+        @test exact_manifest.derivative_overlap_source_sha256 === nothing
+        @test loaded_exact.operators[tensor_kind].data == tensor
+        @test loaded_exact.operators[SymmetryModule.REAL_SPACE_HAMILTONIAN].data == hamiltonian
+        @test loaded_exact.operators[SymmetryModule.REAL_SPACE_POSITION].data == position
+        HDF5.h5open(exact_metadata_path, "r") do handle
+            @test !haskey(HDF5.attributes(handle), "derivative_overlap_source_sha256")
+        end
 
         projector_cfg = WannierNLQG.Runtime.EffectiveTaskConfig(
             tasks = [("SCK", "Projector", "K-slice")],
@@ -987,17 +1043,25 @@ end
             WannierNLQG.Runtime.normalize_task_specs(projector_cfg),
             projector_cfg,
         )
+        @test WannierNLQG.Runtime.validate_operator_demand(exact_manifest, projector_demand) ===
+              exact_manifest
+        # Mathematical definition errors remain rejected at their actual consumer.
         for (replacement, expected_text) in (
             (
-                (; derivative_overlap_source_sha256 = repeat("z", 64)),
-                "SHA-256 is not lowercase hexadecimal",
+                (; derivative_overlap_source = "unknown_source"),
+                "source must be neighbor_pair_overlap",
             ),
+            ((; derivative_overlap_completeness = "partial"), "not full_hilbert_space"),
             (
                 (; derivative_overlap_algorithm_version = "unknown-get-FF-R"),
                 "unsupported derivative-overlap algorithm",
             ),
         )
             bad_manifest = symmetry_replace_manifest(exact_manifest; replacement...)
+            @test any(
+                getfield(bad_manifest, key) != getfield(exact_manifest, key) for
+                key in keys(replacement)
+            )
             caught = try
                 WannierNLQG.Runtime.validate_operator_demand(bad_manifest, projector_demand)
                 nothing
@@ -1007,51 +1071,37 @@ end
             @test caught isa ArgumentError
             @test occursin(expected_text, sprint(showerror, caught))
         end
-
-        for (suffix, source_sha256, algorithm) in (
-            ("bad-sha", repeat("z", 64), WannierNLQG.IO.FULL_DERIVATIVE_OVERLAP_ALGORITHM_VERSION),
-            ("bad-algorithm", exact_source_sha256, "unknown-get-FF-R"),
+        # Correct definitions cannot substitute for the actual missing tensor.
+        incomplete = symmetry_replace_manifest(
+            WannierNLQG.IO.read_real_space_operator_bundle_manifest(path);
+            derivative_overlap_source = definition["derivative_overlap_source"],
+            derivative_overlap_completeness = definition["derivative_overlap_completeness"],
+            derivative_overlap_algorithm_version = definition["derivative_overlap_algorithm_version"],
         )
-            @test_throws ArgumentError WannierNLQG.IO.write_real_space_operator_bundle(
-                joinpath(directory, "operators-$(suffix).h5"),
-                Matrix{Float64}(I, 3, 3),
-                [1, 1],
-                operators;
-                profile = :hamiltonian_position,
-                provenance = Dict(
-                    "derivative_overlap_source" => "wannier90_uIu",
-                    "derivative_overlap_completeness" => "full_hilbert_space",
-                    "derivative_overlap_source_sha256" => source_sha256,
-                    "derivative_overlap_algorithm_version" => algorithm,
-                ),
-                geometry = test_operator_bundle_geometry(
-                    Matrix{Float64}(I, 3, 3),
-                    [1, 1],
-                    operators,
-                ),
-            )
+        @test tensor_kind ∉ incomplete.inventory
+        caught = try
+            WannierNLQG.Runtime.validate_operator_demand(incomplete, projector_demand)
+            nothing
+        catch exception
+            exception
         end
-
-        for legacy_version in ("3.0", "4.0")
-            legacy_path = joinpath(directory, "operators-v$(legacy_version).h5")
-            cp(path, legacy_path)
-            HDF5.h5open(legacy_path, "r+") do handle
-                root_attributes = HDF5.attributes(handle)
-                HDF5.delete_attribute(handle, "schema_version")
-                root_attributes["schema_version"] = legacy_version
-            end
-            migration_error = try
-                WannierNLQG.IO.read_real_space_operator_bundle_manifest(legacy_path)
-                nothing
-            catch err
-                err
-            end
-            @test migration_error isa ArgumentError
-            migration_message = sprint(showerror, migration_error)
-            @test occursin("operator-bundle migration required", migration_message)
-            @test occursin("schema $(legacy_version)", migration_message)
-            @test occursin("schema 1.1", migration_message)
+        @test caught isa ArgumentError
+        @test occursin(
+            "Current task requires: derivative_overlap_tensor",
+            sprint(showerror, caught),
+        )
+        # This is a real archived payload, not a current writer relabelled old.
+        legacy_path = joinpath(@__DIR__, "fixtures", "schema_compatibility", "packed_6_3.h5")
+        original_legacy_bytes = read(legacy_path)
+        migration_error = try
+            WannierNLQG.IO.read_real_space_operator_bundle_manifest(legacy_path)
+            nothing
+        catch err
+            err
         end
+        @test migration_error isa ArgumentError
+        @test occursin("MODEL_SCHEMA_UNSUPPORTED", sprint(showerror, migration_error))
+        @test read(legacy_path) == original_legacy_bytes
         @test_throws ArgumentError WannierNLQG.IO.write_real_space_operator_bundle(
             path,
             Matrix{Float64}(I, 3, 3),

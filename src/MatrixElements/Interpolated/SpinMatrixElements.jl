@@ -94,7 +94,7 @@ Validate orbital/mesh dimensions and, when enabled, reject reconstruction error 
 function spin_q_to_r_diagnostics(
     spin_q::Array{ComplexF64, 4},
     chk::WannierCHK,
-    model::TightBindingModel;
+    model::AbstractResponseModel;
     atol::Float64 = 1e-8,
     check_roundtrip::Bool = true,
 )
@@ -149,7 +149,7 @@ Retain dimension checks and the optional absolute roundtrip gate from `spin_q_to
 function spin_q_to_r(
     spin_q::Array{ComplexF64, 4},
     chk::WannierCHK,
-    model::TightBindingModel;
+    model::AbstractResponseModel;
     atol::Float64 = 1e-8,
     check_roundtrip::Bool = true,
 )
@@ -166,7 +166,7 @@ end
 function _fourier_spin!(
     output::Array{ComplexF64, 3},
     real_space::SpinRealSpaceData,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     fourier_factors::Vector{ComplexF64},
     ;
     hermitize::Bool = true,
@@ -225,7 +225,7 @@ Require one factor per R vector; include R degeneracies in the Fourier factors a
 function spin_r_to_wannier_gauge!(
     output::Array{ComplexF64, 3},
     real_space::SpinRealSpaceData,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     kpoint::AbstractVector{<:Real},
     fourier_factors::Vector{ComplexF64},
 )
@@ -241,7 +241,7 @@ Fill missing spin channels in Wannier and Hamiltonian gauges and update the SPIN
 
 Use the plan's Cartesian selection and center convention; defer Hermitization when spin velocity also requires the unmodified intermediate.
 """
-function compute_spin_capabilities!(workspace::MatrixElementWorkspace, model::TightBindingModel)
+function compute_spin_capabilities!(workspace::MatrixElementWorkspace, model::AbstractResponseModel)
     plan = workspace.plan
     has_capability(plan, SPIN) || return workspace.data
     data = workspace.data

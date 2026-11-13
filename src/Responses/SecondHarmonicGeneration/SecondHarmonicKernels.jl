@@ -1,3 +1,72 @@
+
+"""Keep ordinary SHG velocity and endpoint semantics unchanged."""
+_second_harmonic_velocity(data)=data.hamiltonian_derivatives
+"""Both SHG backends use I0, so a small gap is not an extra error gate."""
+_second_harmonic_singular_pair(data, difference)=false
+"""Return the declared cutoff inverse for an outer SHG gap."""
+_second_harmonic_endpoint_inverse(data, difference)=bare_energy_inverse(difference)
+"""Select singleton bands of the shared adjacent-gap BCD partition."""
+function _second_harmonic_bcd_enabled(data, n, tolerance)
+    energies=data.spectrum.energies
+    return (n==1 || energies[n]-energies[n - 1]>tolerance) &&
+           (n==length(energies) || energies[n + 1]-energies[n]>tolerance)
+end
+"""Retain the orthogonal full connection curl and commutators."""
+function _second_harmonic_curvature(data, n, bare)
+    energies=data.spectrum.energies;
+    connection=data.internal_connection
+    curvature = zeros(Float64, 3, 3)
+    for a in 1:3, b in 1:3
+        a == b && continue
+        value =
+            data.internal_connection_derivatives[n, n, b, a] -
+            data.internal_connection_derivatives[n, n, a, b]
+        for p in eachindex(energies)
+            value +=
+                connection[n, p, b] * bare[p, n, a] - bare[n, p, a] * connection[p, n, b] -
+                connection[n, p, a] * bare[p, n, b] + bare[n, p, b] * connection[p, n, a] -
+                im * (bare[n, p, a] * bare[p, n, b] - bare[n, p, b] * bare[p, n, a])
+        end
+        curvature[a, b] = real(value)
+    end
+    return curvature
+end
+"""Retain the historical orthogonal regularized energy Hessian."""
+function _second_harmonic_hessian(data, n, b, c, eta)
+    energies=data.spectrum.energies;
+    velocity=_second_harmonic_velocity(data)
+    hessian=real(data.hamiltonian_second_derivatives[n, n, b, c])
+    for p in eachindex(energies)
+        p==n && continue
+        hessian+=2real(
+            velocity[n, p, b]*velocity[p, n, c],
+        )*second_harmonic_principal(energies[n]-energies[p], eta)
+    end
+    return hessian
+end
+"""Metric finite-eta terms use physical velocity, shared HF Hessian and full scalar Berry curvature."""
+_second_harmonic_velocity(
+    data::KPointMatrixData{H, P},
+) where {H, P <: NonorthogonalPositionMatrixData}=data.velocity_vertices
+# Metric SHG shares the existing bare endpoint inverse and isolated-band mask.
+# Its optional cutoff optical vertices do not replace the scalar Hessian.
+"""Use the same differentiated D_eta energy Hessian in metric semiclassical SHG."""
+_second_harmonic_hessian(
+    data::KPointMatrixData{H, P},
+    n,
+    b,
+    c,
+    eta,
+) where {H, P <: NonorthogonalPositionMatrixData}=data.position.energy_second_derivatives[n, b, c]
+"""Use the shared bare isolated-band metric curvature only for admitted BCD bands."""
+function _second_harmonic_curvature(
+    data::KPointMatrixData{H, P},
+    n,
+    bare,
+) where {H, P <: NonorthogonalPositionMatrixData}
+    return MatrixElements.isolated_band_curvature(data, n)
+end
+
 """Ordered algebraic SHG contributions; each susceptibility/conductivity total is their sum."""
 const SECOND_HARMONIC_TERMS = (
     "interband_derivative",
@@ -57,29 +126,45 @@ function second_harmonic_response!(
     eta_correction,
     degeneracy_threshold,
 )
+    all(
+        width->isfinite(width)&&width>0,
+        (broadening, low_frequency_broadening, intermediate_regularization),
+    ) || throw(
+        ArgumentError(
+            "SHG optical widths and intermediate_regularization must be finite and positive in eV",
+        ),
+    )
+    isfinite(degeneracy_threshold)&&degeneracy_threshold>=0 ||
+        throw(ArgumentError("SHG degeneracy_threshold must be finite and nonnegative in eV"))
     fill!(output, 0)
     energies = data.spectrum.energies
-    velocity = data.hamiltonian_derivatives
+    velocity = _second_harmonic_velocity(data)
     eta = intermediate_regularization
-    dipole, regular_dipole, derivative, bare = optical_position_vertices(data, eta, eta_correction)
     count = length(energies)
     occupations = [second_harmonic_occupation(e, fermi_energy, temperature) for e in energies]
+    active_pairs =
+        [n != m && abs(occupations[n] - occupations[m]) >= 1.0e-10 for n in 1:count, m in 1:count]
+    dipole, regular_dipole, derivative, bare =
+        cutoff_optical_position_vertices(data, eta, eta_correction; active_pairs)
     @inbounds for n in 1:count, m in 1:count
         n == m && continue
         occupation = occupations[n] - occupations[m]
         abs(occupation) < 1.0e-10 && continue
         difference = energies[m] - energies[n]
-        abs(difference) < 1.0e-12 &&
+        _second_harmonic_singular_pair(data, difference) &&
             throw(ArgumentError("Occupied SHG pair has a singular energy denominator"))
+        inverse = _second_harmonic_endpoint_inverse(data, difference)
         for (component, (a, b, c)) in enumerate(components)
             first = dipole[n, m, a] * (derivative[m, n, b, c] + derivative[m, n, c, b])
             second =
                 derivative[n, m, a, b] * dipole[m, n, c] + derivative[n, m, a, c] * dipole[m, n, b]
             third =
-                dipole[n, m, a] * (
+                dipole[n, m, a] *
+                (
                     dipole[m, n, b] * real(velocity[m, m, c] - velocity[n, n, c]) +
                     dipole[m, n, c] * real(velocity[m, m, b] - velocity[n, n, b])
-                ) / difference
+                ) *
+                inverse
             fourth =
                 derivative[n, m, b, a] * dipole[m, n, c] + derivative[n, m, c, a] * dipole[m, n, b]
             fifth =
@@ -118,11 +203,11 @@ function second_harmonic_response!(
                 low = second_harmonic_principal(energy, low_frequency_broadening)
                 factor = 0.5im * occupation
                 output[frequency, component, 1, 1] +=
-                    factor / difference * (2first * d2 + second * d1 + (first + second) * low)
-                output[frequency, component, 2, 1] += factor / difference * third * (d1 - 4d2 - low)
+                    factor * inverse * (2first * d2 + second * d1 + (first + second) * low)
+                output[frequency, component, 2, 1] += factor * inverse * third * (d1 - 4d2 - low)
                 output[frequency, component, 3, 1] +=
                     0.5occupation * (2triple_first * d2 + triple_other * dn)
-                output[frequency, component, 4, 1] -= factor / difference * 0.5fourth * (d1 + low)
+                output[frequency, component, 4, 1] -= factor * inverse * 0.5fourth * (d1 + low)
                 output[frequency, component, 5, 1] -= factor * 0.25fifth * d1 * low^2
                 output[frequency, component, 1, 2] += occupation * (first * d2 + second * d1)
                 output[frequency, component, 2, 2] += occupation * third * (d1 - 2d2)
@@ -171,7 +256,7 @@ function second_harmonic_one_band!(
     degeneracy_threshold,
 )
     energies = data.spectrum.energies
-    velocity = data.hamiltonian_derivatives
+    velocity = _second_harmonic_velocity(data)
     connection = data.internal_connection
     kt = 8.617333262145e-5 * temperature
     for n in eachindex(energies)
@@ -179,31 +264,10 @@ function second_harmonic_one_band!(
         abs(offset) > 5kt && continue
         first_derivative = -exp(-0.5(offset / kt)^2) / (kt * sqrt(2pi))
         second_derivative = -offset / kt^2 * first_derivative
-        isolated =
-            (n == 1 || energies[n] - energies[n - 1] > degeneracy_threshold) &&
-            (n == length(energies) || energies[n + 1] - energies[n] > degeneracy_threshold)
-        curvature = zeros(Float64, 3, 3)
-        for a in 1:3, b in 1:3
-            a == b && continue
-            value =
-                data.internal_connection_derivatives[n, n, b, a] -
-                data.internal_connection_derivatives[n, n, a, b]
-            for p in eachindex(energies)
-                value +=
-                    connection[n, p, b] * bare[p, n, a] - bare[n, p, a] * connection[p, n, b] -
-                    connection[n, p, a] * bare[p, n, b] + bare[n, p, b] * connection[p, n, a] -
-                    im * (bare[n, p, a] * bare[p, n, b] - bare[n, p, b] * bare[p, n, a])
-            end
-            curvature[a, b] = real(value)
-        end
+        isolated = _second_harmonic_bcd_enabled(data, n, degeneracy_threshold)
+        curvature = isolated ? _second_harmonic_curvature(data, n, bare) : nothing
         for (component, (a, b, c)) in enumerate(components)
-            hessian = real(data.hamiltonian_second_derivatives[n, n, b, c])
-            for p in eachindex(energies)
-                p == n && continue
-                hessian +=
-                    2real(velocity[n, p, b] * velocity[p, n, c]) *
-                    second_harmonic_principal(energies[n] - energies[p], eta)
-            end
+            hessian = _second_harmonic_hessian(data, n, b, c, eta)
             semiclassical =
                 second_derivative *
                 real(velocity[n, n, a]) *

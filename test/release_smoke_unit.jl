@@ -10,7 +10,7 @@ const RELEASE_OPERATOR_BUNDLE_FILE =
     joinpath(RELEASE_RUNTIME_FIXTURE_ROOT, "synthetic_operators.h5")
 
 @testset "self-contained public release" begin
-    @test Base.pkgversion(WannierNLQG) == v"1.1.1"
+    @test Base.pkgversion(WannierNLQG) == v"1.2.0"
     @test all(isfile, (RELEASE_TB_FILE, RELEASE_WSVEC_FILE, RELEASE_OPERATOR_BUNDLE_FILE))
 
     for line in eachline(joinpath(RELEASE_RUNTIME_FIXTURE_ROOT, "SHA256SUMS"))
@@ -103,15 +103,15 @@ const RELEASE_OPERATOR_BUNDLE_FILE =
         @test all(summary -> all(isfinite, summary), values(result.validation))
         report = JSON3.read(read(result.report_json, String))
         @test String(report.status) == "PASS"
-        @test String(report.wanniernlqg_version) == "1.1.1"
+        @test String(report.wanniernlqg_version) == "1.2.0"
         manifest = WannierNLQG.IO.read_real_space_operator_bundle_manifest(
             result.real_space_operator_bundle,
         )
-        @test manifest.schema_version == "1.1"
+        @test manifest.schema_version == WannierNLQG.IO.OPERATOR_BUNDLE_SCHEMA_VERSION
     end
 
     W = WannierNLQG.Wannierization
-    config = W.SymmetryAdaptedWannierizationConfig(
+    config = W.WannierizationConfig(
         input = W.WannierizationInputConfig(
             win_file = joinpath(RELEASE_SYMMETRY_FIXTURE_ROOT, "synthetic.win"),
             eig_file = joinpath(RELEASE_SYMMETRY_FIXTURE_ROOT, "synthetic.eig"),

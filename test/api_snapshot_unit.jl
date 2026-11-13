@@ -1,7 +1,21 @@
 using Test
 using WannierNLQG
 
+# Existing f23 exports, confirmed by actual frozen-baseline loading; no new API.
+const RESPONSES_SHARED_TRANSITION_API_20261016 = Set([
+    :photon_drag_transition_denominator_weight,
+    :photon_drag_weighted_occupations!,
+    :intrinsic_hall_fermi_sea,
+])
+
 const FROZEN_RESPONSES_API_20260805_GEOMETRIC_BLOCK_COVARIANT = Set([
+    :ThirdHarmonicWorkspace,
+    :third_harmonic_response!,
+    :THIRD_HARMONIC_COMPONENTS,
+    :THIRD_HARMONIC_UNREGROUPED_TERMS,
+    :THIRD_HARMONIC_REGROUPED_TERMS,
+    :JERK_CURRENT_COMPONENTS,
+    :jerk_current_response!,
     :SECOND_HARMONIC_COMPONENTS,
     :SECOND_HARMONIC_TERMS,
     :second_harmonic_response!,
@@ -77,6 +91,7 @@ const FROZEN_RESPONSES_API_20260805_GEOMETRIC_BLOCK_COVARIANT = Set([
     :make_shift_spin_current_conventional_workspace,
     :make_wilson_loop_response_workspace,
     :photon_drag_band_windows,
+    :complete_photon_drag_injection_degenerate_blocks!,
     :photon_drag_compute_overlaps!,
     :photon_drag_has_active_transition,
     :photon_drag_injection_current_component,
@@ -376,17 +391,6 @@ const FROZEN_RUNTIME_API_20260718 = Set([
 ])
 
 const FROZEN_SYMMETRIZATION_API_20260802_UNIFIED = Set([
-    :FAILED_BAND_REPRESENTATION,
-    :FAILED_INPUT_PROVENANCE,
-    :FAILED_INPUT_SUBSPACE_NOT_CLOSED,
-    :FAILED_PHYSICAL_BAND_PRESERVATION,
-    :FAILED_POSITION_VALIDATION,
-    :GaugeAwareSymmetrizationConfig,
-    :GaugeAwareSymmetrizationResult,
-    :GaugeAwareSymmetrizationStatus,
-    :GaugeAwareSymmetrizationThresholds,
-    :GaugeAwareThresholdEvent,
-    :HOLD_POSITION_PENDING,
     :MagneticMomentConfig,
     :MeshScreenConfig,
     :RealSpaceOperator,
@@ -406,13 +410,10 @@ const FROZEN_SYMMETRIZATION_API_20260802_UNIFIED = Set([
     :Symmetrization,
     :SymmetrizationConfig,
     :SymmetrizationResult,
-    :qualify_response_symmetry_wannier90,
+    :qualify_response_symmetry_wannier_frame,
     :screen_wannier_mesh,
-    :symmetrize_existing_wannier_model,
     :symmetrize_wannier_operators,
     :write_response_symmetry_artifact,
-    :PASS,
-    :PASS_WITH_WARNINGS,
 ])
 
 const SYMMETRY_FOUNDATION_API_20260901 = Set([
@@ -420,6 +421,11 @@ const SYMMETRY_FOUNDATION_API_20260901 = Set([
     :BandRepresentation,
     :BandRepresentationQualificationScope,
     :CrystalStructure,
+    :DiagonalKMesh,
+    :diagonal_mesh_closure,
+    :enumerate_diagonal_mesh_closure,
+    :recommend_diagonal_mesh,
+    :classify_diagonal_mesh_points,
     :MagneticSymmetryInventory,
     :NativeWavefunctionData,
     :PlaneWaveKPoint,
@@ -434,6 +440,7 @@ const SYMMETRY_FOUNDATION_API_20260901 = Set([
     :WannierSymmetryPlan,
     :detect_magnetic_symmetry_inventory,
     :detect_symmetry_operations,
+    :high_symmetry_band_path,
     :generate_vasp_band_representation,
     :maximum_real_space_covariance_error,
     :read_band_representation_hdf5,
@@ -459,7 +466,7 @@ const FROZEN_WANNIERIZATION_API_20260819_Z_U_FOURIER_DIAGNOSTICS = Set([
     :AbstractWannierMatrixElementSource,
     :BandRepresentationPreparationConfig,
     :BandRepresentationPreparationResult,
-    :ExternalWannier90Matrices,
+    :ExternalOverlapProjectionMatrices,
     :NativeQEPAWMatrices,
     :NativeVASPPAWMatrices,
     :QEPAWArrayParityMetrics,
@@ -469,7 +476,7 @@ const FROZEN_WANNIERIZATION_API_20260819_Z_U_FOURIER_DIAGNOSTICS = Set([
     :RepresentationCompatibilityReport,
     :RepresentationGateDefinitionStatus,
     :RepresentationProductTable,
-    :SymmetryAdaptedWannierizationConfig,
+    :WannierizationConfig,
     :TBSymmetryMetric,
     :TBSymmetryQualification,
     :TB_SYMMETRY_QUALIFICATION_SCHEMA,
@@ -503,7 +510,7 @@ const FROZEN_WANNIERIZATION_API_20260819_Z_U_FOURIER_DIAGNOSTICS = Set([
     :build_wannier_tight_binding_model,
     :qualify_exported_wannierization_tb,
     :classify_wannierization_u_periodicity,
-    :construct_symmetry_adapted_wannier_functions,
+    :construct_wannier_functions,
     :diagnose_wannier_gauge_chain,
     :prepare_band_representation,
     :generate_wannier_amn,
@@ -513,9 +520,7 @@ const FROZEN_WANNIERIZATION_API_20260819_Z_U_FOURIER_DIAGNOSTICS = Set([
     :validate_band_representation_compatibility,
     :read_wannier_nnkp,
     :read_wannierization_checkpoint_hdf5,
-    :read_wannierization_fixed_subspace_hdf5,
     :write_wannierization_checkpoint_hdf5,
-    :write_wannierization_fixed_subspace_hdf5,
     :write_wannierization_u_convergence_diagnostics_hdf5,
 ])
 
@@ -569,14 +574,14 @@ const FROZEN_WANNIERIZATION_API_ADDITIONS_20260820_AUGMENTATION_AWARE_SEWING = S
 ])
 
 const FROZEN_WANNIERIZATION_API_ADDITIONS_20260825_UIU = Set([
-    :ExactWannierOperatorBundleConfig,
-    :ExactWannierOperatorBundleResult,
+    :FullUIUDerivativeOperatorBundleConfig,
+    :FullUIUDerivativeOperatorBundleResult,
     :WannierUIUGenerationConfig,
     :WannierUIUGenerationResult,
     :WannierUIUGenerationThresholds,
     :WannierUIUParityMetrics,
     :generate_wannier_uiu,
-    :prepare_exact_wannier_operator_bundle,
+    :prepare_full_uiu_derivative_operator_bundle,
 ])
 
 const FROZEN_WANNIERIZATION_API_ADDITIONS_20260830_OPERATOR_PROFILES = Set([
@@ -584,7 +589,6 @@ const FROZEN_WANNIERIZATION_API_ADDITIONS_20260830_OPERATOR_PROFILES = Set([
     :WannierHamiltonianOperatorGenerationConfig,
     :WannierHamiltonianOperatorGenerationResult,
     :WannierOperatorTargetContract,
-    :wannier_operator_target_contract_sha256,
     :prepare_wannier_operator_target_contract,
     :generate_qe_paw_spn,
     :generate_wannier_uhu,
@@ -594,7 +598,7 @@ const FROZEN_WANNIERIZATION_API_ADDITIONS_20260830_OPERATOR_PROFILES = Set([
 
 const FROZEN_WANNIERIZATION_API_ADDITIONS_20260830_PROJECTION_REPRESENTATION_SEARCHER = Set([
     :ProjectionCandidateSpec,
-    :ProjectionRepresentationCompatibilityInfo,
+    :ProjectionRepresentationAlgorithmInfo,
     :ProjectionRepresentationSearchConfig,
     :ProjectionRepresentationSearchResult,
     :ProjectionRepresentationSearchStatus,
@@ -619,9 +623,9 @@ const WANNIERIZATION_QUALIFIED_CONFIG_API_20260902 = Set([
 
 const WANNIERIZATION_FACADE_API_20260901 = Set([
     :Wannierization,
-    :SymmetryAdaptedWannierizationConfig,
+    :WannierizationConfig,
     :WannierizationResult,
-    :construct_symmetry_adapted_wannier_functions,
+    :construct_wannier_functions,
 ])
 
 const WANNIERIZATION_QUALIFIED_EXPERT_API_20260901 = union(
@@ -634,6 +638,10 @@ const WANNIERIZATION_QUALIFIED_EXPERT_API_20260901 = union(
 )
 
 const FROZEN_TASK_CONFIG_FIELDS_NATIVE_001 = (
+    :native_model_input,
+    :integration_bounds,
+    :integration_affine_region,
+    :integration_algorithm,
     :gamma_intra_ev,
     :gamma_inter_ev,
     :fs_kind,
@@ -641,9 +649,14 @@ const FROZEN_TASK_CONFIG_FIELDS_NATIVE_001 = (
     :spectral_gap_tolerance,
     :orbital_input_semantics,
     :shg_low_frequency_broadening,
+    :shg_intermediate_regularization,
     :shg_eta_correction,
     :shg_output,
     :shg_response,
+    :third_order,
+    :derivative_backend,
+    :derivative_backend_was_explicit,
+    :berry_multipole,
     :tasks,
     :k_mesh,
     :fourier_backend,
@@ -651,7 +664,7 @@ const FROZEN_TASK_CONFIG_FIELDS_NATIVE_001 = (
     :NKFFT,
     :photon_energies,
     :fermi_energies,
-    :fermi_energies_sha256,
+    :fermi_energies_definition,
     :fermi_energy,
     :temperature,
     :broadening,
@@ -668,6 +681,8 @@ const FROZEN_TASK_CONFIG_FIELDS_NATIVE_001 = (
     :kslice_vector_2,
     :kpath_nodes,
     :kpoints_per_segment,
+    :kpath_branches,
+    :kpath_provenance,
     :real_space_replica_policy,
     :wsvec_file,
     :mp_grid,
@@ -675,6 +690,7 @@ const FROZEN_TASK_CONFIG_FIELDS_NATIVE_001 = (
     :wigner_seitz_search_size,
     :band_hermiticity_tolerance,
     :photon_momentum,
+    :photon_momentum_path,
     :finite_difference_step,
     :wannier_center_convention,
     :degeneracy_threshold,
@@ -699,47 +715,73 @@ const FROZEN_TASK_CONFIG_FIELDS_NATIVE_001 = (
 )
 
 @testset "Geometric block-covariant expert API snapshot 2026-08-05" begin
-    @test Set(names(WannierNLQG.Responses; all = false, imported = false)) ==
-          FROZEN_RESPONSES_API_20260805_GEOMETRIC_BLOCK_COVARIANT
+    @test Set(names(WannierNLQG.Responses; all = false, imported = false)) == union(
+        FROZEN_RESPONSES_API_20260805_GEOMETRIC_BLOCK_COVARIANT,
+        RESPONSES_SHARED_TRANSITION_API_20261016,
+    )
     @test Set(names(WannierNLQG.Runtime; all = false, imported = false)) == union(
         FROZEN_RUNTIME_API_20260718,
         Set([
+            :TaskInputResolution,
+            :read_task_input,
+            :resolve_task_input,
+            :explain_task_input,
+            :write_task_input_template,
+            :write_task_input_resolution,
+            :run_task_input,
             :compile_task_config,
             :compile_task_configs,
             :task_parameter_summary,
             :EffectiveTaskConfig,
             :NormalizedTaskSpec,
             :ModelInput,
+            :RealSpaceTBInput,
+            :AnalyticKInput,
+            :PointOrbitalSymmetryOperation,
+            :write_native_response_symmetry,
+            :KRegion,
             :BZMesh,
             :KSlice,
             :KPath,
+            :automatic_kpath,
             :ExecutionOptions,
+            :AbstractIntegrationAlgorithm,
+            :UniformIntegration,
+            :HAdaptiveCubature,
+            :IntegrationDomain,
+            :IntegrationDomain2D,
+            :ResponseIntegralResult,
+            :integrate_response,
             :OutputOptions,
             :OpticalParameters,
             :SeparateRelaxation,
-            :FermiSurfaceBroadening,
             :LinearTransportParameters,
             :LinearOpticalResponseParameters,
             :OrbitalMagnetizationParameters,
-            :LinearResponseNumerics,
-            :OrbitalNumerics,
+            :Numerics,
+            :Numerics,
             :SHGParameters,
-            :SHGNumerics,
+            :JerkParameters,
+            :THGParameters,
+            :Numerics,
             :SeparateRelaxation,
-            :FermiSurfaceBroadening,
             :LinearTransportParameters,
             :LinearOpticalResponseParameters,
             :OrbitalMagnetizationParameters,
-            :LinearResponseNumerics,
-            :OrbitalNumerics,
+            :Numerics,
+            :Numerics,
             :SHGParameters,
-            :SHGNumerics,
+            :JerkParameters,
+            :THGParameters,
+            :Numerics,
             :FiniteQOpticalParameters,
+            :IntrinsicHallParameters,
             :GeometryParameters,
+            :BerryMultipoleParameters,
             :BandParameters,
-            :OpticalNumerics,
-            :GeometryNumerics,
-            :BandNumerics,
+            :Numerics,
+            :Numerics,
+            :Numerics,
             :BandTargets,
             :Subspace,
             :Subspaces,
@@ -749,6 +791,7 @@ const FROZEN_TASK_CONFIG_FIELDS_NATIVE_001 = (
             :InterbandGroups,
             :TripleGroups,
             :TensorComponent,
+            :TensorComponents,
             :FullTensor,
             :KSliceSelection,
         ]),
@@ -764,7 +807,7 @@ end
           fieldnames(module_under_test.WannierHamiltonianOperatorGenerationConfig)
     @test :construction_policy in
           fieldnames(module_under_test.WannierHamiltonianOperatorGenerationConfig)
-    @test fieldnames(module_under_test.SymmetryAdaptedWannierizationConfig) ==
+    @test fieldnames(module_under_test.WannierizationConfig) ==
           (:input, :solver, :checkpoint, :runtime, :output)
     output_fields = fieldnames(module_under_test.WannierizationOutputConfig)
     @test :spn_provenance_file in output_fields
@@ -818,6 +861,7 @@ end
         :WannierSymmetryPlan,
         :detect_magnetic_symmetry_inventory,
         :detect_symmetry_operations,
+        :high_symmetry_band_path,
         :generate_vasp_band_representation,
         :maximum_real_space_covariance_error,
         :read_band_representation_hdf5,
@@ -844,38 +888,61 @@ end
     actual_wannierization_api =
         Set(names(WannierNLQG.Wannierization; all = false, imported = false))
     @test actual_wannierization_api == WANNIERIZATION_FACADE_API_20260901
+    @test !isdefined(WannierNLQG.Wannierization, :read_wannierization_fixed_subspace_hdf5)
+    @test !isdefined(WannierNLQG.Wannierization, :write_wannierization_fixed_subspace_hdf5)
     for name in WANNIERIZATION_QUALIFIED_EXPERT_API_20260901
         @test isdefined(WannierNLQG.Wannierization, name)
     end
     @test Set(names(WannierNLQG; all = false, imported = false)) == Set([
         :WannierNLQG,
+        :TaskInputResolution,
+        :read_task_input,
+        :resolve_task_input,
+        :explain_task_input,
+        :write_task_input_template,
+        :write_task_input_resolution,
+        :run_task_input,
         :TaskConfig,
         :TaskSpec,
         :RunResult,
         :ResponseQualificationResult,
         :run,
         :ModelInput,
+        :RealSpaceTBInput,
+        :AnalyticKInput,
+        :PointOrbitalSymmetryOperation,
+        :write_native_response_symmetry,
+        :KRegion,
         :BZMesh,
         :KSlice,
         :KPath,
+        :automatic_kpath,
         :ExecutionOptions,
+        :UniformIntegration,
+        :HAdaptiveCubature,
+        :IntegrationDomain,
+        :IntegrationDomain2D,
+        :integrate_response,
         :OutputOptions,
         :OpticalParameters,
         :SeparateRelaxation,
-        :FermiSurfaceBroadening,
         :LinearTransportParameters,
         :LinearOpticalResponseParameters,
         :OrbitalMagnetizationParameters,
-        :LinearResponseNumerics,
-        :OrbitalNumerics,
+        :Numerics,
+        :Numerics,
         :SHGParameters,
-        :SHGNumerics,
+        :JerkParameters,
+        :THGParameters,
+        :Numerics,
         :FiniteQOpticalParameters,
+        :IntrinsicHallParameters,
         :GeometryParameters,
+        :BerryMultipoleParameters,
         :BandParameters,
-        :OpticalNumerics,
-        :GeometryNumerics,
-        :BandNumerics,
+        :Numerics,
+        :Numerics,
+        :Numerics,
         :BandTargets,
         :Subspace,
         :Subspaces,
@@ -885,6 +952,7 @@ end
         :InterbandGroups,
         :TripleGroups,
         :TensorComponent,
+        :TensorComponents,
         :FullTensor,
         :KSliceSelection,
         :read_linear_transport_result,
@@ -897,10 +965,7 @@ end
     @test isdefined(module_under_test, :SMVFletcherReevesTwoStageAuditThresholds)
     @test isdefined(module_under_test, :smv_fletcher_reeves_two_stage_audit)
     @test isdefined(module_under_test, :smv_fletcher_reeves_two_stage_audit_contract_sha256)
-    removed_threshold_type = Symbol("Wannier", "90ReferenceParityThresholds")
-    removed_manifest_name = Symbol("wannier", "90_reference_qualification_manifest")
-    @test !isdefined(module_under_test, removed_threshold_type)
-    @test !isdefined(module_under_test, removed_manifest_name)
+    @test !isdefined(module_under_test, :wannier_operator_target_contract_sha256)
 end
 
 @testset "Target-subspace Hamiltonian authority API 2026-08-28" begin
@@ -924,7 +989,11 @@ end
 
     outer = BitMatrix([true true; true true; true false; false true])
     frozen = BitMatrix([true true; false true; false false; false false])
-    scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(outer, frozen)
+    scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
+        outer,
+        frozen;
+        content_authentication = false,
+    )
     contract = module_under_test.TargetSubspaceQualificationContract(
         scope;
         outer_min_ev = -18.0,
@@ -935,12 +1004,13 @@ end
     )
     @test contract.authority == :outer_window
     @test contract.parent_audit_policy == :audit_only
-    @test contract.qualification_scope.outer_mask_sha256 ==
-          WannierNLQG.SymmetryFoundation.qualification_mask_sha256(outer)
+    @test contract.qualification_scope.outer_mask_definition ==
+          WannierNLQG.SymmetryFoundation.qualification_mask_definition(outer)
     @test contract.target_anchor_maximum_drift_ev == 0.0
     @test contract.target_complement_maximum_element_ev == 5.0e-6
     @test contract.scoped_paw_thresholds.target_leakage_weight == 5.0e-6
-    @test occursin(r"^[0-9a-f]{64}$", contract.contract_sha256)
+    @test !isempty(contract.contract_definition)
+    @test !hasproperty(contract, :contract_sha256)
 
     qualification = module_under_test.TBSymmetryQualification(
         "NOT_RUN",
@@ -954,13 +1024,13 @@ end
         target_anchor = "completed_symmetrized_target",
         auxiliary_parent_qualification = "audit_only",
         target_leakage_semantics = module_under_test.TB_TARGET_LEAKAGE_WEIGHT_SEMANTICS,
-        target_leakage_formula_sha256 = module_under_test.TB_TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256,
+        target_leakage_formula_definition = module_under_test.TB_TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION,
         target_leakage_threshold = 5.0e-6,
     )
-    @test qualification.schema_version == "1.7"
+    @test qualification.schema_version == "2.0"
     @test qualification.authoritative_hamiltonian == "symmetrized_dft_hamiltonian"
     @test qualification.target_leakage_threshold == 5.0e-6
-    @test length(qualification.payload_sha256) == 64
+    @test !hasproperty(qualification, :payload_sha256)
 
     for legacy_key in ("symmetrized_hamiltonian_candidate", "symmetrized_target_subspace_candidate")
         error = try
@@ -978,8 +1048,13 @@ end
     @test fieldnames(WannierNLQG.TaskConfig) == (:model, :sampling, :tasks, :execution, :output)
     @test fieldnames(WannierNLQG.TaskSpec) ==
           (:id, :quantity, :method, :physics, :numerics, :observable)
-    @test fieldnames(WannierNLQG.Runtime.EffectiveTaskConfig) ==
-          FROZEN_TASK_CONFIG_FIELDS_NATIVE_001
+    @test fieldnames(WannierNLQG.Runtime.EffectiveTaskConfig) == Tuple(
+        Iterators.flatten(
+            name == :denominator_regularization ?
+            (name, :denominator_regularization_was_explicit, :include_external) : (name,) for
+            name in FROZEN_TASK_CONFIG_FIELDS_NATIVE_001
+        ),
+    )
     @test :basis_correction_enabled ∉ fieldnames(WannierNLQG.ModelInput)
     @test WannierNLQG.ModelInput().wannier_center_convention == "Convention_II"
     @test !isdefined(WannierNLQG, :EffectiveTaskConfig)

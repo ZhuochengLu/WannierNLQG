@@ -42,6 +42,7 @@ function _fill_transition_screen!(
     gaussian = broadening_type == "Gaussian"
     lorentzian = broadening_type == "Lorentzian"
     gaussian || lorentzian || error("Unknown smearing type: $broadening_type")
+    # Gaussian skipping must retain the existing nonzero delta support.
     cutoff = broadening * sqrt(200.0)
     gaussian_scale = gaussian ? 1.0 / (sqrt(pi) * broadening) : 0.0
     transition_threshold = transition_window_factor * broadening
@@ -58,7 +59,7 @@ function _fill_transition_screen!(
                 screen.band_start <= n <= screen.band_end &&
                 screen.band_start <= m <= screen.band_end
             pair_active = occupation_active && lorentzian
-            if occupation_active && in_band_window && transition_threshold <= 0
+            if occupation_active && in_band_window && !gaussian && transition_threshold <= 0
                 screen.active = true
             end
             for energy_index in eachindex(photon_energies)
@@ -74,8 +75,10 @@ function _fill_transition_screen!(
                 end
                 if occupation_active &&
                    in_band_window &&
-                   transition_threshold > 0 &&
-                   abs(delta_arg) < transition_threshold
+                   (
+                       gaussian ? inside_cutoff :
+                       (transition_threshold > 0 && abs(delta_arg) < transition_threshold)
+                   )
                     screen.active = true
                 end
             end
@@ -158,7 +161,7 @@ function _prepare_transition_screen!(
     screen::TransitionScreenWorkspace,
     kpoint::Vector{Float64},
     cfg::EffectiveTaskConfig,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     num_orbitals::Int,
 )
     compute_spectrum!(screen.data, screen.matrix_elements, model, kpoint)
@@ -175,6 +178,64 @@ function _prepare_transition_screen!(
         cfg.transition_window_factor,
     )
     return screen
+end
+
+"""Allocate private buffers for one conventional slice's named transition.
+
+The cold path validates disjoint conduction/valence groups. These buffers do
+not alias the common transition screen used by other task families.
+"""
+function _make_conventional_kslice_pair_selection(band_selection, num_orbitals::Int)
+    conduction, valence = validate_interband_band_selection(band_selection, num_orbitals)
+    conduction_mask = falses(num_orbitals)
+    valence_mask = falses(num_orbitals)
+    conduction_mask[conduction] .= true
+    valence_mask[valence] .= true
+    return (;
+        conduction_mask,
+        valence_mask,
+        active_pair_mask = falses(num_orbitals, num_orbitals),
+        active_pairs_nmajor = Vector{Tuple{Int, Int}}(undef, num_orbitals^2),
+        active_pairs_mmajor = Vector{Tuple{Int, Int}}(undef, num_orbitals^2),
+        derivative_required_pairs_nmajor = Vector{Tuple{Int, Int}}(undef, num_orbitals^2),
+    )
+end
+
+"""Filter external valence-to-conduction pairs without changing the shared screen.
+
+Keep stable n-major/m-major orders and both orientations required to form
+generalized derivatives. Intermediate-state sums are not band-filtered.
+"""
+function _prepare_conventional_kslice_pairs!(selection, screen::TransitionScreenWorkspace)
+    mask = selection.active_pair_mask
+    fill!(mask, false)
+    active_pair_count = 0
+    @inbounds for n in screen.band_start:screen.band_end
+        selection.valence_mask[n] || continue
+        for m in screen.band_start:screen.band_end
+            selection.conduction_mask[m] && screen.active_pair_mask[n, m] || continue
+            mask[n, m] = true
+            active_pair_count += 1
+            selection.active_pairs_nmajor[active_pair_count] = (n, m)
+        end
+    end
+    mmajor_count = 0
+    derivative_pair_count = 0
+    @inbounds for m in screen.band_start:screen.band_end
+        for n in screen.band_start:screen.band_end
+            mask[n, m] || continue
+            mmajor_count += 1
+            selection.active_pairs_mmajor[mmajor_count] = (n, m)
+        end
+    end
+    @inbounds for n in screen.band_start:screen.band_end
+        for m in screen.band_start:screen.band_end
+            mask[n, m] || mask[m, n] || continue
+            derivative_pair_count += 1
+            selection.derivative_required_pairs_nmajor[derivative_pair_count] = (n, m)
+        end
+    end
+    return (; active_pair_count, derivative_pair_count)
 end
 
 # Rebuild pair activity from nonzero frequency weights and occupation differences, then refresh ordered lists and valid lengths.
@@ -254,6 +315,7 @@ function _fill_photon_drag_transition_screen!(
     gaussian = broadening_type == "Gaussian"
     lorentzian = broadening_type == "Lorentzian"
     gaussian || lorentzian || error("Unknown smearing type: $broadening_type")
+    # Gaussian skipping must retain the existing nonzero delta support.
     cutoff = broadening * sqrt(200.0)
     gaussian_scale = gaussian ? 1.0 / (sqrt(pi) * broadening) : 0.0
     transition_threshold = transition_window_factor * broadening
@@ -271,7 +333,7 @@ function _fill_photon_drag_transition_screen!(
                 screen.valence_band_start <= n <= screen.valence_band_end &&
                 screen.conduction_band_start <= m <= screen.conduction_band_end
             pair_active = occupation_active && lorentzian
-            if occupation_active && in_band_window && transition_threshold <= 0
+            if occupation_active && in_band_window && !gaussian && transition_threshold <= 0
                 screen.active = true
             end
             for energy_index in eachindex(photon_energies)
@@ -287,8 +349,10 @@ function _fill_photon_drag_transition_screen!(
                 end
                 if occupation_active &&
                    in_band_window &&
-                   transition_threshold > 0 &&
-                   abs(delta_arg) < transition_threshold
+                   (
+                       gaussian ? inside_cutoff :
+                       (transition_threshold > 0 && abs(delta_arg) < transition_threshold)
+                   )
                     screen.active = true
                 end
             end
@@ -305,7 +369,7 @@ function _prepare_photon_drag_transition_screen!(
     kpoint::Vector{Float64},
     photon_momentum_fractional::Vector{Float64},
     cfg::EffectiveTaskConfig,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     num_orbitals::Int,
 )
     @inbounds for a in 1:3
@@ -330,7 +394,7 @@ function _prepare_photon_drag_transition_screen!(
         valence_energies,
         conduction_energies,
         cfg.fermi_energy,
-        cfg.band_window_size,
+        -1, # Photon-drag response and intermediate bands use the complete finite model.
         num_orbitals,
     )
     fermi_dirac!(screen.valence_occupations, valence_energies, cfg.fermi_energy, cfg.temperature)
@@ -348,6 +412,12 @@ function _prepare_photon_drag_transition_screen!(
         cfg.broadening_type,
         cfg.broadening,
         cfg.transition_window_factor,
+    )
+    photon_drag_weighted_occupations!(
+        screen.weighted_occupation_differences,
+        screen.occupation_differences,
+        screen.transition_energies,
+        cfg.denominator_regularization,
     )
     return screen
 end

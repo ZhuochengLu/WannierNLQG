@@ -99,8 +99,12 @@ function _star_select_buffer(
     target_indices::UnitRange{Int},
     policy::ClosureDrivenBandBuffer,
     leakage_threshold::Float64;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
+    validate_ordinary_construction_policy(construction_policy)
+    all(isfinite, representative_energies) &&
+    all(matrix -> all(isfinite, matrix), raw_transports) ||
+        throw(ArgumentError("NONFINITE_STRUCTURAL_HOLD: band buffer input"))
     parent_count = length(representative_energies)
     first(target_indices) >= 1 && last(target_indices) <= parent_count ||
         throw(ArgumentError("PAW_GAUGE_TARGET_RANK_MISMATCH"))
@@ -114,14 +118,9 @@ function _star_select_buffer(
 
     function validate_candidate(first_band::Int, last_band::Int)
         extra = length(first_band:last_band) - length(target_indices)
-        if construction_policy == :standard && extra > policy.max_extra_bands
+        if extra > policy.max_extra_bands
             return false
         end
-        extra <= policy.max_extra_bands || throw(
-            ArgumentError(
-                "FINITE_BUFFER_HOLD: closure requires more than $(policy.max_extra_bands) bands",
-            ),
-        )
         lower_distance = max(
             representative_energies[first(target_indices)] - representative_energies[first_band],
             0.0,
@@ -130,15 +129,9 @@ function _star_select_buffer(
             representative_energies[last_band] - representative_energies[last(target_indices)],
             0.0,
         )
-        if construction_policy == :standard &&
-           maximum((lower_distance, upper_distance)) > policy.hard_energy_cap_ev
+        if maximum((lower_distance, upper_distance)) > policy.hard_energy_cap_ev
             return false
         end
-        maximum((lower_distance, upper_distance)) <= policy.hard_energy_cap_ev || throw(
-            ArgumentError(
-                "FINITE_BUFFER_HOLD: adjacent cluster exceeds the $(policy.hard_energy_cap_ev) eV hard cap",
-            ),
-        )
         return true
     end
     if !validate_candidate(selected_first, selected_last)

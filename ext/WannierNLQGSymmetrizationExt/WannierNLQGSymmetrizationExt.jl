@@ -38,6 +38,8 @@ import WannierNLQG.IO:
     WannierHR,
     WannierMMN,
     operator_storage_name,
+    observe_scientific_source,
+    scientific_file_identity,
     read_real_space_operator_bundle,
     read_response_symmetry_artifact,
     read_wannier_amn,
@@ -48,6 +50,7 @@ import WannierNLQG.IO:
     read_wannier_spn,
     read_wannier_tb,
     validate_operator_profile,
+    validate_scientific_source_state,
     write_real_space_operator_bundle,
     write_wannier_hr,
     write_wannier_tb
@@ -97,22 +100,9 @@ import WannierNLQG.SymmetryFoundation:
     write_band_representation_hdf5,
     write_band_representation_summary
 import WannierNLQG.Symmetrization:
-    FAILED_BAND_REPRESENTATION,
-    FAILED_INPUT_PROVENANCE,
-    FAILED_INPUT_SUBSPACE_NOT_CLOSED,
-    FAILED_PHYSICAL_BAND_PRESERVATION,
-    FAILED_POSITION_VALIDATION,
-    GaugeAwareSymmetrizationConfig,
-    GaugeAwareSymmetrizationResult,
-    GaugeAwareSymmetrizationStatus,
-    GaugeAwareSymmetrizationThresholds,
-    GaugeAwareThresholdEvent,
-    HOLD_POSITION_PENDING,
     MagneticMomentConfig,
     MeshScreenConfig,
     OperatorValidationSummary,
-    PASS,
-    PASS_WITH_WARNINGS,
     SymmetrizationConfig,
     SymmetrizationResult
 import WannierNLQG.WannierProjection:
@@ -123,6 +113,7 @@ import WannierNLQG.WannierProjection:
     crystal_structure,
     parse_input_boolean,
     parse_wannier_float,
+    projection_basis_input_values,
     read_wannier_win,
     strip_input_comment
 
@@ -132,6 +123,7 @@ import WannierNLQG.IO: OperatorBundleIndexEntry, OperatorBundleManifest
 
 import WannierNLQG.WannierProjection: WannierProjectionBlock
 
+include("ResponseQualificationKernels.jl")
 include("components/ValidationComponent.jl")
 include("components/SewingComponent.jl")
 include("components/ProjectionComponent.jl")
@@ -139,18 +131,9 @@ include("components/PersistenceComponent.jl")
 include("components/WorkflowComponent.jl")
 
 export screen_wannier_mesh, symmetrize_wannier_operators
-export write_response_symmetry_artifact, qualify_response_symmetry_wannier90
-export symmetrize_existing_wannier_model
+export write_response_symmetry_artifact, qualify_response_symmetry_wannier_frame
 
-# Captured first-use declarations are specific to the frozen Julia trace.
-if WannierNLQG.FIRST_USE_TRACE_COMPATIBLE
-    include("SymmetrizationExtFirstUsePrecompile.jl")
-    include("Generated/SymmetrizationResponseWriterSignatures.jl")
-    include("ResponseQualificationFirstUseCoverage.jl")
-
-    include("ExistingModelColdNativeCoverage.jl")
-
-    include("SymmetrizationTaskInferenceResidualCoverage.jl")
-end
+# Public composite workloads precede residual ablation.
+include("SymmetrizationExtFirstUsePrecompile.jl")
 
 end

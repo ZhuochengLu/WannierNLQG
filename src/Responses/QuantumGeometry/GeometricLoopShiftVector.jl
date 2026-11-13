@@ -40,7 +40,7 @@ function compute_geometric_loop_shift_vector_kernel!(
     denominator_regularization::Float64,
     finite_difference_step::Float64,
     spatial_dimension::Int64,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     band_start::Int64,
     band_end::Int64;
     tensor_indices::Union{Nothing, AbstractVector{<:Integer}} = nothing,
@@ -186,7 +186,7 @@ function compute_geometric_loop_shift_vector_kernel!(
     denominator_regularization::Float64,
     finite_difference_step::Float64,
     spatial_dimension::Int64,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     num_orbitals::Int64,
     band_start::Int64,
     band_end::Int64,

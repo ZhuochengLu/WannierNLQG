@@ -7,8 +7,7 @@
     "command": "julia --project=. scripts/generate_response_symmetry_catalog.jl",
     "network_required": false,
     "forbidden_inputs": [
-        "PythMPG source, dictionaries, ordering, or generated results",
-        "ISO-MAG data files or generated results",
+        "external magnetic-point-group datasets, source, dictionaries, ordering, or generated results",
         "historical catalog or catalog receipt"
     ],
     "inputs": {
@@ -16,7 +15,7 @@
             "get_magnetic_symmetry_from_database",
             "spg_get_pointgroup"
         ],
-        "generator_sha256": "4fb2133cbbbf9bab2cc5e961abe5b68a149bcf28a50f9184c23f9e1a14ac6821",
+        "generator_sha256": "1bcb544b6293beb8cd3c44f0b8e88bb9ef6c78f7f4102e9de518df46ee7361cd",
         "canonicalization_sha256": "4570b2df131e7983d6c44a78e825edafd26d4298d1ac42b150cf5fd839d1a336",
         "specification_sha256": "01bd5b3882d0cf965c8000563208206c238a723288bc1591d9874af9eead62a4"
     },
@@ -79,7 +78,7 @@
     },
     "outputs": {
         "generated_source": "src/SymmetryFoundation/GeneratedMagneticPointGroupCatalog.jl",
-        "generated_source_sha256": "2d2f30a33e3b85b42840c2c14e6509577ebba99c94dd438b935d7331c32ad7d6",
+        "generated_source_sha256": "9b8dfda700f436283c0132c6f8c1a877960606eda0d5585aef3a9e09d3a91a34",
         "display_catalog_sha256": "4ac72113a12da0557105b3d0689d30e623c3ce6b0bcba52dc2c1cb355946290e"
     }
 }

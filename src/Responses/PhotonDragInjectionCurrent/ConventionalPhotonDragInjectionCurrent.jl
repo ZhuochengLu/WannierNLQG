@@ -46,10 +46,10 @@ const _PHOTON_DRAG_INJECTION_CURRENT_BLAS_AUTO_MIN_ORBITALS_WITHOUT_EXPLICIT_CEN
            matrix_scratch_2 !== nothing ? :blas : :scalar
 end
 
-"""
-Return separate inclusive band windows around the Fermi level for valence/conduction momentum legs and an availability flag.
+"""Return complete valence/conduction band ranges for the declared finite model.
 
-Sorted energies and Fermi level use eV. `-1` selects all bands; invalid nonpositive sizes raise an error and absent Fermi boundaries yield empty windows.
+Photon-drag has one full-band contract. `band_window_size` must be `-1`;
+occupation and resonance screening are evaluated separately.
 """
 function photon_drag_band_windows(
     valence_energies::AbstractVector{<:Real},
@@ -58,28 +58,11 @@ function photon_drag_band_windows(
     band_window_size::Integer,
     num_orbitals::Integer,
 )
-    if band_window_size == -1 || 2 * band_window_size > num_orbitals
-        return 1, num_orbitals, 1, num_orbitals, true
-    elseif band_window_size <= 0
-        error(
-            "Invalid band_window_size=$(band_window_size); use a positive value or -1 for all bands.",
-        )
-    end
-
-    valence_fermi_index = searchsortedlast(valence_energies, fermi_energy)
-    conduction_fermi_index = searchsortedlast(conduction_energies, fermi_energy)
-    if valence_fermi_index < 1 ||
-       valence_fermi_index >= num_orbitals ||
-       conduction_fermi_index < 1 ||
-       conduction_fermi_index >= num_orbitals
-        return 1, 0, 1, 0, false
-    end
-
-    valence_band_start = max(1, valence_fermi_index - band_window_size + 1)
-    valence_band_end = min(num_orbitals, valence_fermi_index + band_window_size)
-    conduction_band_start = max(1, conduction_fermi_index - band_window_size + 1)
-    conduction_band_end = min(num_orbitals, conduction_fermi_index + band_window_size)
-    return (valence_band_start, valence_band_end, conduction_band_start, conduction_band_end, true)
+    band_window_size == -1 ||
+        throw(ArgumentError("photon-drag requires all finite-model bands; use -1"))
+    num_orbitals > 0 && length(valence_energies) == length(conduction_energies) == num_orbitals ||
+        throw(DimensionMismatch("complete finite-model valence/conduction spectra required"))
+    return 1, num_orbitals, 1, num_orbitals, true
 end
 
 """
@@ -153,10 +136,76 @@ function photon_drag_has_active_transition(
     return false
 end
 
+# Phase-weighted left frames are valid only for this overlap call. Both full
+# scratch matrices are overwritten before use; no value is cached across k/q.
+# Preserve the original association (cis(phase) * left) * right and every term,
+# including exact zero and nonfinite frame entries. Reverse phases/frames remain
+# independent. This is scalar assembly, with no change to the matrix selector.
 """
 Fill cross-momentum valence/conduction eigenvector overlaps in caller-owned storage.
 
 Preserve native source-gauge and optional Wannier-center phases; the overlap is dimensionless and carries no response prefactor.
+"""
+function _photon_drag_compute_phased_overlaps!(
+    overlap_1,
+    overlap_2,
+    valence_data,
+    conduction_data,
+    valence_kpoint,
+    conduction_kpoint,
+    centers,
+    num_orbitals,
+    phase_left_1,
+    phase_left_2,
+)
+    delta_12_1=valence_kpoint[1]-conduction_kpoint[1]
+    delta_12_2=valence_kpoint[2]-conduction_kpoint[2]
+    delta_12_3=valence_kpoint[3]-conduction_kpoint[3]
+    delta_21_1=conduction_kpoint[1]-valence_kpoint[1]
+    delta_21_2=conduction_kpoint[2]-valence_kpoint[2]
+    delta_21_3=conduction_kpoint[3]-valence_kpoint[3]
+    left_1=valence_data.spectrum.source_eigenvectors_adjoint
+    left_2=conduction_data.spectrum.source_eigenvectors_adjoint
+    right_1=conduction_data.spectrum.source_eigenvectors
+    right_2=valence_data.spectrum.source_eigenvectors
+    @inbounds for intermediate in 1:num_orbitals
+        phase_12=delta_12_1*centers[1, intermediate]+delta_12_2*centers[2, intermediate]+delta_12_3*centers[
+            3,
+            intermediate,
+        ]
+        phase_21=delta_21_1*centers[1, intermediate]+delta_21_2*centers[2, intermediate]+delta_21_3*centers[
+            3,
+            intermediate,
+        ]
+        factor_12=cis(2.0*pi*phase_12)
+        factor_21=cis(2.0*pi*phase_21)
+        for row in 1:num_orbitals
+            phase_left_1[row, intermediate]=factor_12*left_1[row, intermediate]
+            phase_left_2[row, intermediate]=factor_21*left_2[row, intermediate]
+        end
+    end
+    @inbounds for row in 1:num_orbitals, column in 1:num_orbitals
+        forward=COMPLEX_ZERO;
+        reverse=COMPLEX_ZERO
+        for intermediate in 1:num_orbitals
+            forward += phase_left_1[row, intermediate]*right_1[intermediate, column]
+            reverse += phase_left_2[row, intermediate]*right_2[intermediate, column]
+        end
+        overlap_1[row, column]=forward
+        overlap_2[row, column]=reverse
+    end
+    return nothing
+end
+
+"""
+Overwrite the two dimensionless cross-momentum overlap matrices and return `nothing`.
+
+Read valence/conduction source frames and fractional endpoint/center coordinates;
+when enabled, forward and reverse center phases remain independent. Optional
+caller-owned phase scratch is overwritten only by the eligible dense path, with
+the existing scalar fallback otherwise. With disjoint caller buffers, source
+frames and coordinates remain read-only. Fast-path rejection does not establish
+alias support for the fallback. No owned overlap result is returned or cached.
 """
 function photon_drag_compute_overlaps!(
     overlap_1::Matrix{ComplexF64},
@@ -168,7 +217,56 @@ function photon_drag_compute_overlaps!(
     wannier_centers_fractional::Matrix{Float64},
     explicit_center_phase_enabled::Bool,
     num_orbitals::Int64,
+    ;
+    phase_scratch_1 = nothing,
+    phase_scratch_2 = nothing,
 )
+    if explicit_center_phase_enabled &&
+       num_orbitals>=64 &&
+       phase_scratch_1 isa Matrix{ComplexF64} &&
+       phase_scratch_2 isa Matrix{ComplexF64} &&
+       size(overlap_1)==size(overlap_2)==size(phase_scratch_1)==size(phase_scratch_2)==(
+           num_orbitals,
+           num_orbitals,
+       ) &&
+       all(isfinite, valence_kpoint) &&
+       all(isfinite, conduction_kpoint) &&
+       all(isfinite, wannier_centers_fractional)
+        writable=(overlap_1, overlap_2, phase_scratch_1, phase_scratch_2)
+        frames=(
+            valence_data.spectrum.source_eigenvectors,
+            valence_data.spectrum.source_eigenvectors_adjoint,
+            conduction_data.spectrum.source_eigenvectors,
+            conduction_data.spectrum.source_eigenvectors_adjoint,
+        )
+        disjoint=true
+        for first in 1:4
+            for second in (first + 1):4
+                disjoint &= !Base.mightalias(writable[first], writable[second])
+            end
+            for frame in frames
+                disjoint &= !Base.mightalias(writable[first], frame)
+            end
+            disjoint &= !Base.mightalias(writable[first], wannier_centers_fractional)
+            disjoint &= !Base.mightalias(writable[first], valence_kpoint)
+            disjoint &= !Base.mightalias(writable[first], conduction_kpoint)
+        end
+        if disjoint
+            _photon_drag_compute_phased_overlaps!(
+                overlap_1,
+                overlap_2,
+                valence_data,
+                conduction_data,
+                valence_kpoint,
+                conduction_kpoint,
+                wannier_centers_fractional,
+                num_orbitals,
+                phase_scratch_1,
+                phase_scratch_2,
+            )
+            return nothing
+        end
+    end
     fill!(overlap_1, COMPLEX_ZERO)
     fill!(overlap_2, COMPLEX_ZERO)
     valence_to_conduction_delta_k = valence_kpoint .- conduction_kpoint
@@ -272,7 +370,15 @@ function _photon_drag_compute_velocity_vertices_blas!(
     valence_data::KPointMatrixData,
     conduction_data::KPointMatrixData,
     spatial_dimension::Int64,
-    tensor_indices,
+    tensor_indices;
+    valence_velocity_vertices = MatrixElements.physical_velocity_vertices(
+        valence_data;
+        source_gauge = true,
+    ),
+    conduction_velocity_vertices = MatrixElements.physical_velocity_vertices(
+        conduction_data;
+        source_gauge = true,
+    ),
 )
     forward_axes =
         tensor_indices === nothing ? (1:spatial_dimension) : (tensor_indices[3]:tensor_indices[3])
@@ -280,16 +386,16 @@ function _photon_drag_compute_velocity_vertices_blas!(
         tensor_indices === nothing ? (1:spatial_dimension) : (tensor_indices[2]:tensor_indices[2])
     @views for axis in forward_axes
         forward_vertex = forward_velocity_vertex[:, :, axis]
-        valence_velocity = valence_data.source_gauge_velocity_vertices[:, :, axis]
-        conduction_velocity = conduction_data.source_gauge_velocity_vertices[:, :, axis]
+        valence_velocity = valence_velocity_vertices[:, :, axis]
+        conduction_velocity = conduction_velocity_vertices[:, :, axis]
         mul!(forward_vertex, valence_velocity, overlap_1)
         mul!(matrix_scratch_1, overlap_1, conduction_velocity)
         @. forward_vertex = 0.5 * (forward_vertex + matrix_scratch_1)
     end
     @views for axis in backward_axes
         backward_vertex = backward_velocity_vertex[:, :, axis]
-        valence_velocity = valence_data.source_gauge_velocity_vertices[:, :, axis]
-        conduction_velocity = conduction_data.source_gauge_velocity_vertices[:, :, axis]
+        valence_velocity = valence_velocity_vertices[:, :, axis]
+        conduction_velocity = conduction_velocity_vertices[:, :, axis]
         mul!(backward_vertex, conduction_velocity, overlap_2)
         mul!(matrix_scratch_2, overlap_2, valence_velocity)
         @. backward_vertex = 0.5 * (backward_vertex + matrix_scratch_2)
@@ -335,7 +441,34 @@ function compute_photon_drag_injection_current_kernel!(
     _matrix_scratch_1::Union{Nothing, Matrix{ComplexF64}} = nothing,
     _matrix_scratch_2::Union{Nothing, Matrix{ComplexF64}} = nothing,
     _pdic_matrix_strategy::Symbol = :auto,
+    _optical_overlaps_prepared::Bool = false,
+    # Explicit historical reference for old center-only kernel tests, never a TaskConfig option.
+    _historical_center_overlap_reference::Bool = false,
+    valence_velocity_vertices = nothing,
+    conduction_velocity_vertices = nothing,
 )
+    if !_optical_overlaps_prepared &&
+       !_historical_center_overlap_reference &&
+       valence_kpoint != conduction_kpoint
+        throw(
+            ArgumentError(
+                "FINITE_Q_OPTICAL_LINKS_REQUIRED: prepare physical model links before the response kernel",
+            ),
+        )
+    end
+    valence_velocity_source =
+        valence_velocity_vertices === nothing ?
+        MatrixElements.physical_velocity_vertices(valence_data; source_gauge = true) :
+        valence_velocity_vertices
+    conduction_velocity_source =
+        conduction_velocity_vertices === nothing ?
+        MatrixElements.physical_velocity_vertices(conduction_data; source_gauge = true) :
+        conduction_velocity_vertices
+    ndims(valence_velocity_source) == 3 &&
+    size(valence_velocity_source) == size(conduction_velocity_source) &&
+    size(valence_velocity_source, 1) == size(valence_velocity_source, 2) == num_orbitals &&
+    size(valence_velocity_source, 3) >= spatial_dimension ||
+        throw(DimensionMismatch("full source-gauge velocity axes required"))
     _clear_response_kernel!(response_kernel, tensor_indices)
     if tensor_indices === nothing
         fill!(forward_velocity_vertex, COMPLEX_ZERO)
@@ -360,19 +493,21 @@ function compute_photon_drag_injection_current_kernel!(
         _matrix_scratch_2,
     )
     if matrix_strategy === :blas
-        _photon_drag_compute_overlaps_blas!(
-            overlap_1,
-            overlap_2,
-            _matrix_scratch_1,
-            _matrix_scratch_2,
-            valence_data,
-            conduction_data,
-            valence_kpoint,
-            conduction_kpoint,
-            wannier_centers_fractional,
-            explicit_center_phase_enabled,
-            num_orbitals,
-        )
+        if !_optical_overlaps_prepared
+            _photon_drag_compute_overlaps_blas!(
+                overlap_1,
+                overlap_2,
+                _matrix_scratch_1,
+                _matrix_scratch_2,
+                valence_data,
+                conduction_data,
+                valence_kpoint,
+                conduction_kpoint,
+                wannier_centers_fractional,
+                explicit_center_phase_enabled,
+                num_orbitals,
+            )
+        end
         _photon_drag_compute_velocity_vertices_blas!(
             forward_velocity_vertex,
             backward_velocity_vertex,
@@ -383,7 +518,9 @@ function compute_photon_drag_injection_current_kernel!(
             valence_data,
             conduction_data,
             spatial_dimension,
-            tensor_indices,
+            tensor_indices;
+            valence_velocity_vertices = valence_velocity_source,
+            conduction_velocity_vertices = conduction_velocity_source,
         )
         if active_pairs_nmajor !== nothing
             pair_count = _compact_injection_pair_count(active_pairs_nmajor, active_pair_count)
@@ -454,17 +591,21 @@ function compute_photon_drag_injection_current_kernel!(
         return response_kernel
     end
 
-    photon_drag_compute_overlaps!(
-        overlap_1,
-        overlap_2,
-        valence_data,
-        conduction_data,
-        valence_kpoint,
-        conduction_kpoint,
-        wannier_centers_fractional,
-        explicit_center_phase_enabled,
-        num_orbitals,
-    )
+    if !_optical_overlaps_prepared
+        photon_drag_compute_overlaps!(
+            overlap_1,
+            overlap_2,
+            valence_data,
+            conduction_data,
+            valence_kpoint,
+            conduction_kpoint,
+            wannier_centers_fractional,
+            explicit_center_phase_enabled,
+            num_orbitals;
+            phase_scratch_1 = _matrix_scratch_1,
+            phase_scratch_2 = _matrix_scratch_2,
+        )
+    end
 
     if active_pairs_nmajor !== nothing
         pair_count = _compact_injection_pair_count(active_pairs_nmajor, active_pair_count)
@@ -476,13 +617,11 @@ function compute_photon_drag_injection_current_kernel!(
                     backward_velocity_sum = COMPLEX_ZERO
                     for l in 1:num_orbitals
                         forward_velocity_sum +=
-                            valence_data.source_gauge_velocity_vertices[n, l, a] * overlap_1[l, m] +
-                            overlap_1[n, l] *
-                            conduction_data.source_gauge_velocity_vertices[l, m, a]
+                            valence_velocity_source[n, l, a] * overlap_1[l, m] +
+                            overlap_1[n, l] * conduction_velocity_source[l, m, a]
                         backward_velocity_sum +=
-                            conduction_data.source_gauge_velocity_vertices[m, l, a] *
-                            overlap_2[l, n] +
-                            overlap_2[m, l] * valence_data.source_gauge_velocity_vertices[l, n, a]
+                            conduction_velocity_source[m, l, a] * overlap_2[l, n] +
+                            overlap_2[m, l] * valence_velocity_source[l, n, a]
                     end
                     forward_velocity_vertex[n, m, a] = 0.5 * forward_velocity_sum
                     backward_velocity_vertex[m, n, a] = 0.5 * backward_velocity_sum
@@ -512,11 +651,11 @@ function compute_photon_drag_injection_current_kernel!(
                 backward_velocity_sum = COMPLEX_ZERO
                 for l in 1:num_orbitals
                     forward_velocity_sum +=
-                        valence_data.source_gauge_velocity_vertices[n, l, c] * overlap_1[l, m] +
-                        overlap_1[n, l] * conduction_data.source_gauge_velocity_vertices[l, m, c]
+                        valence_velocity_source[n, l, c] * overlap_1[l, m] +
+                        overlap_1[n, l] * conduction_velocity_source[l, m, c]
                     backward_velocity_sum +=
-                        conduction_data.source_gauge_velocity_vertices[m, l, b] * overlap_2[l, n] +
-                        overlap_2[m, l] * valence_data.source_gauge_velocity_vertices[l, n, b]
+                        conduction_velocity_source[m, l, b] * overlap_2[l, n] +
+                        overlap_2[m, l] * valence_velocity_source[l, n, b]
                 end
                 forward_velocity_vertex[n, m, c] = 0.5 * forward_velocity_sum
                 backward_velocity_vertex[m, n, b] = 0.5 * backward_velocity_sum
@@ -541,13 +680,11 @@ function compute_photon_drag_injection_current_kernel!(
                     backward_velocity_sum = COMPLEX_ZERO
                     for l in 1:num_orbitals
                         forward_velocity_sum +=
-                            valence_data.source_gauge_velocity_vertices[n, l, a] * overlap_1[l, m] +
-                            overlap_1[n, l] *
-                            conduction_data.source_gauge_velocity_vertices[l, m, a]
+                            valence_velocity_source[n, l, a] * overlap_1[l, m] +
+                            overlap_1[n, l] * conduction_velocity_source[l, m, a]
                         backward_velocity_sum +=
-                            conduction_data.source_gauge_velocity_vertices[m, l, a] *
-                            overlap_2[l, n] +
-                            overlap_2[m, l] * valence_data.source_gauge_velocity_vertices[l, n, a]
+                            conduction_velocity_source[m, l, a] * overlap_2[l, n] +
+                            overlap_2[m, l] * valence_velocity_source[l, n, a]
                     end
                     forward_velocity_vertex[n, m, a] = 0.5 * forward_velocity_sum
                     backward_velocity_vertex[m, n, a] = 0.5 * backward_velocity_sum
@@ -582,11 +719,11 @@ function compute_photon_drag_injection_current_kernel!(
                 backward_velocity_sum = COMPLEX_ZERO
                 for l in 1:num_orbitals
                     forward_velocity_sum +=
-                        valence_data.source_gauge_velocity_vertices[n, l, c] * overlap_1[l, m] +
-                        overlap_1[n, l] * conduction_data.source_gauge_velocity_vertices[l, m, c]
+                        valence_velocity_source[n, l, c] * overlap_1[l, m] +
+                        overlap_1[n, l] * conduction_velocity_source[l, m, c]
                     backward_velocity_sum +=
-                        conduction_data.source_gauge_velocity_vertices[m, l, b] * overlap_2[l, n] +
-                        overlap_2[m, l] * valence_data.source_gauge_velocity_vertices[l, n, b]
+                        conduction_velocity_source[m, l, b] * overlap_2[l, n] +
+                        overlap_2[m, l] * valence_velocity_source[l, n, b]
                 end
                 forward_velocity_vertex[n, m, c] = 0.5 * forward_velocity_sum
                 backward_velocity_vertex[m, n, b] = 0.5 * backward_velocity_sum
@@ -610,11 +747,11 @@ one ordered-field injection-rate contribution; it does not include the conjugate
 frequency/momentum outer factor `2` or the steady-state `tau`.
 """
 function accumulate_photon_drag_injection_current_response!(
-    local_response::Array{ComplexF64, 4},
+    local_response::AbstractArray{ComplexF64, 4},
     response_kernel::Array{ComplexF64, 5},
     occupation_differences::Matrix{Float64},
-    delta::Array{Float64, 3},
-    frequency_denominator_weights::Vector{Float64},
+    delta::AbstractArray{Float64, 3},
+    frequency_contraction_weights::Vector{Float64},
     prefactor,
     valence_band_start::Int64,
     valence_band_end::Int64,
@@ -636,11 +773,11 @@ function accumulate_photon_drag_injection_current_response!(
             @inbounds for pair_index in 1:pair_count
                 n, m = active_pairs_nmajor[pair_index]
                 for energy_index in 1:num_photon_energies
-                    frequency_denominator_weight = frequency_denominator_weights[energy_index]
+                    frequency_contraction_weight = frequency_contraction_weights[energy_index]
                     frequency_weight_scratch[energy_index] =
                         occupation_differences[n, m] *
                         delta[energy_index, n, m] *
-                        frequency_denominator_weight
+                        frequency_contraction_weight
                 end
                 for c in 1:spatial_dimension
                     for b in 1:spatial_dimension
@@ -659,13 +796,13 @@ function accumulate_photon_drag_injection_current_response!(
             end
         else
             @inbounds for energy_index in 1:num_photon_energies
-                frequency_denominator_weight = frequency_denominator_weights[energy_index]
+                frequency_contraction_weight = frequency_contraction_weights[energy_index]
                 for pair_index in 1:pair_count
                     n, m = active_pairs_nmajor[pair_index]
                     weight =
                         occupation_differences[n, m] *
                         delta[energy_index, n, m] *
-                        frequency_denominator_weight
+                        frequency_contraction_weight
                     if weight == 0.0
                         continue
                     end
@@ -706,17 +843,17 @@ function accumulate_photon_drag_injection_current_response!(
             _frequency_contraction_scratch,
             strategy = frequency_contraction_strategy,
             pair_order = :nmajor,
-            frequency_weights = frequency_denominator_weights,
+            frequency_weights = frequency_contraction_weights,
         )
     end
     @inbounds for energy_index in 1:num_photon_energies
-        frequency_denominator_weight = frequency_denominator_weights[energy_index]
+        frequency_contraction_weight = frequency_contraction_weights[energy_index]
         for n in valence_band_start:valence_band_end
             for m in conduction_band_start:conduction_band_end
                 weight =
                     occupation_differences[n, m] *
                     delta[energy_index, n, m] *
-                    frequency_denominator_weight
+                    frequency_contraction_weight
                 if weight == 0.0
                     continue
                 end
@@ -744,7 +881,7 @@ function photon_drag_injection_current_component(
     response_kernel::Array{ComplexF64, 5},
     occupation_differences::AbstractMatrix{Float64},
     delta::AbstractMatrix{Float64},
-    frequency_denominator_weight::Float64,
+    frequency_contraction_weight::Float64,
     prefactor,
     tensor_indices::Vector{Int},
     valence_band_start::Int64,
@@ -761,7 +898,7 @@ function photon_drag_injection_current_component(
         pair_count = _compact_injection_pair_count(active_pairs_nmajor, active_pair_count)
         @inbounds for pair_index in 1:pair_count
             n, m = active_pairs_nmajor[pair_index]
-            weight = occupation_differences[n, m] * delta[n, m] * frequency_denominator_weight
+            weight = occupation_differences[n, m] * delta[n, m] * frequency_contraction_weight
             if weight != 0.0
                 value += prefactor * weight * response_kernel[n, m, a, b, c]
             end
@@ -770,7 +907,7 @@ function photon_drag_injection_current_component(
     end
     @inbounds for n in valence_band_start:valence_band_end
         for m in conduction_band_start:conduction_band_end
-            weight = occupation_differences[n, m] * delta[n, m] * frequency_denominator_weight
+            weight = occupation_differences[n, m] * delta[n, m] * frequency_contraction_weight
             if weight != 0.0
                 value += prefactor * weight * response_kernel[n, m, a, b, c]
             end

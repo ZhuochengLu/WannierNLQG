@@ -13,9 +13,15 @@ function prepare_second_harmonic(
     progress_owner = true,
     shared_sources = nothing,
     mixed_memory_limit_bytes = mixed_fourier_memory_limit(),
+    evaluation_policy::Symbol = :canonical_lanes,
 )
+    evaluation_policy in (:canonical_lanes, :whole_blocks) ||
+        throw(ArgumentError("SHG_EVALUATION_POLICY"))
     spec = only(specs)
     slice = spec.calculation == :kslice
+    adaptive = cfg.integration_algorithm isa HAdaptiveCubature
+    adaptive_result = Ref{Any}(nothing)
+    adaptive && bundle_mpi_initialize()
     loaded = shared_sources === nothing ? load_runtime_model_and_sources(ctx, cfg) : shared_sources
     model = loaded.model
     qualification = assess_response_qualification(loaded.manifest, ctx, cfg, specs)
@@ -40,7 +46,7 @@ function prepare_second_harmonic(
                 collect(cfg.kslice_vector_1),
                 collect(cfg.kslice_vector_2),
             ),
-        ) : _integral_k_grid(cfg.k_mesh)
+        ) : _integral_k_grid(cfg, model)
     points = length(grid)
     builder =
         slice ?
@@ -65,17 +71,50 @@ function prepare_second_harmonic(
         builder;
         rank_memory_limit_bytes = mixed_memory_limit_bytes,
     )
-    if fourier.grid !== nothing
-        for workspace in workspaces
-            enable_mixed_fourier!(
-                workspace,
-                model,
-                fourier.grid;
-                memory_limit_bytes = fourier.memory_limit_bytes,
-            )
+    route = nothing
+    provider_limit = fourier.memory_limit_bytes
+    if evaluation_policy === :whole_blocks
+        eligible = !slice && !adaptive && ranks > 1 && workers == 1 && fourier.grid !== nothing
+        width =
+            Base.checked_mul(length(cfg.photon_energies), Base.checked_mul(length(components), 14))
+        proposed =
+            eligible ?
+            response_block_route_plan(
+                ComplexF64,
+                fourier.grid,
+                points,
+                width,
+                rank,
+                ranks,
+                fourier.memory_limit_bytes,
+            ) : nothing
+        feasible = proposed !== nothing
+        if feasible
+            remaining = fourier.memory_limit_bytes-proposed.reserved_bytes
+            feasible =
+                remaining > 0 &&
+                MatrixElements.mixed_fourier_buffer_estimate(
+                    fourier.grid,
+                    first(workspaces),
+                    model;
+                    memory_limit_bytes = remaining,
+                ).estimated_bytes <= remaining
+        end
+        if bundle_mpi_all_true(feasible, comm)
+            route = proposed
+            provider_limit -= route.reserved_bytes
         end
     end
-    lanes = _deterministic_integral_lane_count(points)
+    route_seconds = Ref(0.0)
+    if fourier.grid !== nothing
+        prepare_mixed_worker_buffers!(
+            workspaces,
+            model,
+            fourier.grid;
+            memory_limit_bytes = provider_limit,
+        )
+    end
+    lanes = adaptive ? 1 : _deterministic_integral_lane_count(points)
     rows = slice ? points : length(cfg.photon_energies)
     buffers = [zeros(ComplexF64, rows, length(components), 7, 2) for _ in 1:(slice ? 1 : lanes)]
     scratch = [
@@ -93,7 +132,7 @@ function prepare_second_harmonic(
     else
         coordinates[:, 1] .= cfg.photon_energies
     end
-    volume = abs(det(model.lattice))
+    volume = abs(integration_cell_measure(cfg, model))
     factors = (
         1.602176634e-19 / (8.8541878128e-12 * volume) * 1e12,
         1.602176634e-19^2 / (1.054571817e-34 * volume),
@@ -104,19 +143,8 @@ function prepare_second_harmonic(
     progress_system_summary!(model)
     progress_task_start!(spec)
     progress_fourier_backend!(fourier_execution_summary(cfg, fourier, workspaces))
-    function execute_point!(worker, index, lane)
-        # Do not capture the outer slice-coordinate scratch in this threaded callback.
-        local point = kpoints[worker]
-        slice ? kslice_kpoint!(point, grid, index) : integral_kpoint!(point, grid, index)
+    function point_value!(worker, point)
         workspace = workspaces[worker]
-        if fourier.grid !== nothing
-            if slice
-                u_index, v_index = kslice_indices(grid, index)
-                begin_mixed_kpoint!(workspace, point, (u_index - 1, v_index - 1, 0))
-            else
-                begin_mixed_kpoint!(workspace, point)
-            end
-        end
         data = compute_kpoint!(workspace, model, point)
         values = scratch[worker]
         second_harmonic_response!(
@@ -129,12 +157,28 @@ function prepare_second_harmonic(
             broadening = cfg.broadening,
             low_frequency_broadening = cfg.shg_low_frequency_broadening,
             gaussian = cfg.broadening_type == "Gaussian",
-            intermediate_regularization = cfg.denominator_regularization,
+            intermediate_regularization = cfg.shg_intermediate_regularization,
             eta_correction = cfg.shg_eta_correction,
             degeneracy_threshold = cfg.degeneracy_threshold,
         )
-        all(isfinite, values) || error("Nonfinite SHG response at k index $(index)")
-        if slice
+        all(isfinite, values) || error("Nonfinite SHG response at fractional k $(Tuple(point))")
+        return values
+    end
+    point_evaluators = [
+        ResponsePointEvaluator(
+            point_value!,
+            worker,
+            (
+                shape = size(scratch[worker]),
+                prefactor = :raw_shg_density,
+                arbitrary_k = fourier.grid === nothing,
+            ),
+        ) for worker in 1:workers
+    ]
+    function consume_point!(worker, index, lane, values)
+        if route !== nothing
+            response_route_record!(route, index, values)
+        elseif slice
             buffers[1][index, :, :, :] .= @view values[1, :, :, :]
         else
             buffers[lane] .+= values
@@ -148,7 +192,41 @@ function prepare_second_harmonic(
         end
         return nothing
     end
+    execute_point! = ResponseGridConsumer(
+        point_evaluators,
+        grid,
+        kpoints,
+        slice ? kslice_kpoint! : integral_kpoint!,
+        response_grid_request(workspaces, fourier.grid, grid, slice),
+        consume_point!,
+    )
+    domain = adaptive ? response_integration_domain(cfg) : nothing
+    function adaptive_units!(values)
+        for quantity in 1:2
+            values[:, :, :, quantity] .*= factors[quantity]
+        end
+        return values
+    end
+    evaluator =
+        ResponseNodeEvaluator(first(point_evaluators), domain, model; transform! = adaptive_units!)
+    function execute_adaptive!(worker, index, lane)
+        adaptive_result[] = integrate_response_mpi(
+            evaluator,
+            domain,
+            cfg.integration_algorithm;
+            normalization = :domain_average,
+        )
+        return nothing
+    end
     function finish!()
+        if route !== nothing
+            t0=time_ns()
+            response_route_finish!(route, buffers, points, lanes, comm)
+            route_seconds[]=(time_ns()-t0)*1e-9
+        end
+        bundle_mpi_collective_call(; enabled = true, comm) do
+            progress_localized_run_diagnostics!(workspaces, comm)
+        end
         result = zeros(ComplexF64, rows, length(components), 7, 2)
         for buffer in buffers
             reduced = bundle_mpi_reduce_sum(buffer, 0, comm)
@@ -156,8 +234,12 @@ function prepare_second_harmonic(
         end
         outputs = String[]
         if rank == 0
-            for quantity in 1:2
-                result[:, :, :, quantity] .*= factors[quantity] / (slice ? 1 : points)
+            if adaptive
+                result .= adaptive_result[].value
+            else
+                for quantity in 1:2
+                    result[:, :, :, quantity] .*= factors[quantity] / (slice ? 1 : points)
+                end
             end
             outputs = write_second_harmonic(
                 ctx.run_dir,
@@ -169,6 +251,20 @@ function prepare_second_harmonic(
                 response = cfg.shg_response,
                 digits = max(12, cfg.response_output_digits),
                 slice,
+                integration_dimension = integration_output_dimension(cfg),
+                region = cfg.integration_bounds !== nothing,
+                domain_metadata = integration_domain_metadata(cfg),
+            )
+        end
+        if adaptive && rank==0
+            push!(
+                outputs,
+                write_response_integration_diagnostics(
+                    ctx.run_dir,
+                    adaptive_result[],
+                    cfg.integration_algorithm,
+                    cfg,
+                ),
             )
         end
         progress_task_done!(spec, outputs)
@@ -176,25 +272,46 @@ function prepare_second_harmonic(
             outputs,
             ["second_harmonic_generation"],
             NamedTuple[],
-            fourier_execution_summary(cfg, fourier, workspaces),
+            merge(
+                fourier_execution_summary(cfg, fourier, workspaces),
+                (
+                    requested_evaluation_policy = String(evaluation_policy),
+                    effective_evaluation_policy = route===nothing ? "canonical_lanes" :
+                                                  "whole_blocks_canonical_replay",
+                    route_reserved_bytes = route===nothing ? 0 : route.reserved_bytes,
+                    route_send_bytes = route===nothing ? 0 : sizeof(route.sendvalues),
+                    route_receive_bytes = route===nothing ? 0 : sizeof(route.recvvalues),
+                    response_route_seconds = route_seconds[],
+                ),
+            ),
             NamedTuple(),
             NamedTuple(),
             runtime_replica_summary(loaded.replica_summary),
             qualification,
+            runtime_model_geometry(model),
         )
     end
     function cleanup!()
-        for workspace in workspaces
-            disable_mixed_fourier!(workspace)
-        end
+        release_mixed_worker_buffers!(workspaces)
         shared_sources === nothing && release_runtime_storage!(loaded)
         return nothing
     end
-    units = NTuple{3, Int}[
-        (index, index, lane) for lane in _local_deterministic_integral_lanes(lanes, rank, ranks) for
-        index in _deterministic_integral_lane_range(points, lanes, lane)
-    ]
-    prepared = PreparedResponseTask(units, execute_point!, finish!, cleanup!)
+    units =
+        adaptive ? [(1, 1, 1)] :
+        response_access_units(
+            points,
+            rank,
+            ranks;
+            grid = fourier.grid,
+            policy = route===nothing ? :canonical_lanes : :whole_blocks,
+        )
+    prepared = PreparedResponseTask(
+        units,
+        adaptive ? execute_adaptive! : execute_point!,
+        finish!,
+        cleanup!;
+        point_evaluators,
+    )
     prepare_only && return prepared
     try
         execute_prepared_tasks!([prepared])

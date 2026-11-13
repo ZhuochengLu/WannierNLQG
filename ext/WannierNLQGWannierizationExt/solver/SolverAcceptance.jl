@@ -8,9 +8,9 @@ function _seal_solver_disentanglement_state(state::NamedTuple)
         sealed_subspace_frames,
         sealed_subspace_projectors,
         localization_initial_frames,
-        wannier90_reference_unitaries,
-        wannier90_reference_overlaps,
-        wannier90_reference_omega_i,
+        recursive_localization_unitaries,
+        recursive_localization_overlaps,
+        recursive_localization_omega_i,
         optimizer_phase,
         u_stability_count,
         previous_u_gradient,
@@ -45,7 +45,7 @@ function _seal_solver_disentanglement_state(state::NamedTuple)
     ) = state
     sealed_subspace_frames = deepcopy(frames)
     if effective_algorithms.disentanglement == :smv_fletcher_reeves_two_stage
-        energy_gauge = _wannier90_reference_post_smv_hamiltonian_gauge(
+        energy_gauge = _recursive_localization_post_smv_hamiltonian_gauge(
             something(sealed_subspace_frames),
             representation.energies_ev,
             outer_indices,
@@ -56,7 +56,7 @@ function _seal_solver_disentanglement_state(state::NamedTuple)
                 WannierizationDiagnostic(
                     energy_gauge.code,
                     :error,
-                    "Wannier90-reference post-SMV Hamiltonian gauge failed";
+                    "Wannier-reference post-SMV Hamiltonian gauge failed";
                     context = Dict(
                         "kpoint" => string(energy_gauge.kpoint),
                         "maximum_projector_drift" => string(energy_gauge.maximum_projector_drift),
@@ -81,10 +81,10 @@ function _seal_solver_disentanglement_state(state::NamedTuple)
         end
         sealed_subspace_frames = energy_gauge.frames
         frames = deepcopy(something(sealed_subspace_frames))
-        input_summary["wannier90_reference_post_smv_hamiltonian_gauge"] = "APPLIED"
-        input_summary["wannier90_reference_post_smv_projector_drift"] =
+        input_summary["recursive_localization_post_smv_hamiltonian_gauge"] = "APPLIED"
+        input_summary["recursive_localization_post_smv_projector_drift"] =
             string(energy_gauge.maximum_projector_drift)
-        input_summary["wannier90_reference_post_smv_projected_eigen_residual_ev"] =
+        input_summary["recursive_localization_post_smv_projected_eigen_residual_ev"] =
             string(energy_gauge.maximum_eigen_residual_ev)
     end
     if effective_algorithms.localization == :smv_fletcher_reeves_two_stage
@@ -111,20 +111,18 @@ function _seal_solver_disentanglement_state(state::NamedTuple)
     input_summary["fixed_subspace_stage_boundary_iteration"] = string(iteration)
     input_summary["fixed_subspace_stage_boundary_projector_drift"] = "0.0"
     input_summary["fixed_subspace_stage_boundary_spread_angstrom2"] = string(sum(spreads))
-    input_summary["fixed_subspace_projector_sha256"] =
-        _complex_field_sha256(something(sealed_subspace_projectors))
-    input_summary["fixed_subspace_frame_sha256"] =
-        _complex_field_sha256(something(sealed_subspace_frames))
-    input_summary["disentanglement_state_sha256"] =
-        _disentanglement_state_sha256(disentanglement_state)
-    input_summary["disentanglement_outer_mask_sha256"] =
-        qualification_mask_sha256(disentanglement_state.outer_mask)
-    input_summary["disentanglement_frozen_mask_sha256"] =
-        qualification_mask_sha256(disentanglement_state.frozen_mask)
+    input_summary["disentanglement_outer_mask_definition"] =
+        qualification_mask_definition(disentanglement_state.outer_mask)
+    input_summary["disentanglement_frozen_mask_definition"] =
+        qualification_mask_definition(disentanglement_state.frozen_mask)
     input_summary["disentanglement_projector_residual"] =
         string(disentanglement_state.projector_residual)
     input_summary["disentanglement_state_converged"] = string(disentanglement_state.converged)
-    if config.solver.localize
+    # Ordinary SMV establishes the projected-AMN gauge before wann_main's
+    # optimization loop.  A zero localization budget skips that loop, not
+    # internal_find_u; H, links and position must consume this same frame.
+    if state.effective_controls.objectives.num_iter > 0 ||
+       (!apply_symmetry && effective_algorithms.localization == :smv_fletcher_reeves_two_stage)
         aligned = _projected_reference_alignment(
             something(sealed_subspace_frames),
             localization_reference_frames,
@@ -163,7 +161,9 @@ function _seal_solver_disentanglement_state(state::NamedTuple)
             )
         end
         frames = aligned.frames
-        if config.solver.multi_start.enabled && config.solver.multi_start.start_index > 1
+        if state.effective_controls.objectives.num_iter > 0 &&
+           config.solver.multi_start.enabled &&
+           config.solver.multi_start.start_index > 1
             perturbed = _deterministic_sealed_subspace_perturbation(
                 frames,
                 config.solver.random_seed,
@@ -180,11 +180,13 @@ function _seal_solver_disentanglement_state(state::NamedTuple)
             input_summary["multi_start_perturbation"] = "ORIGINAL_AMN"
         end
         if effective_algorithms.localization == :smv_fletcher_reeves_two_stage &&
-           wannier90_reference_unitaries === nothing
-            wannier90_reference_unitaries =
-                config.solver.multi_start.enabled && config.solver.multi_start.start_index > 1 ?
+           recursive_localization_unitaries === nothing
+            recursive_localization_unitaries =
+                state.effective_controls.objectives.num_iter > 0 &&
+                config.solver.multi_start.enabled &&
+                config.solver.multi_start.start_index > 1 ?
                 [
-                    _wannier90_reference_zgemm(
+                    _recursive_localization_zgemm(
                         something(sealed_subspace_frames)[kpoint],
                         'C',
                         frames[kpoint],
@@ -195,27 +197,25 @@ function _seal_solver_disentanglement_state(state::NamedTuple)
         if effective_algorithms.localization == :smv_fletcher_reeves_two_stage
             # A stage-boundary checkpoint is a valid U restart,
             # even before the first localization step.  Seal the
-            # recursive Wannier90 M/U state now; otherwise the
+            # recursive Wannier M/U state now; otherwise the
             # durable observer sees only the unitary half of the
             # state and correctly rejects the checkpoint as
             # incomplete.  This contraction is collective in
             # MPI mode and therefore also keeps every rank at
             # the same Z-to-U control-flow boundary.
-            wannier90_reference_overlaps = _wannier90_reference_initial_slim_overlap_state(
+            recursive_localization_overlaps = _recursive_localization_initial_slim_overlap_state(
                 something(sealed_subspace_frames),
-                something(wannier90_reference_unitaries),
+                something(recursive_localization_unitaries),
                 outer_indices,
                 mmn,
                 config.solver.parallel,
             )
-            wannier90_reference_omega_i = _wannier90_reference_invariant_spread(
-                something(wannier90_reference_overlaps),
+            recursive_localization_omega_i = _recursive_localization_invariant_spread(
+                something(recursive_localization_overlaps),
                 weights,
             )
         end
         localization_initial_frames = deepcopy(frames)
-        input_summary["localization_initial_frame_sha256"] =
-            _complex_field_sha256(something(localization_initial_frames))
         input_summary["raw_amn_alignment_minimum_singular_value"] =
             string(aligned.minimum_singular_value)
         input_summary["raw_amn_alignment_maximum_condition"] = string(aligned.maximum_condition)
@@ -235,10 +235,15 @@ function _seal_solver_disentanglement_state(state::NamedTuple)
             weights,
             plan,
             effective_algorithms.localization == :smv_fletcher_reeves_two_stage ?
-            wannier90_reference_overlaps : nothing,
+            recursive_localization_overlaps : nothing,
         )
         input_summary["localization_stage_initial_spread_angstrom2"] = string(sum(spreads))
-        optimizer_phase = :localization
+        input_summary["localization_initial_gauge"] = "PROJECTED_AMN"
+        optimizer_phase =
+            state.effective_controls.objectives.num_iter > 0 ? :localization : :completed
+        if state.effective_controls.objectives.num_iter == 0
+            two_stage_complete = true
+        end
         u_stability_count = 0
         previous_u_gradient = nothing
         previous_u_direction = nothing
@@ -246,21 +251,23 @@ function _seal_solver_disentanglement_state(state::NamedTuple)
         last_cg_beta = NaN
         last_cg_restart_reason = :STAGE_BOUNDARY_RESET
         convergence_values = [vcat(vec(centers), spreads)]
-        input_summary["localization_convergence"] = "IN_PROGRESS"
+        input_summary["localization_convergence"] =
+            state.effective_controls.objectives.num_iter > 0 ? "IN_PROGRESS" : "SKIPPED_ZERO_STEPS"
     else
         optimizer_phase = :completed
         two_stage_complete = true
     end
     return (;
+        effective_controls = state.effective_controls,
         frames,
         centers,
         spreads,
         sealed_subspace_frames,
         sealed_subspace_projectors,
         localization_initial_frames,
-        wannier90_reference_unitaries,
-        wannier90_reference_overlaps,
-        wannier90_reference_omega_i,
+        recursive_localization_unitaries,
+        recursive_localization_overlaps,
+        recursive_localization_omega_i,
         optimizer_phase,
         u_stability_count,
         previous_u_gradient,
@@ -287,21 +294,19 @@ function _accept_solver_iteration(state::NamedTuple)
         accepted_joint_z_backtracking_steps,
         accepted_merit,
         accepted_reference,
-        accepted_residual_history,
         accepted_z,
-        accepted_z_history,
         actual_u_mix_ratio,
         actual_z_mix_ratio,
-        amn_sha256,
+
         apply_symmetry,
-        basis_sha256,
+
         best_polar_centers,
         best_polar_frames,
         best_polar_objective,
         best_polar_spreads,
         compatibility,
         config,
-        config_sha256,
+
         convergence_values,
         retained_disentanglement_nonconverged,
         diagnostics,
@@ -309,23 +314,10 @@ function _accept_solver_iteration(state::NamedTuple)
         effective_algorithms,
         effective_compatibility_policy,
         epoch,
-        fixed_complete,
-        fixed_mode,
-        fixed_source_qualified,
-        fixed_stability_count,
-        fixed_stationary,
-        fixed_stationary_count,
         frozen_indices,
         full_constraint_scope,
         gradient_fallback_active,
         gradient_steps,
-        grassmann_actual_decrease_history,
-        grassmann_gradient_history,
-        grassmann_predicted_decrease_history,
-        grassmann_projector_change_history,
-        grassmann_radius_history,
-        grassmann_ratio_history,
-        grassmann_trust_radius,
         history,
         improvement_streak,
         included_bands,
@@ -334,7 +326,6 @@ function _accept_solver_iteration(state::NamedTuple)
         irreducible,
         iteration,
         iteration_phase,
-        joint_mode,
         last_accepted_u_step_scale,
         latest_restart_state,
         localization_initial_frames,
@@ -372,14 +363,12 @@ function _accept_solver_iteration(state::NamedTuple)
         started_ns,
         stencil,
         tangent_plans,
-        trajectory_previous_frames,
-        trajectory_two_step_frames,
         two_stage_complete,
         u_stability_count,
         u_steps,
-        wannier90_reference_omega_i,
-        wannier90_reference_overlaps,
-        wannier90_reference_unitaries,
+        recursive_localization_omega_i,
+        recursive_localization_overlaps,
+        recursive_localization_unitaries,
         weights,
         z_residual,
         z_stability_count,
@@ -387,11 +376,8 @@ function _accept_solver_iteration(state::NamedTuple)
     ) = state
     accepted === nothing && error("internal acceleration acceptance state was not set")
     result = something(accepted)
-    joint_mode && (actual_z_mix_ratio = proposal_z_mix_ratio)
     if result.raw_amn_alignment_applied
         localization_initial_frames = deepcopy(something(result.localization_initial_frames))
-        input_summary["localization_initial_frame_sha256"] =
-            _complex_field_sha256(something(localization_initial_frames))
         input_summary["raw_amn_alignment_minimum_singular_value"] =
             string(result.raw_amn_alignment_minimum_singular_value)
         input_summary["raw_amn_alignment_maximum_condition"] =
@@ -448,44 +434,37 @@ function _accept_solver_iteration(state::NamedTuple)
     spreads = result.spreads
 
     z_previous = something(accepted_z)
-    previous_u_gradient = joint_mode ? nothing : result.previous_u_gradient
-    previous_u_direction = joint_mode ? nothing : result.previous_u_direction
-    u_cg_iteration = joint_mode ? 0 : result.u_cg_iteration
+    previous_u_gradient = result.previous_u_gradient
+    previous_u_direction = result.previous_u_direction
+    u_cg_iteration = result.u_cg_iteration
     u_cg_restart_count = result.u_cg_restart_count
-    u_lbfgs_s_history = joint_mode ? Vector{Vector{Matrix{ComplexF64}}}() : result.u_lbfgs_s_history
-    u_lbfgs_y_history = joint_mode ? Vector{Vector{Matrix{ComplexF64}}}() : result.u_lbfgs_y_history
-    u_lbfgs_rho_history = joint_mode ? Float64[] : result.u_lbfgs_rho_history
-    u_lbfgs_restart_count = result.u_lbfgs_restart_count
-    u_branch_signature = joint_mode ? "" : result.u_active_orbit_sha256
-    u_active_orbit_count = joint_mode ? 0 : result.u_active_orbit_count
+    u_branch_signature = result.u_active_orbit_definition
+    u_active_orbit_count = result.u_active_orbit_count
     u_generalized_gradient_rms = result.generalized_gradient_rms
     last_u_optimizer_restart_reason = result.u_optimizer_restart_reason
     # A Z-only candidate owns only the disentanglement projector.  It must
-    # not erase the sealed Wannier90 U-stage recursive M/U oracle that was
+    # not erase the sealed Wannier U-stage recursive M/U oracle that was
     # loaded before the two-stage run.  Rebuilding M from the completed Z
     # frame is physically equivalent, but changes its last bits and then
     # changes the Fletcher--Reeves/parabolic trajectory.  A localization
     # result, in contrast, owns and replaces the recursively updated state.
-    if hasproperty(result, :wannier90_reference_overlaps)
-        wannier90_reference_overlaps = result.wannier90_reference_overlaps
+    if hasproperty(result, :recursive_localization_overlaps)
+        recursive_localization_overlaps = result.recursive_localization_overlaps
     elseif iteration_phase != :disentanglement
-        wannier90_reference_overlaps = nothing
+        recursive_localization_overlaps = nothing
     end
-    if hasproperty(result, :wannier90_reference_omega_i)
-        wannier90_reference_omega_i = result.wannier90_reference_omega_i
+    if hasproperty(result, :recursive_localization_omega_i)
+        recursive_localization_omega_i = result.recursive_localization_omega_i
     elseif iteration_phase != :disentanglement
-        wannier90_reference_omega_i = nothing
+        recursive_localization_omega_i = nothing
     end
-    if hasproperty(result, :wannier90_reference_unitaries)
-        wannier90_reference_unitaries = result.wannier90_reference_unitaries
+    if hasproperty(result, :recursive_localization_unitaries)
+        recursive_localization_unitaries = result.recursive_localization_unitaries
     elseif iteration_phase != :disentanglement
-        wannier90_reference_unitaries = nothing
+        recursive_localization_unitaries = nothing
     end
     last_cg_beta = result.cg_beta
-    last_cg_restart_reason =
-        joint_mode &&
-        effective_algorithms.localization in (:riemannian_cg, :smv_fletcher_reeves_two_stage) ?
-        :JOINT_SUBSPACE_RESET : result.cg_restart_reason
+    last_cg_restart_reason = result.cg_restart_reason
     last_anderson_reason = accepted_anderson_reason
     spread_total = result.spread_total
     spread_std = result.spread_std
@@ -511,8 +490,10 @@ function _accept_solver_iteration(state::NamedTuple)
     )
     previous_total_spreads = [entry.spread_total for entry in history]
     push!(previous_total_spreads, spread_total)
-    total_spread_window =
-        previous_total_spreads[max(1, end - config.solver.convergence_window + 1):end]
+    total_spread_window = previous_total_spreads[max(
+        1,
+        end - max(2, state.effective_controls.objectives.conv_window) + 1,
+    ):end]
     total_spread_window_std = _population_standard_deviation(total_spread_window)
     omega_i = _gauge_invariant_spread(frames, mmn, weights)
     omega_i_delta = if isempty(disentanglement_objective_history)
@@ -524,10 +505,16 @@ function _accept_solver_iteration(state::NamedTuple)
         abs(omega_i - last(disentanglement_objective_history))
     end
     z_iteration =
-        config.solver.acceleration.schedule == :joint ||
         (config.solver.acceleration.schedule == :two_stage && iteration_phase == :disentanglement)
     if z_iteration
-        z_iteration_stable = if _is_symmetry_projected_smv_fr(effective_algorithms.disentanglement)
+        z_iteration_stable = if state.effective_controls.objectives !== nothing
+            controls = state.effective_controls.objectives
+            wannier_stage_stability(
+                [disentanglement_objective_history; omega_i],
+                controls.dis_conv_tol;
+                relative = true,
+            ) > 0
+        elseif _is_symmetry_projected_smv_fr(effective_algorithms.disentanglement)
             abs(omega_i_delta) <=
             min(1.0e-10, config.solver.acceleration.disentanglement_objective_tolerance) &&
                 result.projector_residual <=
@@ -544,22 +531,6 @@ function _accept_solver_iteration(state::NamedTuple)
             z_stability_count = 0
         end
         push!(disentanglement_objective_history, omega_i)
-    end
-    if config.solver.acceleration.schedule == :joint
-        if length(total_spread_window) == config.solver.convergence_window &&
-           result.gradient_rms <= config.solver.acceleration.u_gradient_norm_tolerance &&
-           result.u_residual <= config.solver.acceleration.u_inner_tolerance &&
-           total_spread_window_std <= config.solver.convergence_tolerance
-            u_stability_count += 1
-        else
-            u_stability_count = 0
-        end
-        joint_z_converged = z_stability_count >= config.solver.acceleration.z_stability_window
-        input_summary["z_seal_class"] = joint_z_converged ? "CONVERGED" : "IN_PROGRESS"
-        input_summary["disentanglement_convergence"] =
-            joint_z_converged ? "CONVERGED" : "IN_PROGRESS"
-        input_summary["localization_convergence"] =
-            u_stability_count >= config.solver.convergence_window ? "CONVERGED" : "IN_PROGRESS"
     end
     iteration_diagnostics = WannierizationIterationDiagnostics(
         directional_available ? something(directional) : nothing,
@@ -614,29 +585,8 @@ function _accept_solver_iteration(state::NamedTuple)
             iteration_diagnostics,
         ),
     )
-    if fixed_mode
-        if length(total_spread_window) == config.solver.convergence_window &&
-           result.gradient_rms <= config.solver.acceleration.u_gradient_norm_tolerance &&
-           result.u_residual <= config.solver.acceleration.u_inner_tolerance &&
-           total_spread_window_std <= config.solver.convergence_tolerance
-            fixed_stability_count += 1
-        else
-            fixed_stability_count = 0
-        end
-        fixed_complete = fixed_stability_count >= config.solver.convergence_window
-        if result.gradient_rms <= config.solver.acceleration.u_gradient_norm_tolerance &&
-           result.u_residual <= config.solver.acceleration.u_inner_tolerance &&
-           total_spread_window_std > config.solver.convergence_tolerance
-            fixed_stationary_count += 1
-        else
-            fixed_stationary_count = 0
-        end
-        fixed_stationary = fixed_stationary_count >= config.solver.convergence_window
-    end
     z_recheck_drift = NaN
-    localization_iteration =
-        config.solver.acceleration.schedule in (:joint, :fixed_subspace) ||
-        iteration_phase == :localization
+    localization_iteration = iteration_phase == :localization
     if localization_iteration
         if hasproperty(result, :minimum_diagonal_phase_margin)
             minimum_localization_diagonal_phase_margin = min(
@@ -668,6 +618,14 @@ function _accept_solver_iteration(state::NamedTuple)
                 ),
             )
         end
+        # Count the first accepted change against the actual initial spread.
+        # Preserve other optimizer/multi-sweep contracts and never invent an old predecessor.
+        if result.u_residual === nothing && isempty(localization_objective_history)
+            isfinite(result.base_objective) ||
+                throw(ArgumentError("NONFINITE_INITIAL_LOCALIZATION_OBJECTIVE"))
+            push!(localization_objective_history, result.base_objective)
+            input_summary["stopping_contract"] = "ordinary-objective-change/2"
+        end
         push!(localization_objective_history, result.accepted_objective)
         append!(localization_trial_step_scales, result.attempted_step_scales)
         append!(localization_trial_objectives, result.attempted_objectives)
@@ -689,8 +647,10 @@ function _accept_solver_iteration(state::NamedTuple)
     if config.solver.acceleration.schedule == :two_stage
         if iteration_phase == :disentanglement
             z_steps += 1
-            z_stage_converged = z_stability_count >= config.solver.acceleration.z_stability_window
-            z_stage_limit_reached = z_steps >= config.solver.acceleration.disentanglement_max_steps
+            z_stage_converged =
+                z_stability_count >= state.effective_controls.accepted_disentanglement_window
+            z_stage_limit_reached =
+                z_steps >= state.effective_controls.accepted_disentanglement_limit
             standard_transition = false
             transition_to_localization = z_stage_converged
             if !z_stage_converged && z_stage_limit_reached
@@ -788,15 +748,16 @@ function _accept_solver_iteration(state::NamedTuple)
             end
             if transition_to_localization
                 seal = _seal_solver_disentanglement_state((;
+                    effective_controls = state.effective_controls,
                     frames,
                     centers,
                     spreads,
                     sealed_subspace_frames,
                     sealed_subspace_projectors,
                     localization_initial_frames,
-                    wannier90_reference_unitaries,
-                    wannier90_reference_overlaps,
-                    wannier90_reference_omega_i,
+                    recursive_localization_unitaries,
+                    recursive_localization_overlaps,
+                    recursive_localization_omega_i,
                     optimizer_phase,
                     u_stability_count,
                     previous_u_gradient,
@@ -837,9 +798,9 @@ function _accept_solver_iteration(state::NamedTuple)
                     sealed_subspace_frames,
                     sealed_subspace_projectors,
                     localization_initial_frames,
-                    wannier90_reference_unitaries,
-                    wannier90_reference_overlaps,
-                    wannier90_reference_omega_i,
+                    recursive_localization_unitaries,
+                    recursive_localization_overlaps,
+                    recursive_localization_omega_i,
                     optimizer_phase,
                     u_stability_count,
                     previous_u_gradient,
@@ -854,7 +815,8 @@ function _accept_solver_iteration(state::NamedTuple)
                     input_summary["disentanglement_convergence"] = "CONVERGED"
                     input_summary["z_seal_class"] = "CONVERGED"
                     input_summary["localization_qualification"] =
-                        config.solver.localize ? "FORMAL_CANDIDATE" : "NOT_APPLICABLE"
+                        (state.effective_controls.objectives.num_iter > 0) ? "FORMAL_CANDIDATE" :
+                        "NOT_APPLICABLE"
                     input_summary["model_qualification"] = "FORMAL_CANDIDATE"
                     push!(
                         diagnostics,
@@ -872,15 +834,16 @@ function _accept_solver_iteration(state::NamedTuple)
                 end
             end
         elseif iteration_phase == :localization
-            if length(total_spread_window) == config.solver.convergence_window &&
-               result.gradient_rms <= config.solver.acceleration.u_gradient_norm_tolerance &&
-               result.u_residual <= config.solver.acceleration.u_inner_tolerance &&
-               total_spread_window_std <= config.solver.convergence_tolerance
-                u_stability_count += 1
-            else
-                u_stability_count = 0
-            end
-            two_stage_complete = u_stability_count >= config.solver.convergence_window
+            controls = state.effective_controls.objectives
+            u_stability_count =
+                controls.conv_window <= 1 ? 0 :
+                wannier_stage_stability(
+                    localization_objective_history,
+                    controls.conv_tol;
+                    relative = false,
+                )
+            two_stage_complete =
+                controls.conv_window > 1 && u_stability_count >= controls.conv_window
             if two_stage_complete
                 optimizer_phase = :completed
                 input_summary["localization_convergence"] = "CONVERGED"
@@ -891,59 +854,15 @@ function _accept_solver_iteration(state::NamedTuple)
                     qualified_z ? "FORMAL_CANDIDATE" : "AVAILABLE_WITH_QUALITY_WARNINGS"
             end
             !two_stage_complete &&
-                u_steps >= config.solver.acceleration.localization_max_steps &&
+                u_steps >= state.effective_controls.accepted_localization_limit &&
                 begin
                     input_summary["localization_convergence"] = "MAX_ITERATIONS"
                     stage_stop_reason = :LOCALIZATION_MAX_STEPS
                 end
         end
-    elseif config.solver.acceleration.schedule == :joint
-        z_steps += 1
-    end
-    if config.solver.acceleration.strategy == :adaptive
-        actual_z_mix_ratio, actual_u_mix_ratio, improvement_streak = _adaptive_next_mixing(
-            actual_z_mix_ratio,
-            actual_u_mix_ratio,
-            improvement_streak,
-            previous_convergence_metric,
-            spread_std,
-            config.solver.acceleration,
-        )
     end
     residual_reference = accepted_reference
     previous_merit = accepted_merit
-    anderson_z_history = accepted_z_history
-    anderson_residual_history = accepted_residual_history
-    one_step_geodesic_distances = fill(NaN, length(irreducible))
-    two_step_geodesic_distances = fill(NaN, length(irreducible))
-    aligned_one_step_geodesic_distances = fill(NaN, length(irreducible))
-    if trajectory_previous_frames !== nothing
-        previous_frames = something(trajectory_previous_frames)
-        for (local_index, kpoint) in enumerate(irreducible)
-            one_step_geodesic_distances[local_index] = _frame_geodesic_distance(
-                previous_frames[kpoint],
-                frames[kpoint],
-                config.input.representation_tolerance,
-            )
-            aligned_one_step_geodesic_distances[local_index] =
-                one_step_geodesic_distances[local_index]
-            if trajectory_two_step_frames !== nothing
-                two_frames = something(trajectory_two_step_frames)
-                two_step_geodesic_distances[local_index] = _frame_geodesic_distance(
-                    two_frames[kpoint],
-                    frames[kpoint],
-                    config.input.representation_tolerance,
-                )
-            end
-        end
-    end
-    one_step_geodesic_distance =
-        all(isfinite, one_step_geodesic_distances) ? maximum(one_step_geodesic_distances) : NaN
-    two_step_geodesic_distance =
-        all(isfinite, two_step_geodesic_distances) ? maximum(two_step_geodesic_distances) : NaN
-    aligned_one_step_geodesic_distance =
-        all(isfinite, aligned_one_step_geodesic_distances) ?
-        maximum(aligned_one_step_geodesic_distances) : NaN
     accepted_invariants = _candidate_invariant_residuals(frames, frozen_indices, representation)
     apply_symmetry && _record_construction_symmetry_quality!(
         diagnostics,
@@ -966,8 +885,6 @@ function _accept_solver_iteration(state::NamedTuple)
         rejected_steps,
         residual_reference,
         previous_merit,
-        anderson_z_history,
-        anderson_residual_history,
         optimizer_phase,
         z_stability_count,
         u_stability_count,
@@ -1002,19 +919,15 @@ function _accept_solver_iteration(state::NamedTuple)
         last_cg_restart_reason,
         last_anderson_reason,
         LOCALIZATION_GRADIENT_CONTRACT,
-        u_branch_signature,
         u_active_orbit_count,
         u_generalized_gradient_rms,
-        _pack_u_tangent_history(u_lbfgs_s_history),
-        _pack_u_tangent_history(u_lbfgs_y_history),
-        u_lbfgs_rho_history,
-        u_lbfgs_restart_count,
         last_u_optimizer_restart_reason,
-        wannier90_reference_overlaps === nothing ? zeros(ComplexF64, 0, 0, 0, 0) :
-        something(wannier90_reference_overlaps),
-        wannier90_reference_unitaries === nothing ? zeros(ComplexF64, 0, 0, 0) :
-        _pack_matrix_field(something(wannier90_reference_unitaries)),
-        something(wannier90_reference_omega_i, NaN),
+        recursive_localization_overlaps === nothing ? zeros(ComplexF64, 0, 0, 0, 0) :
+        something(recursive_localization_overlaps),
+        recursive_localization_unitaries === nothing ? zeros(ComplexF64, 0, 0, 0) :
+        _pack_matrix_field(something(recursive_localization_unitaries)),
+        something(recursive_localization_omega_i, NaN),
+        u_branch_signature,
     )
     latest_restart_state = _restart_state(
         iteration,
@@ -1022,26 +935,25 @@ function _accept_solver_iteration(state::NamedTuple)
         z_previous,
         centers,
         spreads,
-        convergence_values[max(1, end - config.solver.convergence_window + 1):end],
+        convergence_values[max(
+            1,
+            end - max(2, state.effective_controls.objectives.conv_window) + 1,
+        ):end],
         included_bands,
         elapsed_seconds,
-        config_sha256,
-        compatibility.representation_sha256,
         stencil,
-        basis_sha256,
-        amn_sha256,
         optimizer_state,
         fixed_subspace_projectors = sealed_subspace_projectors,
         fixed_subspace_frames = sealed_subspace_frames,
         localization_initial_frames = localization_initial_frames,
+        input_definition = latest_restart_state.input_definition,
     )
     input_summary["optimizer_phase"] = String(optimizer_phase)
     input_summary["disentanglement_steps"] = string(z_steps)
     input_summary["localization_steps"] = string(u_steps)
-    input_summary["u_active_orbit_sha256"] = u_branch_signature
+    input_summary["u_active_orbit_definition"] = u_branch_signature
     input_summary["u_active_orbit_count"] = string(u_active_orbit_count)
     input_summary["u_generalized_gradient_rms"] = string(u_generalized_gradient_rms)
-    input_summary["u_lbfgs_restart_count"] = string(u_lbfgs_restart_count)
     input_summary["last_u_optimizer_restart_reason"] = String(last_u_optimizer_restart_reason)
     input_summary["disentanglement_objective_count"] =
         string(length(disentanglement_objective_history))
@@ -1070,7 +982,7 @@ function _accept_solver_iteration(state::NamedTuple)
                     little_group_residual = result.projection_residual,
                     projector_residual = result.projector_residual,
                     z_residual = z_residual,
-                    u_residual = result.u_residual,
+                    (result.u_residual === nothing ? (;) : (; u_residual = result.u_residual))...,
                     normalized_residual_merit = accepted_merit,
                     z_mix_ratio = iteration_diagnostics.z_mix_ratio,
                     u_mix_ratio = iteration_diagnostics.u_mix_ratio,
@@ -1102,7 +1014,6 @@ function _accept_solver_iteration(state::NamedTuple)
                     gradient_fallback_active = gradient_fallback_active,
                     projected_gradient_rms = result.gradient_rms,
                     total_spread_window_standard_deviation = total_spread_window_std,
-                    fixed_stability_count = fixed_stability_count,
                     epoch = epoch,
                     accepted_u_step_scale = result.accepted_step_scale,
                     localization_backtracking_steps = result.backtracking_steps,
@@ -1126,7 +1037,6 @@ function _accept_solver_iteration(state::NamedTuple)
                     minimum_phase_wannier = result.minimum_phase_wannier,
                     minimum_phase_value = result.minimum_phase_value,
                     branch_safe_backtracking_triggered = result.branch_safe_backtracking_triggered,
-                    u_active_orbit_sha256 = u_branch_signature,
                     u_active_orbit_count = u_active_orbit_count,
                     u_generalized_gradient_rms = u_generalized_gradient_rms,
                     cg_beta = result.cg_beta,
@@ -1135,31 +1045,13 @@ function _accept_solver_iteration(state::NamedTuple)
                     cg_descent_cosine = result.cg_descent_cosine,
                     u_cg_iteration = result.u_cg_iteration,
                     u_cg_restart_count = result.u_cg_restart_count,
-                    u_lbfgs_restart_count = u_lbfgs_restart_count,
+                    u_lbfgs_restart_count = 0,
                     last_u_optimizer_restart_reason = last_u_optimizer_restart_reason,
-                    kstar_gradient_rms = result.kstar_gradient_rms,
-                    maximum_kstar_gradient_rms = result.maximum_kstar_gradient_rms,
-                    maximum_kstar_gradient_index = result.maximum_kstar_gradient_index,
                     joint_z_backtracking_steps = accepted_joint_z_backtracking_steps,
                     joint_transport_minimum_singular_value = accepted_joint_transport_minimum_singular_value,
                     joint_transport_maximum_condition = accepted_joint_transport_maximum_condition,
                     joint_acceptance_reason = accepted_joint_reason,
-                    localization_spectra = result.localization_spectra,
-                    localization_ranks = result.localization_ranks,
-                    localization_conditions = result.localization_conditions,
-                    raw_eigenphases = result.raw_eigenphases,
-                    aligned_eigenphases = result.aligned_eigenphases,
-                    raw_geodesic_distances = result.raw_geodesic_distances,
-                    aligned_geodesic_distances = result.aligned_geodesic_distances,
-                    block_permutations = result.block_permutations,
-                    block_phases = result.block_phases,
                     z_recheck_drift = z_recheck_drift,
-                    one_step_geodesic_distances = one_step_geodesic_distances,
-                    two_step_geodesic_distances = two_step_geodesic_distances,
-                    aligned_one_step_geodesic_distances = aligned_one_step_geodesic_distances,
-                    one_step_geodesic_distance = one_step_geodesic_distance,
-                    two_step_geodesic_distance = two_step_geodesic_distance,
-                    aligned_one_step_geodesic_distance = aligned_one_step_geodesic_distance,
                     isometry_residual = accepted_invariants.isometry,
                     frozen_projector_residual = accepted_invariants.frozen,
                     elapsed_seconds = elapsed_seconds,
@@ -1205,16 +1097,13 @@ function _accept_solver_iteration(state::NamedTuple)
             initialization_report,
         )
     end
-    trajectory_two_step_frames = trajectory_previous_frames
-    trajectory_previous_frames = deepcopy(frames)
     return (;
+        effective_controls = state.effective_controls,
         actual_u_mix_ratio,
         actual_z_mix_ratio,
-        amn_sha256,
-        anderson_residual_history,
-        anderson_z_history,
+
         apply_symmetry,
-        basis_sha256,
+
         best_polar_centers,
         best_polar_frames,
         best_polar_objective,
@@ -1222,7 +1111,7 @@ function _accept_solver_iteration(state::NamedTuple)
         centers,
         compatibility,
         config,
-        config_sha256,
+
         convergence_values,
         retained_disentanglement_nonconverged,
         diagnostics,
@@ -1230,24 +1119,11 @@ function _accept_solver_iteration(state::NamedTuple)
         effective_algorithms,
         effective_compatibility_policy,
         epoch,
-        fixed_complete,
-        fixed_mode,
-        fixed_source_qualified,
-        fixed_stability_count,
-        fixed_stationary,
-        fixed_stationary_count,
         frames,
         frozen_indices,
         full_constraint_scope,
         gradient_fallback_active,
         gradient_steps,
-        grassmann_actual_decrease_history,
-        grassmann_gradient_history,
-        grassmann_predicted_decrease_history,
-        grassmann_projector_change_history,
-        grassmann_radius_history,
-        grassmann_ratio_history,
-        grassmann_trust_radius,
         history,
         improvement_streak,
         included_bands,
@@ -1301,23 +1177,17 @@ function _accept_solver_iteration(state::NamedTuple)
         stencil,
         tangent_plans,
         total_spread_window_std,
-        trajectory_previous_frames,
-        trajectory_two_step_frames,
         two_stage_complete,
         u_active_orbit_count,
         u_branch_signature,
         u_cg_iteration,
         u_cg_restart_count,
         u_generalized_gradient_rms,
-        u_lbfgs_restart_count,
-        u_lbfgs_rho_history,
-        u_lbfgs_s_history,
-        u_lbfgs_y_history,
         u_stability_count,
         u_steps,
-        wannier90_reference_omega_i,
-        wannier90_reference_overlaps,
-        wannier90_reference_unitaries,
+        recursive_localization_omega_i,
+        recursive_localization_overlaps,
+        recursive_localization_unitaries,
         weights,
         z_previous,
         z_stability_count,

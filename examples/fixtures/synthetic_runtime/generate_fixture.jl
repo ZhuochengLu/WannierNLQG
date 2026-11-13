@@ -124,7 +124,7 @@ function write_bundle(path::AbstractString, tb_path::AbstractString)
             "sHu_generation_algorithm_version" => "synthetic-runtime-fixture-v1",
             "authoritative_hamiltonian" => "native_dft",
             "authoritative_hamiltonian_digest" => repeat("a", 64),
-            "derivative_overlap_source" => "wannier90_uIu",
+            "derivative_overlap_source" => "neighbor_pair_overlap",
             "derivative_overlap_completeness" => "full_hilbert_space",
             "derivative_overlap_source_sha256" => repeat("2", 64),
             "derivative_overlap_algorithm_version" =>
@@ -154,7 +154,7 @@ function write_bundle(path::AbstractString, tb_path::AbstractString)
         operators;
         profile = :full,
         overwrite = true,
-        paired_tb_sha256 = bytes2hex(sha256(read(tb_path))),
+        paired_tb_file = tb_path,
         geometry = Dict(
             "wannier_center_policy" => "symmetrize",
             "real_space_replica_policy" => "input",
@@ -169,7 +169,7 @@ function write_bundle(path::AbstractString, tb_path::AbstractString)
             "final_wannier_centers_cartesian" => CENTERS,
             "final_wannier_centers_fractional" => CENTERS,
             "center_alignment_lattice_shifts" => zeros(Int, size(CENTERS)),
-            "replica_mapping_sha256" => repeat("0", 64),
+            "replica_mapping_reference" => repeat("0", 64),
         ),
         provenance = provenance,
         eligibility = Dict(

@@ -1,0 +1,11 @@
+# Template: supply one consistent native calculation; not a material qualification.
+workflow = "mesh_screening"
+[source]
+kind = "qe"
+save_directory = "inputs/seed.save"
+[mesh_screening]
+dimension = 3
+density_target = 55.0
+search_radius = 10
+[output]
+report_json_file = "results/mesh.json"

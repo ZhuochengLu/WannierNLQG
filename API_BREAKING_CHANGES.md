@@ -1,95 +1,69 @@
-# WannierNLQG 1.0.0 public API baseline
+# Public interface and numerical contracts
 
-WannierNLQG 1.0.0 is the initial public release. There is no preceding public
-API to migrate from. This document records boundaries that public callers can
-rely on for the 1.0.0 line.
+WannierNLQG 1.2.0 provides the grouped task API described in
+[Public API](docs/PUBLIC_API.md), the [TOML contract](docs/TEXT_INPUT.md), and
+[numerical controls](docs/NUMERICAL_CONTROLS.md). Unknown or inapplicable inputs
+are errors. Removed interfaces have no compatibility aliases or automatic input
+conversion. Supported external file formats retain their actual adapter contracts.
 
-## Response task configuration
+## Physical and algorithm names
 
-Construct `TaskConfig` from `model`, `sampling`, `tasks`, `execution`, and
-optional `output` groups. Each `TaskSpec` has a unique ID and explicit `physics`,
-`numerics`, and typed `observable`. Task output is written under
-`output_root/<id>/`, and root metadata indexes all task results.
+The Wannierization expert API uses `ExternalOverlapProjectionMatrices` and
+`ProjectionRepresentationAlgorithmInfo`. Symmetrization exposes
+`qualify_response_symmetry_wannier_frame`. Text TB output uses the boolean
+`WannierizationOutputConfig.write_model_tb` option or `:model_tb` in
+`tb_output_formats`; the shared file writer is `IO.write_wannier_tb`.
+The character-reduction profile records its algorithm name, parameters and owned
+implementation identity. An identity does not establish material qualification.
 
-`BZMesh`, `KSlice`, and `KPath` select distinct sampling domains. The public
-registry currently exposes `Band_Structure` on `KPath`; unregistered response or
-quantum-geometry K-path requests fail at the registry boundary.
+## Current mathematical data
 
-## Public and expert namespaces
+Packed real-space models use schema `3.0`. Embedded and referenced Wannierization
+checkpoints use `3.0` and `3.1`; referenced checkpoints require their explicit source
+root. Projection-search data use `4.0`. These identifiers are independent of the
+software version. Ordinary readers require the documented current contract and
+complete mathematical definitions. Unsupported data are not relabeled or silently
+converted. See [storage contracts](docs/STORAGE_SCHEMAS.md).
 
-The top-level facade exports grouped response configuration types, observable
-selectors, `RunResult`, and `run`. Symmetry, projection, symmetrization, and
-Wannierization expert APIs are accessed through their qualified owner modules.
-The exact facade and qualified integration inventories are enforced by the API
-and structure checks.
+## Occupation and degeneracy
 
-## Wannierization configuration and output
+Intrinsic Hall response uses the actual zero-temperature occupation `E <= mu`.
+Occupied/empty links use every nonzero floating-point energy difference directly;
+no occupation grouping, group-mean energy, geometric width or threshold substitutes
+for that gap. Nonfinite operations are explicit errors. AHC does not accept
+`degeneracy_threshold`. The orthogonal Conventional and Projector routes and the
+nonorthogonal Conventional route retain their supported model scopes.
 
-`SymmetryAdaptedWannierizationConfig` contains the immutable `input`, `solver`,
-`checkpoint`, `runtime`, and `output` groups. See the
-[configuration reference](docs/WANNIERIZATION_CONFIG_MIGRATION.md).
+ISC/SSC and orbital magnetization require a finite positive
+`denominator_regularization`. Their smooth vertices and complementary contributions
+are documented in their theory chapters. ISC/SSC reject an explicit
+`degeneracy_threshold`; OM rejects `gap_tolerance`. At a zero-temperature OM Fermi
+boundary, the two complete occupied-subspace limits receive equal weight. This is
+not a fractional projector. Nonorthogonal Projector OM remains unsupported.
 
-Ordinary and symmetry-adapted runs use the `.wannierization.*` output family.
-Checkpoint, text TB, Packed TB, operator, and qualification outputs are selected
-through the owning output group. Full-profile operator generation requires a
-target contract that binds the operator-oracle and solver MMN roles and their
-source, gauge, frame, and Hamiltonian authority.
+Jerk and THG reject `degeneracy_threshold`. Jerk uses the same occupation helper
+as ordinary injection current, including the established zero-temperature equality
+convention. Positive-temperature results near the Fermi level can differ from the
+former low-temperature step approximation.
 
-## Real-space replica policy
+## Geometric and optical scopes
 
-`ModelInput` exposes `real_space_replica_policy`, `wsvec_file`, `mp_grid`,
-`wigner_seitz_tolerance`, and `wigner_seitz_search_size`. Minimum-distance
-selection requires an explicit mapping source. If `wsvec_file` and reconstructed
-mapping data are both supplied, their canonical maps must agree. A materialized
-Packed model is reused without applying the transformation a second time.
+Quantum Metric defaults to internal contributions. `include_external=true` requires
+the documented additional orthogonal-model operators; it is unsupported for the
+nonorthogonal route. Applicable zero-width scalar-geometry tasks use their explicit
+supported branch; this does not open a zero-width mode for every response.
 
-## Storage and qualification
+Conventional nonorthogonal linear optics requires positive geometric regularization.
+SHG requires finite positive geometry and intermediate widths. Its nonorthogonal
+widths remain independent, and nonorthogonal `eta_correction=true` is unsupported.
+The optional cutoff optical vertices preserve the separate roles of the bare and
+regularized endpoints and generalized derivative. Other consumers retain their
+existing shared-geometry prescription.
 
-Writers and readers validate their declared wire contract, payload, identity
-digests, linked provenance, and qualification metadata. Unsupported or
-inconsistent inputs fail closed. Details are maintained in the
-[storage schema inventory](docs/STORAGE_SCHEMAS.md).
+Geometric Loop Quantum Hermitian Connection is unsupported and reports an error.
+Geometric Loop shift current, photon-drag shift current and shift vector retain
+their supported implementations. No fallback between methods is implied.
 
-Scientific formulas, units, tensor-index order, numerical filenames and column
-layouts are governed by their calculation documentation. Package tests use
-synthetic inputs and do not confer material-specific Physics or Production
-qualification.
-
-## 1.1.0 operator-selection update
-
-The original public baseline above is retained. New Wannierization output accepts
-only `:hamiltonian_position` and `:full` fixed profiles. Task-derived export uses
-`WannierizationOutputConfig(profile=nothing, operator_tasks=(... ,))` with qualified
-`WannierNLQG.Core.OperatorTask` values. The default method is `:all`; normalized
-requested pairs retain it and the per-task closure records expansion. No arbitrary
-operator-name export API is introduced. Existing `hamiltonian_position_spin`
-bundles remain readable within supported wire versions, but that profile is no
-longer accepted for new Wannierization output. See the
-[1.1.0 migration](docs/WANNIERIZATION_CONFIG_MIGRATION.md#task-derived-output-selection-in-110)
-and [complete API/dependency reference](docs/WANNIERIZATION.md#task-derived-selection-and-canonical-union).
-
-## 1.1.0 chemical-potential vector migration
-
-`LinearTransportParameters` and `OrbitalMagnetizationParameters` no longer
-accept `fermi_energy=`. Use an exact `Vector{Float64}`:
-
-```julia
-LinearTransportParameters(fermi_energies=Float64[mu], ...)
-OrbitalMagnetizationParameters(fermi_energies=Float64[mu], ...)
-```
-
-Multiple strictly increasing values are evaluated in one Integral task. A
-KSlice requires a one-element vector. Scalar, range, tuple, generator, empty,
-nonfinite, duplicate, or non-increasing inputs fail instead of being collected
-or sorted. Linear optical and all unrelated quantities retain their existing
-scalar occupation inputs.
-
-Integral results use the new vector schemas and are read through
-`read_linear_transport_result` or `read_orbital_magnetization_result`. Old
-scalar directories are not accepted by these readers and must be recomputed;
-renaming or editing headers is not a migration. The three-mechanism linear
-response contract writes `drude`, `quantum_metric`, `berry_curvature`, and
-`total`; `berry_curvature` combines the former contact and interband Hall
-summands and represents the anomalous-Hall-effect mechanism. The strict DC
-reader accepts only `wanniernlqg.linear-transport-vector/2.0` four-file
-results, not historical `/1.0` five-file results.
+These changes require new result identity metadata. Preserved filenames, units and
+columns do not imply equality with older numerical results. Software regression,
+mathematical validation and material qualification remain separate.

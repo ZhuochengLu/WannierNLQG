@@ -36,6 +36,19 @@ function _hop_native_config(source, fixture, eig_file, output; kwargs...)
     )
 end
 
+function _hop_overwrite_config(config)
+    values = (;
+        (
+            name => getfield(config, name) for
+            name in fieldnames(typeof(config)) if name != :overwrite
+        )...
+    )
+    return HOP_WANNIERIZATION.WannierHamiltonianOperatorGenerationConfig(;
+        values...,
+        overwrite = true,
+    )
+end
+
 function _hop_verify_publication_recovery(config, operator)
     original = bytes2hex(SHA.sha256(read(config.output_file)))
     mv(config.provenance_json, config.provenance_json * ".before-interruption")
@@ -48,10 +61,12 @@ function _hop_verify_publication_recovery(config, operator)
     E=first(W._load_wannierization_extension!()).OperatorExport
     @eval E function _operator_center_checkpoint(builder,validator,config,operator,contract,center)
         path=joinpath(config.execution.checkpoint_directory,string(operator),"center-"*string(center)*".bin")
-        payload=IO.read_preparation_checkpoint(path,contract*":"*string(center))
-        payload === nothing && error("CENTER_RECOMPUTATION_FORBIDDEN")
-        validator(payload) || error("INVALID_CHECKPOINT")
-        return payload
+        saved=IO.read_preparation_checkpoint(path,"hamiltonian-center-values/2:"*string(operator)*":"*string(center))
+        saved === nothing && error("CENTER_RECOMPUTATION_FORBIDDEN")
+        saved.definition isa IO.ScientificInputDefinition || error("COMPLETE_INPUTS_REQUIRED")
+        IO.validate_scientific_input_definitions_equal(contract,saved.definition)
+        validator(saved.payload) || error("INVALID_CHECKPOINT")
+        return saved.payload
     end
     config=deserialize(ARGS[1])
     result=getproperty(W,Symbol("generate_wannier_"*ARGS[2]))(config)
@@ -73,17 +88,29 @@ function _hop_scope_topology(; neighbor_override = nothing)
         num_neighbors = 1,
         neighbors = neighbors,
         reciprocal_shifts = zeros(Int, 3, 1, 2),
-        source_sha256 = "synthetic-topology-sha256",
+        source_definition = repr((
+            num_bands = 2,
+            num_kpts = 2,
+            neighbors = neighbors,
+            shifts = zeros(Int, 3, 1, 2),
+        )),
     )
 end
 
-function _hop_scope_contract(artifact_sha256; transforms = zeros(ComplexF64, 2, 2, 2))
+function _hop_scope_contract(artifact_reference; transforms = :identity)
+    # The scope unit uses a true identity frame, not a zero-matrix PASS token.
+    extension = first(HOP_WANNIERIZATION._load_wannierization_extension!()).PAWMatrixElements
+    frame = extension._identity_band_frame_contract(2, 2)
+    identity = zeros(ComplexF64, 2, 2, 2)
+    identity[:, :, 1] .= Matrix{ComplexF64}(I, 2, 2)
+    identity[:, :, 2] .= Matrix{ComplexF64}(I, 2, 2)
     return (
-        gauge_artifact_sha256 = artifact_sha256,
-        contract_sha256 = "synthetic-frame-contract-sha256",
-        status = "PASS",
+        gauge_definition = artifact_reference === nothing ? nothing :
+                           repr((scope_fixture = true, frame = frame.contract_definition)),
+        contract_definition = frame.contract_definition,
+        transform_definition = frame.transform_definition,
         legacy = false,
-        transforms = transforms,
+        transforms = transforms === :identity ? identity : transforms,
         physical_isometry_maximum = 1.0e-13,
         replay_maximum = 2.0e-13,
     )
@@ -95,7 +122,7 @@ function _hop_write_scope_artifact(
     frozen_mask = falses(size(outer_mask)),
     include_scope::Bool = true,
     outer_digest = nothing,
-    schema_version::String = "1.11",
+    schema_version::String = "2.0",
     status::String = "PASS",
 )
     HDF5.h5open(path, "w") do handle
@@ -103,18 +130,21 @@ function _hop_write_scope_artifact(
         attributes["schema"] = "WannierNLQG.star_covariant_paw_gauge"
         attributes["schema_version"] = schema_version
         attributes["status"] = status
+        frame = _hop_scope_contract("scope-fixture")
+        attributes["band_frame_contract_definition"] = frame.contract_definition
+        attributes["band_frame_transform_definition"] = frame.transform_definition
         if include_scope
             group = HDF5.create_group(handle, "qualification_scope")
             group_attributes = HDF5.attributes(group)
             group_attributes["authority"] = "outer_window"
             group_attributes["parent_audit_policy"] = "audit_only"
             expected_outer =
-                WannierNLQG.SymmetryFoundation.qualification_mask_sha256(BitMatrix(outer_mask))
+                WannierNLQG.SymmetryFoundation.qualification_mask_definition(BitMatrix(outer_mask))
             expected_frozen =
-                WannierNLQG.SymmetryFoundation.qualification_mask_sha256(BitMatrix(frozen_mask))
-            group_attributes["outer_mask_sha256"] =
+                WannierNLQG.SymmetryFoundation.qualification_mask_definition(BitMatrix(frozen_mask))
+            group_attributes["outer_mask_definition"] =
                 outer_digest === nothing ? expected_outer : String(outer_digest)
-            group_attributes["frozen_mask_sha256"] = expected_frozen
+            group_attributes["frozen_mask_definition"] = expected_frozen
             group["outer_mask"] = UInt8.(outer_mask)
             group["frozen_mask"] = UInt8.(frozen_mask)
         end
@@ -207,7 +237,7 @@ end
         @test scope.outer_mask == outer_mask
         @test scope.outer_rank_minimum == 1
         @test scope.outer_rank_maximum == 1
-        @test length(scope.contract_sha256) == 64
+        @test !isempty(scope.contract_sha256) # legacy spelling stores the complete closure definition
 
         diagnostic_artifact = _hop_write_scope_artifact(
             joinpath(directory, "diagnostic-scope.h5"),
@@ -216,10 +246,17 @@ end
         )
         diagnostic_sha256 = bytes2hex(SHA.sha256(read(diagnostic_artifact)))
         diagnostic_contract = _hop_scope_contract(diagnostic_sha256)
-        @test_throws ArgumentError extension._hamiltonian_operator_closure_scope(
+        default_scope=extension._hamiltonian_operator_closure_scope(
             diagnostic_artifact,
             diagnostic_contract,
             topology,
+        )
+        @test default_scope.outer_mask == outer_mask
+        @test_throws ArgumentError extension._hamiltonian_operator_closure_scope(
+            diagnostic_artifact,
+            diagnostic_contract,
+            topology;
+            construction_policy = :strict,
         )
         diagnostic_scope = extension._hamiltonian_operator_closure_scope(
             diagnostic_artifact,
@@ -244,8 +281,8 @@ end
         )
         @test wire_scope.outer_mask == diagnostic_scope.outer_mask
         @test wire_scope.frozen_mask == diagnostic_scope.frozen_mask
-        @test wire_scope.outer_mask_sha256 == diagnostic_scope.outer_mask_sha256
-        @test wire_scope.frozen_mask_sha256 == diagnostic_scope.frozen_mask_sha256
+        @test wire_scope.outer_mask_definition == diagnostic_scope.outer_mask_definition
+        @test wire_scope.frozen_mask_definition == diagnostic_scope.frozen_mask_definition
         @test read(wire_artifact) == wire_bytes
         @test_throws ArgumentError extension._hamiltonian_operator_closure_scope(
             wire_artifact,
@@ -260,16 +297,19 @@ end
                 status,
             )
             rejected_contract = _hop_scope_contract(bytes2hex(SHA.sha256(read(rejected))))
-            @test_throws ArgumentError extension._hamiltonian_operator_closure_scope(
+            # Retired labels cannot override the actual matrix/frame contract.
+            labelled_scope = extension._hamiltonian_operator_closure_scope(
                 rejected,
                 rejected_contract,
                 topology;
                 construction_policy = :standard,
             )
+            @test labelled_scope.outer_mask == outer_mask
+            @test labelled_scope.frozen_mask == falses(size(outer_mask))
         end
         for (label, options, message) in (
             ("digest", (; outer_digest = repeat("0", 64)), "CLOSURE_SCOPE_MASK_DIGEST_MISMATCH"),
-            ("missing", (; include_scope = false), "CLOSURE_QUALIFICATION_SCOPE_REQUIRED"),
+            ("missing", (; include_scope = false), "CLOSURE_SCOPE_DATA_MISSING"),
         )
             invalid = _hop_write_scope_artifact(
                 joinpath(directory, "invalid-wire-$(label).h5"),
@@ -335,7 +375,7 @@ end
             caught
         end
         @test error isa ArgumentError
-        @test occursin("CLOSURE_QUALIFICATION_SCOPE_REQUIRED", sprint(showerror, error))
+        @test occursin("CLOSURE_SCOPE_DATA_MISSING", sprint(showerror, error))
     end
 
     identity_contract = _hop_scope_contract(nothing; transforms = nothing)
@@ -459,18 +499,22 @@ end
             3;
             construction_policy = :standard,
         )
+        operator_export =
+            Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).OperatorExport
         authority_mismatch_target = HOP_WANNIERIZATION.WannierOperatorTargetContract(
             oracle_mmn,
-            bytes2hex(SHA.sha256(read(oracle_mmn))),
+            WannierNLQG.IO.scientific_source_collection_definition(Dict("MMN" => oracle_mmn)),
             solver_mmn,
-            bytes2hex(SHA.sha256(read(solver_mmn))),
+            WannierNLQG.IO.scientific_source_collection_definition(Dict("MMN" => solver_mmn)),
             identity_gauge.source_band_gauge,
             identity_gauge.target_band_gauge,
-            identity_gauge.transform_sha256,
-            identity_gauge.contract_sha256,
+            identity_gauge.transform_definition,
+            identity_gauge.contract_definition,
             "NOT_APPLICABLE",
             "symmetrized_dft_hamiltonian",
-            repeat("a", 64),
+            operator_export._native_authoritative_band_hamiltonian(
+                WannierNLQG.IO.WannierEIG(1, 3, energies),
+            ).definition,
             1,
             3,
             1,
@@ -499,16 +543,18 @@ end
         write(gauge_file, "gauge artifact fixture")
         gauge_mismatch_target = HOP_WANNIERIZATION.WannierOperatorTargetContract(
             oracle_mmn,
-            bytes2hex(SHA.sha256(read(oracle_mmn))),
+            WannierNLQG.IO.scientific_source_collection_definition(Dict("MMN" => oracle_mmn)),
             solver_mmn,
-            bytes2hex(SHA.sha256(read(solver_mmn))),
+            WannierNLQG.IO.scientific_source_collection_definition(Dict("MMN" => solver_mmn)),
             "native_dft_eigenstate",
-            "sawf_completed_native_dft",
-            identity_gauge.transform_sha256,
-            identity_gauge.contract_sha256,
-            repeat("b", 64),
+            "native_dft_eigenstate",
+            identity_gauge.transform_definition,
+            identity_gauge.contract_definition,
+            identity_gauge.contract_definition,
             "native_dft",
-            repeat("a", 64),
+            operator_export._native_authoritative_band_hamiltonian(
+                WannierNLQG.IO.WannierEIG(1, 3, energies),
+            ).definition,
             1,
             3,
             1,
@@ -531,7 +577,7 @@ end
             exception
         end
         @test gauge_mismatch_error isa ArgumentError
-        @test occursin("gauge artifact digest differs", sprint(showerror, gauge_mismatch_error))
+        @test occursin("target band gauge differs", sprint(showerror, gauge_mismatch_error))
         @test HOP_PREFLIGHT_SOURCE_CALLS[] == 0
         qe_spn_file = joinpath(directory, "qe-native.spn")
         qe_spn = HOP_WANNIERIZATION.generate_qe_paw_spn(
@@ -544,50 +590,52 @@ end
         @test qe_spn.passed
         @test qe_spn.spn !== nothing
         @test isfile(qe_spn_file)
-        before_spn_reuse = stat(qe_spn_file)
-        expected_spn_digest = extension._star_array_sha256(something(qe_spn.spn).data)
+        original_spn_bytes = read(qe_spn_file)
+        spn_definition_buffer = IOBuffer()
+        WannierNLQG.IO.write_native_definition_value(
+            spn_definition_buffer,
+            something(qe_spn.spn).data,
+        )
+        expected_spn_definition = bytes2hex(take!(spn_definition_buffer))
         spn_reuse_code = """
         using WannierNLQG,HDF5,JSON3,EzXML,Spglib,LinearAlgebra
         W=WannierNLQG.Wannierization
         E=first(W._load_wannierization_extension!()).PAWMatrixElements
-        @eval E _uiu_qe_state(source::QuantumEspressoWavefunctionSource, topology, cache_size) = error("COMPLETED_QE_SPN_PREPARATION_FORBIDDEN")
         source=WannierNLQG.SymmetryFoundation.QuantumEspressoWavefunctionSource(ARGS[1];include_time_reversal=false)
         result=W.generate_qe_paw_spn(source,ARGS[2];output_spn_file=ARGS[3],
-            provenance_json=ARGS[3]*".json",max_cached_wavefunction_kpoints=2)
+            provenance_json=ARGS[3]*".json",max_cached_wavefunction_kpoints=2,overwrite=true)
         @assert result.passed
-        @assert E._star_array_sha256(something(result.spn).data) == ARGS[4]
-        println("QE_SPN_COMPLETE_FRESH_REUSE_PASS")
+        buffer=IOBuffer()
+        WannierNLQG.IO.write_native_definition_value(buffer, something(result.spn).data)
+        @assert bytes2hex(take!(buffer)) == ARGS[4]
+        println("QE_SPN_COMPLETE_FRESH_RECOMPUTE_PASS")
         """
         spn_child =
-            `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(Base.active_project())) --threads=$(Threads.nthreads()) -e $spn_reuse_code $(fixture.save_directory) $(fixture.nnkp_file) $qe_spn_file $expected_spn_digest`
-        @test occursin("QE_SPN_COMPLETE_FRESH_REUSE_PASS", read(spn_child, String))
-        after_spn_reuse = stat(qe_spn_file)
-        # ctime can change from filesystem metadata; content digests below, inode,
-        # mtime and size establish the publication invariants.
-        @test (before_spn_reuse.inode, before_spn_reuse.mtime, before_spn_reuse.size) ==
-              (after_spn_reuse.inode, after_spn_reuse.mtime, after_spn_reuse.size)
+            `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(Base.active_project())) --threads=$(Threads.nthreads()) -e $spn_reuse_code $(fixture.save_directory) $(fixture.nnkp_file) $qe_spn_file $expected_spn_definition`
+        @test occursin("QE_SPN_COMPLETE_FRESH_RECOMPUTE_PASS", read(spn_child, String))
+        @test read(qe_spn_file) == original_spn_bytes
         @test maximum(abs, something(qe_spn.spn).data[:, :, 1:2, :]; init = 0.0) <= 1.0e-12
         @test something(qe_spn.spn).data[1, 1, 3, :] ≈ ones(3) atol = 1.0e-12 rtol = 0.0
         qe_spn_provenance = JSON3.read(read(qe_spn.provenance_json, String))
         @test qe_spn_provenance.schema == "wanniernlqg.qe-paw-spn"
-        @test qe_spn_provenance.schema_version == "1.1"
-        @test qe_spn_provenance.algorithm_version ==
-              "pw2wannier90-compute-spin-paw-q0-v3-frame-contract-bound"
-        @test qe_spn_provenance.status == "PASS"
+        @test qe_spn_provenance.schema_version == "2.0"
+        @test qe_spn_provenance.algorithm_version == "projector-augmented-spin-q0/3"
+        @test qe_spn_provenance.content_authentication == "NOT_PERFORMED"
+        @test qe_spn_provenance.generalized_norm_max_absolute <= 1.0e-12
         @test qe_spn_provenance.source_band_gauge == "native_dft_eigenstate"
         @test qe_spn_provenance.target_band_gauge == "native_dft_eigenstate"
-        @test qe_spn_provenance.band_frame_transform_sha256 ==
-              qe_spn_provenance.band_gauge_rotation_sha256
+        @test !hasproperty(qe_spn_provenance, :band_gauge_rotation_sha256)
         @test qe_spn_provenance.band_frame_contract.status == "PASS"
         @test qe_spn_provenance.band_frame_contract.metric_kind == "not_applicable_native_identity"
-        @test qe_spn_provenance.artifacts.spn_sha256 == bytes2hex(SHA.sha256(read(qe_spn_file)))
+        @test !hasproperty(qe_spn_provenance.artifacts, :spn_sha256)
+        @test String(qe_spn_provenance.artifacts.spn) == qe_spn_file
         extension = Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).PAWMatrixElements
         normalized = extension.read_qe_paw_spn_provenance(qe_spn.provenance_json)
         @test normalized.num_bands == 1
         @test normalized.num_kpoints == 3
         tampered_provenance = joinpath(directory, "qe-native-tampered.json")
         tampered_payload = JSON3.read(read(qe_spn.provenance_json, String), Dict{String, Any})
-        tampered_payload["physical_metric"] = "tampered"
+        delete!(tampered_payload, "physical_metric")
         open(tampered_provenance, "w") do stream
             JSON3.write(stream, tampered_payload)
         end
@@ -669,11 +717,11 @@ end
         @test uhu.operator == :uHu
         @test uhu.closure_residual <= 1.0e-12
         @test isfile(uhu_file)
-        before_resume = stat(uhu_file)
-        reused_uhu = HOP_WANNIERIZATION.generate_wannier_uhu(uhu_config)
-        after_resume = stat(uhu_file)
-        @test (before_resume.inode, before_resume.mtime, before_resume.size) ==
-              (after_resume.inode, after_resume.mtime, after_resume.size)
+        original_uhu_bytes = read(uhu_file)
+        @test_throws ArgumentError HOP_WANNIERIZATION.generate_wannier_uhu(uhu_config)
+        @test read(uhu_file) == original_uhu_bytes
+        reused_uhu = HOP_WANNIERIZATION.generate_wannier_uhu(_hop_overwrite_config(uhu_config))
+        @test read(uhu_file) == original_uhu_bytes
         @test reused_uhu.input_sha256 == uhu.input_sha256
         _hop_verify_publication_recovery(uhu_config, :uHu)
         uhu_blocks = Tuple{Int, Int, Int, Matrix{ComplexF64}}[]
@@ -685,12 +733,12 @@ end
         uhu_provenance = JSON3.read(read(uhu.provenance_json, String))
         @test uhu_provenance.status == "PASS"
         @test uhu_provenance.construction_policy == "standard"
-        @test uhu_provenance.model_qualification == "STANDARD"
-        @test uhu_provenance.quality_review_recommended
+        @test uhu_provenance.model_qualification == "COMPUTATION_READY"
+        @test !uhu_provenance.quality_review_recommended
         @test !uhu_provenance.production_eligible
         @test uhu_provenance.record_order == "ik->nn2->nn1"
         @test uhu_provenance.authoritative_hamiltonian == "native_dft"
-        @test uhu_provenance.schema_version == "1.1"
+        @test uhu_provenance.schema_version == "2.0"
         @test uhu_provenance.source_generation_qualified
         @test uhu_provenance.artifact_published
         @test uhu_provenance.diagnostic_reference_status == "WITHIN_REFERENCE"
@@ -705,11 +753,10 @@ end
         @test uhu_provenance.galerkin_cancellation_audit.cancellation_ratio === nothing
         @test uhu_provenance.source_band_gauge == "native_dft_eigenstate"
         @test uhu_provenance.target_band_gauge == "native_dft_eigenstate"
-        @test uhu_provenance.gauge_artifact_sha256 == "NOT_APPLICABLE"
+        @test uhu_provenance.gauge_definition == "NOT_APPLICABLE"
         @test uhu_provenance.band_frame_contract.status == "PASS"
-        @test uhu_provenance.band_frame_transform_sha256 ==
-              uhu_provenance.band_gauge_rotation_sha256
-        @test uhu_provenance.output_sha256 !== nothing
+        @test !hasproperty(uhu_provenance, :band_gauge_rotation_sha256)
+        @test !hasproperty(uhu_provenance, :output_sha256)
 
         missing_spn_output = joinpath(directory, "missing-spn-must-not-publish.sIu")
         missing_spn_error = try
@@ -754,11 +801,11 @@ end
                 ),
             )
             result = generator(operator_config)
-            before_resume = stat(output)
-            reused = generator(operator_config)
-            after_resume = stat(output)
-            @test (before_resume.inode, before_resume.mtime, before_resume.size) ==
-                  (after_resume.inode, after_resume.mtime, after_resume.size)
+            original_operator_bytes = read(output)
+            @test_throws ArgumentError generator(operator_config)
+            @test read(output) == original_operator_bytes
+            reused = generator(_hop_overwrite_config(operator_config))
+            @test read(output) == original_operator_bytes
             @test reused.input_sha256 == result.input_sha256
             _hop_verify_publication_recovery(operator_config, operator)
             @test result.passed
@@ -774,13 +821,13 @@ end
                 @test only(block) == expected_factor(native_spin, energies[1, center])
             end
             sidecar = JSON3.read(read(result.provenance_json, String))
-            @test sidecar.schema_version == "1.1"
+            @test sidecar.schema_version == "2.0"
             @test sidecar.source_generation_qualified
             @test sidecar.artifact_published
             @test sidecar.galerkin_block_audit.exchange_hermiticity_status == "NOT_APPLICABLE"
             @test sidecar.band_frame_contract.status == "PASS"
-            @test sidecar.spn_provenance_sha256 ==
-                  bytes2hex(SHA.sha256(read(qe_spn.provenance_json)))
+            @test !hasproperty(sidecar, :spn_provenance_sha256)
+            @test !isempty(String(sidecar.spn_contract_definition))
         end
 
         formatted_file = joinpath(directory, "fixture-formatted.uHu")
@@ -804,9 +851,9 @@ end
     u1 = ComplexF64[1 0; 0 phase]
     u2 = ComplexF64[0 1; 1 0] * ComplexF64[phase 0; 0 1]
     operator = ComplexF64[1 + 0.2im 2 - 0.3im; -0.4 + 0.1im 0.7]
-    @test extension._rotate_single_point_operator(operator, u1) == u1' * operator * u1
-    @test extension._rotate_link_operator(operator, u1, u2) == u1' * operator * u2
-    @test extension._rotate_double_endpoint_operator(operator, u1, u2) == u1' * operator * u2
+    @test extension._transform_single_point_operator(operator, u1) == u1' * operator * u1
+    @test extension._transform_link_operator(operator, u1, u2) == u1' * operator * u2
+    @test extension._transform_double_endpoint_operator(operator, u1, u2) == u1' * operator * u2
 
     nonunitary_transform = ComplexF64[1.000001 0.2im; 0 0.999999]
     eig = WannierNLQG.IO.WannierEIG(2, 1, reshape([-2.0, 3.0], 2, 1))
@@ -899,6 +946,8 @@ end
         @test provenance.diagnostic_reference == 1.0e-6
         @test provenance.diagnostic_reference_status == "ABOVE_REFERENCE"
         @test provenance.outer_probability_leakage_audit_status == "ABOVE_REFERENCE"
+        @test provenance.quality_review_recommended
+        @test !provenance.production_eligible
         @test provenance.actual_operator_error_status ==
               "NOT_AVAILABLE_WITHOUT_COMPLEMENT_HAMILTONIAN_OR_NBANDS_REFERENCE"
         @test provenance.nbands_convergence_status == "NOT_ESTABLISHED"
@@ -951,25 +1000,29 @@ end
         alias = joinpath(directory, "solver.mmn")
         symlink(path, alias)
         reads = Ref(0)
-        hashes = Ref(0)
+        references = Ref(0)
         reader = p -> begin
             reads[] += 1
             WannierNLQG.IO.read_wannier_mmn_topology(p)
         end
-        hasher = p -> begin
-            hashes[] += 1
-            bytes2hex(SHA.sha256(read(p)))
-        end
+        reference_builder =
+            p -> begin
+                references[] += 1
+                WannierNLQG.IO.scientific_source_collection_definition(Dict("MMN" => p))
+            end
         before = read(path)
         identities = extension._operator_mmn_file_identities(
             mmn,
             path,
             alias;
             topology_reader = reader,
-            file_hasher = hasher,
+            reference_builder = reference_builder,
         )
-        @test reads[] == hashes[] == 1
-        @test identities[realpath(path)] == bytes2hex(SHA.sha256(before))
+        @test reads[] == references[] == 1
+        @test WannierNLQG.IO.validate_scientific_source_collection(
+            Dict("MMN" => path),
+            identities[realpath(path)],
+        ) === nothing
         @test read(path) == before
         copy_path = joinpath(directory, "separate.mmn")
         cp(path, copy_path)
@@ -978,9 +1031,9 @@ end
             path,
             copy_path;
             topology_reader = reader,
-            file_hasher = hasher,
+            reference_builder = reference_builder,
         )
-        @test reads[] == hashes[] == 3
+        @test reads[] == references[] == 3
         # The registry is scoped to this validation, never a stale path-only global cache.
         changed = WannierNLQG.IO.WannierMMN(
             1,
@@ -1106,49 +1159,57 @@ end
         )
         baseline = extension._uiu_qe_state(source, fixture.nnkp_file, 2)
         expected = [baseline.spn_block(k) for k in 1:3]
-        extension._with_qe_operator_preparation(source, fixture.nnkp_file, 2) do
-            state = extension._uiu_qe_state(source, fixture.nnkp_file, 2)
-            next_state = extension._uiu_source_state(source, fixture.nnkp_file, 2)
-            @test state.wavefunction_cache === next_state.wavefunction_cache
-            @test state.beta_cache === next_state.beta_cache
-            outer_context = get(task_local_storage(), :wannier_qe_operator_preparation, nothing)
+        lifecycle_error = try
             extension._with_qe_operator_preparation(source, fixture.nnkp_file, 2) do
+                state = extension._uiu_qe_state(source, fixture.nnkp_file, 2)
+                next_state = extension._uiu_source_state(source, fixture.nnkp_file, 2)
+                @test state.wavefunction_cache === next_state.wavefunction_cache
+                @test state.beta_cache === next_state.beta_cache
+                outer_context =
+                    get(task_local_storage(), :wannier_qe_operator_preparation, nothing)
+                extension._with_qe_operator_preparation(source, fixture.nnkp_file, 2) do
+                    @test get(task_local_storage(), :wannier_qe_operator_preparation, nothing) === outer_context
+                    nested = extension._uiu_qe_state(source, fixture.nnkp_file, 2)
+                    @test nested.wavefunction_cache === state.wavefunction_cache
+                    @test nested.beta_cache === state.beta_cache
+                    @test nested.input_sha256 !== state.input_sha256
+                    @test nested.spn_block(1) == expected[1]
+                end
+                @test_throws ErrorException extension._with_qe_operator_preparation(
+                    source,
+                    fixture.nnkp_file,
+                    2,
+                ) do
+                    error("intentional nested preparation failure")
+                end
                 @test get(task_local_storage(), :wannier_qe_operator_preparation, nothing) ===
                       outer_context
-                nested = extension._uiu_qe_state(source, fixture.nnkp_file, 2)
-                @test nested.wavefunction_cache === state.wavefunction_cache
-                @test nested.beta_cache === state.beta_cache
-                @test nested.input_sha256 !== state.input_sha256
-                @test nested.spn_block(1) == expected[1]
-            end
-            @test_throws ErrorException extension._with_qe_operator_preparation(
-                source,
-                fixture.nnkp_file,
-                2,
-            ) do
-                error("intentional nested preparation failure")
-            end
-            @test get(task_local_storage(), :wannier_qe_operator_preparation, nothing) ===
-                  outer_context
 
-            @test state.input_sha256 !== next_state.input_sha256
-            @test state.diagnostics !== next_state.diagnostics
-            state.input_sha256["OPERATOR_TARGET_CONTRACT"] = "stage-local"
-            push!(state.diagnostics, "STAGE_LOCAL_DIAGNOSTIC")
-            @test next_state.input_sha256 == baseline.input_sha256
-            @test !("STAGE_LOCAL_DIAGNOSTIC" in next_state.diagnostics)
-            @test extension._uiu_qe_state(source, fixture.nnkp_file, 2).input_sha256 ==
-                  baseline.input_sha256
-            delete!(state.input_sha256, "OPERATOR_TARGET_CONTRACT")
-            @test state.input_sha256 == baseline.input_sha256
-            @test state.generalized_norm == baseline.generalized_norm
-            for k in 1:3
-                @test state.spn_block(k) == expected[k]
+                @test state.input_sha256 !== next_state.input_sha256
+                @test state.diagnostics !== next_state.diagnostics
+                state.input_sha256["OPERATOR_TARGET_CONTRACT"] = "stage-local"
+                push!(state.diagnostics, "STAGE_LOCAL_DIAGNOSTIC")
+                @test next_state.input_sha256 == baseline.input_sha256
+                @test !("STAGE_LOCAL_DIAGNOSTIC" in next_state.diagnostics)
+                @test extension._uiu_qe_state(source, fixture.nnkp_file, 2).input_sha256 ==
+                      baseline.input_sha256
+                delete!(state.input_sha256, "OPERATOR_TARGET_CONTRACT")
+                @test state.input_sha256 == baseline.input_sha256
+                @test state.generalized_norm == baseline.generalized_norm
+                for k in 1:3
+                    @test state.spn_block(k) == expected[k]
+                end
+                @test_throws ArgumentError extension._uiu_qe_state(source, fixture.nnkp_file, 3)
+                write(fixture.nnkp_file, read(fixture.nnkp_file, String) * "\n")
+                @test_throws ArgumentError extension._uiu_qe_state(source, fixture.nnkp_file, 2)
             end
-            @test_throws ArgumentError extension._uiu_qe_state(source, fixture.nnkp_file, 3)
-            write(fixture.nnkp_file, read(fixture.nnkp_file, String) * "\n")
-            @test_throws ArgumentError extension._uiu_qe_state(source, fixture.nnkp_file, 2)
+            nothing
+        catch exception
+            exception
         end
+        @test lifecycle_error isa ArgumentError
+        @test occursin("Scientific input changed during use", sprint(showerror, lifecycle_error))
+        @test occursin("fixture.nnkp", sprint(showerror, lifecycle_error))
         @test get(task_local_storage(), :wannier_qe_operator_preparation, nothing) === nothing
         @test get(task_local_storage(), :wannier_verified_file_digests, nothing) === nothing
     end
@@ -1202,50 +1263,37 @@ end
                 )
                 @test resumed.passed
                 @test read(output) == bytes
-                @test state.wavefunction_cache.hits + state.wavefunction_cache.misses == before
-                # Interruption after SPN publication: keep the original bytes
-                # and recover provenance entirely from verified checkpoint blocks.
-                provenance_path = output * ".provenance.json"
-                mv(provenance_path, provenance_path * ".before-interruption")
-                recovered = HOP_WANNIERIZATION.generate_qe_paw_spn(
+                @test state.wavefunction_cache.hits + state.wavefunction_cache.misses > before
+                @test_throws ArgumentError HOP_WANNIERIZATION.generate_qe_paw_spn(
                     source,
                     fixture.nnkp_file;
                     output_spn_file = output,
                     max_cached_wavefunction_kpoints = 2,
                     execution,
                 )
-                @test recovered.passed
                 @test read(output) == bytes
-                @test state.wavefunction_cache.hits + state.wavefunction_cache.misses == before
-                @test isfile(provenance_path)
-                open(joinpath(checkpoint_directory, "qe-spn", "block-1.bin"), "a") do stream
-                    write(stream, "corrupt")
-                end
-                repaired = HOP_WANNIERIZATION.generate_qe_paw_spn(
-                    source,
-                    fixture.nnkp_file;
-                    output_spn_file = output,
-                    max_cached_wavefunction_kpoints = 2,
-                    execution,
-                    overwrite = true,
-                )
-                @test repaired.passed
-                @test read(output) == bytes
-                @test state.wavefunction_cache.hits + state.wavefunction_cache.misses == before + 1
             end
         end
     end
 end
 
-@testset "Hamiltonian operator center checkpoints resume and invalidate" begin
+@testset "Hamiltonian center checkpoints require complete unchanged input definitions" begin
     extension = Base.get_extension(WannierNLQG, :WannierNLQGWannierizationExt).OperatorExport
+    io_layer = WannierNLQG.IO
     mktempdir() do directory
-        config = (
+        make_config(path) = (
             execution = HOP_WANNIERIZATION.WavefunctionPreparationExecutionConfig(
-                checkpoint_directory = directory,
+                checkpoint_directory = path,
                 resume = true,
             ),
         )
+        config = make_config(directory)
+        definition_a = io_layer.scientific_input_definition_bytes() do stream
+            io_layer.write_native_definition_value(stream, (energies = [-1.0, 2.0], topology = [1, 2]))
+        end
+        definition_b = io_layer.scientific_input_definition_bytes() do stream
+            io_layer.write_native_definition_value(stream, (energies = [-1.0, 3.0], topology = [1, 2]))
+        end
         calls = Ref(0)
         value = reshape([reshape(ComplexF64[1 + 2im], 1, 1)], 1, 1)
         builder = () -> (calls[] += 1; deepcopy(value))
@@ -1257,7 +1305,7 @@ end
                 validator,
                 config,
                 operator,
-                "bound-input-a",
+                definition_a,
                 1,
             )
             @test first == value
@@ -1267,38 +1315,83 @@ end
                 validator,
                 config,
                 operator,
-                "bound-input-a",
+                definition_a,
                 1,
             ) == first
             @test calls[] == before + 1
+            path = joinpath(directory, string(operator), "center-1.bin")
+            accepted_bytes = read(path)
+            mismatch = try
+                extension._operator_center_checkpoint(
+                    builder,
+                    validator,
+                    config,
+                    operator,
+                    definition_b,
+                    1,
+                )
+                nothing
+            catch exception
+                exception
+            end
+            @test mismatch isa ArgumentError
+            @test occursin("OPERATOR_CENTER_INPUT_MISMATCH", sprint(showerror, mismatch))
+            @test calls[] == before + 1
+            @test read(path) == accepted_bytes
             @test extension._operator_center_checkpoint(
                 builder,
                 validator,
-                config,
+                make_config(joinpath(directory, "new-" * string(operator))),
                 operator,
-                "bound-input-b",
+                definition_b,
                 1,
-            ) == first
+            ) == value
             @test calls[] == before + 2
-            open(joinpath(directory, string(operator), "center-1.bin"), "a") do stream
+            open(path, "a") do stream
                 write(stream, "truncated-or-corrupt")
             end
-            @test extension._operator_center_checkpoint(
+            corrupted = read(path)
+            @test_throws ArgumentError extension._operator_center_checkpoint(
                 builder,
                 validator,
                 config,
                 operator,
-                "bound-input-b",
+                definition_a,
                 1,
-            ) == first
-            @test calls[] == before + 3
+            )
+            @test calls[] == before + 2
+            @test read(path) == corrupted
+            legacy_path = joinpath(directory, string(operator), "center-3.bin")
+            io_layer.write_preparation_checkpoint(
+                legacy_path,
+                "hamiltonian-center-values/2:" * string(operator) * ":3",
+                (definition = "old-digest-only", payload = value),
+            )
+            legacy_error = try
+                extension._operator_center_checkpoint(
+                    builder,
+                    validator,
+                    config,
+                    operator,
+                    definition_a,
+                    3,
+                )
+                nothing
+            catch exception
+                exception
+            end
+            @test legacy_error isa ArgumentError
+            @test occursin(
+                "OPERATOR_CENTER_COMPLETE_INPUTS_REQUIRED",
+                sprint(showerror, legacy_error),
+            )
         end
         @test_throws ArgumentError extension._operator_center_checkpoint(
             () -> [fill(ComplexF64(NaN), 1, 1);;],
             validator,
             config,
             :uHu,
-            "bad",
+            definition_a,
             2,
         )
         @test !isfile(joinpath(directory, "uHu", "center-2.bin"))
@@ -1357,7 +1450,7 @@ end
     end
 end
 
-@testset "QE compact preparation skips repeated norm and beta contractions" begin
+@testset "QE complete-source preparation recomputes across calls and shares owned state" begin
     extension = HOP_PAW_EXTENSION
     mktempdir() do directory
         fixture = write_qe_paw_fixture(
@@ -1395,20 +1488,23 @@ end
             implementation_contract = "fixture-implementation-v1",
         ) do
             state = extension._uiu_qe_state(source, fixture.nnkp_file, 2)
-            @test state.normalization_points[] == 0
-            @test isempty(state.wavefunction_cache.load_counts)
+            @test state.normalization_points[] == 3
+            @test !isempty(state.wavefunction_cache.load_counts)
             @test state.generalized_norm == reference_norm[]
             @test [state.spn_block(k) for k in 1:3] == expected[]
-            @test state.beta_contractions[] == 0
+            @test state.beta_contractions[] == 3
         end
-        code = "using WannierNLQG,HDF5,JSON3,EzXML,Spglib; W=WannierNLQG.Wannierization; E=first(W._load_wannierization_extension!()).PAWMatrixElements; source=WannierNLQG.SymmetryFoundation.QuantumEspressoWavefunctionSource(ARGS[1];include_time_reversal=false); E._with_qe_operator_preparation(source,ARGS[2],2;checkpoint_directory=ARGS[3],implementation_contract=\"fixture-implementation-v1\") do; state=E._uiu_qe_state(source,ARGS[2],2); @assert state.normalization_points[]==0; @assert isempty(state.wavefunction_cache.load_counts); state.spn_block(1); @assert state.beta_contractions[]==0; println(\"FRESH_QE_REUSE_PASS\"); end"
+        expected_file = joinpath(directory, "norm-reference.bin")
+        open(expected_file, "w") do io
+            Serialization.serialize(io, (; norm = reference_norm[], spn = expected[]))
+        end
         command =
-            `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(@__DIR__)) -e $code $(fixture.save_directory) $(fixture.nnkp_file) $cache`
-        @test strip(read(command, String)) == "FRESH_QE_REUSE_PASS"
+            `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(@__DIR__)) $(joinpath(@__DIR__, "QEPreparationFreshProbe.jl")) $(fixture.save_directory) $(fixture.nnkp_file) $cache $expected_file norm`
+        @test strip(read(command, String)) == "FRESH_QE_RECOMPUTE_PASS"
     end
 end
 
-@testset "QE overlap cache restores before wavefunction access" begin
+@testset "QE repeated overlaps preserve values within owned preparation" begin
     extension = HOP_PAW_EXTENSION
     mktempdir() do directory
         fixture = write_qe_paw_fixture(
@@ -1435,7 +1531,7 @@ end
             expected[] = extension._uiu_center_neighbor_block(state, 1, 1)
             @test state.overlap_contractions[] == 1
             @test extension._uiu_center_neighbor_block(state, 1, 1) == expected[]
-            @test state.overlap_contractions[] == 1
+            @test state.overlap_contractions[] == 2
         end
         extension._with_qe_operator_preparation(
             source,
@@ -1446,21 +1542,24 @@ end
         ) do
             state = extension._uiu_qe_state(source, fixture.nnkp_file, 2)
             @test extension._uiu_center_neighbor_block(state, 1, 1) == expected[]
-            @test state.overlap_contractions[] == 0
-            @test isempty(state.wavefunction_cache.load_counts)
+            @test state.overlap_contractions[] == 1
+            @test !isempty(state.wavefunction_cache.load_counts)
         end
-        code = "using WannierNLQG,HDF5,JSON3,EzXML,Spglib; W=WannierNLQG.Wannierization; E=first(W._load_wannierization_extension!()).PAWMatrixElements; source=WannierNLQG.SymmetryFoundation.QuantumEspressoWavefunctionSource(ARGS[1];include_time_reversal=false); E._with_qe_operator_preparation(source,ARGS[2],2;checkpoint_directory=ARGS[3],implementation_contract=\"overlap-fixture-v1\") do; state=E._uiu_qe_state(source,ARGS[2],2); block=E._uiu_center_neighbor_block(state,1,1); @assert all(isfinite,block); @assert state.overlap_contractions[]==0; @assert isempty(state.wavefunction_cache.load_counts); println(\"FRESH_OVERLAP_REUSE_PASS\"); end"
+        expected_file = joinpath(directory, "overlap-reference.bin")
+        open(expected_file, "w") do io
+            Serialization.serialize(io, expected[])
+        end
         command =
-            `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(@__DIR__)) -e $code $(fixture.save_directory) $(fixture.nnkp_file) $cache`
-        @test strip(read(command, String)) == "FRESH_OVERLAP_REUSE_PASS"
+            `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(@__DIR__)) $(joinpath(@__DIR__, "QEPreparationFreshProbe.jl")) $(fixture.save_directory) $(fixture.nnkp_file) $cache $expected_file overlap`
+        @test strip(read(command, String)) == "FRESH_QE_RECOMPUTE_PASS"
     end
 end
 
-@testset "First target construction shares one strict gauge read" begin
+@testset "Gauge readers revalidate current sources and reject in-use changes" begin
     extension = HOP_PAW_EXTENSION
     mktempdir() do directory
         path = joinpath(directory, "gauge.h5")
-        write(path, "sealed gauge identity")
+        write(path, "fixture-gauge-a")
         calls = Ref(0)
         reader =
             (p; construction_policy, source) -> begin
@@ -1480,36 +1579,46 @@ end
                 source = :fixture,
                 reader,
             )
-            @test first === second
-            @test calls[] == 1
-            @test second.data == ComplexF64[1 + 2im]
-            chmod(path, 0o400)
-            refreshed = extension._read_generation_gauge(
+            @test first.data == second.data == ComplexF64[1 + 2im]
+            @test first.data !== second.data
+            @test calls[] == 2
+            second.data[1] = 9
+            @test first.data == ComplexF64[1 + 2im]
+            reading = (p; kwargs...) -> read(p, String)
+            @test extension._read_generation_gauge(
                 path;
                 construction_policy = :standard,
                 source = :fixture,
-                reader,
-            )
-            @test refreshed === first
-            @test calls[] == 1
-            @test refreshed.data == ComplexF64[1 + 2im]
-            chmod(path, 0o600)
-            write(path, "modified gauge identity with new length")
-            @test_throws ArgumentError extension._read_generation_gauge(
+                reader = reading,
+            ) == "fixture-gauge-a"
+            write(path, "fixture-gauge-b")
+            @test extension._read_generation_gauge(
                 path;
                 construction_policy = :standard,
                 source = :fixture,
-                reader,
-            )
+                reader = reading,
+            ) == "fixture-gauge-b"
+            mutating = (p; kwargs...) -> begin
+                value = read(p, String)
+                write(p, "changed-during-owned-read")
+                value
+            end
+            failure = try
+                extension._read_generation_gauge(
+                    path;
+                    construction_policy = :standard,
+                    source = :fixture,
+                    reader = mutating,
+                )
+                nothing
+            catch exception
+                exception
+            end
+            @test failure isa ArgumentError
+            @test occursin("Scientific input changed during reading", sprint(showerror, failure))
+            @test occursin("gauge.h5", sprint(showerror, failure))
         end
         @test get(task_local_storage(), :wannier_generation_gauge_reuse, nothing) === nothing
-        extension._read_generation_gauge(
-            path;
-            construction_policy = :standard,
-            source = :fixture,
-            reader,
-        )
-        @test calls[] == 2
         @test_throws ErrorException extension._with_generation_gauge_reuse() do
             error("stop target preparation")
         end
@@ -1574,7 +1683,7 @@ end
             state = extension._uiu_qe_state(source, fixture.nnkp_file, 2)
             @test isfinite(state.generalized_norm)
         end
-        @test isdir(joinpath(cache, "qe-generalized-norm"))
+        @test !isdir(joinpath(cache, "qe-generalized-norm"))
     end
 end
 
@@ -1600,7 +1709,7 @@ end
             provenance = joinpath(directory, "model.uIu.provenance.json"),
             checkpoint = joinpath(directory, "model.uIu.partial.json"),
         )
-        checksums = String[]
+        checksums = Int[]
         open(paths.output, "w") do io
             extension._uiu_header!(io, topology)
             for center in 1:topology.num_kpts
@@ -1706,24 +1815,41 @@ end
             state = extension._uiu_qe_state(source, fixture.nnkp_file, 2)
             @test state.normalization_points[] == 3
             @test state.beta_contractions[] == 3
-            (norm = state.generalized_norm, inputs = copy(state.input_sha256))
+            (
+                norm = state.generalized_norm,
+                inputs = copy(state.input_sha256),
+                definition = state.native.source_definition,
+            )
         end
-        extension._with_qe_operator_artifacts(
-            source,
-            fixture.nnkp_file,
-            directory,
-            2;
-            additional_inputs = [second_input],
-        ) do
-            state = extension._uiu_qe_state(source, fixture.nnkp_file, 2)
-            @test state.normalization_points[] == 0
-            @test state.beta_contractions[] == 0
-            @test isempty(state.wavefunction_cache.load_counts)
-            @test state.generalized_norm == reference.norm
-            @test state.input_sha256 == reference.inputs
-            write(second_input, "mutated second stage dependency")
-            @test_throws ArgumentError extension.sha256_file(second_input)
+        stage_error = try
+            extension._with_qe_operator_artifacts(
+                source,
+                fixture.nnkp_file,
+                directory,
+                2;
+                additional_inputs = [second_input],
+            ) do
+                state = extension._uiu_qe_state(source, fixture.nnkp_file, 2)
+                @test state.normalization_points[] == 3
+                @test state.beta_contractions[] == 3
+                @test !isempty(state.wavefunction_cache.load_counts)
+                @test state.generalized_norm == reference.norm
+                @test state.input_sha256 == reference.inputs
+                @test WannierNLQG.IO.validate_scientific_input_definitions_equal(
+                    reference.definition,
+                    state.native.source_definition,
+                ) === nothing
+                write(second_input, "mutated second stage dependency")
+                @test read(second_input, String) == "mutated second stage dependency"
+            end
+            nothing
+        catch exception
+            exception
         end
+        @test stage_error isa ArgumentError
+        @test occursin("Scientific input changed during use", sprint(showerror, stage_error))
+        @test occursin("stage-b.input", sprint(showerror, stage_error))
+        @test get(task_local_storage(), :wannier_qe_operator_preparation, nothing) === nothing
         metadata = extension.read_qe_xml(source)
         upf = first(values(metadata.upf_files))
         open(upf, "a") do stream
@@ -1740,7 +1866,10 @@ end
             @test state.normalization_points[] == 3
             @test state.beta_contractions[] == 3
             @test state.generalized_norm == reference.norm
-            @test state.input_sha256 != reference.inputs
+            @test_throws ArgumentError WannierNLQG.IO.validate_scientific_input_definitions_equal(
+                reference.definition,
+                state.native.source_definition,
+            )
         end
         # Exercise eviction independently of the durable overlap cache hits above.
         state = extension._uiu_qe_state(source, fixture.nnkp_file, 2)
@@ -1806,15 +1935,23 @@ end
                 @test state.normalization_points[] == 3
                 @test state.wavefunction_cache.load_counts == Dict(k => 1 for k in 1:3)
                 @test state.wavefunction_cache.reloads == 0
-                resumed = HOP_WANNIERIZATION.generate_qe_paw_spn(
+                @test_throws ArgumentError HOP_WANNIERIZATION.generate_qe_paw_spn(
                     source,
                     fixture.nnkp_file;
                     output_spn_file = output,
                     max_cached_wavefunction_kpoints = 2,
                     execution,
                 )
-                @test resumed.spn.data == expected
-                @test state.wavefunction_cache.load_counts == Dict(k => 1 for k in 1:3)
+                rebuilt = HOP_WANNIERIZATION.generate_qe_paw_spn(
+                    source,
+                    fixture.nnkp_file;
+                    output_spn_file = output,
+                    max_cached_wavefunction_kpoints = 2,
+                    execution,
+                    overwrite = true,
+                )
+                @test rebuilt.spn.data == expected
+                @test state.normalization_points[] == 3
             end
         end
     end

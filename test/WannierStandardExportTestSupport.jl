@@ -7,7 +7,16 @@ const EXPORT_WANNIERIZATION = WannierNLQG.Wannierization
 const EXPORT_SYMMETRIZATION = WannierNLQG.Symmetrization
 const EXPORT_IO = WannierNLQG.IO
 
-function standard_export_fixture(; mmn_override = nothing)
+function standard_export_fixture(;
+    mmn_override = nothing,
+    real_lattice_override = nothing,
+    centers_override = nothing,
+    frames_override = nothing,
+)
+    real_lattice =
+        real_lattice_override === nothing ? Matrix{Float64}(I, 3, 3) :
+        Matrix{Float64}(real_lattice_override)
+    reciprocal_lattice = 2pi * inv(transpose(real_lattice))
     operation = WannierNLQG.SymmetryFoundation.SymmetryOperation(
         Matrix{Int}(I, 3, 3),
         zeros(3),
@@ -18,8 +27,8 @@ function standard_export_fixture(; mmn_override = nothing)
         "1.0",
         :synthetic,
         false,
-        Matrix{Float64}(I, 3, 3),
-        2.0pi .* Matrix{Float64}(I, 3, 3),
+        real_lattice,
+        reciprocal_lattice,
         (2, 1, 1),
         [0.0 0.0 0.0; 0.5 0.0 0.0],
         energies,
@@ -58,7 +67,7 @@ function standard_export_fixture(; mmn_override = nothing)
     mmn =
         mmn_override === nothing ? EXPORT_IO.WannierMMN(2, 2, 6, mmn_data, neighbors, shifts) :
         mmn_override
-    config = EXPORT_WANNIERIZATION.SymmetryAdaptedWannierizationConfig(
+    config = EXPORT_WANNIERIZATION.WannierizationConfig(
         input = EXPORT_WANNIERIZATION.WannierizationInputConfig(
             construction_policy = :standard,
             wannierization_mode = :ordinary,
@@ -69,26 +78,29 @@ function standard_export_fixture(; mmn_override = nothing)
             num_wannier = 1,
             frozen_states = [(1, 1), (2, 1)],
         ),
-        solver = EXPORT_WANNIERIZATION.WannierizationSolverConfig(
-            algorithm_profile = :custom,
-            initialization = :amn,
-        ),
+        solver = EXPORT_WANNIERIZATION.WannierizationSolverConfig(initialization = :amn),
         checkpoint = EXPORT_WANNIERIZATION.WannierizationCheckpointConfig(),
         runtime = EXPORT_WANNIERIZATION.WannierizationRuntimeConfig(),
         output = EXPORT_WANNIERIZATION.WannierizationOutputConfig(
-            write_wannier90_tb = true,
-            tb_output_formats = (:packed_hdf5, :wannier90_tb),
+            write_model_tb = true,
+            tb_output_formats = (:packed_hdf5, :model_tb),
         ),
     )
     frames = zeros(ComplexF64, 2, 1, 2)
     frames[1, 1, :] .= 1.0
-    centers = zeros(Float64, 1, 3)
+    if frames_override !== nothing
+        size(frames_override) == size(frames) || error("accepted-state frame shape mismatch")
+        frames .= frames_override
+        all(isfinite, frames) || error("nonfinite accepted-state fixture frame")
+    end
+    centers =
+        centers_override === nothing ? zeros(Float64, 1, 3) : Matrix{Float64}(centers_override)
+    size(centers) == (1, 3) || error("accepted-state fixture center shape mismatch")
     spreads = [1.0]
     stencil = EXPORT_WANNIERIZATION._finite_difference_weights(representation, mmn)
-    config_sha = EXPORT_WANNIERIZATION._restart_config_sha256(config)
-    representation_sha = repeat("c", 64)
-    basis_sha = EXPORT_WANNIERIZATION._projection_basis_sha256(basis)
-    amn_sha = repeat("d", 64)
+    basis_sha = EXPORT_WANNIERIZATION._projection_basis_definition(basis)
+    # Raw synthetic accepted-state fixture: no fabricated restart/input authentication.
+    # Continuation tests must supply actual inputs through the current definition port.
     restart_state = EXPORT_WANNIERIZATION.WannierizationRestartState(
         1,
         frames,
@@ -98,11 +110,7 @@ function standard_export_fixture(; mmn_override = nothing)
         reshape([0.0, 0.0, 0.0, 1.0], 4, 1),
         trues(2, 2),
         0.0,
-        config_sha,
-        representation_sha,
         stencil,
-        basis_sha,
-        amn_sha,
         EXPORT_WANNIERIZATION.WannierizationOptimizerState(:fixed, 0.5, 1.0),
     )
     chk = EXPORT_IO.WannierCHK(
@@ -193,20 +201,11 @@ function standard_export_fixture(; mmn_override = nothing)
         "hard_gate_isometry" => "0.0",
         "hard_gate_frozen" => "0.01",
         "hard_gate_covariance" => "0.0",
-        "input_sha256" => repeat("e", 64),
         "authoritative_hamiltonian" => "native_dft",
-        "authoritative_hamiltonian_sha256" => "LEGACY_NATIVE_DFT",
         "qualification_scope" => "full_parent",
         "target_authority" => "NOT_APPLICABLE",
         "parent_audit_policy" => "legacy_hard_gate",
-        "disentanglement_outer_mask_sha256" => "NOT_SEALED",
-        "disentanglement_frozen_mask_sha256" => "NOT_SEALED",
-        "target_subspace_contract_sha256" => "NOT_RECORDED",
-        "restart_config_sha256" => config_sha,
-        "representation_sha256" => representation_sha,
-        "projection_basis_sha256" => basis_sha,
-        "amn_sha256" => amn_sha,
-        "finite_difference_stencil_sha256" => stencil.digest,
+        "projection_basis_definition" => basis_sha,
         "spread_metric" => "full_3d",
         "optimizer_strategy" => "fixed",
         "optimizer_schedule" => "two_stage",
@@ -230,4 +229,33 @@ function standard_export_fixture(; mmn_override = nothing)
         report,
     )
     return (; representation, basis, eig, mmn, config, result)
+end
+
+# Codec fixture only: encode the actual selected states of the existing finite
+# EIG and explicit frozen-state list. No production input/config is altered.
+function standard_export_target_contract(fixture)
+    energies = fixture.eig.data
+    outer = copy(something(fixture.result.restart_state).included_bands)
+    frozen = falses(size(outer))
+    for (kpoint, band) in fixture.config.input.frozen_states
+        frozen[band, kpoint] = true
+    end
+    lower, upper = extrema(energies)
+    frozen_energies = energies[frozen]
+    frozen_lower, frozen_upper = extrema(frozen_energies)
+    @assert outer == ((lower .<= energies) .& (energies .<= upper))
+    @assert frozen == ((frozen_lower .<= energies) .& (energies .<= frozen_upper))
+    scope = WannierNLQG.SymmetryFoundation.BandRepresentationQualificationScope(
+        outer,
+        frozen;
+        content_authentication = false,
+    )
+    return EXPORT_WANNIERIZATION.TargetSubspaceQualificationContract(
+        scope;
+        outer_min_ev = lower,
+        outer_max_ev = upper,
+        frozen_min_ev = frozen_lower,
+        frozen_max_ev = frozen_upper,
+        num_wannier = fixture.config.input.num_wannier,
+    )
 end

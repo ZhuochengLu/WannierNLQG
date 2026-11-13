@@ -12,6 +12,7 @@ struct FusedBundleRunResult
     band_summary::NamedTuple
     replica_summary::NamedTuple
     qualification::ResponseQualificationResult
+    model_geometry::NamedTuple
 end
 
 """
@@ -137,6 +138,7 @@ mutable struct PhotonDragTransitionScreenWorkspace{W, D}
     valence_occupations::Vector{Float64}
     conduction_occupations::Vector{Float64}
     occupation_differences::Matrix{Float64}
+    weighted_occupation_differences::Matrix{Float64}
     transition_energies::Matrix{Float64}
     delta::Array{Float64, 3}
     active_pair_mask::Matrix{Bool}
@@ -187,6 +189,7 @@ function make_photon_drag_transition_screen_workspace(
         zeros(Float64, num_orbitals),
         zeros(Float64, num_orbitals, num_orbitals),
         zeros(Float64, num_orbitals, num_orbitals),
+        zeros(Float64, num_orbitals, num_orbitals),
         zeros(Float64, num_photon_energies, num_orbitals, num_orbitals),
         fill(false, num_orbitals, num_orbitals),
         Vector{NTuple{2, Int}}(undef, num_orbitals^2),
@@ -211,17 +214,17 @@ Per-task deterministic lane tensors and optional reduced symmetry coefficients w
 
 Rank-root reduction populates global storage; worker lanes do not share mutable accumulators.
 """
-mutable struct IntegralTaskAccumulator{N}
+mutable struct IntegralTaskAccumulator{N, A <: AbstractArray{ComplexF64, N}}
     spec::NormalizedTaskSpec
     outputs::Vector{String}
-    worker_data::Vector{Array{ComplexF64, N}}
-    local_data::Array{ComplexF64, N}
-    global_data::Array{ComplexF64, N}
+    worker_data::Vector{A}
+    local_data::A
+    global_data::A
     tensor_symmetry_plan::Union{Nothing, ResponseTensorSymmetryPlan}
     worker_coefficients::Union{Nothing, Vector{Matrix{ComplexF64}}}
     local_coefficients::Union{Nothing, Matrix{ComplexF64}}
     global_coefficients::Union{Nothing, Matrix{ComplexF64}}
-    scratch_data::Union{Nothing, Vector{Array{ComplexF64, N}}}
+    scratch_data::Union{Nothing, Vector{A}}
 end
 
 """
@@ -235,7 +238,7 @@ function IntegralTaskAccumulator(
     local_data::Array{ComplexF64, N},
     global_data::Array{ComplexF64, N},
 ) where {N}
-    return IntegralTaskAccumulator{N}(
+    return IntegralTaskAccumulator(
         spec,
         outputs,
         worker_data,
@@ -262,7 +265,12 @@ mutable struct KSliceTaskAccumulator
     worker_data::Vector{Matrix{ComplexF64}}
     local_data::Matrix{ComplexF64}
     global_data::Matrix{ComplexF64}
+    metric_contribution::Symbol
 end
+
+# Preserve the primary output constructor while tracking metric decomposition explicitly.
+KSliceTaskAccumulator(spec, band, group, outputs, workers, local_data, global_data) =
+    KSliceTaskAccumulator(spec, band, group, outputs, workers, local_data, global_data, :total)
 
 """
 Copied Cartesian indices, photon momentum and fractional slice origin/spanning vectors shared by the validated bundle.
@@ -367,9 +375,12 @@ function _make_integral_state(
     scratch_data =
         tensor_plan === nothing ? nothing :
         [zeros(ComplexF64, response_size) for _ in 1:num_scratch_workers]
+    outputs = _bundle_outputs(ctx, spec)
+    cfg.photon_momentum_path === nothing ||
+        push!(outputs, first(outputs) * ".photon_momentum_path.toml")
     return IntegralTaskAccumulator(
         spec,
-        _bundle_outputs(ctx, spec),
+        outputs,
         worker_data,
         zeros(ComplexF64, response_size),
         zeros(ComplexF64, response_size),
@@ -393,11 +404,19 @@ end
 
 # Return selected Cartesian tuples for a compact response kernel.
 function integral_symmetry_component_vectors(state::IntegralTaskAccumulator)
-    tensor_plan = state.tensor_symmetry_plan
+    return _integral_symmetry_component_vectors(
+        state.spec,
+        state.tensor_symmetry_plan,
+        size(state.global_data, 2),
+    )
+end
+
+# Select the original compact Cartesian components independently of sum storage.
+function _integral_symmetry_component_vectors(spec, tensor_plan, num_axes::Int)
     tensor_plan === nothing && return nothing
     tensor_plan.accumulation_path == :selected_component_kernel_compact_coefficients ||
         return nothing
-    components = response_component_tuples(state.spec.quantity, size(state.global_data, 2))
+    components = response_component_tuples(spec.quantity, num_axes)
     return [Int[components[index]...] for index in tensor_plan.raw_component_indices]
 end
 
@@ -503,11 +522,12 @@ function _find_state(states, quantity::Symbol, method::Symbol)
     return nothing
 end
 
-# Find a quantity/method accumulator and assert its expected tensor rank, retaining nothing for absent tasks.
+# Find an original dense task accumulator with concrete rank/storage, or nothing.
+# Paired original-row views are constructed only after this cold lookup.
 function _find_integral_state(states, quantity::Symbol, method::Symbol, ::Val{N}) where {N}
     state = _find_state(states, quantity, method)
     state === nothing && return nothing
-    return state::IntegralTaskAccumulator{N}
+    return state::IntegralTaskAccumulator{N, Array{ComplexF64, N}}
 end
 
 # Collect all accumulators matching a quantity/method pair in their original order.

@@ -56,6 +56,30 @@ function WannierPairWignerSeitzTransformPlan(
     image_policy::Symbol = :minimum_distance,
     wannier_centers_fractional::Union{Nothing, Matrix{Float64}} = nothing,
 )
+    return _wannier_pair_wigner_seitz_transform_plan(
+        chk,
+        target_r_vectors;
+        wigner_seitz_tolerance,
+        search_size,
+        image_policy,
+        wannier_centers_fractional,
+    )
+end
+
+# The private precomputed map is produced and consumed in one export invocation.
+# Public callers retain the original independent-geometry constructor above.
+function _wannier_pair_wigner_seitz_transform_plan(
+    chk::WannierCHK,
+    target_r_vectors::Matrix{Int};
+    wigner_seitz_tolerance::Float64,
+    search_size::Int,
+    image_policy::Symbol = :minimum_distance,
+    wannier_centers_fractional::Union{Nothing, Matrix{Float64}} = nothing,
+    precomputed_images::Union{
+        Nothing,
+        Dict{Tuple{Int, Int, NTuple{3, Int}}, Vector{NTuple{3, Int}}},
+    } = nothing,
+)
     wigner_seitz_tolerance > 0.0 || throw(ArgumentError("wigner_seitz_tolerance must be positive"))
     search_size > 0 || throw(ArgumentError("search_size must be positive"))
     size(target_r_vectors, 1) == 3 ||
@@ -97,7 +121,9 @@ function WannierPairWignerSeitzTransformPlan(
         center_shift =
             round.(-centers_fractional[left, :] .+ centers_fractional[right, :]; digits = digits)
         for (grid_index, residue) in enumerate(residues)
-            images = if image_policy == :minimum_distance
+            images = if image_policy == :minimum_distance && precomputed_images !== nothing
+                precomputed_images[(left, right, residue)]
+            elseif image_policy == :minimum_distance
                 nearest_wigner_seitz_images(
                     residue,
                     center_shift,

@@ -1,4 +1,6 @@
 using Test
+using JSON3
+using SHA
 
 const HAN_CODEPOINT_RANGES = (
     (0x3400, 0x4dbf),
@@ -131,6 +133,9 @@ function exact_case_path_exists(path::AbstractString; root::AbstractString = ROO
     return true
 end
 
+# Public exports contain no private fixed dependency documents or link exceptions.
+fixed_external_operational_link(source, resolved; root = ROOT) = false
+
 function validate_markdown_link(
     source::AbstractString,
     raw_target::AbstractString;
@@ -145,8 +150,10 @@ function validate_markdown_link(
     pieces = split(target, '#'; limit = 2)
     decoded_path = percent_decode(pieces[1])
     resolved = isempty(decoded_path) ? source : normpath(joinpath(dirname(source), decoded_path))
-    exact_case_path_exists(resolved; root = root) ||
+    if !exact_case_path_exists(resolved; root = root)
+        fixed_external_operational_link(source, resolved; root) && return
         error("broken or case-mismatched local link in $(relpath(source, root)): $(raw_target)")
+    end
     if length(pieces) == 2 &&
        !isempty(pieces[2]) &&
        isfile(resolved) &&

@@ -1,4 +1,4 @@
-"""Dimensions and header of a Wannier90 `.uHu` file."""
+"""Dimensions and header of a Wannier `.uHu` file."""
 struct WannierUHUHeader
     comment::String
     num_bands::Int
@@ -13,7 +13,7 @@ struct WannierUHUHeader
     end
 end
 
-"""Dimensions and header of a Wannier90 `.sHu` file."""
+"""Dimensions and header of a Wannier `.sHu` file."""
 struct WannierSHUHeader
     comment::String
     num_bands::Int
@@ -28,7 +28,7 @@ struct WannierSHUHeader
     end
 end
 
-"""Dimensions and header of a Wannier90 `.sIu` file."""
+"""Dimensions and header of a Wannier `.sIu` file."""
 struct WannierSIUHeader
     comment::String
     num_bands::Int

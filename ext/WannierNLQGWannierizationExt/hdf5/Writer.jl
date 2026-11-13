@@ -139,28 +139,28 @@ function _read_initialization_report(parent)
     )
 end
 
-# Exact-Wannier90 identity is carried by its complete recursive M/U state.
+# Exact-Wannier identity is carried by its complete recursive M/U state.
 # Periodic checkpoint views intentionally contain only a minimal input summary,
 # so algorithm-name strings are not an authoritative discriminator here.
-function _checkpoint_exact_wannier90_state_presence(optimizer)
+function _checkpoint_exact_recursive_state_presence(optimizer)
     present = (
-        !isempty(optimizer.wannier90_reference_overlaps),
-        !isempty(optimizer.wannier90_reference_unitaries),
-        isfinite(optimizer.wannier90_reference_omega_i),
+        !isempty(optimizer.recursive_localization_overlaps),
+        !isempty(optimizer.recursive_localization_unitaries),
+        isfinite(optimizer.recursive_localization_omega_i),
     )
     all(present) ||
         !any(present) ||
-        throw(ArgumentError("checkpoint exact-Wannier90 recursive state is incomplete"))
+        throw(ArgumentError("checkpoint exact-Wannier recursive state is incomplete"))
     return all(present)
 end
 
-# Wannier90 keeps `ncg=0` after the first accepted steepest-descent step and
+# Wannier keeps `ncg=0` after the first accepted steepest-descent step and
 # increments it only after a Fletcher--Reeves update.  A nonempty exact
 # recursive state with `ncg=0` is therefore a valid persisted state; an RCG
 # state at the same counter remains invalid.
 function _checkpoint_cg_iteration_is_valid(optimizer, iteration::Int)
     iteration > 0 && return true
-    return iteration == 0 && _checkpoint_exact_wannier90_state_presence(optimizer)
+    return iteration == 0 && _checkpoint_exact_recursive_state_presence(optimizer)
 end
 
 # Validate schema-2.4 fixed-subspace arrays and synchronized trial histories.
@@ -168,7 +168,7 @@ function _validate_checkpoint_fixed_subspace(result::WannierizationResult)
     result.restart_state === nothing && return nothing
     state = something(result.restart_state)
     optimizer = state.optimizer_state
-    exact_reference = _checkpoint_exact_wannier90_state_presence(optimizer)
+    exact_reference = _checkpoint_exact_recursive_state_presence(optimizer)
     cg_present = (!isempty(optimizer.previous_u_gradient), !isempty(optimizer.previous_u_direction))
     all(cg_present) ||
         !any(cg_present) ||
@@ -183,21 +183,6 @@ function _validate_checkpoint_fixed_subspace(result::WannierizationResult)
             throw(ArgumentError("checkpoint Riemannian-CG state contains NaN or Inf"))
         _checkpoint_cg_iteration_is_valid(optimizer, optimizer.u_cg_iteration) ||
             throw(ArgumentError("checkpoint Riemannian-CG history has no accepted iteration"))
-    end
-    lbfgs_count = length(optimizer.u_lbfgs_rho_history)
-    size(optimizer.u_lbfgs_s_history, 4) == lbfgs_count == size(optimizer.u_lbfgs_y_history, 4) ||
-        throw(DimensionMismatch("checkpoint L-BFGS history lengths disagree"))
-    if lbfgs_count > 0
-        size(optimizer.u_lbfgs_s_history) == size(optimizer.u_lbfgs_y_history) ||
-            throw(DimensionMismatch("checkpoint L-BFGS S/Y fields disagree"))
-        size(optimizer.u_lbfgs_s_history, 3) == size(state.frames, 3) ||
-            throw(DimensionMismatch("checkpoint L-BFGS mesh disagrees"))
-        all(isfinite, optimizer.u_lbfgs_s_history) &&
-        all(isfinite, optimizer.u_lbfgs_y_history) &&
-        all(isfinite, optimizer.u_lbfgs_rho_history) ||
-            throw(ArgumentError("checkpoint L-BFGS state contains NaN or Inf"))
-        all(>(0.0), optimizer.u_lbfgs_rho_history) ||
-            throw(ArgumentError("checkpoint L-BFGS curvature inverse must be positive"))
     end
     optimizer.u_phase_contract == LOCALIZATION_GRADIENT_CONTRACT ||
         throw(ArgumentError("checkpoint U phase contract is incompatible"))
@@ -276,25 +261,25 @@ function _validate_checkpoint_fixed_subspace(result::WannierizationResult)
         end
     end
     if exact_reference
-        overlaps = optimizer.wannier90_reference_overlaps
-        unitaries = optimizer.wannier90_reference_unitaries
+        overlaps = optimizer.recursive_localization_overlaps
+        unitaries = optimizer.recursive_localization_unitaries
         num_wannier = size(state.frames, 2)
         num_kpoints = size(state.frames, 3)
         size(overlaps, 1) == num_wannier == size(overlaps, 2) ||
-            throw(DimensionMismatch("checkpoint exact-Wannier90 overlap band dimensions disagree"))
+            throw(DimensionMismatch("checkpoint exact-Wannier overlap band dimensions disagree"))
         size(overlaps, 4) == num_kpoints ||
-            throw(DimensionMismatch("checkpoint exact-Wannier90 overlap mesh disagrees"))
+            throw(DimensionMismatch("checkpoint exact-Wannier overlap mesh disagrees"))
         size(unitaries) == (num_wannier, num_wannier, num_kpoints) ||
-            throw(DimensionMismatch("checkpoint exact-Wannier90 unitary dimensions disagree"))
+            throw(DimensionMismatch("checkpoint exact-Wannier unitary dimensions disagree"))
         all(isfinite, overlaps) && all(isfinite, unitaries) ||
-            throw(ArgumentError("checkpoint exact-Wannier90 recursive state contains NaN or Inf"))
+            throw(ArgumentError("checkpoint exact-Wannier recursive state contains NaN or Inf"))
     end
     declared_reference =
         get(result.input_summary, "localization_algorithm", "") == "smv_fletcher_reeves_two_stage"
     if declared_reference && optimizer.phase in (:localization, :completed) && optimizer.u_steps > 0
         exact_reference || throw(
             ArgumentError(
-                "RESTART_SEMANTICS_INCOMPATIBLE: exact-Wannier90 localization checkpoint lacks recursive overlap/unitary state",
+                "RESTART_SEMANTICS_INCOMPATIBLE: exact-Wannier localization checkpoint lacks recursive overlap/unitary state",
             ),
         )
     end
@@ -304,10 +289,17 @@ end
 """Atomically persist one Wannierization result at the exact requested checkpoint path."""
 function write_wannierization_checkpoint_hdf5(
     filename::AbstractString,
-    result::WannierizationResult,
+    result::WannierizationResult;
+    publish_receipt = write_scientific_file_publication,
+    reference_root = nothing,
 )
     HDF5.enable_complex_support()
-    result = _checkpoint_persisted_result(result)
+    publication_identity = scientific_data_generation(ScientificDataOwner())
+    reference_root === nothing || (reference_root = scientific_reference_root(reference_root))
+    wire_version =
+        reference_root === nothing ? WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION :
+        WANNIERIZATION_REFERENCED_CHECKPOINT_SCHEMA_VERSION
+    result = _checkpoint_persisted_result(result; publication_identity, wire_version)
     validate_persisted_authority_key(
         get(result.input_summary, "authoritative_hamiltonian", "native_dft"),
     )
@@ -321,7 +313,7 @@ function write_wannierization_checkpoint_hdf5(
             "use .wannierization.h5 (legacy files require external migration)",
         ),
     )
-    return atomic_hdf5_write(output_path) do temporary
+    published = atomic_hdf5_write(output_path) do temporary
         HDF5.h5open(temporary, "w") do handle
             attributes = HDF5.attributes(handle)
             converged = result.status in (COMPLETED, COMPLETED_WITH_WARNINGS)
@@ -332,7 +324,8 @@ function write_wannierization_checkpoint_hdf5(
                 parse(Float64, get(result.input_summary, "convergence_tolerance", "Inf"))
             production_eligible = _wannierization_scoped_production_eligible(result)
             attributes["schema"] = WANNIERIZATION_CHECKPOINT_SCHEMA
-            attributes["schema_version"] = WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION
+            attributes["schema_version"] = wire_version
+            attributes["content_authentication"] = "NOT_PERFORMED"
             attributes["status"] = string(result.status)
             attributes["checkpoint_phase"] =
                 result.status == IN_PROGRESS_CHECKPOINT ? "periodic" : "terminal"
@@ -346,7 +339,7 @@ function write_wannierization_checkpoint_hdf5(
             attributes["convergence_metric_name"] = "center_spread_window_std_max"
             attributes["convergence_metric"] = convergence_metric
             attributes["convergence_tolerance"] = convergence_tolerance
-            attributes["checkpoint_sha256"] = _wannierization_checkpoint_sha256_v2_29(result)
+            attributes["publication_identity"] = publication_identity
             attributes["algorithm_profile"] =
                 get(result.input_summary, "algorithm_profile", "legacy")
             attributes["effective_algorithm_profile"] =
@@ -389,12 +382,13 @@ function write_wannierization_checkpoint_hdf5(
                 get(result.input_summary, "sewing_backend", "coefficient_mapping")
             attributes["sewing_metric"] =
                 get(result.input_summary, "sewing_metric", "pseudo_coefficient_linear_map")
-            attributes["strict_sewing_diagnostics_sha256"] =
-                get(result.input_summary, "strict_sewing_diagnostics_sha256", "NOT_RECORDED")
             attributes["authoritative_hamiltonian"] =
                 get(result.input_summary, "authoritative_hamiltonian", "native_dft")
-            attributes["authoritative_hamiltonian_sha256"] =
-                get(result.input_summary, "authoritative_hamiltonian_sha256", "LEGACY_NATIVE_DFT")
+            attributes["authoritative_hamiltonian_sha256"] = get(
+                result.input_summary,
+                "authoritative_hamiltonian_sha256",
+                "LEGACY_NATIVE_DFT",
+            )
             attributes["native_fidelity_status"] =
                 get(result.input_summary, "native_fidelity_status", "NOT_RECORDED")
             attributes["symmetrized_hamiltonian_status"] =
@@ -412,11 +406,11 @@ function write_wannierization_checkpoint_hdf5(
                 ("qualification_scope", "full_parent"),
                 ("target_authority", "NOT_APPLICABLE"),
                 ("parent_audit_policy", "legacy_hard_gate"),
-                ("disentanglement_outer_mask_sha256", "NOT_SEALED"),
-                ("disentanglement_frozen_mask_sha256", "NOT_SEALED"),
-                ("target_subspace_contract_sha256", "NOT_RECORDED"),
+                ("disentanglement_outer_mask_definition", "NOT_SEALED"),
+                ("disentanglement_frozen_mask_definition", "NOT_SEALED"),
+                ("target_subspace_contract_definition", "NOT_RECORDED"),
                 ("target_leakage_semantics", "LEGACY_AMPLITUDE_LEAKAGE_CONTRACT"),
-                ("target_leakage_formula_sha256", "NOT_RECORDED"),
+                ("target_leakage_formula_definition", "NOT_RECORDED"),
                 ("target_leakage_threshold", "NOT_RECORDED"),
                 ("target_anchor", "NOT_APPLICABLE"),
                 ("target_complement_completion", "NOT_APPLICABLE"),
@@ -430,12 +424,12 @@ function write_wannierization_checkpoint_hdf5(
             end
             attributes["wavefunction_gauge_backend"] =
                 get(result.input_summary, "wavefunction_gauge_backend", "native_eigenstate")
-            attributes["wavefunction_gauge_hdf5_sha256"] =
-                get(result.input_summary, "wavefunction_gauge_hdf5_sha256", "NOT_APPLICABLE")
+            attributes["wavefunction_gauge_definition"] =
+                get(result.input_summary, "wavefunction_gauge_definition", "NOT_APPLICABLE")
             attributes["block_partition_policy"] =
                 get(result.input_summary, "block_partition_policy", "NOT_APPLICABLE")
-            attributes["block_partition_policy_sha256"] =
-                get(result.input_summary, "block_partition_policy_sha256", "NOT_APPLICABLE")
+            attributes["block_partition_policy_definition"] =
+                get(result.input_summary, "block_partition_policy_definition", "NOT_APPLICABLE")
             attributes["localization_gradient_contract"] =
                 result.input_summary["localization_gradient_contract"]
             attributes["joint_update_contract"] = result.input_summary["joint_update_contract"]
@@ -444,12 +438,8 @@ function write_wannierization_checkpoint_hdf5(
             attributes["z_seal_class"] = result.input_summary["z_seal_class"]
             attributes["constraint_operation_scope"] =
                 result.input_summary["constraint_operation_scope"]
-            attributes["constraint_operation_parent_representation_sha256"] =
-                result.input_summary["constraint_operation_parent_representation_sha256"]
-            attributes["constraint_operation_subgroup_sha256"] =
-                result.input_summary["constraint_operation_subgroup_sha256"]
-            attributes["input_sha256"] = get(result.input_summary, "input_sha256", "")
-            attributes["config_sha256"] = get(result.input_summary, "restart_config_sha256", "")
+            attributes["constraint_operation_parent_indices"] =
+                get(result.input_summary, "constraint_operation_parent_indices", "NOT_RECORDED")
             attributes["representation_sha256"] =
                 get(result.input_summary, "representation_sha256", "")
             attributes["restart_complete"] = result.restart_state !== nothing
@@ -494,7 +484,9 @@ function write_wannierization_checkpoint_hdf5(
                 Float64[entry.maximum_covariance_error for entry in result.history]
             iteration_count = length(result.history)
             directional = fill(NaN, 3, iteration_count)
-            diagnostic_values = fill(NaN, 25, iteration_count)
+            diagnostic_values = fill(NaN, 24, iteration_count)
+            frame_distance_iterations = Int[]
+            frame_distances = Float64[]
             diagnostic_integers = zeros(Int, 10, iteration_count)
             diagnostic_flags = zeros(UInt8, 3, iteration_count)
             anderson_reasons = fill("NOT_RECORDED", iteration_count)
@@ -505,11 +497,14 @@ function write_wannierization_checkpoint_hdf5(
                 values = something(entry.diagnostics)
                 values.omega_directional === nothing ||
                     (directional[:, index] .= collect(something(values.omega_directional)))
+                if hasproperty(values, :u_residual)
+                    push!(frame_distance_iterations, index)
+                    push!(frame_distances, values.u_residual)
+                end
                 diagnostic_values[:, index] .= (
                     values.omega_total,
                     values.projector_residual,
                     values.z_residual,
-                    values.u_residual,
                     values.wcc_step_maximum,
                     values.spread_step_maximum,
                     values.little_group_residual,
@@ -544,14 +539,21 @@ function write_wannierization_checkpoint_hdf5(
                     values.z_stability_count,
                     values.joint_z_backtracking_steps,
                 )
-                diagnostic_flags[:, index] .=
-                    UInt8.((values.anderson_used, values.anderson_fallback, values.cg_restarted))
+                diagnostic_flags[:, index] .= UInt8.((
+                    values.anderson_used,
+                    values.anderson_fallback,
+                    values.cg_restarted,
+                ))
                 anderson_reasons[index] = String(values.anderson_reason)
                 cg_restart_reasons[index] = String(values.cg_restart_reason)
                 joint_acceptance_reasons[index] = String(values.joint_acceptance_reason)
             end
             history["omega_directional"] = directional
             history["iteration_diagnostic_values"] = diagnostic_values
+            if !isempty(frame_distance_iterations)
+                history["frame_distance_iterations"] = frame_distance_iterations
+                history["frame_distances"] = frame_distances
+            end
             history["iteration_diagnostic_integers"] = diagnostic_integers
             history["iteration_diagnostic_flags"] = diagnostic_flags
             history["anderson_reason"] = anderson_reasons
@@ -559,7 +561,7 @@ function write_wannierization_checkpoint_hdf5(
             history["joint_acceptance_reason"] = joint_acceptance_reasons
             HDF5.attributes(history["omega_directional"])["axis_order"] = "direction,iteration"
             HDF5.attributes(history["iteration_diagnostic_values"])["field_order"] =
-                "omega_total,projector_residual,z_residual,u_residual,wcc_step_maximum," *
+                "omega_total,projector_residual,z_residual,wcc_step_maximum," *
                 "spread_step_maximum,little_group_residual,z_boundary_gap,z_mix_ratio,u_mix_ratio," *
                 "projected_gradient_rms,accepted_u_step_scale,localization_directional_derivative," *
                 "fixed_projector_drift,localization_base_objective,localization_required_change," *
@@ -585,8 +587,7 @@ function write_wannierization_checkpoint_hdf5(
             end
             summary = HDF5.create_group(handle, "input_summary")
             checkpoint_summary = Dict{String, String}(result.input_summary)
-            checkpoint_summary["checkpoint_schema_version"] =
-                WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION
+            checkpoint_summary["checkpoint_schema_version"] = wire_version
             get!(
                 checkpoint_summary,
                 "z_u_stage_semantics",
@@ -613,7 +614,6 @@ function write_wannierization_checkpoint_hdf5(
                     stencil_group = HDF5.create_group(handle, "finite_difference_stencil")
                     stencil_attributes = HDF5.attributes(stencil_group)
                     stencil_attributes["spread_metric"] = "full_3d"
-                    stencil_attributes["digest"] = stencil.digest
                     stencil_attributes["completeness_residual"] = stencil.completeness_residual
                     stencil_group["vectors_cartesian"] = stencil.vectors_cartesian
                     stencil_group["shell_ids"] = stencil.shell_ids
@@ -622,20 +622,19 @@ function write_wannierization_checkpoint_hdf5(
                 end
                 restart_group = HDF5.create_group(handle, "restart_state")
                 restart_attributes = HDF5.attributes(restart_group)
+                _write_restart_input_definition_hdf5(restart_group, state; reference_root)
                 restart_attributes["iteration"] = state.iteration
                 restart_attributes["elapsed_seconds"] = state.elapsed_seconds
-                restart_attributes["config_sha256"] = state.config_sha256
-                restart_attributes["representation_sha256"] = state.representation_sha256
-                restart_attributes["projection_basis_sha256"] = state.projection_basis_sha256
-                restart_attributes["amn_sha256"] = state.amn_sha256
                 restart_group["frames"] = state.frames
                 restart_group["has_z_previous"] = state.z_previous !== nothing
                 state.z_previous === nothing || (restart_group["z_previous"] = state.z_previous)
                 restart_group["has_fixed_subspace"] =
                     state.fixed_subspace_projectors !== nothing &&
                     state.fixed_subspace_frames !== nothing
-                state.fixed_subspace_projectors === nothing ||
-                    (restart_group["fixed_subspace_projectors"] = state.fixed_subspace_projectors)
+                state.fixed_subspace_projectors === nothing || (
+                    restart_group["fixed_subspace_projectors"] =
+                        state.fixed_subspace_projectors
+                )
                 state.fixed_subspace_frames === nothing ||
                     (restart_group["fixed_subspace_frames"] = state.fixed_subspace_frames)
                 restart_group["has_localization_initial_frames"] =
@@ -650,6 +649,11 @@ function write_wannierization_checkpoint_hdf5(
                 restart_group["included_bands"] = Matrix{UInt8}(state.included_bands)
                 optimizer = HDF5.create_group(restart_group, "optimizer")
                 optimizer_attributes = HDF5.attributes(optimizer)
+                _write_restart_branch_definition_hdf5(
+                    optimizer,
+                    state.optimizer_state;
+                    qualified = state.input_definition!==nothing,
+                )
                 optimizer_attributes["strategy"] = String(state.optimizer_state.strategy)
                 optimizer_attributes["z_mix_ratio"] = state.optimizer_state.z_mix_ratio
                 optimizer_attributes["u_mix_ratio"] = state.optimizer_state.u_mix_ratio
@@ -658,8 +662,10 @@ function write_wannierization_checkpoint_hdf5(
                 optimizer_attributes["rejected_steps"] = state.optimizer_state.rejected_steps
                 optimizer_attributes["previous_merit"] = state.optimizer_state.previous_merit
                 optimizer_attributes["phase"] = String(state.optimizer_state.phase)
-                optimizer_attributes["z_stability_count"] = state.optimizer_state.z_stability_count
-                optimizer_attributes["u_stability_count"] = state.optimizer_state.u_stability_count
+                optimizer_attributes["z_stability_count"] =
+                    state.optimizer_state.z_stability_count
+                optimizer_attributes["u_stability_count"] =
+                    state.optimizer_state.u_stability_count
                 optimizer_attributes["z_steps"] = state.optimizer_state.z_steps
                 optimizer_attributes["u_steps"] = state.optimizer_state.u_steps
                 optimizer_attributes["disentanglement_steps"] = state.optimizer_state.z_steps
@@ -684,34 +690,30 @@ function write_wannierization_checkpoint_hdf5(
                     String(state.optimizer_state.last_cg_restart_reason)
                 optimizer_attributes["last_anderson_reason"] =
                     String(state.optimizer_state.last_anderson_reason)
-                optimizer_attributes["u_phase_contract"] = state.optimizer_state.u_phase_contract
-                optimizer_attributes["u_active_orbit_sha256"] =
-                    state.optimizer_state.u_active_orbit_sha256
+                optimizer_attributes["u_phase_contract"] =
+                    state.optimizer_state.u_phase_contract
                 optimizer_attributes["u_active_orbit_count"] =
                     state.optimizer_state.u_active_orbit_count
                 optimizer_attributes["u_generalized_gradient_rms"] =
                     state.optimizer_state.u_generalized_gradient_rms
-                optimizer_attributes["u_lbfgs_restart_count"] =
-                    state.optimizer_state.u_lbfgs_restart_count
                 optimizer_attributes["last_u_optimizer_restart_reason"] =
                     String(state.optimizer_state.last_u_optimizer_restart_reason)
-                optimizer_attributes["wannier90_reference_omega_i"] =
-                    state.optimizer_state.wannier90_reference_omega_i
+                optimizer_attributes["recursive_localization_omega_i"] =
+                    state.optimizer_state.recursive_localization_omega_i
                 optimizer_attributes["best_polar_objective"] =
                     state.optimizer_state.best_polar_objective
-                optimizer["residual_reference"] = collect(state.optimizer_state.residual_reference)
-                optimizer["anderson_z_history"] = state.optimizer_state.anderson_z_history
-                optimizer["anderson_residual_history"] =
-                    state.optimizer_state.anderson_residual_history
+                optimizer["residual_reference"] = Float64[
+                    value for value in state.optimizer_state.residual_reference if value !== nothing
+                ]
+                HDF5.attributes(optimizer["residual_reference"])["field_order"] =
+                    state.optimizer_state.residual_reference[3] === nothing ?
+                    "projector,z,spread" : "projector,z,frame_distance,spread"
                 optimizer["previous_u_gradient"] = state.optimizer_state.previous_u_gradient
                 optimizer["previous_u_direction"] = state.optimizer_state.previous_u_direction
-                optimizer["u_lbfgs_s_history"] = state.optimizer_state.u_lbfgs_s_history
-                optimizer["u_lbfgs_y_history"] = state.optimizer_state.u_lbfgs_y_history
-                optimizer["u_lbfgs_rho_history"] = state.optimizer_state.u_lbfgs_rho_history
-                optimizer["wannier90_reference_overlaps"] =
-                    state.optimizer_state.wannier90_reference_overlaps
-                optimizer["wannier90_reference_unitaries"] =
-                    state.optimizer_state.wannier90_reference_unitaries
+                optimizer["recursive_localization_overlaps"] =
+                    state.optimizer_state.recursive_localization_overlaps
+                optimizer["recursive_localization_unitaries"] =
+                    state.optimizer_state.recursive_localization_unitaries
                 optimizer["best_polar_frames"] = state.optimizer_state.best_polar_frames
                 optimizer["best_polar_centers"] = state.optimizer_state.best_polar_centers
                 optimizer["best_polar_spreads"] = state.optimizer_state.best_polar_spreads
@@ -738,6 +740,26 @@ function write_wannierization_checkpoint_hdf5(
                 optimizer["localization_trial_accepted"] =
                     state.optimizer_state.localization_trial_accepted
             end
+            HDF5.flush(handle)
         end
     end
+    published_state = scientific_file_state(published)
+    publish_receipt(
+        published;
+        artifact_schema = WANNIERIZATION_CHECKPOINT_SCHEMA,
+        artifact_version = wire_version,
+        publication_identity,
+    )
+    isequal(scientific_file_state(published), published_state) ||
+        throw(ArgumentError("CHECKPOINT_PAYLOAD_CHANGED_DURING_PUBLICATION"))
+    with_scientific_file_publication(
+        published;
+        artifact_schema = WANNIERIZATION_CHECKPOINT_SCHEMA,
+        artifact_version = wire_version,
+    ) do _, actual_identity
+        actual_identity == publication_identity ||
+            throw(ArgumentError("CHECKPOINT_PUBLICATION_DECLARATION_MISMATCH"))
+        nothing
+    end
+    return published
 end

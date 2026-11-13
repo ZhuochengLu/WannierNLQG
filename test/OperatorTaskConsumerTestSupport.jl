@@ -16,10 +16,8 @@ function ots_sparse_consumer_tests()
         m=R.method_symbol(def.method);
         calc=R.calculation_symbol(def.calculation)
         axes=ntuple(i->mod1(i+1, 3), Int(def.tensor_rank))
-        cfg=R.EffectiveTaskConfig(
-            tasks = [(String(q), String(m), String(calc))],
-            fourier_backend = "direct",
-            spatial_dimension = 3,
+        cfg=ots_runtime_demand_configuration(
+            def;
             tensor_indices = axes,
             wannier_center_convention = conv,
         )
@@ -99,6 +97,7 @@ function ots_sparse_consumer_tests()
                 C.OperatorTask(quantity = :shift_current, method = :projector),
             ];
             orbital_input_semantics = :defined_finite_model,
+            content_authentication = false,
         )
         @test C.REAL_SPACE_DERIVATIVE_OVERLAP_TENSOR in sel.required_operators
     end

@@ -1,4 +1,4 @@
-const FERMI_ENERGY_AXIS_DOMAIN = "wanniernlqg.fermi-energy-axis/1.0"
+const FERMI_ENERGY_AXIS_DOMAIN = "wanniernlqg.fermi-energy-axis/2.0"
 
 """Validate and defensively copy the canonical chemical-potential axis in eV."""
 function validate_fermi_energies(values::Vector{Float64})
@@ -10,13 +10,12 @@ function validate_fermi_energies(values::Vector{Float64})
     return copy(values)
 end
 
-"""Hash a validated μ axis using its domain, length, and ordered IEEE-754 bit patterns."""
-function fermi_energy_axis_sha256(values::Vector{Float64})
+"""Describe the complete validated μ axis by its ordered IEEE-754 values in eV.
+
+This is an explicit physical definition, not a digest or authentication claim.
+"""
+function fermi_energy_axis_definition(values::Vector{Float64})
     axis = validate_fermi_energies(values)
-    stream = IOBuffer()
-    write(stream, FERMI_ENERGY_AXIS_DOMAIN, '\0', string(length(axis)), '\0')
-    for value in axis
-        write(stream, lowercase(string(reinterpret(UInt64, value); base = 16, pad = 16)), '\n')
-    end
-    return bytes2hex(SHA.sha256(take!(stream)))
+    entries = [lowercase(string(reinterpret(UInt64, value); base = 16, pad = 16)) for value in axis]
+    return FERMI_ENERGY_AXIS_DOMAIN * ":eV:" * string(length(axis)) * ":" * join(entries, ',')
 end

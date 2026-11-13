@@ -1,6 +1,18 @@
 using LinearAlgebra
 using Random
 
+# Fixed normalized smearing formulas form the test oracle; do not call Runtime._smearing!.
+# The scalar operation order remains explicit so the original bitwise contract is retained.
+function transition_reference_weight(argument, broadening_type, broadening)
+    if broadening_type == "Gaussian"
+        abs(argument) < broadening * sqrt(200.0) || return 0.0
+        return (1.0 / (sqrt(pi) * broadening)) * exp(-(argument / broadening)^2)
+    elseif broadening_type == "Lorentzian"
+        return (broadening / pi) / (argument^2 + broadening^2)
+    end
+    throw(ArgumentError("unsupported reference broadening"))
+end
+
 @testset "in-place Fermi-Dirac occupations" begin
     core = WannierNLQG.Core
     energies = Float64[-100.0, -0.25, 0.0, 0.125, 0.5, 100.0]
@@ -108,16 +120,20 @@ end
                 expected_mask[n, m] = pair_active
             end
         end
-        runtime._smearing!(expected_delta, expected_delta_arg, broadening_type, broadening)
+        for index in eachindex(expected_delta, expected_delta_arg)
+            expected_delta[index] =
+                transition_reference_weight(expected_delta_arg[index], broadening_type, broadening)
+        end
         transition_threshold = transition_window_factor * broadening
         expected_active = false
         @inbounds for n in screen.band_start:screen.band_end
             for m in screen.band_start:screen.band_end
                 abs(expected_occupation_differences[n, m]) <= 1.0e-10 && continue
                 for energy_index in eachindex(photon_energies)
-                    if abs(expected_delta_arg[energy_index, n, m]) < transition_threshold
-                        expected_active = true
-                    end
+                    supported =
+                        broadening_type == "Gaussian" ? expected_delta[energy_index, n, m] != 0.0 :
+                        abs(expected_delta_arg[energy_index, n, m]) < transition_threshold
+                    supported && (expected_active = true)
                 end
             end
         end
@@ -205,7 +221,9 @@ end
         5.0,
     )
     @test threshold_screen.active_pair_mask[1, 2]
-    @test !threshold_screen.active
+    @test threshold_screen.active
+    @test threshold_screen.delta[1, 1, 2] == transition_reference_weight(0.5, "Gaussian", 0.1)
+    gaussian_window_five = copy(threshold_screen.delta)
     runtime._fill_transition_screen!(
         threshold_screen,
         Float64[0.0, 0.5],
@@ -215,6 +233,7 @@ end
         6.0,
     )
     @test threshold_screen.active
+    @test reinterpret(UInt64, threshold_screen.delta) == reinterpret(UInt64, gaussian_window_five)
 
     runtime._fill_transition_screen!(
         threshold_screen,
@@ -224,8 +243,23 @@ end
         0.1,
         0.0,
     )
-    @test threshold_screen.active
+    @test !threshold_screen.active
     @test !any(threshold_screen.active_pair_mask)
+    @test all(iszero, threshold_screen.delta)
+
+    # Lorentzian retains the separate explicit transition-window contract.
+    for (factor, expected_active) in ((5.0, false), (6.0, true), (0.0, true))
+        runtime._fill_transition_screen!(
+            threshold_screen,
+            Float64[0.0, 0.5],
+            Float64[0.0],
+            "Lorentzian",
+            0.1,
+            factor,
+        )
+        @test threshold_screen.active == expected_active
+        @test threshold_screen.active_pair_mask[1, 2]
+    end
 
     threshold_screen.occupations .= Float64[1.0e-10, 0.0]
     runtime._fill_transition_screen!(
@@ -324,7 +358,10 @@ end
                 expected_mask[n, m] = pair_active
             end
         end
-        runtime._smearing!(expected_delta, expected_delta_arg, broadening_type, broadening)
+        for index in eachindex(expected_delta, expected_delta_arg)
+            expected_delta[index] =
+                transition_reference_weight(expected_delta_arg[index], broadening_type, broadening)
+        end
         runtime._fill_photon_drag_transition_screen!(
             screen,
             valence_energies,

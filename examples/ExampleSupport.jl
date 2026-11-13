@@ -27,11 +27,20 @@ function synthetic_model_file()
     return SYNTHETIC_MODEL_FILE
 end
 
-"""Return the repository-owned exact operator bundle used by advanced task examples."""
+"""Return an explicitly adopted copy of the declared miniature Packed fixture."""
 function synthetic_operator_bundle_file()
     isfile(SYNTHETIC_OPERATOR_BUNDLE_FILE) ||
         error("Missing synthetic operator bundle: $(SYNTHETIC_OPERATOR_BUNDLE_FILE)")
-    return SYNTHETIC_OPERATOR_BUNDLE_FILE
+    directory = mktempdir()
+    target = joinpath(directory, basename(SYNTHETIC_OPERATOR_BUNDLE_FILE))
+    cp(SYNTHETIC_OPERATOR_BUNDLE_FILE, target)
+    WannierNLQG.IO.adopt_real_space_operator_bundle(target)
+    return target
+end
+
+"""Use the immutable mathematical fixture; the reader owns its input lifetime."""
+function with_synthetic_operator_bundle(f::F) where {F}
+    return f()
 end
 
 """Return the explicit pair-dependent minimum-distance mapping fixture."""

@@ -137,6 +137,63 @@ function probe_symmetrization_concurrent_first_call()
     return nothing
 end
 
+# Resolve an I/O entry during concurrent first activation without concurrent HDF5 access.
+function probe_operator_bundle_concurrent_first_call()
+    Threads.nthreads() == 4 || error("concurrent probe requires exactly four Julia threads")
+    assert_cold_parent()
+    implementations = Vector{Any}(undef, 4)
+    @sync for index in eachindex(implementations)
+        Threads.@spawn begin
+            extension, _ = WannierNLQG.IO._load_operator_bundle_extension!()
+            implementations[index] =
+                Base.invokelatest(getproperty, extension, :read_real_space_operator_bundle_manifest)
+        end
+    end
+    all(implementation -> implementation === first(implementations), implementations) ||
+        error("concurrent operator-bundle entries resolved differently")
+    first(implementations) isa Function || error("operator-bundle entry is not callable")
+    dependency_loaded(:Spglib) && error("operator-bundle activation loaded Spglib")
+    dependency_loaded(:EzXML) && error("operator-bundle activation loaded EzXML")
+    modules_before = Set(Base.loaded_modules_array())
+    extension, activated = WannierNLQG.IO._load_operator_bundle_extension!()
+    activated && error("warm operator-bundle load reported first activation")
+    Base.invokelatest(getproperty, extension, :read_real_space_operator_bundle_manifest) ===
+    first(implementations) || error("warm operator-bundle entry changed")
+    Set(Base.loaded_modules_array()) == modules_before ||
+        error("warm operator-bundle call loaded additional modules")
+    return nothing
+end
+
+# Resolve the actual Wannierization bridge during concurrent activation without a solver.
+function probe_wannierization_concurrent_first_call()
+    Threads.nthreads() == 4 || error("concurrent probe requires exactly four Julia threads")
+    assert_cold_parent()
+    implementations = Vector{Any}(undef, 4)
+    @sync for index in eachindex(implementations)
+        Threads.@spawn begin
+            extension, _ = WannierNLQG.Wannierization._load_wannierization_extension!()
+            resolver = Base.invokelatest(getproperty, extension, :resolve_wannierization_entrypoint)
+            implementations[index] =
+                Base.invokelatest(resolver, :write_wannierization_u_convergence_diagnostics_hdf5)
+        end
+    end
+    all(implementation -> implementation === first(implementations), implementations) ||
+        error("concurrent Wannierization entries resolved differently")
+    first(implementations) isa Function || error("Wannierization entry is not callable")
+    dependency_loaded(:Spglib) && error("Wannierization activation loaded Spglib")
+    Base.get_extension(WannierNLQG, FOUNDATION_EXTENSION_NAME) === nothing ||
+        error("Wannierization activation loaded Foundation")
+    modules_before = Set(Base.loaded_modules_array())
+    extension, activated = WannierNLQG.Wannierization._load_wannierization_extension!()
+    activated && error("warm Wannierization load reported first activation")
+    resolver = Base.invokelatest(getproperty, extension, :resolve_wannierization_entrypoint)
+    Base.invokelatest(resolver, :write_wannierization_u_convergence_diagnostics_hdf5) ===
+    first(implementations) || error("warm Wannierization entry changed")
+    Set(Base.loaded_modules_array()) == modules_before ||
+        error("warm Wannierization call loaded additional modules")
+    return nothing
+end
+
 # Activate only the Symmetrization extension and keep the detection backend cold.
 function probe_symmetrization_partial_activation()
     assert_cold_parent()
@@ -175,14 +232,23 @@ function probe_foundation_concurrent_first_call()
         zeros(3, 1),
     )
     results = Vector{Any}(undef, 4)
+    compatibility_results = Vector{Any}(undef, 4)
     @sync for index in eachindex(results)
         Threads.@spawn begin
+            compatibility_results[index] =
+                WannierNLQG.SymmetryFoundation.detect_tb_compatibility_symmetry_operations(
+                    structure;
+                    include_time_reversal = false,
+                )
             results[index] = WannierNLQG.SymmetryFoundation.detect_symmetry_operations(
                 structure;
                 include_time_reversal = false,
             )
         end
     end
+    compatibility_signatures = operation_signatures.(compatibility_results)
+    all(signature -> signature == first(compatibility_signatures), compatibility_signatures) ||
+        error("concurrent TB compatibility calls returned different results")
     signatures = operation_signatures.(results)
     all(signature -> signature == first(signatures), signatures) ||
         error("concurrent foundation calls returned different results")
@@ -195,25 +261,25 @@ function probe_foundation_concurrent_first_call()
     )
     operation_signatures(second) == first(signatures) ||
         error("second foundation call changed the result")
+    second_compatibility =
+        WannierNLQG.SymmetryFoundation.detect_tb_compatibility_symmetry_operations(
+            structure;
+            include_time_reversal = false,
+        )
+    operation_signatures(second_compatibility) == first(compatibility_signatures) ||
+        error("second TB compatibility call changed the result")
     Set(Base.loaded_modules_array()) == modules_before ||
         error("second foundation call loaded additional modules")
     return nothing
 end
 
 # Enter each facade with all weak-dependency triggers still cold in this calling frame.
-function probe_operator_bundle_function_entry()
+function probe_operator_bundle_function_entry(filename::AbstractString)
     assert_cold_parent()
-    filename = joinpath(
-        dirname(@__DIR__),
-        "examples",
-        "fixtures",
-        "synthetic_runtime",
-        "synthetic_operators.h5",
-    )
     first_manifest = WannierNLQG.IO.read_real_space_operator_bundle_manifest(filename)
     first_manifest.num_orbitals > 0 || error("operator facade did not read the fixture")
     second_manifest = WannierNLQG.IO.read_real_space_operator_bundle_manifest(filename)
-    first_manifest.scientific_content_sha256 == second_manifest.scientific_content_sha256 ||
+    first_manifest.publication_identity == second_manifest.publication_identity ||
         error("same-frame operator manifest read changed content")
     return nothing
 end
@@ -278,7 +344,8 @@ end
 
 mode = only(ARGS[1:1])
 if mode in ("operator_bundle_function_entry", "operator_bundle_cached_entry")
-    probe_operator_bundle_function_entry()
+    length(ARGS) == 2 || error("operator bundle entry requires the actual current model path")
+    probe_operator_bundle_function_entry(ARGS[2])
 elseif mode in ("foundation_function_entry", "foundation_cached_entry")
     probe_foundation_function_entry()
 elseif mode == "symmetrization_function_entry"
@@ -296,6 +363,10 @@ elseif mode == "symmetrization_concurrent"
     probe_symmetrization_concurrent_first_call()
 elseif mode == "foundation_concurrent"
     probe_foundation_concurrent_first_call()
+elseif mode == "operator_bundle_concurrent"
+    probe_operator_bundle_concurrent_first_call()
+elseif mode == "wannierization_concurrent"
+    probe_wannierization_concurrent_first_call()
 elseif mode == "symmetrization_partial"
     probe_symmetrization_partial_activation()
 elseif mode == "wannierization_partial"

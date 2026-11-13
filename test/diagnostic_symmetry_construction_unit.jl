@@ -56,12 +56,7 @@ using WannierNLQG
         operations,
         1.0e-8;
         construction_policy = :standard,
-    ) == projection._map_projection_centers(
-        exact,
-        operations,
-        1.0e-8;
-        construction_policy = :strict,
-    )
+    ) == (indices, shifts)
     ambiguous = [0.0 0.5; 0.0 0.0; 0.0 0.0]
     quarter = [operation_type(identity_rotation, [0.25, 0.0, 0.0], Float64.(identity_rotation))]
     @test_throws ArgumentError projection._map_projection_centers(
@@ -113,25 +108,32 @@ using .QEPAWMatrixElementsTestSupport
         @test result.status == :STANDARD
         path = joinpath(directory, "diagnostic.standard.h5")
         @test isfile(path)
-        @test_throws ArgumentError Base.invokelatest(
+        # The legacy policy argument is not an approval credential. All actual
+        # source/frame replay checks still run, and no qualification is granted.
+        legacy_mode_read = Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             path;
             construction_policy = :strict,
         )
+        @test legacy_mode_read.status == :NOT_EVALUATED
         restored = Base.invokelatest(
             extension._read_star_covariant_paw_gauge_hdf5,
             path;
             construction_policy = :standard,
             source,
         )
-        @test restored.status == :STANDARD
+        @test restored.status == :NOT_EVALUATED
+        @test legacy_mode_read.payload.rotations == restored.payload.rotations
+        @test legacy_mode_read.payload.kpoint_map == restored.payload.kpoint_map
         @test restored.payload.source_metadata["construction_policy"] == "standard"
         @test something(restored.band_frame_contract).status == "PASS"
         HDF5.h5open(path, "r") do handle
             attributes = HDF5.attributes(handle)
-            @test !read(attributes["production_eligible"])
-            @test String(read(attributes["status"])) == "DIAGNOSTIC_ONLY"
-            @test read(attributes["diagnostic_only"])
+            @test !haskey(attributes, "production_eligible")
+            @test !haskey(attributes, "status")
+            @test !haskey(attributes, "diagnostic_only")
+            @test haskey(handle, "native_source_definition")
+            @test haskey(handle, "native_to_completed_rotations")
             @test !haskey(attributes, "quality_review_recommended")
         end
         maxima, contexts = Dict{String, Float64}(), Dict{String, String}()
@@ -146,7 +148,8 @@ using .QEPAWMatrixElementsTestSupport
         )
         @test maxima["construction_synthetic_covariance_failed"] == 1.0
         @test maxima["construction_synthetic_covariance_threshold"] == 1.0e-7
-        @test contexts["construction_synthetic_covariance_failed"] == "CONTINUE_STANDARD"
+        @test contexts["construction_synthetic_covariance_failed"] ==
+              "CONTINUE_WITH_NUMERICAL_WARNING"
         @test Base.invokelatest(
             extension._star_construction_quality_gate!,
             config,
@@ -158,7 +161,8 @@ using .QEPAWMatrixElementsTestSupport
         )
         @test maxima["construction_synthetic_covariance_failed"] == 1.0
         @test maxima["construction_synthetic_covariance_value"] == 2.0e-7
-        @test contexts["construction_synthetic_covariance_failed"] == "CONTINUE_STANDARD"
+        @test contexts["construction_synthetic_covariance_failed"] ==
+              "CONTINUE_WITH_NUMERICAL_WARNING"
         @test_throws ArgumentError Base.invokelatest(
             extension._star_construction_quality_gate!,
             config,
@@ -178,9 +182,27 @@ using .QEPAWMatrixElementsTestSupport
             quality_path,
             restored.payload;
             status = :STANDARD,
+            ordinary_calculation = true,
             root_cause = :SYNTHETIC_QUALITY_FAILURE,
             diagnostics = String[],
         )
+        for (gauge, expected_review) in ((path, false), (quality_path, true))
+            generated = W.generate_symmetry_completed_qe_paw_matrix_elements(
+                source,
+                gauge,
+                fixture.nnkp_file;
+                artifact_dir = joinpath(
+                    directory,
+                    expected_review ? "warning-matrices" : "ordinary-matrices",
+                ),
+            )
+            @test generated.passed
+            HDF5.h5open(generated.artifacts["provenance_hdf5"], "r") do handle
+                @test Bool(read(HDF5.attributes(handle)["quality_review_recommended"])) ==
+                      expected_review
+                @test !Bool(read(HDF5.attributes(handle)["production_eligible"]))
+            end
+        end
         P = WannierNLQG.WannierProjection
         block = P.WannierProjectionBlock(
             "X",
@@ -216,10 +238,12 @@ using .QEPAWMatrixElementsTestSupport
             diagnostic -> diagnostic.code == :GAUGE_QUALITY_STANDARD_CONTINUE,
             prepared.diagnostics,
         )
-        representation =
-            WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(representation_path)
+        representation = WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(
+            representation_path;
+            content_authentication = false,
+        )
         @test representation.conventions["construction_policy"] == "standard"
-        @test representation.conventions["production_eligible"] == "false"
+        @test !haskey(representation.conventions, "production_eligible")
         @test representation.conventions["quality_review_recommended"] == "true"
         @test occursin(
             "construction_synthetic_covariance_failed",
@@ -246,7 +270,7 @@ using .QEPAWMatrixElementsTestSupport
             eig_file = splitext(path)[1] * ".eig",
             mmn_file = mmn_path,
             amn_file = amn_path,
-            matrix_elements = W.ExternalWannier90Matrices(mmn_path, amn_path),
+            matrix_elements = W.ExternalOverlapProjectionMatrices(mmn_path, amn_path),
             projection_basis = basis,
             band_representation_hdf5 = representation_path,
             outer_min_ev = -18.0,
@@ -255,15 +279,17 @@ using .QEPAWMatrixElementsTestSupport
             frozen_max_ev = 0.5,
             num_wannier = 1,
         )
-        authority_config = W.SymmetryAdaptedWannierizationConfig(
+        authority_config = W.WannierizationConfig(
             input = authority_input,
-            solver = W.WannierizationSolverConfig(max_iterations = 2),
+            solver = W.WannierizationSolverConfig(
+                stage_controls = W.WannierizationStageControls(dis_num_iter = 2, num_iter = 2),
+            ),
             checkpoint = W.WannierizationCheckpointConfig(
                 checkpoint_hdf5 = joinpath(directory, "native-authority.wannierization.h5"),
             ),
             output = W.WannierizationOutputConfig(
-                tb_output_formats = (:packed_hdf5, :wannier90_tb),
-                write_wannier90_tb = true,
+                tb_output_formats = (:packed_hdf5, :model_tb),
+                write_model_tb = true,
                 profile = :hamiltonian_position,
             ),
         )
@@ -310,9 +336,10 @@ using .QEPAWMatrixElementsTestSupport
             eig;
             construction_policy = :strict,
         )
-        exported = W.construct_symmetry_adapted_wannier_functions(authority_config)
+        exported = W.construct_wannier_functions(authority_config)
         @test exported.input_summary["has_accepted_state"] == "true"
-        @test exported.input_summary["wannierization_eligibility_production_eligible"] == "false"
+        @test exported.input_summary["quality_review_recommended"] == "true"
+        @test any(d->d.code == :GAUGE_QUALITY_STANDARD_CONTINUE, exported.diagnostics)
         if exported.artifacts.packed_hdf5 === nothing
             @info "Native authority export diagnostics" status=exported.status gate=get(
                 exported.input_summary,
@@ -321,14 +348,23 @@ using .QEPAWMatrixElementsTestSupport
             ) diagnostics=join((string(d.code)*": "*d.message for d in exported.diagnostics), "\n")
         end
         @test exported.artifacts.packed_hdf5 !== nothing
-        @test exported.artifacts.wannier90_tb !== nothing
+        @test exported.artifacts.model_tb !== nothing
         if exported.artifacts.packed_hdf5 !== nothing
             HDF5.h5open(exported.artifacts.packed_hdf5, "r") do handle
-                @test !read(HDF5.attributes(handle)["production_eligible"])
+                @test !haskey(HDF5.attributes(handle), "production_eligible")
             end
         end
-        if exported.artifacts.wannier90_tb !== nothing
-            @test WI.read_wannier_tb_num_orbitals(exported.artifacts.wannier90_tb) == 1
+        if exported.artifacts.packed_hdf5 !== nothing
+            actual_model=WI.read_real_space_operator_bundle(exported.artifacts.packed_hdf5)
+            for kind in
+                (WannierNLQG.Core.REAL_SPACE_HAMILTONIAN, WannierNLQG.Core.REAL_SPACE_POSITION)
+                @test haskey(actual_model.operators, kind)
+                @test all(isfinite, actual_model.operators[kind].data)
+                @test size(actual_model.operators[kind].data, 1) == 1
+            end
+        end
+        if exported.artifacts.model_tb !== nothing
+            @test WI.read_wannier_tb_num_orbitals(exported.artifacts.model_tb) == 1
         end
         HDF5.h5open(path, "r+") do handle
             HDF5.delete_attribute(handle, "band_frame_replay_maximum")
@@ -355,7 +391,8 @@ end
         [0.0, 0.2],
         1:1,
         buffer,
-        1.0e-7,
+        1.0e-7;
+        construction_policy = :strict,
     )
     selected, leakage = Base.invokelatest(
         extension._star_select_buffer,
@@ -396,6 +433,7 @@ end
         operations,
         ones(Int, 2, 1);
         kwargs...,
+        construction_policy = :strict,
     )
     formal = Base.invokelatest(
         extension._star_project_formal_target_actions,
@@ -466,7 +504,11 @@ end
     near_rotation = copy(identity_rotation)
     near_rotation[1, 1] += 1.0e-6
     records = NamedTuple[]
-    @test_throws ArgumentError P._base_orbital_rotation("d", near_rotation)
+    @test_throws ArgumentError P._base_orbital_rotation(
+        "d",
+        near_rotation;
+        construction_policy = :strict,
+    )
     orbital = P._base_orbital_rotation(
         "d",
         near_rotation;
@@ -481,7 +523,8 @@ end
         "sp3",
         near_rotation,
         identity_rotation,
-        identity_rotation,
+        identity_rotation;
+        construction_policy = :strict,
     )
     hybrid = P._orbital_rotation(
         "sp3",
@@ -502,7 +545,12 @@ end
     operations = [S.SymmetryOperation(Matrix{Int}(I, 3, 3), zeros(3), identity_rotation)]
     matrices = reshape(copy(hybrid), 4, 4, 1)
     shifts = zeros(Int, 3, 4, 1)
-    @test_throws ArgumentError S.WannierSymmetryPlan(operations, matrices, shifts)
+    @test_throws ArgumentError S.WannierSymmetryPlan(
+        operations,
+        matrices,
+        shifts;
+        construction_policy = :strict,
+    )
     plan = S.WannierSymmetryPlan(
         operations,
         matrices,

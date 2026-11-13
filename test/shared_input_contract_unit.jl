@@ -15,7 +15,7 @@ function shared_input_task(id, quantity)
             fermi_energy = 0.0,
             temperature = 0.0,
         ),
-        numerics = OpticalNumerics(broadening = 0.04),
+        numerics = Numerics(broadening = 0.04),
         observable = FullTensor(),
     )
 end
@@ -75,12 +75,13 @@ end
         )
         @test merged.seed_inputs !== nothing
         @test merged.seed_inputs.seed_prefix == reverse_merged.seed_inputs.seed_prefix
-        @test merged.model_sha256 == reverse_merged.model_sha256
+        @test merged.model_identity == reverse_merged.model_identity
+        @test startswith(merged.model_identity, "wanniernlqg.file-state/1:")
         @test merged.operator_demand.required_operators ==
               reverse_merged.operator_demand.required_operators
         @test merged.operator_demand.required_components ==
               reverse_merged.operator_demand.required_components
-        mismatched = shared_input_context_copy(contexts[2]; model_sha256 = repeat("0", 64))
+        mismatched = shared_input_context_copy(contexts[2]; model_identity = repeat("0", 64))
         @test_throws ArgumentError SharedInputRuntime.context_with_demand(
             [contexts[1], mismatched],
             merged.operator_demand,
@@ -142,3 +143,5 @@ end
         end
     end
 end
+
+include(joinpath(@__DIR__, "ScientificSourceAliasChecks.jl"))

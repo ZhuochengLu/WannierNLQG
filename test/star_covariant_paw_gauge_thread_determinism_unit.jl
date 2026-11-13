@@ -36,7 +36,7 @@ using .QEPAWMatrixElementsTestSupport
             policy_digests[policy] = digests
         end
 
-        gauge_hdf5 = joinpath(directory, "weighted-threads-1", "star_gauge.h5")
+        gauge_hdf5 = joinpath(directory, "weighted-threads-1", "star_gauge.standard.h5")
         wfc_file = joinpath(fixture.save_directory, "wfc1.hdf5")
         held_wfc = wfc_file * ".readback-hold"
         mv(wfc_file, held_wfc)
@@ -57,6 +57,6 @@ using .QEPAWMatrixElementsTestSupport
         command =
             `$(Base.julia_cmd()) --startup-file=no --project=$(dirname(@__DIR__)) $(readback_probe) $(gauge_hdf5)`
         text = read(command, String)
-        @test occursin(r"STAR_GAUGE_FRESH_READ_DIGEST=[0-9a-f]{64}", text)
+        @test occursin(r"STAR_GAUGE_FRESH_READ_VALUES=[0-9a-f]+", text)
     end
 end

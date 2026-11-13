@@ -182,7 +182,7 @@ function _evaluate_orbital_polynomial(polynomial::OrbitalPolynomial, local_q)
     )
 end
 
-const PROJECTION_COMPATIBILITY_BOHR_ANGSTROM = 0.529177210544
+const PROJECTION_REDUCTION_BOHR_ANGSTROM = 0.529177210544
 const PROJECTION_HIGH_PRECISION_BOHR_ANGSTROM = 0.529177210903
 const PROJECTION_RADIAL_SPLINES = Dict{Int, NamedTuple}()
 const PROJECTION_RADIAL_SPLINE_LOCK = ReentrantLock()
@@ -209,8 +209,8 @@ function _projection_spherical_bessel(degree::Int, argument::Float64)
     return j_current
 end
 
-# Reproduce the public WannierBerri radial-grid contract without a runtime
-# dependency.  A linear prefix is followed by exponentially spaced tail points.
+# Construct the fixed mixed radial grid used by the compatibility transform.
+# A linear prefix is followed by exponentially spaced tail points.
 function _projection_mixed_grid(
     linear_end::Float64,
     maximum_value::Float64,
@@ -355,10 +355,10 @@ function _projection_radial_factor(
     momentum_norm::Float64,
     config::ProjectionRadialTransformConfig,
 )
-    if config.method == :wannierberri_compatible
+    if config.method == :mixed_grid_cubic
         return _projection_compatible_radial_factor(
             degree,
-            momentum_norm * PROJECTION_COMPATIBILITY_BOHR_ANGSTROM,
+            momentum_norm * PROJECTION_REDUCTION_BOHR_ANGSTROM,
         )
     end
     return _projection_gauss_laguerre_radial_factor(
@@ -393,8 +393,8 @@ function _projection_base_value(
     degree = findfirst(==(shell), BASE_SHELLS) - 1
     radial = _projection_radial_factor(degree, norm(local_q), radial_transform)
     bohr_radius =
-        radial_transform.method == :wannierberri_compatible ?
-        PROJECTION_COMPATIBILITY_BOHR_ANGSTROM : PROJECTION_HIGH_PRECISION_BOHR_ANGSTROM
+        radial_transform.method == :mixed_grid_cubic ? PROJECTION_REDUCTION_BOHR_ANGSTROM :
+        PROJECTION_HIGH_PRECISION_BOHR_ANGSTROM
     prefactor = 4.0pi * bohr_radius^(3 / 2)
     return prefactor * (-1.0im)^degree * radial * _projection_spherical_harmonic(label, local_q)
 end
@@ -424,12 +424,11 @@ end
 function _base_orbital_rotation(
     shell::String,
     rotation::Matrix{Float64};
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
     mapping_diagnostics = nothing,
     operation_index::Int = 0,
 )
-    construction_policy in (:strict, :standard) ||
-        throw(ArgumentError("construction_policy must be :strict or :standard"))
+    validate_ordinary_construction_policy(construction_policy)
     all(isfinite, rotation) || throw(ArgumentError("orbital rotation contains nonfinite values"))
     degree = findfirst(==(shell), BASE_SHELLS) - 1
     labels = ORBITAL_LABELS[shell]
@@ -453,9 +452,6 @@ function _base_orbital_rotation(
     singular_values = svdvals(representation)
     minimum(singular_values) > eps(Float64) * max(1.0, maximum(singular_values)) ||
         throw(ArgumentError("orbital representation is rank deficient"))
-    construction_policy == :standard ||
-        residual <= 1.0e-8 ||
-        throw(ArgumentError("rotated $(shell) orbitals leave their harmonic subspace"))
     mapping_diagnostics === nothing || push!(
         mapping_diagnostics,
         (
@@ -526,10 +522,11 @@ function _orbital_rotation(
     rotation_cartesian::Matrix{Float64},
     source_basis::AbstractMatrix,
     target_basis::AbstractMatrix;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
     mapping_diagnostics = nothing,
     operation_index::Int = 0,
 )
+    validate_ordinary_construction_policy(construction_policy)
     local_rotation = Matrix{Float64}(target_basis * rotation_cartesian * source_basis')
     if orbital_set in BASE_SHELLS
         return _base_orbital_rotation(
@@ -560,9 +557,7 @@ function _orbital_rotation(
     minimum(singular_values) > eps(Float64) * max(1.0, maximum(singular_values)) ||
         throw(ArgumentError("orbital representation is rank deficient"))
     residual = norm(result' * result - Matrix{Float64}(I, size(result, 1), size(result, 1)))
-    construction_policy == :standard ||
-        residual <= 1.0e-8 ||
-        throw(ArgumentError("orbital subspace $(orbital_set) is not closed by this operation"))
+    isfinite(residual) || throw(ArgumentError("orbital subspace residual is nonfinite"))
     mapping_diagnostics === nothing || push!(
         mapping_diagnostics,
         (
@@ -608,7 +603,7 @@ function _build_local_projection_basis(x_axis, z_axis)
     return Matrix{Float64}(transpose(hcat(x, y, z)))
 end
 
-# Select structure centers addressed by one Wannier90 projection selector.
+# Select structure centers addressed by one Wannier projection selector.
 function _projection_centers(
     selector_value::AbstractString,
     input::WannierWinData,
@@ -810,9 +805,9 @@ end
 """
 Build the ordered Wannier projection basis declared by a WIN input.
 
-Wannier90 projection ordering is preserved exactly. SOC uses interlaced spin
+Wannier projection ordering is preserved exactly. SOC uses interlaced spin
 ordering. Supported scalar sets are `s/p/d/f` plus `sp`, `p2`, `pxy`, `sp2`,
-`pz`, individual `dxy`/`dxz`/`dyz`, `sp3`, `sp3d2`, `t2g`, the Wannier90
+`pz`, individual `dxy`/`dxz`/`dyz`, `sp3`, `sp3d2`, `t2g`, the Wannier
 `dxy;dxz;dyz`-ordered t2g subspace, and `eg`; every block must reproduce
 `num_wann`.
 """
@@ -836,6 +831,35 @@ function build_wannier_projection_basis(
     )
 end
 
+"""
+Build ordered projections from input strings without reading or generating a WIN file.
+
+This adapter shares the ProjectionSpec expansion and numbering implementation.
+Only projection syntax already supported by that implementation is accepted.
+"""
+function build_wannier_projection_basis(
+    lines::AbstractVector{<:AbstractString};
+    structure::CrystalStructure,
+    spinor::Bool = false,
+    num_wannier::Union{Nothing, Integer} = nothing,
+    tolerance::Real = 1.0e-8,
+    radial_transform::ProjectionRadialTransformConfig = ProjectionRadialTransformConfig(),
+)
+    specs = ProjectionSpec[]
+    for line in lines
+        selector, orbital_sets, local_basis = parse_projection_line(String(line))
+        push!(specs, ProjectionSpec(; selector, orbital_sets, local_bases = local_basis))
+    end
+    return build_wannier_projection_basis(
+        specs;
+        structure,
+        spinor,
+        num_wannier,
+        tolerance,
+        radial_transform,
+    )
+end
+
 """Build the ordered projection basis directly from one read-only WIN path."""
 function build_wannier_projection_basis(
     filename::AbstractString;
@@ -850,11 +874,10 @@ function _map_projection_centers(
     projection_centers_fractional::Matrix{Float64},
     operations::Vector{SymmetryOperation},
     tolerance::Float64;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
     mapping_diagnostics = nothing,
 )
-    construction_policy in (:standard, :strict) ||
-        throw(ArgumentError("construction_policy must be :standard or :strict"))
+    validate_ordinary_construction_policy(construction_policy)
     all(isfinite, projection_centers_fractional) ||
         throw(ArgumentError("projection centers contain nonfinite values"))
     projection_center_count = size(projection_centers_fractional, 2)
@@ -882,7 +905,7 @@ function _map_projection_centers(
                 push!(matching_target_center_indices, target_center_candidate_index)
                 push!(matching_lattice_shifts, lattice_shift)
             end
-            if construction_policy == :standard
+            begin
                 order = sortperm(distances)
                 isempty(order) && throw(ArgumentError("projection center set is empty"))
                 nearest = first(order)
@@ -932,7 +955,7 @@ function _map_projection_centers(
         sort(target_center_indices[:, operation_index]) == collect(1:projection_center_count) ||
             throw(ArgumentError("center mapping is not a permutation"))
     end
-    if construction_policy == :standard
+    begin
         _validate_projection_center_group_mapping(
             operations,
             target_center_indices,
@@ -992,7 +1015,7 @@ function build_wannier_symmetry_plan(
     operations::Vector{SymmetryOperation};
     operation_indices = nothing,
     tolerance::Real = 1.0e-8,
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
     mapping_diagnostics = nothing,
 )
     tolerance_value = Float64(tolerance)

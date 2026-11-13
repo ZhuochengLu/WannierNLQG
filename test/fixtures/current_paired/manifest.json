@@ -1,0 +1,36 @@
+{
+  "schema": "wanniernlqg.current-paired-fixtures/1",
+  "source_codec_run": "studio-wn-exact-paired-report-path-319-091",
+  "source_manifest_sha256": "17dcc1e609e98dc8f87be59e74532aa6d6c81e941702681e81fd97dab9f79a3e",
+  "qualification": "EXACT_ARCHIVED_CODEC_VALUES_ONLY",
+  "historical_scientific_and_timing_evidence_preserved": true,
+  "new_science_claim": false,
+  "rows": [
+    {
+      "name": "ordinary",
+      "original_relative": "test/fixtures/first_use_portable/assets/group_3/true.wannierization-tb.h5",
+      "original_file_sha256": "51973960002d7d810c5e7903c3346d7a8aeb8aaff565355be04f8dfc519ec2f4",
+      "current_file_sha256": "64857d5e9bf7c4fc4ca57fe62bcd707175163a7e9205455d6d1e600288aaf240",
+      "original_paired_source_sha256": "8f4c99c2e8ec4e3ab8a5ff2d1ad652ab1777137832b65aaad1298a417b425ca3",
+      "all_operator_bytes_equal": true,
+      "original_physics_qualification": "PHYSICS_HOLD",
+      "current_physics_qualification": "NOT_REQUALIFIED_CURRENT_MATHEMATICAL_COPY",
+      "original_production_eligible": false,
+      "current_production_eligible": false,
+      "current_relative": "test/fixtures/first_use_portable/assets/group_3/true.current.wannierization-tb.h5"
+    },
+    {
+      "name": "symmetrized",
+      "original_relative": "test/fixtures/first_use_science/artifact_24.h5",
+      "original_file_sha256": "a53dbc7a8e883a3eabc2eb6cc43e94031232181c99090b8ac13d3f6b1e757373",
+      "current_file_sha256": "e47c4bd79f366d0f590559a71757a3473482b17fc67627ad008da8156064cea7",
+      "original_paired_source_sha256": "1e99d2afc74290305913c1760b040d7d3cd9d68905db9ca2c5c0cd0fa30165ae",
+      "all_operator_bytes_equal": true,
+      "original_physics_qualification": null,
+      "current_physics_qualification": "NOT_REQUALIFIED_CURRENT_MATHEMATICAL_COPY",
+      "original_production_eligible": true,
+      "current_production_eligible": false,
+      "current_relative": "test/fixtures/current_paired/symmetrized.h5"
+    }
+  ]
+}

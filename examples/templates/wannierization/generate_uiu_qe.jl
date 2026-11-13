@@ -15,15 +15,15 @@ function build_config(
     )
     return W.WannierUIUGenerationConfig(
         source = source,
-        topology_file = joinpath(input_root, "wannier90.nnkp"),
-        oracle_mmn_file = target_contract === nothing ? joinpath(input_root, "wannier90.mmn") :
+        topology_file = joinpath(input_root, "wannier.nnkp"),
+        oracle_mmn_file = target_contract === nothing ? joinpath(input_root, "wannier.mmn") :
                           target_contract.operator_oracle_mmn_file,
         authoritative_mmn_file = target_contract === nothing ? nothing :
                                  target_contract.operator_oracle_mmn_file,
         target_contract = target_contract,
-        output_file = joinpath(output_root, "wannier90.uIu"),
+        output_file = joinpath(output_root, "wannier.uIu"),
         scratch_directory = joinpath(output_root, "scratch"),
-        provenance_json = joinpath(output_root, "wannier90.uIu.provenance.json"),
+        provenance_json = joinpath(output_root, "wannier.uIu.provenance.json"),
         resume = true,
         overwrite = false,
         require_mmn_oracle = true,
@@ -34,7 +34,7 @@ end
 if abspath(PROGRAM_FILE) == @__FILE__
     input_root = get(ENV, "WANNIERNLQG_UIU_QE_INPUT_ROOT", "")
     isempty(input_root) &&
-        error("set WANNIERNLQG_UIU_QE_INPUT_ROOT to the QE/Wannier90 input directory")
+        error("set WANNIERNLQG_UIU_QE_INPUT_ROOT to the QE/Wannier input directory")
     output_root = normpath(
         get(ENV, "WANNIERNLQG_TEMPLATE_OUTPUT_ROOT", joinpath(tempdir(), "wanniernlqg-uiu-qe")),
     )

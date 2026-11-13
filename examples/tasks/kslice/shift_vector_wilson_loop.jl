@@ -34,7 +34,7 @@ function build_config(;
                 quantity = "SVK",
                 method = "Wilson_loop",
                 physics = GeometryParameters(),
-                numerics = GeometryNumerics(
+                numerics = Numerics(
                     denominator_regularization = 0.001,
                     degeneracy_threshold = 0.002,
                     finite_difference_step = 0.0001,

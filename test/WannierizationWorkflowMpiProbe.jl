@@ -18,7 +18,16 @@ root = abspath(first(ARGS))
 # Record exact numeric bytes and terminal states; paths, digests, and elapsed time
 # belong to artifact identity rather than serial/MPI numerical equivalence.
 function record_workflow_payload!(records, prefix, value)
-    if value isa Number
+    if value isa WannierNLQG.IO.ScientificInputDefinition
+        # Local path/inode/times protect this reader lifetime; complete input
+        # bytes, rather than the descriptor's local publication, define equality.
+        bytes = WannierNLQG.IO.with_scientific_input_definition_bytes(value) do stream
+            read(stream)
+        end
+        length(bytes) == value.byte_count || error("Incomplete workflow input reference")
+        record_workflow_payload!(records, "$(prefix).reference_bytes", bytes)
+        record_workflow_payload!(records, "$(prefix).byte_count", value.byte_count)
+    elseif value isa Number
         records[prefix] = string(typeof(value), ':', bytes2hex(reinterpret(UInt8, [value])))
     elseif value isa AbstractArray && isbitstype(eltype(value)) && eltype(value) <: Number
         records[prefix] = string(
@@ -41,6 +50,40 @@ function record_workflow_payload!(records, prefix, value)
         end
     end
     return records
+end
+# Small fixture controls qualify the changed recorder, not the solver.
+if rank == 0
+    let
+        make_definition(bytes) =
+            WannierNLQG.IO.scientific_input_definition_bytes() do stream
+                write(stream, bytes)
+            end
+        first_definition = make_definition(UInt8[0x01, 0x02, 0x03])
+        independent_definition = make_definition(UInt8[0x01, 0x02, 0x03])
+        changed_definition = make_definition(UInt8[0x01, 0x02, 0x04])
+        first_definition.state != independent_definition.state ||
+            error("Independent fixture lifetime missing")
+        encode(value) = record_workflow_payload!(Dict{String, String}(), "fixture", value)
+        encode(first_definition) == encode(independent_definition) ||
+            error("Equal complete references differ")
+        encode(first_definition) != encode(changed_definition) ||
+            error("Changed reference bytes ignored")
+        encode(1.0) != encode(2.0) || error("Changed scalar bytes ignored")
+        encode(ComplexF64[1 + 2im]) != encode(ComplexF64[1 + 3im]) ||
+            error("Changed frame bytes ignored")
+        open(first_definition.path, "a") do stream
+            write(stream, UInt8(0x05))
+        end
+        stale_rejected = false
+        try
+            encode(first_definition)
+        catch exception
+            exception isa ArgumentError || rethrow()
+            stale_rejected = true
+        end
+        stale_rejected || error("Stale input publication was accepted")
+        println("WANNIERIZATION_INPUT_REFERENCE_VALUE_ORACLE_CONTROLS=5")
+    end
 end
 win_file = joinpath(root, "synthetic.win")
 eig_file = joinpath(root, "synthetic.eig")
@@ -137,8 +180,8 @@ if rank == 0
 end
 parallel == :mpi && MPI.Barrier(MPI.COMM_WORLD)
 
-result = W.construct_symmetry_adapted_wannier_functions(
-    W.SymmetryAdaptedWannierizationConfig(
+result = W.construct_wannier_functions(
+    W.WannierizationConfig(
         input = W.WannierizationInputConfig(
             wannierization_mode = :symmetry_adapted,
             win_file = win_file,
@@ -154,12 +197,7 @@ result = W.construct_symmetry_adapted_wannier_functions(
         ),
         solver = W.WannierizationSolverConfig(
             initialization = :random,
-            localize = false,
-            # This probe validates root-only MPI persistence, not default-profile
-            # selection.  Pin its historical projected-gradient trajectory so the
-            # new symmetry :auto profile does not turn an eight-step I/O fixture
-            # into an SMV--FR convergence test.
-            algorithm_profile = :custom,
+            # Root-only MPI persistence of an explicit Z-only trajectory.
             acceleration = W.WannierizationAccelerationConfig(
                 schedule = :two_stage,
                 z_stability_window = 1,
@@ -167,16 +205,19 @@ result = W.construct_symmetry_adapted_wannier_functions(
                 z_projector_tolerance = 1.0e-8,
             ),
             parallel = parallel,
-            max_iterations = 8,
-            convergence_tolerance = 1.0e-8,
-            convergence_window = 1,
+            stage_controls = W.WannierizationStageControls(
+                dis_num_iter = 8,
+                num_iter = 0,
+                dis_conv_tol = 1e-8,
+                dis_conv_window = 1,
+            ),
             random_seed = 0x1234,
         ),
         checkpoint = W.WannierizationCheckpointConfig(
             checkpoint_hdf5 = checkpoint_file,
-            checkpoint_interval = 0,
+            num_dump_cycles = 0,
         ),
-        runtime = W.WannierizationRuntimeConfig(progress_interval = 0),
+        runtime = W.WannierizationRuntimeConfig(num_print_cycles = 0),
         output = W.WannierizationOutputConfig(tb_output_formats = ()),
     ),
 )

@@ -317,7 +317,7 @@ function pcf_write_fortran_record(io, values)
     write(io, marker)
 end
 
-@testset "Wannier90 uIu streaming reader" begin
+@testset "Wannier uIu streaming reader" begin
     mktempdir() do directory
         path = joinpath(directory, "fixture.uIu")
         blocks = Dict{Tuple{Int, Int, Int}, Matrix{ComplexF64}}()

@@ -483,8 +483,7 @@ function render_generation_receipt(
         command = "julia --project=. scripts/generate_response_symmetry_catalog.jl",
         network_required = false,
         forbidden_inputs = [
-            "PythMPG source, dictionaries, ordering, or generated results",
-            "ISO-MAG data files or generated results",
+            "external magnetic-point-group datasets, source, dictionaries, ordering, or generated results",
             "historical catalog or catalog receipt",
         ],
         inputs = (

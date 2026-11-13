@@ -4,7 +4,7 @@ using WannierNLQG
 import WannierNLQG.Wannierization as W
 
 const HELP = """
-Generate a dimensionless Cartesian Wannier90 SPN file from VASP PAW data.
+Generate a dimensionless Cartesian Wannier SPN file from VASP PAW data.
 
 Required:
   --poscar=PATH --potcar=PATH --wavecar=PATH --bands=FIRST:LAST

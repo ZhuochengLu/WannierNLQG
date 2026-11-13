@@ -2,6 +2,7 @@ module BandPublicSchemaTestSupport
 
 using WannierNLQG
 using LinearAlgebra
+using HDF5
 
 # One scalar s orbital, or its two spin components, at the origin.
 function single_site_s_basis(; spinor::Bool = false)
@@ -14,6 +15,12 @@ function single_site_s_basis(; spinor::Bool = false)
         spinor,
     )
     return WannierNLQG.WannierProjection.WannierProjectionBasis([block], spinor ? 2 : 1, spinor)
+end
+
+# Recreate an attribute under its live owning object; callers reopen to verify.
+function replace_band_attribute!(object, key, value)
+    haskey(HDF5.attributes(object), key) && HDF5.delete_attribute(object, key)
+    HDF5.attributes(object)[key] = value
 end
 
 # Raw two-k-point spinor input used by both original and current preparation workflows.
@@ -79,6 +86,7 @@ function prepare_public_band_fixture(
     eig_file = nothing,
     output_hdf5 = nothing,
     construction_policy = :standard,
+    compatibility_policy = :warn,
     sewing_backend = WannierNLQG.Wannierization.CoefficientMappingSewing(),
 )
     mkpath(directory)
@@ -104,7 +112,7 @@ function prepare_public_band_fixture(
         projection_basis = projection_basis,
         band_representation = representation,
         sewing_backend = sewing_backend,
-        compatibility_policy = :warn,
+        compatibility_policy = compatibility_policy,
         construction_policy = construction_policy,
         output_hdf5 = output_hdf5,
     )
@@ -112,14 +120,18 @@ function prepare_public_band_fixture(
 end
 
 # Persist only through normal preparation: this helper never edits a stored schema header.
-function write_prepared_time_reversal_fixture(directory::AbstractString)
+function write_prepared_time_reversal_fixture(
+    directory::AbstractString;
+    compatibility_policy = :warn,
+)
     output = joinpath(directory, "normal-prepared-band.h5")
     prepared = prepare_public_band_fixture(
         raw_time_reversal_representation_fixture();
         directory,
         projection_basis = single_site_s_basis(spinor = true),
         output_hdf5 = output,
-        construction_policy = :strict,
+        construction_policy = :standard,
+        compatibility_policy,
     )
     return output, prepared
 end

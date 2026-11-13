@@ -36,19 +36,22 @@ r^a_{nm}=-\frac{iV^a_{nm}}{E_n-E_m},\qquad
 Q^{ab}_{nm}=r^a_{nm}r^b_{mn}.
 $$
 
-Let $|u_i^{\rm W}(\mathbf k)\rangle$ span the retained Wannier (orbital)
-frame, and let $U(\mathbf k)$ diagonalize its Hamiltonian,
-$U^\dagger H^{\rm W}U=\operatorname{diag}(E_n)$. With
-$A^{\rm W}_{a,ij}=i\langle u_i^{\rm W}|\partial_{k_a}u_j^{\rm W}\rangle$,
+Let $|u_i^{\rm orb}(\mathbf k)\rangle$ span the supplied orbital
+frame, and let $U(\mathbf k)$ diagonalize its Hamiltonian. For file-based
+inputs this is the retained Wannier frame; for native point-orbital inputs
+the specified centers define the position connection in the fixed orbital
+basis. In either case,
+$U^\dagger H^{\rm orb}U=\operatorname{diag}(E_n)$. With
+$A^{\rm orb}_{a,ij}=i\langle u_i^{\rm orb}|\partial_{k_a}u_j^{\rm orb}\rangle$,
 the $A^a_{nm}$ in the vertex above is
-$(U^\dagger A_a^{\rm W}U)_{nm}$. Define the supplied **ambient covariant
+$(U^\dagger A_a^{\rm orb}U)_{nm}$. Define the supplied **ambient covariant
 curvature** by
 
 $$
-\mathcal F_{ab}^{\rm W}
-=\partial_{k_a}A_b^{\rm W}-\partial_{k_b}A_a^{\rm W}
--i[A_a^{\rm W},A_b^{\rm W}],\qquad
-\mathcal F_{ab}^{\rm H}=U^\dagger\mathcal F_{ab}^{\rm W}U.
+\mathcal F_{ab}^{\rm orb}
+=\partial_{k_a}A_b^{\rm orb}-\partial_{k_b}A_a^{\rm orb}
+-i[A_a^{\rm orb},A_b^{\rm orb}],\qquad
+\mathcal F_{ab}^{\rm H}=U^\dagger\mathcal F_{ab}^{\rm orb}U.
 $$
 
 Here $[X,Y]=XY-YX$; both the derivatives and the connection use the same
@@ -105,7 +108,7 @@ $$
 Pairing $(n,m)$ with $(m,n)$ gives exactly the preceding implemented
 contact-plus-interband expression. After the normalized full-BZ average and
 cell-volume conversion, the resolved-gap, zero-interband-width limit takes
-the conventional intrinsic-AHE form
+the conventional intrinsic-AHE form for a periodic model
 
 $$
 \sigma_{\rm AHE,intr}^{ab}
@@ -117,7 +120,8 @@ At finite width, $\widetilde\Omega_n$ is a relaxation-model response
 kernel, **not** the static geometric $\Omega_n$ or a pointwise SOS-map
 identity. The clean limit presumes resolved nonzero cross-block gaps; it
 does not by itself establish convergence or physical completeness of a
-truncated material model.
+truncated material model. Bounded Cartesian-region integration has a
+separate dimension-aware normalization and is not this bulk-BZ limit.
 
 For an exact degenerate block $I$, Conventional counts each explicit state
 $n\in I$ once in the Drude sum, including the block-internal product
@@ -136,7 +140,7 @@ $W_I^{ab}$ and $B_I^{ab}$ for each block:
 $$
 Q^{ab}_{IJ}=\operatorname{Tr}[P_I(D_aP_I)P_J(D_bP_I)],\quad
 W^{ab}_I=\operatorname{Re}\operatorname{Tr}(P_IV_aP_IV_b),\quad
-B^{ab}_I=\operatorname{Re}\operatorname{Tr}(P_I\mathcal F_{ab}^{\rm W}).
+B^{ab}_I=\operatorname{Re}\operatorname{Tr}(P_I\mathcal F_{ab}^{\rm orb}).
 $$
 
 The Projector equations are the four Conventional equations above with
@@ -181,7 +185,7 @@ applies only to an integral.
 | --- | --- | --- |
 | Band length-gauge Drude, metric, and Hall structures | Aversa–Sipe (1995) for length-gauge organization; LinearTransportKernels.jl, linear_transport_response for exact coefficients | **IMPLEMENTATION_FORMULA**: the release-specific two-width prescription and grouping are not verbatim formulas from that paper. |
 | Physical velocity, cross-block position, exact spectral blocks | SpectralResponseGeometry.jl, spectral_response_geometry | The code's exact-block and gap-tolerance policy defines its numerical domain. |
-| Ambient $\mathcal F^{\rm W}$, its Hamiltonian-frame transform, and $B_n$ | PositionMatrixElements.jl, compute_position_capabilities!; SpectralResponseGeometry.jl, spectral_response_geometry | The covariant curvature uses the supplied position matrices and their derivatives; it is only one part of the full $\Omega_n$. |
+| Ambient $\mathcal F^{\rm orb}$, its Hamiltonian-frame transform, and $B_n$ | PositionMatrixElements.jl, compute_position_capabilities!; SpectralResponseGeometry.jl, spectral_response_geometry | The covariant curvature uses the supplied position model and is only one part of the full $\Omega_n$. |
 | Cross-block geometry, velocity, curvature Projector traces | SpectralResponseGeometry.jl, projector_spectral_pair, projector_block_velocity, projector_block_curvature | **Project-specific generalization**; trace invariance does not imply near-degenerate averaging. |
 | Berry-curvature mechanism and anomalous Hall interpretation | Xiao–Chang–Niu (2010) and Wang *et al.* (2006) for AHE context; linear_transport_response for contact-plus-interband combination | These sources do **not** assert that the broadened channel equals a static SOS map at each $k$. |
 | BZ average and SI volume conversion | SpectralResponseDriver.jl and output metadata | Release-specific normalization and serialization contract. |
@@ -193,3 +197,50 @@ applies only to an integral.
 3. X. Wang, J. R. Yates, I. Souza, and D. Vanderbilt, “Ab initio calculation of the anomalous Hall conductivity by Wannier interpolation,” *Phys. Rev. B* **74**, 195118 (2006). [DOI](https://doi.org/10.1103/PhysRevB.74.195118)
 
 See the [input and output contract](../docs/LINEAR_AND_ORBITAL_RESPONSES.md).
+
+
+## Projected-position contact term: a self-contained derivation
+
+Use signed electron charge q_e=-|e|. In the full single-particle space [r^a,r^b]=0.
+Projection into a moving Wannier space does not preserve this commutator:
+X^a=P_W r^a P_W is represented by i∂_a+A_W^a and
+
+$$
+[X^a,X^b]=i\mathcal F_W^{ab}.
+$$
+
+For H_E=H_W-q_e E_b X^b, the velocity defined by this effective model is
+
+$$
+v^a(E)=\frac{[X^a,H_E]}{i\hbar}
+=\frac{D_aH_W}{\hbar}-\frac{q_e}{\hbar}E_b\mathcal F_W^{ab}.
+$$
+
+Linear current therefore contains both q_e Tr[v_0 rho^(1)] and
+q_e Tr[delta v rho^(0)]. The latter gives
+
+$$
+\boxed{\sigma_{contact}^{ab}=-\frac{q_e^2}{\hbar}\int_{BZ}[dk]
+\operatorname{Tr}[f(H_W)\mathcal F_W^{ab}].}
+$$
+
+It carries no density-matrix relaxation denominator. This is the origin of
+-c sum_n f_n B_n in the BC output; it is not a second copy of the band curvature.
+For Omega_n=B_n-2 sum_(m!=n) Im Q_nm, the clean DC sum is -c sum_n f_n Omega_n.
+A flat complete orbital frame has B_n=0 while individual bands can still have
+nonzero Berry curvature.
+
+Projection and the commutator defining physical current do not generally commute.
+Consequently this effective-model identity does not establish complete finite-
+frequency material response. Omitted optical transitions retain their own energies.
+For an exact retained spectral space containing all occupied states and empty
+external states, contact accounts for their unit-weight static Hall limit. Adding
+explicit external transitions on top of contact requires subtracting that static
+piece; it is not permissible to double count it. Static metric completion likewise
+must not be inserted directly into a dynamical conductivity kernel.
+
+The symbol F_partial for derivative overlaps in
+[Subspace position matrix elements](SubspacePositionMatrixElements.md) is distinct
+from the ambient connection curvature mathcal F used here. The shared Sylvester
+contract changes matrix-element organization, not the physical Gamma_intra,
+Gamma_inter, Fermi weights, contact definition or unit conversion.

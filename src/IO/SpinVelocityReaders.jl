@@ -3,7 +3,7 @@
 using LinearAlgebra
 
 """
-Band energies in eV as `data[band,kpoint]` from a Wannier90 EIG file.
+Band energies in eV as `data[band,kpoint]` from a Wannier EIG file.
 
 Construction requires positive counts and the exact declared matrix shape; the supplied array is retained without copying.
 """
@@ -59,7 +59,7 @@ struct WannierMMN
 end
 
 """
-Neighbour topology from a formatted Wannier90 MMN file without matrix values.
+Neighbour topology from a formatted Wannier MMN file without matrix values.
 
 This type is the only MMN input admitted by the native VASP PAW generator.
 Keeping it distinct from `WannierMMN` makes it impossible for oracle matrix
@@ -90,8 +90,20 @@ struct WannierMMNTopology
     end
 end
 
+"""Complete MMN neighbour definition without reading or authenticating overlap values."""
+function wannier_topology_definition(value::WannierMMNTopology)
+    fields = (
+        value.num_bands,
+        value.num_kpts,
+        value.num_neighbors,
+        copy(value.neighbors),
+        copy(value.reciprocal_shifts),
+    )
+    return "WannierNLQG.mmn-topology-values/1:" * repr(fields)
+end
+
 """
-Parse indexed Wannier90 band energies in eV into a `(band,kpoint)` matrix.
+Parse indexed Wannier band energies in eV into a `(band,kpoint)` matrix.
 
 Reject missing, duplicate or malformed rows and preserve the file's one-based band/k-point numbering.
 
@@ -131,19 +143,25 @@ function read_wannier_eig(filename::AbstractString)::WannierEIG
 end
 
 """
-Write one formatted Wannier90 EIG file in band-major, k-point-minor order.
+Write one formatted Wannier EIG file in band-major, k-point-minor order.
 
 The supplied matrix uses `data[band,kpoint]`. Publication is atomic and the
 returned path is absolute; no energy shift or unit conversion is applied.
+`roundtrip=true` preserves binary Float64 values for owned native generation;
+the default retains the established external text layout.
 """
-function write_wannier_eig(filename::AbstractString, eig::WannierEIG)
+function write_wannier_eig(filename::AbstractString, eig::WannierEIG; roundtrip::Bool = false)
     path = abspath(filename)
     mkpath(dirname(path))
     temporary, stream = mktemp(dirname(path); cleanup = false)
     completed = false
     try
         for kpoint in 1:eig.num_kpts, band in 1:eig.num_bands
-            @printf(stream, "%5d %5d %22.14f\n", band, kpoint, eig.data[band, kpoint])
+            if roundtrip
+                @printf(stream, "%5d %5d %.17g\n", band, kpoint, eig.data[band, kpoint])
+            else
+                @printf(stream, "%5d %5d %22.14f\n", band, kpoint, eig.data[band, kpoint])
+            end
         end
         close(stream)
         mv(temporary, path; force = true)
@@ -189,9 +207,17 @@ function read_wannier_mmn(filename::AbstractString)::WannierMMN
         num_neighbors = parse(Int, dims[3])
         data_path, data_io = mktemp(; cleanup = true)
         data_size = sizeof(ComplexF64) * nb * nb * num_neighbors * num_kpoints
-        truncate(data_io, data_size)
-        data = Mmap.mmap(data_io, Array{ComplexF64, 4}, (nb, nb, num_neighbors, num_kpoints))
-        close(data_io)
+        data = try
+            truncate(data_io, data_size)
+            Mmap.mmap(data_io, Array{ComplexF64, 4}, (nb, nb, num_neighbors, num_kpoints))
+        finally
+            close(data_io)
+            # The private pathname has no consumer: WannierMMN owns the mapping.
+            # POSIX keeps the mapped inode alive after unlink until normal unmapping.
+            # Avoid retaining a named temporary until process-exit cleanup (and its
+            # full GC). Non-POSIX systems retain the existing cleanup registration.
+            Sys.isunix() && rm(data_path; force = true)
+        end
         neighbors = Matrix{Int}(undef, num_neighbors, num_kpoints)
         reciprocal_shifts = Array{Int, 3}(undef, 3, num_neighbors, num_kpoints)
         for kpoint_index in 1:num_kpoints

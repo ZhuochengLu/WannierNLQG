@@ -19,9 +19,11 @@ end
 """Common sampling geometry for a response run or a band path."""
 abstract type AbstractSampling end
 
+include("CartesianRegionSampling.jl")
+
 """Uniform Brillouin-zone mesh shared by all Integral task instances."""
 struct BZMesh <: AbstractSampling
-    k_mesh::Union{NTuple{2, Int}, NTuple{3, Int}}
+    k_mesh::Union{NTuple{1, Int}, NTuple{2, Int}, NTuple{3, Int}}
     spatial_dimension::Int
 end
 """Copy the shared Integral mesh and record the number of physical Cartesian axes."""
@@ -37,29 +39,142 @@ struct KSlice <: AbstractSampling
     vector_2::NTuple{3, Float64}
 end
 """Copy an explicit fractional slice plane and its two sampling counts."""
-KSlice(; k_mesh, spatial_dimension::Integer, origin, vector_1, vector_2) = KSlice(
-    k_mesh,
-    Int(spatial_dimension),
-    Tuple(Float64.(origin)),
-    Tuple(Float64.(vector_1)),
-    Tuple(Float64.(vector_2)),
-)
+function KSlice(; k_mesh, spatial_dimension::Integer, origin, vector_1, vector_2)
+    d = length(origin)
+    d in (2, 3) && length(vector_1) == length(vector_2) == d || throw(
+        DimensionMismatch("slice origin and vectors require matching two or three coordinates"),
+    )
+    pad(value) = ntuple(i -> i <= d ? Float64(value[i]) : 0.0, 3)
+    return KSlice(k_mesh, Int(spatial_dimension), pad(origin), pad(vector_1), pad(vector_2))
+end
 
-"""An explicit reciprocal-space path independent of the task evaluated on it."""
+"""Reciprocal nodes partitioned into connected branches; counts include endpoints."""
 struct KPath <: AbstractSampling
     nodes::Vector{Tuple{String, NTuple{3, Float64}}}
     kpoints_per_segment::Vector{Int}
     spatial_dimension::Int
+    branches::Vector{UnitRange{Int}}
+    provenance::Dict{String, Any}
 end
-"""Normalize path labels and fractional nodes, preserving the supplied segment counts."""
-KPath(; nodes, kpoints_per_segment, spatial_dimension::Integer = 3) =
-    KPath(normalize_kpath_input(nodes), Int[x for x in kpoints_per_segment], Int(spatial_dimension))
+
+"""Preserve explicit counts, or sample by Cartesian length when counts are omitted.
+
+`branches` partitions the node list into disconnected connected chains. Default
+sampling has 50 intervals per A^-1, at least two endpoints per segment.
+"""
+function KPath(;
+    nodes,
+    kpoints_per_segment = nothing,
+    spatial_dimension::Integer = 3,
+    branches = nothing,
+    lattice = nothing,
+    density::Real = 50.0,
+    provenance = Dict{String, Any}(),
+)
+    normalized = normalize_kpath_input(nodes)
+    ranges =
+        branches === nothing ? [1:length(normalized)] :
+        UnitRange{Int}[first(range):last(range) for range in branches]
+    isempty(ranges) && throw(ArgumentError("KPath requires at least one connected branch"))
+    all(range -> length(range) >= 2, ranges) &&
+    reduce(vcat, collect.(ranges)) == collect(eachindex(normalized)) || throw(
+        ArgumentError("branches must partition the node list into chains of at least two nodes"),
+    )
+    segment_count = sum(range -> length(range) - 1, ranges)
+    details = Dict{String, Any}(provenance)
+    counts = if kpoints_per_segment === nothing
+        lattice === nothing &&
+            throw(ArgumentError("omitted KPath counts require the actual model lattice"))
+        isfinite(density) && density > 0 ||
+            throw(ArgumentError("KPath density must be finite and positive"))
+        reference =
+            size(lattice) == (3, 3) ? lattice : first(complete_native_reference_lattice(lattice))
+        reciprocal = reciprocal_lattice(reference)
+        details["sampling_origin"] = "CARTESIAN_DENSITY"
+        details["intervals_per_A_inverse"] = Float64(density)
+        [
+            max(
+                2,
+                ceil(
+                    Int,
+                    density * norm(
+                        transpose(
+                            collect(normalized[index + 1][2]) - collect(normalized[index][2]),
+                        ) * reciprocal,
+                    ),
+                ) + 1,
+            ) for range in ranges for index in first(range):(last(range) - 1)
+        ]
+    else
+        details["sampling_origin"] = "EXPLICIT_COUNTS"
+        kpoints_per_segment isa Integer ? fill(Int(kpoints_per_segment), segment_count) :
+        Int.(kpoints_per_segment)
+    end
+    length(counts) == segment_count && all(>=(2), counts) ||
+        throw(ArgumentError("one count of at least two is required per connected segment"))
+    return KPath(normalized, counts, Int(spatial_dimension), ranges, details)
+end
+
+"""Generate a structural reference path in the input cell's reciprocal coordinates."""
+function automatic_kpath(
+    structure::CrystalStructure;
+    periodic_axes = (1, 2, 3),
+    kpoints_per_segment = nothing,
+    density::Real = 50.0,
+    time_reversal::Union{Nothing, Bool} = nothing,
+    spglib_symprec_angstrom::Real = 1.0e-5,
+    model_lattice = structure.lattice,
+)
+    generated =
+        high_symmetry_band_path(structure; periodic_axes, time_reversal, spglib_symprec_angstrom)
+    model_lattice = Matrix{Float64}(model_lattice)
+    size(model_lattice) == (3, 3) &&
+    all(isfinite, model_lattice) &&
+    abs(det(model_lattice)) > eps(Float64) ||
+        throw(ArgumentError("automatic path requires a finite nonsingular model lattice"))
+    mismatch = maximum(abs, model_lattice - structure.lattice)
+    mismatch <= spglib_symprec_angstrom || throw(
+        ArgumentError(
+            "structure and model cells differ beyond the declared symmetry tolerance; provide the structure in the model cell",
+        ),
+    )
+    conversion =
+        transpose(reciprocal_lattice(model_lattice)) \
+        transpose(reciprocal_lattice(structure.lattice))
+    nodes = [
+        (label, Tuple(conversion * collect(coordinate))) for
+        (label, coordinate) in reduce(vcat, generated.branches)
+    ]
+    generated.provenance["structure_lattice_angstrom"] =
+        generated.provenance["input_lattice_angstrom"]
+    generated.provenance["input_lattice_angstrom"] =
+        [collect(row) for row in eachrow(model_lattice)]
+    generated.provenance["structure_to_model_lattice_max_abs_angstrom"] = mismatch
+    generated.provenance["structure_fractional_to_model_fractional"] =
+        [collect(row) for row in eachrow(conversion)]
+    ranges = UnitRange{Int}[]
+    cursor = 1
+    for branch in generated.branches
+        push!(ranges, cursor:(cursor + length(branch) - 1))
+        cursor += length(branch)
+    end
+    return KPath(;
+        nodes,
+        branches = ranges,
+        kpoints_per_segment,
+        spatial_dimension = length(periodic_axes),
+        lattice = model_lattice,
+        density,
+        provenance = generated.provenance,
+    )
+end
 
 """Shared execution controls; the Fourier backend must be selected explicitly."""
 Base.@kwdef struct ExecutionOptions
     fourier_backend::String
-    NKdiv::Union{Nothing, NTuple{2, Int}, NTuple{3, Int}} = nothing
-    NKFFT::Union{Nothing, NTuple{2, Int}, NTuple{3, Int}} = nothing
+    integration_algorithm::AbstractIntegrationAlgorithm = UniformIntegration()
+    NKdiv::Union{Nothing, NTuple{1, Int}, NTuple{2, Int}, NTuple{3, Int}} = nothing
+    NKFFT::Union{Nothing, NTuple{1, Int}, NTuple{2, Int}, NTuple{3, Int}} = nothing
     response_symmetry_file::Union{Nothing, String} = nothing
     response_symmetry_policy::String = "strict"
     response_symmetry_kmesh_mode::String = "reduced"
@@ -79,17 +194,60 @@ end
 """Physical parameters with quantity-specific applicability checked during compilation."""
 abstract type AbstractTaskParameters end
 
+"""Static BCD/BCQ Hall occupations, positive DC lifetime, and explicit integral expression.
+
+The Fermi-energy scan is in eV, temperature in K and lifetime in femtoseconds.
+No photon frequency, interband relaxation or boundary correction is implied.
+"""
+struct BerryMultipoleParameters <: AbstractTaskParameters
+    fermi_energies::Vector{Float64}
+    temperature::Float64
+    relaxation_time_fs::Float64
+    integral_form::Symbol
+    function BerryMultipoleParameters(;
+        fermi_energies,
+        temperature::Real,
+        relaxation_time_fs::Real,
+        integral_form::Symbol = :fermi_surface,
+    )
+        temperature isa Bool && throw(ArgumentError("temperature must be a physical temperature"))
+        relaxation_time_fs isa Bool &&
+            throw(ArgumentError("relaxation_time_fs must be a physical lifetime"))
+        isfinite(temperature) && temperature >= 0 || throw(ArgumentError("invalid temperature"))
+        isfinite(relaxation_time_fs) && relaxation_time_fs > 0 ||
+            throw(ArgumentError("positive finite relaxation_time_fs required"))
+        integral_form in (:fermi_surface, :fermi_sea) ||
+            throw(ArgumentError("integral_form must be fermi_surface or fermi_sea"))
+        axis = fermi_energies isa Real ? [Float64(fermi_energies)] : Float64.(fermi_energies)
+        return new(
+            validate_fermi_energies(axis),
+            Float64(temperature),
+            Float64(relaxation_time_fs),
+            integral_form,
+        )
+    end
+end
+
 """Independent positive intraband and interband relaxation energies, in eV."""
 Base.@kwdef struct SeparateRelaxation
     gamma_intra_ev::Float64
     gamma_inter_ev::Float64
 end
 
-"""Explicit normalized zero-temperature delta approximation; Gaussian eta is sqrt(2) sigma."""
-Base.@kwdef struct FermiSurfaceBroadening
-    kind::Symbol
-    eta_fs_ev::Float64
+"""Static intrinsic Berry Fermi-sea AHC. T0 only; no relaxation parameter."""
+struct IntrinsicHallParameters <: AbstractTaskParameters
+    fermi_energies::Vector{Float64}
+    temperature::Float64
+    function IntrinsicHallParameters(fermi_energies, temperature::Real)
+        isfinite(temperature) && iszero(temperature) ||
+            throw(ArgumentError("INTRINSIC_HALL_REQUIRES_ZERO_TEMPERATURE"))
+        axis = fermi_energies isa Real ? [Float64(fermi_energies)] : Float64.(fermi_energies)
+        new(validate_fermi_energies(axis), Float64(temperature))
+    end
 end
+# Preserve the keyword Hall-parameter constructor and its zero-temperature default.
+IntrinsicHallParameters(; fermi_energies, temperature::Real = 0.0) =
+    IntrinsicHallParameters(fermi_energies, temperature)
 
 """Strict dc transport parameters; no photon energy axis."""
 struct LinearTransportParameters <: AbstractTaskParameters
@@ -175,24 +333,115 @@ SHGParameters(; photon_energies, fermi_energy, temperature, output = :total, res
         Symbol(response),
     )
 
-"""Optical parameters plus an explicit Cartesian finite-q momentum."""
+"""Finite nonnegative photon energies and occupation controls for the ordered jerk material coefficient."""
+struct JerkParameters <: AbstractTaskParameters
+    photon_energies::Vector{Float64}
+    fermi_energy::Float64
+    temperature::Float64
+    projection::Symbol
+end
+
+"""Fourier THG physical parameters; formulation and observable selections are explicit."""
+struct THGParameters <: AbstractTaskParameters
+    photon_energies::Vector{Float64}
+    fermi_energy::Float64
+    temperature::Float64
+    formulation::Symbol
+    response::Symbol
+    output::Symbol
+end
+
+# Reject removed response-layer unit conversion controls at the input boundary.
+function reject_removed_third_order_measure_keys(names, location)
+    removed = filter(
+        name ->
+            (name isa Symbol || name isa AbstractString) &&
+            Symbol(name) in (:response_measure, :sheet_axes, :effective_thickness_angstrom),
+        names,
+    )
+    isempty(removed) || throw(
+        ArgumentError(
+            "$(location): unsupported removed JC/THG parameter(s) $(join(removed, ", ")). " *
+            "Declare model geometry in the model input and perform sheet/line/effective-thickness conversions in postprocessing; these fields are not ignored.",
+        ),
+    )
+    return nothing
+end
+
+"""Construct the ordered jerk coefficient without response-layer unit conversions."""
+function JerkParameters(;
+    photon_energies,
+    fermi_energy,
+    temperature,
+    projection = :ordered,
+    kwargs...,
+)
+    reject_removed_third_order_measure_keys(keys(kwargs), "JerkParameters")
+    isempty(kwargs) ||
+        throw(ArgumentError("Unsupported JerkParameters keyword(s): $(join(keys(kwargs), ", "))"))
+    return JerkParameters(photon_energies, fermi_energy, temperature, projection)
+end
+
+"""Construct THG with the retained formulation, observable and output defaults."""
+function THGParameters(;
+    photon_energies,
+    fermi_energy,
+    temperature,
+    formulation = :regrouped,
+    response = :both,
+    output = :both,
+    kwargs...,
+)
+    reject_removed_third_order_measure_keys(keys(kwargs), "THGParameters")
+    isempty(kwargs) ||
+        throw(ArgumentError("Unsupported THGParameters keyword(s): $(join(keys(kwargs), ", "))"))
+    return THGParameters(photon_energies, fermi_energy, temperature, formulation, response, output)
+end
+
+"""
+Optical parameters with either one Cartesian q or an explicitly zipped q axis.
+
+Energies use eV and momenta use A^-1. Exactly one of `photon_momentum` and
+`photon_momenta` is required; inputs are copied and unequal lengths are rejected.
+The paired path has no Cartesian-product or momentum-symmetry interpretation.
+"""
 struct FiniteQOpticalParameters <: AbstractTaskParameters
     photon_energies::Vector{Float64}
     fermi_energy::Float64
     temperature::Float64
-    photon_momentum::NTuple{3, Float64}
+    photon_momentum::Union{Nothing, NTuple{3, Float64}}
+    photon_momenta::Union{Nothing, Vector{NTuple{3, Float64}}}
 end
-"""Copy the optical and occupation inputs together with the required Cartesian momentum."""
-FiniteQOpticalParameters(;
+"""Copy optical inputs and select one explicit fixed or paired momentum axis."""
+function FiniteQOpticalParameters(;
     photon_energies,
     fermi_energy::Real,
     temperature::Real,
-    photon_momentum,
-) = FiniteQOpticalParameters(
-    Float64[x for x in photon_energies],
-    Float64(fermi_energy),
-    Float64(temperature),
-    Tuple(Float64.(photon_momentum)),
+    photon_momentum = nothing,
+    photon_momenta = nothing,
+)
+    (photon_momentum === nothing) != (photon_momenta === nothing) ||
+        throw(ArgumentError("specify exactly one of photon_momentum and photon_momenta"))
+    energies = _copy_photon_path_energies(photon_energies)
+    momentum = photon_momentum === nothing ? nothing : _copy_photon_path_momentum(photon_momentum)
+    momenta =
+        photon_momenta === nothing ? nothing :
+        make_photon_momentum_path(energies, photon_momenta).photon_momenta
+    return FiniteQOpticalParameters(
+        energies,
+        Float64(fermi_energy),
+        Float64(temperature),
+        momentum,
+        momenta,
+    )
+end
+
+# Preserve the valid four-argument fixed-q construction through the same owned inputs.
+FiniteQOpticalParameters(energies, fermi_energy, temperature, momentum) = FiniteQOpticalParameters(;
+    photon_energies = energies,
+    fermi_energy,
+    temperature,
+    photon_momentum = momentum,
 )
 
 """Geometric parameters; occupation values are required only for an explicit occupied sum."""
@@ -200,6 +449,7 @@ Base.@kwdef struct GeometryParameters <: AbstractTaskParameters
     fermi_energy::Union{Nothing, Float64} = nothing
     temperature::Union{Nothing, Float64} = nothing
     photon_momentum::Union{Nothing, NTuple{3, Float64}} = nothing
+    include_external::Bool = false
 end
 
 """Explicit reference energy in eV for band-spectrum output."""
@@ -209,22 +459,298 @@ end
 """Store the explicitly supplied band energy reference in eV."""
 BandParameters(; fermi_energy::Real) = BandParameters(Float64(fermi_energy))
 
-"""Numerical options owned by one task rather than by the common run."""
-abstract type AbstractTaskNumerics end
+"""
+Explicit numerical controls for one task. No response defaults are inserted here.
 
-"""First-order response spectral resolution and explicitly selected FS quadrature."""
-Base.@kwdef struct LinearResponseNumerics <: AbstractTaskNumerics
-    fermi_surface::Union{Nothing, FermiSurfaceBroadening}=nothing
-    gap_tolerance::Float64=1e-10
+Quantity, method, sampling and physical parameters determine defaults and legality
+when the task is compiled. Values are copied; `supplied` distinguishes an omitted
+key from an explicit `nothing` or explicit default. Hot kernels consume resolved
+concrete settings, never this public request object.
+"""
+struct Numerics{V <: NamedTuple}
+    values::V
+    supplied::Tuple{Vararg{Symbol}}
+    function Numerics(; kwargs...)
+        values = (; kwargs...)
+        unknown = setdiff(keys(values), NUMERICS_PARAMETER_NAMES)
+        isempty(unknown) ||
+            throw(ArgumentError("Numerics: unknown parameters $(join(string.(unknown), ", "))."))
+        copied = deepcopy(values)
+        new{typeof(copied)}(copied, Tuple(keys(copied)))
+    end
 end
 
-"""Orbital analytic cross-block resolution; no physical linewidth is introduced."""
-Base.@kwdef struct OrbitalNumerics <: AbstractTaskNumerics
-    gap_tolerance::Float64=1e-10
+# All recognized public keys; applicability is checked against the actual task.
+const NUMERICS_PARAMETER_NAMES = (
+    :broadening,
+    :broadening_type,
+    :transition_window_factor,
+    :denominator_regularization,
+    :degeneracy_threshold,
+    :finite_difference_step,
+    :derivative_backend,
+    :band_window_size,
+    :low_frequency_broadening,
+    :intermediate_regularization,
+    :eta_correction,
+    :hermiticity_tolerance,
+    :gap_tolerance,
+    :fs_kind,
+    :eta_fs_ev,
+    :prescription,
+    :occupation_derivative_mode,
+)
+
+# Resolve quantity-specific defaults without mutating the user's explicit request.
+function resolved_numerical_values(task, quantity; nonorthogonal::Bool = false)
+    request = something(task.numerics, Numerics())
+    if quantity in (:photon_drag_shift_current, :photon_drag_injection_current) &&
+       :band_window_size in request.supplied &&
+       get(request.values, :band_window_size, -1) != -1
+        throw(
+            ArgumentError(
+                "photon-drag uses all finite-model bands; band_window_size must be omitted or -1",
+            ),
+        )
+    end
+    defaults = if quantity == :second_harmonic_generation
+        (;
+            broadening = 0.025,
+            broadening_type = "Gaussian",
+            low_frequency_broadening = 0.025,
+            intermediate_regularization = 0.001,
+            eta_correction = true,
+            degeneracy_threshold = 1.0e-4,
+        )
+    elseif quantity == :third_harmonic_generation
+        (;
+            broadening = 0.025,
+            broadening_type = "Gaussian",
+            low_frequency_broadening = 0.025,
+            intermediate_regularization = 0.001,
+            eta_correction = true,
+            prescription = :distribution_broadening,
+            occupation_derivative_mode = :shg_gaussian,
+        )
+    elseif quantity == :band_structure
+        (; hermiticity_tolerance = 1.0e-10)
+    elseif quantity == :intrinsic_ahc
+        NamedTuple()
+    elseif quantity == :orbital_magnetization
+        (; denominator_regularization = 0.001)
+    elseif quantity in (:linear_transport, :linear_optical_response)
+        nonorthogonal && quantity==:linear_transport ?
+        (; gap_tolerance = 1.0e-10, fs_kind = nothing, eta_fs_ev = nothing) :
+        (;
+            gap_tolerance = 1.0e-10,
+            fs_kind = nothing,
+            eta_fs_ev = nothing,
+            denominator_regularization = 0.001,
+        )
+    elseif quantity in BERRY_MULTIPOLE_QUANTITIES
+        berry_multipole_numerical_defaults(task, quantity)
+    elseif quantity in OPTICAL_TASK_QUANTITIES
+        (;
+            broadening = 0.040,
+            broadening_type = "Gaussian",
+            transition_window_factor = 5.0,
+            denominator_regularization = 0.001,
+            degeneracy_threshold = 0.002,
+            finite_difference_step = nothing,
+            band_window_size = -1,
+        )
+    elseif quantity in (:berry_curvature_dipole, :berry_curvature_quadrupole)
+        (;
+            derivative_backend = :finite_difference,
+            denominator_regularization = get(
+                request.values,
+                :derivative_backend,
+                :finite_difference,
+            ) == :analytic ? 0.0 : 0.001,
+            degeneracy_threshold = 0.002,
+            finite_difference_step = nothing,
+            band_window_size = nothing,
+        )
+    else
+        (;
+            denominator_regularization = 0.001,
+            degeneracy_threshold = 0.002,
+            finite_difference_step = nothing,
+            band_window_size = nothing,
+        )
+    end
+    if nonorthogonal && quantity == :second_harmonic_generation
+        defaults=merge(defaults, (; denominator_regularization = 0.001, eta_correction = false))
+    end
+    if nonorthogonal && quantity == :orbital_magnetization
+        defaults=merge(defaults, (; denominator_regularization = 0.001))
+    end
+    quantity in ZERO_REGULARIZATION_GEOMETRY_QUANTITIES &&
+        (defaults = merge(defaults, (; denominator_regularization = 0.0)))
+    # A positive supplied width chooses the existing finite-difference expression.
+    if quantity in (:berry_curvature_dipole, :berry_curvature_quadrupole) &&
+       get(request.values, :denominator_regularization, 0.0) isa Real &&
+       get(request.values, :denominator_regularization, 0.0) > 0
+        get(request.values, :derivative_backend, :finite_difference) == :analytic && throw(
+            ArgumentError("positive denominator_regularization conflicts with analytic geometry"),
+        )
+        defaults = merge(defaults, (; derivative_backend = :finite_difference))
+    end
+    if quantity in (:shift_spin_current, :injection_spin_current)
+        :degeneracy_threshold in request.supplied && throw(
+            ArgumentError(
+                "SPIN_CURRENT_DEGENERACY_THRESHOLD_REMOVED: task $(task.id) explicitly supplies degeneracy_threshold, which is no longer supported for spin-current tasks. Remove this parameter from this task's numerics.",
+            ),
+        )
+        defaults = merge(defaults, (; degeneracy_threshold = 0.0))
+    end
+    if quantity == :orbital_magnetization && :gap_tolerance in request.supplied
+        throw(
+            ArgumentError(
+                "OM_GAP_TOLERANCE_UNSUPPORTED: task $(task.id), orbital_magnetization does not support gap_tolerance.",
+            ),
+        )
+    end
+    if quantity in (:jerk_current, :third_harmonic_generation)
+        :degeneracy_threshold in request.supplied && throw(
+            ArgumentError(
+                "THIRD_ORDER_DEGENERACY_THRESHOLD_UNSUPPORTED: task $(task.id), $quantity does not support degeneracy_threshold.",
+            ),
+        )
+        defaults = (;
+            (key => value for (key, value) in pairs(defaults) if key != :degeneracy_threshold)...
+        )
+    end
+    # Normal metric optics uses the same positive finite-eta prescription as orthogonal optics.
+    # This is a task admission rule, not a restriction on metric spectra or velocity operators.
+    if nonorthogonal &&
+       quantity==:linear_optical_response &&
+       :denominator_regularization in request.supplied
+        eta = get(request.values, :denominator_regularization, nothing)
+        valid_eta = eta isa Real && !(eta isa Bool) && isfinite(eta) && eta>0
+        valid_eta || throw(
+            ArgumentError(
+                "NONORTHOGONAL_LINEAR_OPTICAL_REGULARIZATION_REQUIRED: task $(task.id), denominator_regularization must be finite and positive in eV (default 0.001 eV).",
+            ),
+        )
+    end
+    unused = setdiff(request.supplied, keys(defaults))
+    isempty(unused) || throw(
+        ArgumentError(
+            "Numerics parameters $(join(string.(unused), ", ")) do not apply to task $(task.id), quantity $quantity.",
+        ),
+    )
+    for (name, value) in pairs(request.values)
+        if value===nothing
+            (defaults[name]===nothing || name==:band_window_size) || throw(
+                ArgumentError(
+                    "Numerics parameter $name cannot be nothing in task $(task.id), quantity $quantity",
+                ),
+            )
+            continue
+        end
+        valid =
+            name==:eta_correction ? value isa Bool :
+            name==:broadening_type ? value isa AbstractString :
+            name in (:fs_kind, :prescription, :occupation_derivative_mode, :derivative_backend) ?
+            value isa Symbol : value isa Real && !(value isa Bool)
+        if valid && value isa Real
+            numeric_value=try
+                Float64(value)
+            catch
+                NaN
+            end
+            valid=isfinite(numeric_value)
+            if name==:band_window_size
+                valid &=
+                    isinteger(value) && typemin(Int)<=value<=typemax(Int) && (value==-1 || value>0)
+            elseif name in (
+                :broadening,
+                :low_frequency_broadening,
+                :eta_fs_ev,
+                :hermiticity_tolerance,
+                :finite_difference_step,
+            )
+                valid &= numeric_value>0
+            elseif name in (
+                :gap_tolerance,
+                :degeneracy_threshold,
+                :denominator_regularization,
+                :intermediate_regularization,
+            )
+                valid &= numeric_value>=0
+                # Retain the existing metric SC isolated-band eta=0 branch.
+                # Other regularized roles stay positive; this introduces no bare SHG mode.
+                metric_sc_isolated =
+                    nonorthogonal && quantity==:shift_current && name==:denominator_regularization
+                analytic_geometry_bare =
+                    name == :denominator_regularization && (
+                        (
+                            quantity in (:berry_curvature_dipole, :berry_curvature_quadrupole) &&
+                            get(request.values, :derivative_backend, :finite_difference) ==
+                            :analytic
+                        ) || (
+                            quantity in BERRY_MULTIPOLE_QUANTITIES &&
+                            defaults.denominator_regularization == 0
+                        )
+                    )
+                positive_regularization =
+                    name in (:denominator_regularization, :intermediate_regularization) &&
+                    !metric_sc_isolated &&
+                    !(
+                        quantity in ZERO_REGULARIZATION_GEOMETRY_QUANTITIES ||
+                        quantity in BERRY_MULTIPOLE_QUANTITIES
+                    ) &&
+                    !analytic_geometry_bare
+                positive_regularization && (valid &= numeric_value>0)
+            end
+        elseif valid && name==:broadening_type
+            valid=value in ("Gaussian", "Lorentzian")
+        elseif valid && name==:fs_kind
+            valid=value in (:gaussian, :lorentzian)
+        elseif valid && name==:prescription
+            value == :distribution_broadening || throw(
+                ArgumentError(
+                    "THG prescription must be distribution_broadening; causal was removed and shg_compatible requires explicit migration",
+                ),
+            )
+            valid=true
+        elseif valid && name==:occupation_derivative_mode
+            valid=value in (:fermi_dirac, :shg_gaussian)
+        elseif valid && name==:derivative_backend
+            valid=value in (:analytic, :finite_difference)
+        end
+        valid || throw(
+            ArgumentError(
+                "Invalid value or type for Numerics parameter $name in task $(task.id), quantity $quantity",
+            ),
+        )
+    end
+    resolved = merge(defaults, request.values)
+    if quantity in (:berry_curvature_dipole, :berry_curvature_quadrupole) &&
+       resolved.derivative_backend == :analytic
+        :finite_difference_step in request.supplied && throw(
+            ArgumentError(
+                "finite_difference_step does not apply to analytic task $(task.id); inherited explicit values must also be omitted",
+            ),
+        )
+        resolved.denominator_regularization == 0 || throw(
+            ArgumentError(
+                "analytic BCD/BCQ requires zero denominator_regularization; regularized-curvature derivatives are not supported",
+            ),
+        )
+        nonorthogonal && throw(
+            ArgumentError(
+                "analytic BCD/BCQ requires an orthogonal model; finite_difference remains available",
+            ),
+        )
+    end
+    return resolved
 end
 
 # Keep new response quantities separate from the historical optical-current family.
 const SPECTRAL_RESPONSE_QUANTITIES=(
+    :intrinsic_ahc,
     :linear_transport,
     :linear_optical_response,
     :orbital_magnetization,
@@ -233,6 +759,20 @@ const SPECTRAL_RESPONSE_QUANTITIES=(
 # Validate explicit family inputs before file IO and preserve static versus optical axes.
 function _spectral_task_physics(task, quantity, calculation = :integral)
     physics=task.physics
+    if quantity == :intrinsic_ahc
+        physics isa IntrinsicHallParameters ||
+            throw(ArgumentError("intrinsic_ahc requires IntrinsicHallParameters"))
+        calculation in (:integral, :kslice) ||
+            throw(ArgumentError("intrinsic_ahc requires Integral or KSlice sampling"))
+        iszero(physics.temperature) ||
+            throw(ArgumentError("INTRINSIC_HALL_REQUIRES_ZERO_TEMPERATURE"))
+        return (;
+            fermi_energies = copy(physics.fermi_energies),
+            fermi_energies_definition = fermi_energy_axis_definition(physics.fermi_energies),
+            temperature = physics.temperature,
+            photon_energies = Float64[],
+        )
+    end
     expected=quantity==:linear_transport ? LinearTransportParameters :
              quantity==:linear_optical_response ? LinearOpticalResponseParameters :
              OrbitalMagnetizationParameters
@@ -261,7 +801,7 @@ function _spectral_task_physics(task, quantity, calculation = :integral)
             throw(ArgumentError("Unknown orbital input semantics"))
         return (;
             fermi_energies = copy(physics.fermi_energies),
-            fermi_energies_sha256 = fermi_energy_axis_sha256(physics.fermi_energies),
+            fermi_energies_definition = fermi_energy_axis_definition(physics.fermi_energies),
             temperature = physics.temperature,
             photon_energies = energy,
             orbital_input_semantics = physics.input_semantics,
@@ -275,8 +815,9 @@ function _spectral_task_physics(task, quantity, calculation = :integral)
     )
     return (;
         fermi_energies = quantity == :linear_transport ? copy(physics.fermi_energies) : Float64[],
-        fermi_energies_sha256 = quantity == :linear_transport ?
-                                fermi_energy_axis_sha256(physics.fermi_energies) : "NOT_APPLICABLE",
+        fermi_energies_definition = quantity == :linear_transport ?
+                                    fermi_energy_axis_definition(physics.fermi_energies) :
+                                    "NOT_APPLICABLE",
         fermi_energy = quantity == :linear_optical_response ? physics.fermi_energy : 0.0,
         temperature = physics.temperature,
         photon_energies = copy(energy),
@@ -286,91 +827,48 @@ function _spectral_task_physics(task, quantity, calculation = :integral)
 end
 
 # Keep spectral-gap thresholds independent of physical relaxation and FS broadening.
-function _spectral_task_numerics(task, quantity)
-    expected=quantity==:orbital_magnetization ? OrbitalNumerics : LinearResponseNumerics
-    numerics=something(task.numerics, expected())
-    numerics isa expected || throw(ArgumentError("$quantity requires $expected"))
+function _spectral_task_numerics(task, quantity; nonorthogonal::Bool = false)
+    numerics=resolved_numerical_values(task, quantity; nonorthogonal)
+    if quantity == :intrinsic_ahc
+        return NamedTuple()
+    end
+    if quantity == :orbital_magnetization
+        return (; denominator_regularization = Float64(numerics.denominator_regularization))
+    end
     isfinite(numerics.gap_tolerance)&&numerics.gap_tolerance>=0 ||
         throw(ArgumentError("Invalid spectral gap tolerance"))
     result=(;
-        spectral_gap_tolerance = numerics.gap_tolerance,
-        denominator_regularization = 0.0,
+        spectral_gap_tolerance = Float64(numerics.gap_tolerance),
+        denominator_regularization = !nonorthogonal || quantity in
+                                     (:orbital_magnetization, :linear_optical_response) ?
+                                     Float64(numerics.denominator_regularization) : 0.0,
         degeneracy_threshold = 0.0,
     )
     if quantity!=:orbital_magnetization
-        fs=numerics.fermi_surface
+        has_kind = numerics.fs_kind !== nothing
+        has_width = numerics.eta_fs_ev !== nothing
+        has_kind == has_width ||
+            throw(ArgumentError("fs_kind and eta_fs_ev must be provided together"))
+        has_fs = has_kind && has_width
         if task.physics.temperature==0
-            fs!==nothing || throw(ArgumentError("T=0 requires explicit FermiSurfaceBroadening"))
-        elseif fs!==nothing
-            throw(ArgumentError("Finite T uses exact -f′; omit fermi_surface"))
+            has_fs || throw(ArgumentError("T=0 requires explicit fs_kind and eta_fs_ev"))
+        elseif has_fs || any(
+            key->key in (:fs_kind, :eta_fs_ev),
+            something(task.numerics, Numerics()).supplied,
+        )
+            throw(ArgumentError("Finite T uses exact -f′; omit fs_kind and eta_fs_ev"))
         end
-        if fs!==nothing
-            fs.kind in (:gaussian, :lorentzian) && isfinite(fs.eta_fs_ev)&&fs.eta_fs_ev>0 ||
-                throw(ArgumentError("Invalid FS line shape/width"))
-            result=merge(result, (; fs_kind = fs.kind, eta_fs_ev = fs.eta_fs_ev))
+        if has_fs
+            numerics.fs_kind in (:gaussian, :lorentzian) &&
+            isfinite(numerics.eta_fs_ev) &&
+            numerics.eta_fs_ev>0 || throw(ArgumentError("Invalid FS line shape/width"))
+            result=merge(
+                result,
+                (; fs_kind = numerics.fs_kind, eta_fs_ev = Float64(numerics.eta_fs_ev)),
+            )
         end
     end
     return result
-end
-
-"""Independent SHG resonance, low-frequency and intermediate-state regularizations in eV."""
-Base.@kwdef struct SHGNumerics <: AbstractTaskNumerics
-    broadening::Float64 = 0.025
-    broadening_type::String = "Gaussian"
-    low_frequency_broadening::Float64 = 0.025
-    intermediate_regularization::Float64 = 0.04
-    eta_correction::Bool = true
-    degeneracy_threshold::Float64 = 1.0e-4
-end
-
-"""Optical broadening and matrix/finite-difference controls, with explicit-key provenance."""
-struct OpticalNumerics <: AbstractTaskNumerics
-    values::NamedTuple
-    supplied::Tuple
-end
-
-"""Geometry matrix/finite-difference controls; optical line-width options are not accepted."""
-struct GeometryNumerics <: AbstractTaskNumerics
-    values::NamedTuple
-    supplied::Tuple
-end
-
-"""Fail-closed Hermiticity tolerance for a band-spectrum task."""
-Base.@kwdef struct BandNumerics <: AbstractTaskNumerics
-    hermiticity_tolerance::Float64 = 1.0e-10
-end
-
-# Reject unknown numerical keys, then combine explicit values with the numerical defaults.
-function _task_numerics(defaults::NamedTuple, kwargs, name::AbstractString)
-    unknown = setdiff(collect(keys(kwargs)), collect(keys(defaults)))
-    isempty(unknown) ||
-        throw(ArgumentError("$(name) does not accept $(join(string.(unknown), ", "))."))
-    return merge(defaults, (; kwargs...)), Tuple(keys(kwargs))
-end
-
-"""Store optical numerical defaults and track which options were explicitly supplied."""
-function OpticalNumerics(; kwargs...)
-    defaults = (
-        broadening = 0.040,
-        broadening_type = "Gaussian",
-        transition_window_factor = 5.0,
-        denominator_regularization = 0.001,
-        degeneracy_threshold = 0.002,
-        finite_difference_step = nothing,
-        band_window_size = -1,
-    )
-    return OpticalNumerics(_task_numerics(defaults, kwargs, "OpticalNumerics")...)
-end
-
-"""Store geometry numerical defaults while rejecting optical-only options."""
-function GeometryNumerics(; kwargs...)
-    defaults = (
-        denominator_regularization = 0.001,
-        degeneracy_threshold = 0.002,
-        finite_difference_step = nothing,
-        band_window_size = nothing,
-    )
-    return GeometryNumerics(_task_numerics(defaults, kwargs, "GeometryNumerics")...)
 end
 
 """Typed band observation; it never substitutes for the internal calculation band window."""
@@ -473,6 +971,39 @@ struct TensorComponent
     end
 end
 
+"""An ordered, nonempty list of unique Cartesian components; the task checks rank applicability."""
+struct TensorComponents
+    components::Tuple{Vararg{Union{NTuple{3, Int}, NTuple{4, Int}}}}
+    function TensorComponents(components::TensorComponent...)
+        isempty(components) && throw(ArgumentError("TensorComponents must be nonempty"))
+        rank = length(first(components).indices)
+        rank in (3, 4) && all(c->length(c.indices)==rank && all(i->i<=3, c.indices), components) ||
+            throw(
+                ArgumentError(
+                    "TensorComponents requires one consistent rank, three or four Cartesian axes; the task registry checks applicability",
+                ),
+            )
+        tuples=Tuple(c.indices for c in components)
+        length(unique(tuples))==length(tuples) || throw(ArgumentError("Duplicate components"))
+        new(tuples)
+    end
+end
+
+"""Accept a collection of typed selectors or three-/four-axis integer tuples."""
+function TensorComponents(components::Union{AbstractVector, Tuple})
+    converted=map(components) do component
+        component isa TensorComponent && return component
+        component isa Tuple && length(component) in (3, 4) && all(i->i isa Integer, component) ||
+            throw(
+                ArgumentError(
+                    "TensorComponents accepts TensorComponent or three-/four-axis integer tuples",
+                ),
+            )
+        return TensorComponent(component...)
+    end
+    return TensorComponents(converted...)
+end
+
 """The complete response tensor currently supported for Integral output."""
 struct FullTensor end
 
@@ -488,8 +1019,18 @@ struct TaskSpec
     quantity::String
     method::Union{Nothing, String}
     physics::AbstractTaskParameters
-    numerics::Union{Nothing, AbstractTaskNumerics}
-    observable::Union{Nothing, FullTensor, KSliceSelection}
+    numerics::Union{Nothing, Numerics}
+    observable::Union{Nothing, FullTensor, TensorComponents, KSliceSelection}
+end
+
+# Shared by the typed API, named text boundary and explicit migration tool.
+function _validate_task_id(id::AbstractString)
+    occursin(r"^[A-Za-z0-9][A-Za-z0-9_-]*$", id) || throw(
+        ArgumentError(
+            "Task id must contain only ASCII letters, digits, '-' and '_', and start with a letter or digit.",
+        ),
+    )
+    return String(id)
 end
 
 """Copy one named task and reject IDs that could escape its output directory."""
@@ -498,14 +1039,10 @@ function TaskSpec(;
     quantity::AbstractString,
     method::Union{Nothing, AbstractString} = nothing,
     physics::AbstractTaskParameters,
-    numerics::Union{Nothing, AbstractTaskNumerics} = nothing,
-    observable::Union{Nothing, FullTensor, KSliceSelection} = nothing,
+    numerics::Union{Nothing, Numerics} = nothing,
+    observable::Union{Nothing, FullTensor, TensorComponents, KSliceSelection} = nothing,
 )
-    occursin(r"^[A-Za-z0-9][A-Za-z0-9_-]*$", id) || throw(
-        ArgumentError(
-            "Task id must contain only ASCII letters, digits, '-' and '_', and start with a letter or digit.",
-        ),
-    )
+    _validate_task_id(id)
     isempty(strip(quantity)) && throw(ArgumentError("Task quantity must not be empty."))
     return TaskSpec(
         String(id),
@@ -519,7 +1056,7 @@ end
 
 """Public run configuration: shared model/sampling/execution plus independently named tasks."""
 struct TaskConfig
-    model::ModelInput
+    model::Union{ModelInput, AbstractNativeModelInput}
     sampling::AbstractSampling
     tasks::Vector{TaskSpec}
     execution::ExecutionOptions
@@ -528,7 +1065,7 @@ end
 
 """Copy the shared configuration and reject empty or case-colliding task identifiers."""
 function TaskConfig(;
-    model::Union{Nothing, ModelInput} = nothing,
+    model::Union{Nothing, ModelInput, AbstractNativeModelInput} = nothing,
     sampling::Union{Nothing, AbstractSampling} = nothing,
     tasks = nothing,
     execution::Union{Nothing, ExecutionOptions} = nothing,
@@ -538,14 +1075,14 @@ function TaskConfig(;
     if !isempty(kwargs) || (tasks !== nothing && !(tasks isa AbstractVector{TaskSpec}))
         throw(
             ArgumentError(
-                "The flat TaskConfig interface has been removed. Use ModelInput, sampling, ExecutionOptions and named TaskSpec objects; see docs/MIGRATION_1.0.0.md. Unsupported keywords: $(join(string.(keys(kwargs)), ", ")).",
+                "The flat TaskConfig interface has been removed. Use ModelInput, sampling, ExecutionOptions and named TaskSpec objects; see docs/PUBLIC_API.md. Unsupported keywords: $(join(string.(keys(kwargs)), ", ")).",
             ),
         )
     end
     model !== nothing && sampling !== nothing && execution !== nothing && tasks !== nothing ||
         throw(
             ArgumentError(
-                "TaskConfig requires explicit model, sampling, execution and tasks groups; see docs/MIGRATION_1.0.0.md.",
+                "TaskConfig requires explicit model, sampling, execution and tasks groups; see docs/PUBLIC_API.md.",
             ),
         )
     isempty(tasks) && throw(ArgumentError("TaskConfig requires at least one TaskSpec."))
@@ -587,6 +1124,8 @@ _sampling_fields(sampling::KPath) = (;
     spatial_dimension = sampling.spatial_dimension,
     kpath_nodes = sampling.nodes,
     kpoints_per_segment = sampling.kpoints_per_segment,
+    kpath_branches = sampling.branches,
+    kpath_provenance = sampling.provenance,
 )
 
 # Band structure is a registry-owned task semantic, not a property of KPath sampling.
@@ -640,6 +1179,27 @@ function _task_observation(task::TaskSpec, definition::TaskDefinition, calculati
             throw(ArgumentError("Band tasks do not accept response observables."))
         return (; tensor_indices = (), band_selection = -1, include_occupied_sum = false)
     elseif calculation == :integral
+        if task.observable isa TensorComponents
+            definition.quantity in (
+                QUANTITY_JERK_CURRENT,
+                QUANTITY_THIRD_HARMONIC_GENERATION,
+                QUANTITY_BERRY_CURVATURE_DIPOLE_CONDUCTIVITY,
+                QUANTITY_BERRY_CURVATURE_QUADRUPOLE_CONDUCTIVITY,
+            ) || throw(ArgumentError("TensorComponents does not apply to this task"))
+            all(
+                component -> length(component) == Int(definition.tensor_rank),
+                task.observable.components,
+            ) || throw(
+                ArgumentError(
+                    "TensorComponents rank must match the registered task rank $(definition.tensor_rank)",
+                ),
+            )
+            return (;
+                tensor_indices = first(task.observable.components),
+                band_selection = -1,
+                include_occupied_sum = false,
+            )
+        end
         task.observable isa Union{Nothing, FullTensor} ||
             throw(ArgumentError("Integral tasks support only FullTensor()."))
         return (;
@@ -659,9 +1219,14 @@ function _task_observation(task::TaskSpec, definition::TaskDefinition, calculati
     accepted =
         if definition.quantity in (
             QUANTITY_SECOND_HARMONIC_GENERATION,
+            QUANTITY_JERK_CURRENT,
+            QUANTITY_THIRD_HARMONIC_GENERATION,
             QUANTITY_LINEAR_TRANSPORT,
             QUANTITY_LINEAR_OPTICAL_RESPONSE,
             QUANTITY_ORBITAL_MAGNETIZATION,
+            QUANTITY_INTRINSIC_AHC,
+            QUANTITY_BERRY_CURVATURE_DIPOLE_CONDUCTIVITY,
+            QUANTITY_BERRY_CURVATURE_QUADRUPOLE_CONDUCTIVITY,
         )
             bands isa AllBands && !bands.include_occupied_sum
         elseif definition.quantity == QUANTITY_HERMITIAN_CURVATURE_TENSOR
@@ -693,12 +1258,32 @@ end
 
 const OPTICAL_TASK_QUANTITIES = (
     :second_harmonic_generation,
+    :jerk_current,
+    :third_harmonic_generation,
     :shift_current,
     :injection_current,
     :injection_spin_current,
     :shift_spin_current,
     :photon_drag_shift_current,
     :photon_drag_injection_current,
+)
+# Only these Conventional scalar geometries adopt the unregularized default.
+const ZERO_REGULARIZATION_GEOMETRY_QUANTITIES = (
+    :berry_curvature,
+    :interband_berry_curvature,
+    :interband_quantum_metric,
+    :quantum_metric,
+    :berry_curvature_dipole,
+    :berry_curvature_quadrupole,
+    :quantum_metric_dipole,
+    :quantum_metric_quadrupole,
+    :quantum_christoffel_symbol,
+)
+const EXTERNAL_METRIC_QUANTITIES = (
+    :quantum_metric,
+    :quantum_metric_dipole,
+    :quantum_metric_quadrupole,
+    :quantum_christoffel_symbol,
 )
 const FINITE_DIFFERENCE_GEOMETRY_QUANTITIES = (
     :berry_curvature_dipole,
@@ -723,6 +1308,7 @@ function _task_physics(
     definition::TaskDefinition,
     observation,
 )
+    quantity in BERRY_MULTIPOLE_QUANTITIES && return berry_multipole_task_physics(task)
     quantity in SPECTRAL_RESPONSE_QUANTITIES &&
         return _spectral_task_physics(task, quantity, calculation_symbol(definition.calculation))
     physics = task.physics
@@ -735,6 +1321,8 @@ function _task_physics(
     elseif quantity in OPTICAL_TASK_QUANTITIES
         finite_q = quantity in (:photon_drag_shift_current, :photon_drag_injection_current)
         expected =
+            quantity == :jerk_current ? JerkParameters :
+            quantity == :third_harmonic_generation ? THGParameters :
             quantity == :second_harmonic_generation ? SHGParameters :
             finite_q ? FiniteQOpticalParameters : OpticalParameters
         physics isa expected || throw(ArgumentError("Task $(task.id) requires $(expected)."))
@@ -746,13 +1334,24 @@ function _task_physics(
         calculation == :kslice &&
             length(physics.photon_energies) != 1 &&
             throw(ArgumentError("Optical K-slice requires exactly one photon energy."))
-        momentum = finite_q ? physics.photon_momentum : (0.0, 0.0, 0.0)
+        finite_q &&
+            ((physics.photon_momentum === nothing) == (physics.photon_momenta === nothing)) &&
+            throw(ArgumentError("specify exactly one fixed or paired photon momentum axis"))
+        path =
+            finite_q && physics.photon_momenta !== nothing ?
+            make_photon_momentum_path(physics.photon_energies, physics.photon_momenta) : nothing
+        finite_q &&
+            path !== nothing &&
+            physics.photon_momentum !== nothing &&
+            throw(ArgumentError("fixed and paired photon momenta are mutually exclusive"))
+        momentum = finite_q ? something(physics.photon_momentum, (0.0, 0.0, 0.0)) : (0.0, 0.0, 0.0)
         all(isfinite, momentum) || throw(ArgumentError("photon_momentum must be finite."))
         return (;
             photon_energies = copy(physics.photon_energies),
             fermi_energy = physics.fermi_energy,
             temperature = physics.temperature,
             photon_momentum = momentum,
+            photon_momentum_path = path,
         )
     end
     physics isa GeometryParameters || throw(
@@ -774,8 +1373,14 @@ function _task_physics(
             ),
         )
     end
-    allows_q =
-        method == :geometric_loop && quantity in (:shift_vector, :quantum_hermitian_connection)
+    physics.include_external &&
+        !(quantity in EXTERNAL_METRIC_QUANTITIES) &&
+        throw(
+            ArgumentError(
+                "include_external applies only to ordinary Quantum Metric and its derivatives",
+            ),
+        )
+    allows_q = method == :geometric_loop && quantity == :shift_vector
     physics.photon_momentum === nothing ||
         allows_q ||
         throw(ArgumentError("photon_momentum does not apply to task $(task.id)."))
@@ -786,27 +1391,43 @@ function _task_physics(
         fermi_energy = something(physics.fermi_energy, 0.0),
         temperature = something(physics.temperature, 0.0),
         photon_momentum = momentum,
+        include_external = physics.include_external,
     )
 end
 
 # Apply numerical defaults only within the task family and reject unused explicit controls.
-function _task_numerical_values(
+function _resolved_task_numerical_values(
     task::TaskSpec,
     quantity::Symbol,
     method::Symbol,
     definition::TaskDefinition,
+    ;
+    nonorthogonal::Bool = false,
 )
-    quantity in SPECTRAL_RESPONSE_QUANTITIES && return _spectral_task_numerics(task, quantity)
+    quantity in BERRY_MULTIPOLE_QUANTITIES &&
+        return berry_multipole_task_numerics(task, quantity; nonorthogonal)
+    quantity in SPECTRAL_RESPONSE_QUANTITIES &&
+        return _spectral_task_numerics(task, quantity; nonorthogonal)
     calculation = calculation_symbol(definition.calculation)
     if _is_band_structure(definition)
-        numerics = something(task.numerics, BandNumerics())
-        numerics isa BandNumerics ||
-            throw(ArgumentError("Band task $(task.id) requires BandNumerics."))
-        return (; band_hermiticity_tolerance = numerics.hermiticity_tolerance)
+        numerics = resolved_numerical_values(task, quantity)
+        isfinite(numerics.hermiticity_tolerance) && numerics.hermiticity_tolerance > 0 ||
+            throw(ArgumentError("Invalid hermiticity_tolerance"))
+        return (; band_hermiticity_tolerance = Float64(numerics.hermiticity_tolerance))
+    end
+    if quantity in (:jerk_current, :third_harmonic_generation)
+        return third_order_numerical_values(task, quantity, definition)
     end
     if quantity == :second_harmonic_generation
-        numerics = something(task.numerics, SHGNumerics())
-        numerics isa SHGNumerics || throw(ArgumentError("SHG requires SHGNumerics"))
+        numerics = resolved_numerical_values(task, quantity; nonorthogonal)
+        nonorthogonal &&
+            numerics.eta_correction &&
+            throw(
+                ArgumentError(
+                    "NONORTHOGONAL_SHG_ETA_CORRECTION_UNSUPPORTED: metric cutoff optics has no eta correction",
+                ),
+            )
+        numerics.eta_correction isa Bool || throw(ArgumentError("eta_correction must be Bool"))
         for value in (
             numerics.broadening,
             numerics.low_frequency_broadening,
@@ -827,27 +1448,36 @@ function _task_numerical_values(
         all(>=(0), physics.photon_energies) ||
             throw(ArgumentError("SHG energies must be nonnegative"))
         return (;
-            broadening = numerics.broadening,
-            broadening_type = numerics.broadening_type,
-            denominator_regularization = numerics.intermediate_regularization,
-            degeneracy_threshold = numerics.degeneracy_threshold,
-            shg_low_frequency_broadening = numerics.low_frequency_broadening,
+            broadening = Float64(numerics.broadening),
+            broadening_type = String(numerics.broadening_type),
+            denominator_regularization = nonorthogonal ?
+                                         Float64(numerics.denominator_regularization) :
+                                         Float64(numerics.intermediate_regularization),
+            shg_intermediate_regularization = Float64(numerics.intermediate_regularization),
+            degeneracy_threshold = Float64(numerics.degeneracy_threshold),
+            shg_low_frequency_broadening = Float64(numerics.low_frequency_broadening),
             shg_eta_correction = numerics.eta_correction,
             shg_output = physics.output,
             shg_response = physics.response,
         )
     end
     optical = quantity in OPTICAL_TASK_QUANTITIES
-    expected = optical ? OpticalNumerics : GeometryNumerics
-    numerics = something(task.numerics, expected())
-    numerics isa expected || throw(ArgumentError("Task $(task.id) requires $(expected)."))
-    values = numerics.values
+    numerics = something(task.numerics, Numerics())
+    values = resolved_numerical_values(task, quantity; nonorthogonal)
+    analytic_geometry =
+        quantity in (:berry_curvature_dipole, :berry_curvature_quadrupole) &&
+        values.derivative_backend == :analytic
     uses_degeneracy =
-        method != :conventional || definition.requires_spin || definition.requires_finite_q
+        analytic_geometry ||
+        method != :conventional ||
+        definition.requires_spin ||
+        definition.requires_finite_q
     !uses_degeneracy &&
         :degeneracy_threshold in numerics.supplied &&
         throw(ArgumentError("degeneracy_threshold does not apply to task $(task.id)."))
-    uses_fd = method != :conventional || quantity in FINITE_DIFFERENCE_GEOMETRY_QUANTITIES
+    uses_fd =
+        !analytic_geometry &&
+        (method != :conventional || quantity in FINITE_DIFFERENCE_GEOMETRY_QUANTITIES)
     !uses_fd &&
         :finite_difference_step in numerics.supplied &&
         throw(ArgumentError("finite_difference_step does not apply to task $(task.id)."))
@@ -872,6 +1502,9 @@ function _task_numerical_values(
         finite_difference_step = Float64(fd),
         band_window_size = Int(something(values.band_window_size, -1)),
     )
+    if quantity in (:berry_curvature_dipole, :berry_curvature_quadrupole)
+        result = merge(result, (; derivative_backend = values.derivative_backend))
+    end
     if optical
         values.broadening isa Real && isfinite(values.broadening) && values.broadening > 0 ||
             throw(ArgumentError("broadening must be finite and positive (eV)."))
@@ -891,8 +1524,123 @@ function _task_numerical_values(
     return result
 end
 
+# Validate independent third-order controls and create a concrete internal execution policy.
+function third_order_numerical_values(task, quantity, definition)
+    values=resolved_numerical_values(task, quantity)
+    physics=task.physics
+    all(x->isfinite(x)&&x>=0, physics.photon_energies) ||
+        throw(ArgumentError("Third-order photon energies must be finite and nonnegative (eV)."))
+    components=task.observable isa TensorComponents ? task.observable.components : ()
+    if quantity==:jerk_current
+        physics.projection in (:ordered, :symmetric, :antisymmetric) ||
+            throw(ArgumentError("Invalid jerk projection"))
+        isfinite(values.denominator_regularization) && values.denominator_regularization>0 ||
+            throw(ArgumentError("JC denominator_regularization must be positive"))
+        :finite_difference_step in something(task.numerics, Numerics()).supplied && throw(
+            ArgumentError("JC uses analytic derivatives; finite_difference_step does not apply"),
+        )
+        isfinite(values.broadening) && values.broadening>0 ||
+            throw(ArgumentError("Invalid broadening"))
+        values.broadening_type in ("Gaussian", "Lorentzian") ||
+            throw(ArgumentError("Invalid broadening_type"))
+        isfinite(values.transition_window_factor) ||
+            throw(ArgumentError("Invalid transition_window_factor"))
+        options=ThirdOrderSettings(
+            :both,
+            :conductivity,
+            :total,
+            physics.projection,
+            components,
+            HarmonicFrequencyPolicy(
+                values.broadening_type=="Gaussian",
+                values.broadening,
+                values.broadening,
+                values.denominator_regularization,
+            ),
+            false,
+            false,
+        )
+        return (;
+            broadening = Float64(values.broadening),
+            broadening_type = String(values.broadening_type),
+            denominator_regularization = Float64(values.denominator_regularization),
+            transition_window_factor = Float64(values.transition_window_factor),
+            band_window_size = Int(something(values.band_window_size, -1)),
+            third_order = options,
+        )
+    end
+    physics.formulation in (:unregrouped, :regrouped, :both) ||
+        throw(ArgumentError("Invalid formulation"))
+    physics.response in (:conductivity, :susceptibility, :both) ||
+        throw(ArgumentError("Invalid response"))
+    physics.output in (:total, :terms, :both) || throw(ArgumentError("Invalid output"))
+    values.prescription == :distribution_broadening || throw(
+        ArgumentError(
+            "THG supports prescription=:distribution_broadening only; causal was removed and shg_compatible must be migrated explicitly",
+        ),
+    )
+    values.occupation_derivative_mode in (:fermi_dirac, :shg_gaussian) ||
+        throw(ArgumentError("Invalid occupation_derivative_mode"))
+    values.eta_correction isa Bool || throw(ArgumentError("eta_correction must be Bool"))
+    values.broadening_type in ("Gaussian", "Lorentzian") ||
+        throw(ArgumentError("Invalid broadening_type"))
+    all(x->isfinite(x)&&x>0, (values.broadening, values.low_frequency_broadening)) ||
+        throw(ArgumentError("Positive frequency widths required"))
+    isfinite(values.intermediate_regularization) && values.intermediate_regularization>0 ||
+        throw(ArgumentError("Positive intermediate_regularization required"))
+    options=ThirdOrderSettings(
+        physics.formulation,
+        physics.response,
+        physics.output,
+        :ordered,
+        components,
+        HarmonicFrequencyPolicy(
+            values.broadening_type=="Gaussian",
+            values.broadening,
+            values.low_frequency_broadening,
+            values.intermediate_regularization,
+        ),
+        values.eta_correction,
+        values.occupation_derivative_mode==:fermi_dirac,
+    )
+    return (;
+        broadening = Float64(values.broadening),
+        broadening_type = String(values.broadening_type),
+        denominator_regularization = Float64(values.intermediate_regularization),
+        third_order = options,
+    )
+end
+
+# Attach the user task identity to all numerical validation failures before IO.
+function _task_numerical_values(
+    task::TaskSpec,
+    quantity::Symbol,
+    method::Symbol,
+    definition::TaskDefinition,
+    ;
+    nonorthogonal::Bool = false,
+)
+    try
+        return _resolved_task_numerical_values(task, quantity, method, definition; nonorthogonal)
+    catch exception
+        exception isa InterruptException && rethrow()
+        throw(
+            ArgumentError(
+                "Numerics for task $(task.id), quantity $quantity: $(sprint(showerror, exception))",
+            ),
+        )
+    end
+end
+
 """Compile and validate one named task without reading model files or creating directories."""
-function compile_task_config(cfg::TaskConfig, task::TaskSpec)
+Base.@nospecializeinfer function compile_task_config(
+    cfg::TaskConfig,
+    task::TaskSpec;
+    native_model_input = nothing,
+)
+    # Share task admission across user-defined analytic callback types.
+    @nospecialize native_model_input
+    cfg.model isa AbstractNativeModelInput && return compile_native_task_config(cfg, task)
     occursin(r"^[A-Za-z0-9][A-Za-z0-9_-]*$", task.id) ||
         throw(ArgumentError("Invalid task id $(repr(task.id))."))
     (
@@ -908,9 +1656,72 @@ function compile_task_config(cfg::TaskConfig, task::TaskSpec)
         ),
     )
     quantity, method, calculation, definition = _public_task_identity(task, cfg.sampling)
+    if native_model_input isa AnalyticKInput &&
+       native_model_input.basis == :explicit &&
+       !(
+           quantity in (
+               :berry_curvature_dipole,
+               :berry_curvature_quadrupole,
+               :berry_curvature_dipole_conductivity,
+               :berry_curvature_quadrupole_conductivity,
+           )
+       )
+        throw(
+            ArgumentError(
+                "explicit analytic connection is currently admitted only for BCD/BCQ; no overlap, metric, optical or loop support is inferred",
+            ),
+        )
+    end
+    if quantity in (:jerk_current, :third_harmonic_generation)
+        cfg.execution.response_symmetry_file === nothing ||
+            cfg.execution.integration_algorithm isa HAdaptiveCubature ||
+            cfg.sampling isa KRegion ||
+            throw(ArgumentError("JC/THG automatic symmetry reduction is unsupported"))
+        (
+            cfg.sampling isa KRegion ||
+            cfg.sampling.spatial_dimension==3 ||
+            native_physical_dimension(native_model_input) < 3
+        ) || throw(ArgumentError("JC/THG requires three Cartesian axes"))
+    end
     observation = _task_observation(task, definition, calculation)
     physics = _task_physics(task, quantity, method, definition, observation)
-    numerics = _task_numerical_values(task, quantity, method, definition)
+    if hasproperty(physics, :photon_momentum_path) && physics.photon_momentum_path !== nothing
+        cfg.sampling isa Union{BZMesh, KRegion} &&
+        cfg.execution.integration_algorithm isa UniformIntegration || throw(
+            ArgumentError("paired photon momenta require UniformIntegration on BZMesh or KRegion"),
+        )
+        lowercase(cfg.execution.fourier_backend) == "direct" ||
+            throw(ArgumentError("paired photon momenta currently require explicit Direct Fourier"))
+        native_model_input === nothing ||
+            native_model_input isa RealSpaceTBInput ||
+            (
+                native_model_input isa AnalyticKInput &&
+                native_model_input.basis in (:point_orbitals, :fixed_orthonormal)
+            ) ||
+            throw(
+                ArgumentError(
+                    "paired photon momenta require an orthogonal Wannier, real-space or fixed-basis analytic model",
+                ),
+            )
+        cfg.execution.response_symmetry_file === nothing || throw(
+            ArgumentError("paired photon momenta do not yet support response-symmetry reduction"),
+        )
+    end
+    numerics = _task_numerical_values(
+        task,
+        quantity,
+        method,
+        definition;
+        nonorthogonal = native_model_input isa NonorthogonalLocalizedInput,
+    )
+    if get(numerics, :derivative_backend, :finite_difference) == :analytic ||
+       quantity in BERRY_MULTIPOLE_QUANTITIES
+        lowercase(cfg.execution.fourier_backend) == "direct" || throw(
+            ArgumentError(
+                "analytic BCD/BCQ currently requires explicit Direct Fourier; no implicit backend switch",
+            ),
+        )
+    end
     case_root = resolve_case_root(cfg.model.case_root)
     output_parent =
         resolve_path(cfg.output.output_root, default_output_root(case_root); base = case_root)
@@ -922,9 +1733,24 @@ function compile_task_config(cfg::TaskConfig, task::TaskSpec)
         seed_prefix = resolve_path(cfg.model.seedname, cfg.model.seedname; base = case_root)
         model_fields = merge(model_fields, (; model_file = seed_prefix * "_tb.dat"))
     end
+    sampling_fields = _sampling_fields(cfg.sampling)
+    native_physical_dimension(native_model_input) < 3 &&
+        (sampling_fields = merge(sampling_fields, (; spatial_dimension = 3)))
+    quantity in BERRY_MULTIPOLE_QUANTITIES &&
+        (sampling_fields = merge(sampling_fields, (; spatial_dimension = 3)))
+    if cfg.sampling isa KRegion && quantity in (
+        :second_harmonic_generation,
+        :jerk_current,
+        :third_harmonic_generation,
+        :linear_transport,
+        :linear_optical_response,
+        :orbital_magnetization,
+    )
+        sampling_fields = merge(sampling_fields, (; spatial_dimension = 3))
+    end
     options = merge(
         model_fields,
-        _sampling_fields(cfg.sampling),
+        sampling_fields,
         _configuration_fields(cfg.execution),
         _configuration_fields(cfg.output),
         observation,
@@ -937,10 +1763,15 @@ function compile_task_config(cfg::TaskConfig, task::TaskSpec)
                 canonical_calculation_name(calculation),
             )],
             output_root = joinpath(output_parent, task.id),
+            denominator_regularization_was_explicit = :denominator_regularization in
+                                                      something(task.numerics, Numerics()).supplied,
+            derivative_backend_was_explicit = :derivative_backend in
+                                              something(task.numerics, Numerics()).supplied,
         ),
     )
-    effective = EffectiveTaskConfig(; options...)
+    effective = EffectiveTaskConfig(; options..., native_model_input)
     validate_config(effective)
+    warn_integration_domain(effective)
     return effective
 end
 
@@ -960,7 +1791,12 @@ validate_config(cfg::TaskConfig) =
 function _task_observation_summary(task::TaskSpec, definition::TaskDefinition)
     calculation = calculation_symbol(definition.calculation)
     _is_band_structure(definition) && return (; kind = "band_spectrum")
-    calculation == :integral && return (; kind = "full_tensor")
+    if calculation == :integral
+        return quantity_symbol(definition.quantity) in BERRY_MULTIPOLE_QUANTITIES &&
+               task.observable isa TensorComponents ?
+               (; kind = "tensor_components", components = task.observable.components) :
+               (; kind = "full_tensor")
+    end
     observation = task.observable::KSliceSelection
     bands = observation.bands
     band_summary = if bands isa BandTargets
@@ -997,10 +1833,21 @@ function task_parameter_summary(cfg::TaskConfig, task::TaskSpec)
     effective = compile_task_config(cfg, task)
     quantity, method, calculation, definition = _public_task_identity(task, cfg.sampling)
     optical = quantity in OPTICAL_TASK_QUANTITIES
-    physical = if quantity in SPECTRAL_RESPONSE_QUANTITIES
+    physical = if quantity in BERRY_MULTIPOLE_QUANTITIES
+        (;
+            fermi_energies = copy(task.physics.fermi_energies),
+            temperature = task.physics.temperature,
+            relaxation_time_fs = task.physics.relaxation_time_fs,
+            integral_form = task.physics.integral_form,
+        )
+    elseif quantity in SPECTRAL_RESPONSE_QUANTITIES
         _spectral_task_physics(task, quantity, calculation)
     elseif _is_band_structure(definition)
         (; fermi_energy = effective.fermi_energy)
+    elseif quantity in (:jerk_current, :third_harmonic_generation)
+        NamedTuple{fieldnames(typeof(task.physics))}(
+            Tuple(deepcopy(getfield(task.physics, n)) for n in fieldnames(typeof(task.physics))),
+        )
     elseif optical
         base = (;
             photon_energies = copy(effective.photon_energies),
@@ -1010,36 +1857,71 @@ function task_parameter_summary(cfg::TaskConfig, task::TaskSpec)
         task.physics isa SHGParameters ?
         merge(base, (; output = effective.shg_output, response = effective.shg_response)) :
         task.physics isa FiniteQOpticalParameters ?
-        merge(base, (; photon_momentum = effective.photon_momentum)) : base
+        merge(
+            base,
+            effective.photon_momentum_path === nothing ?
+            (; photon_momentum = effective.photon_momentum) :
+            (;
+                photon_momenta = copy(effective.photon_momentum_path.photon_momenta),
+                momentum_pairing = "zip",
+            ),
+        ) : base
     else
         base =
             effective.include_occupied_sum ?
             (; fermi_energy = effective.fermi_energy, temperature = effective.temperature) :
             NamedTuple()
-        method == :geometric_loop &&
-            quantity in (:shift_vector, :quantum_hermitian_connection) ?
+        quantity in EXTERNAL_METRIC_QUANTITIES &&
+            (base = merge(base, (; include_external = effective.include_external)))
+        method == :geometric_loop && quantity == :shift_vector ?
         merge(base, (; photon_momentum = effective.photon_momentum)) : base
     end
-    numerical = if quantity in SPECTRAL_RESPONSE_QUANTITIES
-        _spectral_task_numerics(task, quantity)
+    numerical = if quantity in BERRY_MULTIPOLE_QUANTITIES
+        resolved_numerical_values(task, quantity)
+    elseif quantity in (:jerk_current, :third_harmonic_generation)
+        resolved_numerical_values(task, quantity)
+    elseif quantity in SPECTRAL_RESPONSE_QUANTITIES
+        _spectral_task_numerics(
+            task,
+            quantity;
+            nonorthogonal = effective.native_model_input isa NonorthogonalLocalizedInput,
+        )
     elseif quantity == :second_harmonic_generation
-        (;
-            broadening = effective.broadening,
-            broadening_type = effective.broadening_type,
-            low_frequency_broadening = effective.shg_low_frequency_broadening,
-            intermediate_regularization = effective.denominator_regularization,
-            eta_correction = effective.shg_eta_correction,
-            degeneracy_threshold = effective.degeneracy_threshold,
+        merge(
+            (;
+                broadening = effective.broadening,
+                broadening_type = effective.broadening_type,
+                low_frequency_broadening = effective.shg_low_frequency_broadening,
+                intermediate_regularization = effective.shg_intermediate_regularization,
+                eta_correction = effective.shg_eta_correction,
+                degeneracy_threshold = effective.degeneracy_threshold,
+            ),
+            effective.native_model_input isa NonorthogonalLocalizedInput ?
+            (; denominator_regularization = effective.denominator_regularization) :
+            NamedTuple(),
         )
     elseif _is_band_structure(definition)
         (; hermiticity_tolerance = effective.band_hermiticity_tolerance)
     else
         base = (; denominator_regularization = effective.denominator_regularization)
-        if method != :conventional || definition.requires_spin || definition.requires_finite_q
+        analytic_geometry =
+            quantity in (:berry_curvature_dipole, :berry_curvature_quadrupole) &&
+            effective.derivative_backend == :analytic
+        if analytic_geometry ||
+           method != :conventional ||
+           (
+               definition.requires_spin &&
+               !(quantity in (:shift_spin_current, :injection_spin_current))
+           ) ||
+           definition.requires_finite_q
             base = merge(base, (; degeneracy_threshold = effective.degeneracy_threshold))
         end
-        if method != :conventional || quantity in FINITE_DIFFERENCE_GEOMETRY_QUANTITIES
+        if !analytic_geometry &&
+           (method != :conventional || quantity in FINITE_DIFFERENCE_GEOMETRY_QUANTITIES)
             base = merge(base, (; finite_difference_step = effective.finite_difference_step))
+        end
+        if quantity in (:berry_curvature_dipole, :berry_curvature_quadrupole)
+            base = merge(base, (; derivative_backend = effective.derivative_backend))
         end
         if optical
             base = merge(
@@ -1061,6 +1943,7 @@ function task_parameter_summary(cfg::TaskConfig, task::TaskSpec)
         calculation = canonical_calculation_name(calculation),
         physics = physical,
         numerics = numerical,
+        explicit_numerics = something(task.numerics, Numerics()).values,
         observable = _task_observation_summary(task, definition),
         output_root = effective.output_root,
     )

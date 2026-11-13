@@ -4,10 +4,10 @@ isdefined(@__MODULE__, :ots_response_config) ||
 bundle, destination, geometry_bundle = ARGS
 @testset "fresh non-finite-model five-operator OAM response" begin
     loaded = OTS_IO.read_real_space_operator_bundle(bundle)
-    @test loaded.manifest.profile == :task_derived
+    @test loaded.manifest.profile == :custom
     @test length(loaded.operators) == 5
     geometry = OTS_IO.read_real_space_operator_bundle(geometry_bundle)
-    @test geometry.manifest.profile == :task_derived
+    @test geometry.manifest.profile == :hamiltonian_position
     @test geometry.manifest.inventory == [OTS_C.REAL_SPACE_HAMILTONIAN, OTS_C.REAL_SPACE_POSITION]
     @test Set(OTS_C.derived_operator_capabilities(geometry.manifest.inventory)) ==
           Set((:internal_connection, :gauge_correction, :berry_connection))
@@ -15,7 +15,7 @@ bundle, destination, geometry_bundle = ARGS
         startswith(basename(path), "tamper-") && endswith(path, ".h5") || continue
         ots_rejects(
             () -> OTS_IO.read_real_space_operator_bundle(path),
-            r"(?i)(operator|inventory|source|selection|registry|contract|hamiltonian|component|digest|SHA)",
+            r"(?i)(operator|inventory|source|selection|registry|contract|hamiltonian|component|mathematical|definition|migration|replica|center|unit)",
         )
     end
     reference = nothing
@@ -33,8 +33,7 @@ bundle, destination, geometry_bundle = ARGS
         @test sources.orbital.axial_energy_overlap !== nothing
         OTS_R.release_runtime_storage!(sources)
         result = WannierNLQG.run(cfg)
-        @test result.qualification.execution_eligible
-        @test !result.qualification.production_eligible
+        # Current model format conveys mathematical data, not stored source qualification.
         tables = Dict(
             basename(path)=>ots_table(path) for path in result.outputs if endswith(path, ".dat")
         )

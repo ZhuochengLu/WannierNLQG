@@ -1,0 +1,38 @@
+
+[model]
+source = "julia"
+identity = "nonperiodic_parallelogram.jl::build_model"
+
+[response]
+fermi_energy_ev = 0.0
+temperature_k = 0.0
+photon_energies_ev = [5.8, 6.4]
+photon_momentum_A_inverse = [0.06, -0.04, 0.0]
+
+[response.sampling]
+kind = "k_region"
+spatial_dimension = 2
+origin = [4.0, 0.2]
+vector_1 = [0.4, 0.08]
+vector_2 = [0.12, 0.36]
+k_mesh = [2, 2]
+
+[response.execution]
+fourier_backend = "direct"
+
+[response.tasks.pdsc]
+kind = "PDSC"
+method = "Geometric_Loop"
+[response.tasks.pdsc.numerics]
+broadening = 0.25
+
+[response.tasks.pdic]
+kind = "PDIC"
+method = "Conventional"
+[response.tasks.pdic.numerics]
+broadening = 0.25
+
+[output]
+# Replace this with your external run directory before execution.
+output_root = "/replace/with/external/parallelogram-output"
+progress_enabled = false

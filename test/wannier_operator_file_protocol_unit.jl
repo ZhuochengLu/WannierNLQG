@@ -141,6 +141,7 @@ end
 
         trailing = joinpath(directory, "trailing.uHu")
         cp(filename, trailing)
+        chmod(trailing, 0o600)
         open(trailing, "a") do io
             write(io, UInt8(0xff))
         end
@@ -156,6 +157,7 @@ end
 
         mismatched = joinpath(directory, "marker-mismatch.uHu")
         cp(filename, mismatched)
+        chmod(mismatched, 0o600)
         open(mismatched, "r+") do io
             seekend(io)
             seek(io, position(io) - 1)

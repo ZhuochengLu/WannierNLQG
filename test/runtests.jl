@@ -26,6 +26,15 @@ const TEST_SELECTION = CITestPlan.resolve_test_selection()
 const RUN_FAST_TESTS = TEST_SELECTION.mode == "fast"
 const RUN_FULL_SHARD = TEST_SELECTION.mode == "full-shard"
 const RUN_MPI_TESTS = TEST_SELECTION.mode == "mpi-only"
+const MPI_APPLICATION = get(ENV, "WANNIERNLQG_MPI_APPLICATION", "")
+isempty(MPI_APPLICATION) ||
+    (
+        MPI_APPLICATION == "nonorthogonal-adaptive" &&
+        RUN_MPI_TESTS &&
+        get(ENV, "WANNIERNLQG_TEST_MPI_PROFILE", "") == "bounded11"
+    ) ||
+    error("unsupported or misplaced MPI application selection")
+const TEST_COMPLETION_MODE = isempty(MPI_APPLICATION) ? TEST_SELECTION.mode : "mpi-application"
 const MPI_EXECUTABLE = if RUN_MPI_TESTS
     @eval import MPI
     MPI.mpiexec()
@@ -119,7 +128,21 @@ include_test_file("ResponseTestSupport.jl")
 include_test_file("DocumentedExampleTestSupport.jl")
 
 const PRE_SHARD_FAST_TEST_FILES = (
+    "orthogonal_geometry_analytic_unit.jl",
+    "berry_geometry_backend_runtime_unit.jl",
+    "berry_multipole_dc_unit.jl",
+    "berry_multipole_runtime_unit.jl",
+    "berry_geometry_fourier_unit.jl",
+    "berry_multipole_periodic_unit.jl",
+    "berry_multipole_dirac_unit.jl",
+    "berry_geometry_multiband_unit.jl",
     "task_configuration_unit.jl",
+    "task_input_unit.jl",
+    "task_input_energy_axes_unit.jl",
+    "task_input_overrides_unit.jl",
+    "workflow_task_input_unit.jl",
+    "scientific_publication_unit.jl",
+    "jc_zero_energy_unit.jl",
     "release_smoke_unit.jl",
     "mpi_runtime_environment_unit.jl",
     "synthetic_runtime_fixture_unit.jl",
@@ -146,7 +169,7 @@ const PRE_SHARD_FAST_TEST_FILES = (
     "projection_representation_group_algebra_unit.jl",
     "projection_representation_corepresentation_unit.jl",
     "projection_representation_intertwiner_unit.jl",
-    "projection_representation_compatibility_unit.jl",
+    "projection_character_reduction_unit.jl",
     "projection_representation_search_unit.jl",
     "projection_representation_materialization_unit.jl",
     "vasp_paw_matrix_elements_unit.jl",
@@ -167,6 +190,8 @@ const PRE_SHARD_FAST_TEST_FILES = (
     "shift_spin_current_unit.jl",
     "zeeman_interband_unit.jl",
     "mixed_fourier_unit.jl",
+    "mixed_position_component_pack_unit.jl",
+    "spectral_block_route_unit.jl",
     "wannier_center_convention_unit.jl",
     "projector_covariant_full_unit.jl",
     "projector_registered_paths_unit.jl",
@@ -206,8 +231,10 @@ const PRE_SHARD_FULL_ONLY_TEST_FILES = (
     "vasp_paw_spn_unit.jl",
     "wannierization_frozen_initializer_unit.jl",
     "wannierization_standard_export_unit.jl",
+    "checkpoint_definition_unit.jl",
     "wannier_operator_profiles_unit.jl",
     "tb_symmetry_qualification_unit.jl",
+    "tb_status_contract_unit.jl",
     "photon_drag_blas_unit.jl",
     "frequency_contraction_prototype_unit.jl",
     "response_exact_optimization_unit.jl",
@@ -222,25 +249,67 @@ const PRE_SHARD_FULL_ONLY_TEST_FILES = (
     "star_covariant_paw_gauge_thread_determinism_unit.jl",
 )
 
+# Preserve the pre-sharding ordered baseline independently of the new automatic
+# Band regression. The authoritative Fast list/digest also fixes its exact order.
+count(==("automatic_band_path_unit.jl"), CITestPlan.FAST_TEST_FILES) == 1 ||
+    error("Fast test plan must include the automatic Band regression exactly once.")
+count(==("optical_momentum_overlap_unit.jl"), CITestPlan.FAST_TEST_FILES) == 1 ||
+    error("Fast test plan must include the optical overlap regression exactly once.")
+
 (
+    "response_integration_unit.jl",
+    "ordinary_calculation_policy_unit.jl",
+    "ordinary_io_call_boundary_unit.jl",
+    "nonorthogonal_localized_unit.jl",
+    "nonorthogonal_io_runtime_unit.jl",
+    "nonorthogonal_spin_convention_unit.jl",
+    "nonorthogonal_spin_charge_unit.jl",
+    "native_model_inputs_unit.jl",
     "preparation_storage_unit.jl",
     "second_harmonic_unit.jl",
     "linear_orbital_response_unit.jl",
+    "subspace_geometry_completion_unit.jl",
     "linear_orbital_runtime_unit.jl",
     PRE_SHARD_FAST_TEST_FILES...,
-) == CITestPlan.FAST_TEST_FILES || error(
+) == filter(
+    name -> !(
+        name in (
+            "eskernel_unit.jl",
+            "hdf5_attribute_backend_unit.jl",
+            "numerics_unit.jl",
+            "third_order_unit.jl",
+            "third_order_runtime_unit.jl",
+            "automatic_band_path_unit.jl",
+            "paired_photon_momentum_unit.jl",
+            "optical_momentum_overlap_unit.jl",
+            CITestPlan.SCIENTIFIC_REPAIR_FAST_TEST_FILES...,
+        )
+    ),
+    CITestPlan.FAST_TEST_FILES,
+) || error(
     "Fast test plan must retain the frozen inventory and add SHG and bounded preparation contracts.",
 )
 (
+    "wannierization_restart_input_definition_unit.jl" in CITestPlan.FULL_ONLY_TEST_FILES &&
     "ordinary_posthoc_tb_qualification_unit.jl" in CITestPlan.FULL_ONLY_TEST_FILES &&
     "disk_bounded_gauge_unit.jl" in CITestPlan.FULL_ONLY_TEST_FILES &&
+    "parallelogram_region_unit.jl" in CITestPlan.FULL_ONLY_TEST_FILES &&
+    "parallelepiped_region_unit.jl" in CITestPlan.FULL_ONLY_TEST_FILES &&
     filter(
         name -> !(
             name in (
+                "wannierization_restart_input_definition_unit.jl",
+                "native_model_symmetry_unit.jl",
+                "native_model_responses_unit.jl",
+                "native_model_region_unit.jl",
+                "parallelogram_region_unit.jl",
+                "parallelepiped_region_unit.jl",
+                "finite_domain_runtime_unit.jl",
                 "ordinary_posthoc_tb_qualification_unit.jl",
                 "disk_bounded_gauge_unit.jl",
                 "fermi_vector_contract_unit.jl",
                 "linear_orbital_parallel_unit.jl",
+                "third_order_parallel_unit.jl",
                 "operator_task_selection_unit.jl",
             )
         ),
@@ -294,7 +363,7 @@ if RUN_FULL_SHARD
     end
 end
 
-if RUN_MPI_TESTS
+if RUN_MPI_TESTS && isempty(MPI_APPLICATION)
     mpi_env = [
         "WANNIERNLQG_USE_MPI" => "1",
         "JULIA_NUM_THREADS" => "1",
@@ -308,29 +377,48 @@ if RUN_MPI_TESTS
     ]
     mpi_cmd =
         `$(MPI_EXECUTABLE) -n 2 $(Base.julia_cmd()) --startup-file=no --threads=1 --project=$(ROOT) $(joinpath(SCRIPT_DIR, "check_mpi_smoke.jl"))`
+    capture_output = get(ENV, "WANNIERNLQG_MPI_ADMISSION_CAPTURE", "")
+    if !isempty(capture_output)
+        include(joinpath(@__DIR__, "MPIAdmissionCapture.jl"))
+        capture_mpi_admission(mpi_cmd, mpi_env, capture_output)
+        println("MPI_ADMISSION_CAPTURE_ONLY_NO_MPI_COMPUTATION")
+        # This is a preflight receipt, never a smoke or Full completion marker.
+        exit(78) # expected preflight-only terminal; cannot make a Full selection PASS
+    end
     @testset "two-rank MPI smoke" begin
         @test run_gate("two-rank MPI smoke", mpi_cmd; env = mpi_env)
     end
 
     response_script = joinpath(SCRIPT_DIR, "check_response_symmetry_mpi.jl")
     @testset "response symmetry MPI determinism" begin
-        @test run_gate(
-            "response symmetry MPI size 1",
-            `$(Base.julia_cmd()) --startup-file=no --threads=1 --project=$(ROOT) $(response_script) 1`;
-            env = mpi_env,
-        )
-        @test run_gate(
-            "response symmetry MPI size 2",
-            `$(MPI_EXECUTABLE) -n 2 $(Base.julia_cmd()) --startup-file=no --threads=1 --project=$(ROOT) $(response_script) 2`;
-            env = mpi_env,
-        )
+        # One caller-owned local fixture survives both child processes. Numerical
+        # outputs stay in the declared suite output root; source guards stay strict.
+        mktempdir() do fixture_root
+            fixture_env = [mpi_env; "WANNIERNLQG_RESPONSE_MPI_FIXTURE_ROOT" => fixture_root]
+            @test run_gate(
+                "response symmetry MPI size 1",
+                `$(Base.julia_cmd()) --startup-file=no --threads=1 --project=$(ROOT) $(response_script) 1`;
+                env = fixture_env,
+            )
+            @test run_gate(
+                "response symmetry MPI size 2",
+                `$(MPI_EXECUTABLE) -n 2 $(Base.julia_cmd()) --startup-file=no --threads=1 --project=$(ROOT) $(response_script) 2`;
+                env = fixture_env,
+            )
+        end
     end
 
     foreach(include_test_file, CITestPlan.MPI_TEST_FILES)
 end
 
+if !isempty(MPI_APPLICATION)
+    include_test_file("nonorthogonal_adaptive_mpi_unit.jl")
+    println("[mpi-application:complete] application=$(MPI_APPLICATION)")
+    flush(stdout)
+end
+
 println(
-    "[test-suite:complete] mode=$(TEST_SELECTION.mode) " *
+    "[test-suite:complete] mode=$(TEST_COMPLETION_MODE) " *
     "shard=$(something(TEST_SELECTION.shard, "none")) " *
     "elapsed_s=$(round((time_ns() - TEST_SUITE_STARTED_NS) / 1.0e9; digits = 3))",
 )

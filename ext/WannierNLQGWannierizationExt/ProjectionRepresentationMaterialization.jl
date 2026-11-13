@@ -5,8 +5,6 @@ function _projection_materialization_solution(result, solution_index::Int)
         throw(ArgumentError("projection basis materialization requires a complete search"))
     result.status == PROJECTION_SEARCH_COMPLETE ||
         throw(ArgumentError("projection basis materialization requires PROJECTION_SEARCH_COMPLETE"))
-    result.payload_sha256 == _projection_search_payload_sha256(result) ||
-        throw(ArgumentError("projection search result payload SHA-256 mismatch"))
     1 <= solution_index <= length(result.solutions) ||
         throw(BoundsError(result.solutions, solution_index))
     solution = result.solutions[solution_index]
@@ -60,28 +58,27 @@ function _projection_materialization_representation(template)
     representation = if input.band_representation !== nothing
         something(input.band_representation)
     else
-        read_band_representation_hdf5(something(input.band_representation_hdf5))
+        read_band_representation_hdf5(
+            something(input.band_representation_hdf5);
+            content_authentication = false,
+        )
     end
-    return representation, representation_static_sha256(representation)
+    return representation, representation_static_definition(representation)
 end
 
 # Require the representation to carry the exact target-contract identity.
 function _validate_projection_materialization_contract(representation, result)
-    recorded_contract = get(
-        representation.conventions,
-        "target_subspace_contract_sha256",
-        get(representation.input_sha256, "TARGET_SUBSPACE_CONTRACT_SHA256", ""),
-    )
-    recorded_contract == result.contract_sha256 || throw(
+    recorded_contract = get(representation.conventions, "target_subspace_contract_definition", "")
+    recorded_contract == result.contract_definition || throw(
         ArgumentError(
-            "SAWF representation does not carry the searched target-subspace contract SHA-256",
+            "SAWF representation does not carry the searched complete target-subspace contract",
         ),
     )
     for (key, expected) in (
-        "outer_mask_sha256" => result.outer_mask_sha256,
-        "frozen_mask_sha256" => result.frozen_mask_sha256,
+        "outer_mask_definition" => result.outer_mask_definition,
+        "frozen_mask_definition" => result.frozen_mask_definition,
     )
-        recorded = get(representation.conventions, key, expected)
+        recorded = get(representation.conventions, key, nothing)
         recorded == expected ||
             throw(ArgumentError("SAWF representation $(key) disagrees with search result"))
     end
@@ -97,12 +94,12 @@ function _validate_projection_materialization_windows(template, representation, 
     )
     outer = BitMatrix(hcat(outer_masks...))
     frozen = BitMatrix(hcat(frozen_masks...))
-    outer_sha = qualification_mask_sha256(outer)
-    frozen_sha = qualification_mask_sha256(frozen)
-    outer_sha == result.outer_mask_sha256 || throw(
+    outer_sha = qualification_mask_definition(outer)
+    frozen_sha = qualification_mask_definition(frozen)
+    outer_sha == result.outer_mask_definition || throw(
         ArgumentError("SAWF template outer window does not reproduce the searched outer mask"),
     )
-    frozen_sha == result.frozen_mask_sha256 || throw(
+    frozen_sha == result.frozen_mask_definition || throw(
         ArgumentError("SAWF template frozen window does not reproduce the searched frozen mask"),
     )
     return nothing
@@ -117,23 +114,23 @@ spinor convention, and dimension are checked before reconstruction. The
 routine does not enter initialization or either Z/U solver stage.
 """
 function materialize_symmetry_adapted_wannierization_config(
-    template::SymmetryAdaptedWannierizationConfig,
+    template::WannierizationConfig,
     result::ProjectionRepresentationSearchResult;
     solution_index::Integer = 1,
 )
     basis = materialize_projection_basis(result; solution_index)
     template.input.num_wannier == result.num_wannier ||
         throw(ArgumentError("SAWF template num_wannier disagrees with projection search result"))
-    representation, representation_sha256 = _projection_materialization_representation(template)
-    representation_sha256 == result.representation_sha256 ||
-        throw(ArgumentError("SAWF template band representation SHA-256 mismatch"))
+    representation, representation_definition = _projection_materialization_representation(template)
+    representation_definition == result.representation_definition ||
+        throw(ArgumentError("SAWF template band representation definition mismatch"))
     representation.spinor == result.spinor ||
         throw(ArgumentError("SAWF template spinor convention mismatch"))
     _validate_projection_materialization_contract(representation, result)
     _validate_projection_materialization_windows(template, representation, result)
 
     materialized = replace_wannierization_config(template; input = (projection_basis = basis,))
-    for group_name in fieldnames(SymmetryAdaptedWannierizationConfig)
+    for group_name in fieldnames(WannierizationConfig)
         materialized_group = getfield(materialized, group_name)
         template_group = getfield(template, group_name)
         for name in fieldnames(typeof(template_group))

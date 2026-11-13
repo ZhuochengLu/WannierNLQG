@@ -1,5 +1,5 @@
 const PAW_BLOCK_PARTITION_AUDIT_SCHEMA = "WannierNLQG.paw_block_partition_audit"
-const PAW_BLOCK_PARTITION_AUDIT_SCHEMA_VERSION = "1.0"
+const PAW_BLOCK_PARTITION_AUDIT_SCHEMA_VERSION = "2.0"
 
 """One complex PAW sewing edge retained by the diagnostic audit."""
 struct _PAWBlockEvidenceRecord
@@ -156,7 +156,7 @@ function _write_paw_block_partition_audit_hdf5(
     orbit_labels::Vector{Int},
     lanes,
     summary::AbstractDict,
-    input_sha256::AbstractDict,
+    input_definitions::AbstractDict,
 )
     HDF5.enable_complex_support()
     return atomic_hdf5_write(filename) do temporary
@@ -214,10 +214,10 @@ function _write_paw_block_partition_audit_hdf5(
             for name in keys(first(lanes))
                 lane_group[string(name)] = getfield.(lanes, name)
             end
-            hashes = HDF5.create_group(handle, "input_sha256")
+            hashes = HDF5.create_group(handle, "input_definitions")
             write_string_dictionary(
                 hashes,
-                Dict(string(key) => string(value) for (key, value) in input_sha256),
+                Dict(string(key) => string(value) for (key, value) in input_definitions),
             )
         end
     end
@@ -788,12 +788,21 @@ function audit_paw_block_partitions(config::PAWBlockPartitionAuditConfig)
     else
         pattern
     end
-    input_sha256 = merge(
-        raw_native.input_sha256,
-        _star_input_audit_hash(config, raw_native.input_sha256, length(operations)),
-    )
+    # Only an explicitly supplied audit has an identity consumer. Native content
+    # fingerprints are neither computed nor copied into this diagnostic report.
+    input_definitions = if config.input_symmetry_audit_json === nothing
+        Dict{String, String}()
+    else
+        _strict_source_definition(parent_source, raw_native)
+        _star_input_audit_definition(
+            config,
+            something(raw_native.source_definition),
+            length(operations),
+        )
+    end
     summary = Dict{String, Any}(
         "status" => "STANDARD",
+        "content_authentication" => "NOT_PERFORMED",
         "production_eligible" => false,
         "source_kpoint_count" => length(selected_kpoints),
         "operation_count" => length(operations),
@@ -883,7 +892,7 @@ function audit_paw_block_partitions(config::PAWBlockPartitionAuditConfig)
         "bands_status" => "NOT_RUN_USER_SCOPED",
         "fixed_gap_scan" =>
             [Dict(string(key) => value for (key, value) in pairs(lane)) for lane in lanes],
-        "input_sha256" => input_sha256,
+        "input_definitions" => input_definitions,
     )
     _write_paw_block_partition_audit_hdf5(
         config.output_hdf5,
@@ -892,7 +901,7 @@ function audit_paw_block_partitions(config::PAWBlockPartitionAuditConfig)
         orbit_labels,
         lanes,
         summary,
-        input_sha256,
+        input_definitions,
     )
     _write_paw_block_partition_audit_csv(config.output_csv, records, component_labels, orbit_labels)
     temporary_json = config.output_json * ".tmp"
@@ -912,7 +921,7 @@ function audit_paw_block_partitions(config::PAWBlockPartitionAuditConfig)
         maximum_gap,
         maximum_coupling,
         pattern,
-        Dict(string(key) => string(value) for (key, value) in input_sha256),
+        Dict(string(key) => string(value) for (key, value) in input_definitions),
         String[],
         far_residual_count,
         tolerated_far_residual_count,

@@ -87,39 +87,39 @@ struct ProjectionCandidateSpec
     end
 end
 
-"""Pinned upstream behavior profile and the scope of one compatibility claim."""
-struct ProjectionRepresentationCompatibilityInfo
-    upstream_package::String
-    upstream_version::String
-    upstream_commit::String
-    upstream_source_sha256::String
-    parity_eligible::Bool
+"""Physical character-reduction algorithm identity and its supported symmetry scope."""
+struct ProjectionRepresentationAlgorithmInfo
+    algorithm_name::String
+    algorithm_version::String
+    algorithm_contract_sha256::String
+    implementation_sha256::String
+    canonical_reduction_eligible::Bool
     scope::Symbol
     character_tolerance::Float64
     character_round_digits::Int
     little_group_tolerance::Float64
 
-    function ProjectionRepresentationCompatibilityInfo(
-        upstream_package,
-        upstream_version,
-        upstream_commit,
-        upstream_source_sha256,
-        parity_eligible,
+    function ProjectionRepresentationAlgorithmInfo(
+        algorithm_name,
+        algorithm_version,
+        algorithm_contract_sha256,
+        implementation_sha256,
+        canonical_reduction_eligible,
         scope,
         character_tolerance,
         character_round_digits,
         little_group_tolerance,
     )
-        package = strip(String(upstream_package))
-        version = strip(String(upstream_version))
-        commit = lowercase(strip(String(upstream_commit)))
-        source_sha256 = lowercase(strip(String(upstream_source_sha256)))
-        isempty(package) && throw(ArgumentError("upstream_package must not be empty"))
-        isempty(version) && throw(ArgumentError("upstream_version must not be empty"))
-        occursin(r"^[0-9a-f]{40}$", commit) ||
-            throw(ArgumentError("upstream_commit must be a full hexadecimal commit"))
+        package = strip(String(algorithm_name))
+        version = strip(String(algorithm_version))
+        commit = lowercase(strip(String(algorithm_contract_sha256)))
+        source_sha256 = lowercase(strip(String(implementation_sha256)))
+        isempty(package) && throw(ArgumentError("algorithm_name must not be empty"))
+        isempty(version) && throw(ArgumentError("algorithm_version must not be empty"))
+        occursin(r"^[0-9a-f]{64}$", commit) ||
+            throw(ArgumentError("algorithm_contract_sha256 must be a hexadecimal SHA-256"))
         occursin(r"^[0-9a-f]{64}$", source_sha256) ||
-            throw(ArgumentError("upstream_source_sha256 must be a hexadecimal SHA-256"))
+            throw(ArgumentError("implementation_sha256 must be a hexadecimal SHA-256"))
         scope_value = Symbol(scope)
         scope_value in (:spinless_unitary, :generalized_symmetry) ||
             throw(ArgumentError("unsupported projection compatibility scope $(scope_value)"))
@@ -136,7 +136,7 @@ struct ProjectionRepresentationCompatibilityInfo
             version,
             commit,
             source_sha256,
-            Bool(parity_eligible),
+            Bool(canonical_reduction_eligible),
             scope_value,
             character_value,
             digits_value,
@@ -165,7 +165,6 @@ struct ProjectionRepresentationSolution
     signature_multiplicities::Vector{Vector{Int}}
     validation_status::ProjectionRepresentationValidationStatus
     embedding_residuals::Dict{String, Float64}
-    validation_sha256::String
 end
 
 """
@@ -249,15 +248,13 @@ end
 struct ProjectionRepresentationSearchResult
     status::ProjectionRepresentationSearchStatus
     complete::Bool
-    representation_sha256::String
-    contract_sha256::String
-    compatibility_info::ProjectionRepresentationCompatibilityInfo
-    config_sha256::String
-    payload_sha256::String
+    representation_definition::String
+    contract_definition::String
+    algorithm_info::ProjectionRepresentationAlgorithmInfo
     spinor::Bool
     num_wannier::Int
-    outer_mask_sha256::String
-    frozen_mask_sha256::String
+    outer_mask_definition::String
+    frozen_mask_definition::String
     candidates::Vector{ProjectionCandidateSpec}
     radial_transform::WannierProjection.ProjectionRadialTransformConfig
     visited_nodes::Int

@@ -6,7 +6,6 @@ import subprocess
 from typing import Any
 
 import matplotlib as mpl
-import matplotlib.font_manager as fm
 
 from .common import VisualizationError, merge_known
 
@@ -105,6 +104,13 @@ def resolve_style(override: dict[str, Any] | None = None) -> dict[str, Any]:
 
 
 def check_environment(style: dict[str, Any]) -> None:
+    import matplotlib.font_manager as fm
+
+    from .pdf_validation import verify_dependency_lock, PDFValidationError
+    try:
+        verify_dependency_lock()
+    except PDFValidationError as exc:
+        raise VisualizationError(str(exc)) from exc
     family = str(style["font_family"])
     try:
         fm.findfont(family, fallback_to_default=False)
@@ -114,8 +120,10 @@ def check_environment(style: dict[str, Any]) -> None:
         return
     pdflatex = shutil.which("pdflatex")
     kpsewhich = shutil.which("kpsewhich")
-    if not pdflatex or not kpsewhich:
-        raise VisualizationError("LaTeX style requires pdflatex and kpsewhich")
+    latex = shutil.which("latex")
+    dvipng = shutil.which("dvipng")
+    if not pdflatex or not kpsewhich or not latex or not dvipng:
+        raise VisualizationError("LaTeX style requires latex, pdflatex, dvipng and kpsewhich")
     for package in ("newtxtext.sty", "newtxmath.sty", "bm.sty", "textgreek.sty"):
         result = subprocess.run(
             [kpsewhich, package], capture_output=True, text=True, check=False
@@ -177,7 +185,9 @@ GREEK = {
 def tex_text(value: str) -> str:
     escaped: list[str] = []
     for character in str(value):
-        if character in GREEK:
+        if character in "₀₁₂₃₄₅₆₇₈₉":
+            escaped.append(r"\textsubscript{" + str("₀₁₂₃₄₅₆₇₈₉".index(character)) + "}")
+        elif character in GREEK:
             escaped.append(GREEK[character])
         elif character in "_%&#{}":
             escaped.append("\\" + character)

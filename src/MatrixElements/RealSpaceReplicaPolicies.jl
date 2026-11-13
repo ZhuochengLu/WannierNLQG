@@ -1,4 +1,4 @@
-const REAL_SPACE_REPLICA_MAP_DIGEST_SCHEME = "sha256:replica-map-v2/source-r/n-r/ordered-pair-absolute-images"
+const REAL_SPACE_REPLICA_MAP_REFERENCE_SCHEMA = "wanniernlqg.replica-map-publication/1"
 
 """One deterministic orbital-pair map from serialized R records to physical images."""
 struct RealSpaceReplicaMap
@@ -7,11 +7,11 @@ struct RealSpaceReplicaMap
     source_degeneracies::Vector{Int}
     target_r_vectors::Matrix{Int}
     images::Array{Vector{NTuple{3, Int}}, 3}
-    mapping_sha256::String
+    mapping_reference::String
 end
 
-"""Marker for raw Wannier90 values that still carry scalar `N_R` weights."""
-struct SerializedWannier90ReplicaValues end
+"""Marker for raw Wannier values that still carry scalar `N_R` weights."""
+struct RawReplicaValues end
 
 """Marker for operators whose scalar `N_R` weights were divided before projection."""
 struct PredividedReplicaValues end
@@ -30,7 +30,7 @@ struct RealSpaceReplicaPolicyResult
     pair_changed_counts::Matrix{Int}
     input_link_lengths_cartesian::Vector{Float64}
     output_link_lengths_cartesian::Vector{Float64}
-    mapping_sha256::String
+    mapping_reference::String
     map::RealSpaceReplicaMap
 end
 
@@ -56,6 +56,14 @@ function nearest_wigner_seitz_images(
     isfinite(tolerance) && tolerance > 0.0 ||
         throw(ArgumentError("minimum-distance tolerance must be finite and positive"))
     search_size > 0 || throw(ArgumentError("minimum-distance search_size must be positive"))
+    # Own only this invocation's displacement. Retain the original row-vector
+    # multiplication and norm, including their rounding at tied-image boundaries.
+    reuse =
+        center_shift isa Vector{Float64} &&
+        length(center_shift) == 3 &&
+        lattice isa Matrix{Float64} &&
+        size(lattice) == (3, 3)
+    displacement = reuse ? Vector{Float64}(undef, 3) : nothing
     candidates = NTuple{3, Int}[]
     distances = Float64[]
     for i in (-search_size):search_size,
@@ -65,7 +73,15 @@ function nearest_wigner_seitz_images(
         candidate =
             (residue[1] + i * mp_grid[1], residue[2] + j * mp_grid[2], residue[3] + k * mp_grid[3])
         push!(candidates, candidate)
-        push!(distances, norm((collect(candidate) .+ center_shift)' * lattice))
+        distance = if displacement === nothing
+            norm((collect(candidate) .+ center_shift)' * lattice)
+        else
+            for axis in 1:3
+                displacement[axis] = candidate[axis] + center_shift[axis]
+            end
+            norm(displacement' * lattice)
+        end
+        push!(distances, distance)
     end
     minimum_distance = minimum(distances)
     return [
@@ -121,7 +137,7 @@ function _materialize_operator_replicas(
     operator::RealSpaceOperator,
     input_degeneracies::Vector{Int},
     map::RealSpaceReplicaMap,
-    normalization::Union{SerializedWannier90ReplicaValues, PredividedReplicaValues},
+    normalization::Union{RawReplicaValues, PredividedReplicaValues},
 )
     operator.r_vectors == map.source_r_vectors ||
         throw(ArgumentError("replica operator R support does not match the map"))
@@ -141,8 +157,7 @@ function _materialize_operator_replicas(
         source = view(operator.data, left, right, tensor_colons..., source_r_index)
         target_images = map.images[left, right, source_r_index]
         scalar_weight =
-            normalization isa SerializedWannier90ReplicaValues ?
-            inv(input_degeneracies[source_r_index]) : 1.0
+            normalization isa RawReplicaValues ? inv(input_degeneracies[source_r_index]) : 1.0
         weight = scalar_weight / length(target_images)
         for target_image in target_images
             target = view(output, left, right, tensor_colons..., target_indices[target_image])
@@ -152,119 +167,8 @@ function _materialize_operator_replicas(
     return RealSpaceOperator(operator.spec, map.target_r_vectors, output)
 end
 
-# Hash the complete canonical source and ordered orbital-pair image map.
-function _replica_mapping_sha256(
-    source_r_vectors::Matrix{Int},
-    source_degeneracies::Vector{Int},
-    images::Array{Vector{NTuple{3, Int}}, 3},
-)
-    buffer = IOBuffer()
-    print(buffer, REAL_SPACE_REPLICA_MAP_DIGEST_SCHEME, '\n')
-    print(buffer, "source_count=", string(size(source_r_vectors, 2)), '\n')
-    for r_index in axes(source_r_vectors, 2)
-        print(
-            buffer,
-            "R=",
-            join(Tuple(source_r_vectors[:, r_index]), ','),
-            ";N_R=",
-            string(source_degeneracies[r_index]),
-            '\n',
-        )
-    end
-    for left in axes(images, 1), right in axes(images, 2), r_index in axes(images, 3)
-        targets = sort(images[left, right, r_index])
-        print(
-            buffer,
-            "left=",
-            string(left),
-            ";right=",
-            string(right),
-            ";source_index=",
-            string(r_index),
-            ";image_count=",
-            string(length(targets)),
-            '\n',
-        )
-        for target in targets
-            print(buffer, "target=", join(target, ','), '\n')
-        end
-    end
-    return bytes2hex(SHA.sha256(take!(buffer)))
-end
-
-# Hold one bounded canonical-serialization buffer and reusable decimal workspace.
-mutable struct _ReplicaDigestSink
-    context::SHA.SHA2_256_CTX
-    bytes::Vector{UInt8}
-    position::Int
-    digits::Vector{UInt8}
-end
-
-# Construct a fixed-size incremental SHA sink without per-entry heap objects.
-_ReplicaDigestSink() = _ReplicaDigestSink(
-    SHA.SHA2_256_CTX(),
-    Vector{UInt8}(undef, 64 * 1024),
-    0,
-    Vector{UInt8}(undef, 24),
-)
-
-# Commit the occupied byte prefix while retaining the reusable storage.
-@inline function _flush_replica_digest!(sink::_ReplicaDigestSink)
-    iszero(sink.position) && return nothing
-    SHA.update!(sink.context, @view(sink.bytes[1:sink.position]))
-    sink.position = 0
-    return nothing
-end
-
-# Append one canonical byte, flushing the bounded buffer only when full.
-@inline function _feed_replica_digest_byte!(sink::_ReplicaDigestSink, byte::UInt8)
-    sink.position == length(sink.bytes) && _flush_replica_digest!(sink)
-    sink.position += 1
-    @inbounds sink.bytes[sink.position] = byte
-    return nothing
-end
-
-# Append a literal exactly as its UTF-8 code units appear in the legacy encoding.
-@inline function _feed_replica_digest_literal!(sink::_ReplicaDigestSink, value::AbstractString)
-    @inbounds for byte in codeunits(value)
-        _feed_replica_digest_byte!(sink, byte)
-    end
-    return nothing
-end
-
-# Append one base-10 integer without allocating a temporary string.
-@inline function _feed_replica_digest_integer!(sink::_ReplicaDigestSink, value::Integer)
-    signed_value = Int(value)
-    magnitude = if signed_value < 0
-        _feed_replica_digest_byte!(sink, UInt8('-'))
-        UInt(-(signed_value + 1)) + UInt(1)
-    else
-        UInt(signed_value)
-    end
-    if iszero(magnitude)
-        _feed_replica_digest_byte!(sink, UInt8('0'))
-        return nothing
-    end
-    cursor = length(sink.digits) + 1
-    while !iszero(magnitude)
-        cursor -= 1
-        @inbounds sink.digits[cursor] = UInt8('0') + UInt8(rem(magnitude, UInt(10)))
-        magnitude = div(magnitude, UInt(10))
-    end
-    @inbounds for index in cursor:length(sink.digits)
-        _feed_replica_digest_byte!(sink, sink.digits[index])
-    end
-    return nothing
-end
-
-# Flush the last bytes and finalize the canonical lowercase hexadecimal digest.
-function _finish_replica_digest!(sink::_ReplicaDigestSink)
-    _flush_replica_digest!(sink)
-    return bytes2hex(SHA.digest!(sink.context))
-end
-
-"""Return the canonical digest of an input-support identity map without materializing it."""
-function input_real_space_replica_mapping_sha256(
+"""Describe the complete ordered small input support without orbital-pair expansion."""
+function input_real_space_support_definition(
     r_vectors::AbstractMatrix{<:Integer},
     degeneracies::AbstractVector{<:Integer},
     num_wannier::Integer,
@@ -276,43 +180,17 @@ function input_real_space_replica_mapping_sha256(
     all(>(0), degeneracies) || throw(ArgumentError("replica-map degeneracies must be positive"))
     count = Int(num_wannier)
     count > 0 || throw(ArgumentError("num_wannier must be positive"))
-
-    sink = _ReplicaDigestSink()
-    _feed_replica_digest_literal!(sink, REAL_SPACE_REPLICA_MAP_DIGEST_SCHEME)
-    _feed_replica_digest_byte!(sink, UInt8('\n'))
-    _feed_replica_digest_literal!(sink, "source_count=")
-    _feed_replica_digest_integer!(sink, size(r_vectors, 2))
-    _feed_replica_digest_byte!(sink, UInt8('\n'))
-    for r_index in axes(r_vectors, 2)
-        _feed_replica_digest_literal!(sink, "R=")
-        _feed_replica_digest_integer!(sink, r_vectors[1, r_index])
-        _feed_replica_digest_byte!(sink, UInt8(','))
-        _feed_replica_digest_integer!(sink, r_vectors[2, r_index])
-        _feed_replica_digest_byte!(sink, UInt8(','))
-        _feed_replica_digest_integer!(sink, r_vectors[3, r_index])
-        _feed_replica_digest_literal!(sink, ";N_R=")
-        _feed_replica_digest_integer!(sink, degeneracies[r_index])
-        _feed_replica_digest_byte!(sink, UInt8('\n'))
-    end
-    for left in 1:count, right in 1:count, r_index in axes(r_vectors, 2)
-        _feed_replica_digest_literal!(sink, "left=")
-        _feed_replica_digest_integer!(sink, left)
-        _feed_replica_digest_literal!(sink, ";right=")
-        _feed_replica_digest_integer!(sink, right)
-        _feed_replica_digest_literal!(sink, ";source_index=")
-        _feed_replica_digest_integer!(sink, r_index)
-        _feed_replica_digest_literal!(sink, ";image_count=1\ntarget=")
-        _feed_replica_digest_integer!(sink, r_vectors[1, r_index])
-        _feed_replica_digest_byte!(sink, UInt8(','))
-        _feed_replica_digest_integer!(sink, r_vectors[2, r_index])
-        _feed_replica_digest_byte!(sink, UInt8(','))
-        _feed_replica_digest_integer!(sink, r_vectors[3, r_index])
-        _feed_replica_digest_byte!(sink, UInt8('\n'))
-    end
-    return _finish_replica_digest!(sink)
+    return (
+        schema = "wanniernlqg.input-r-support/1",
+        num_orbitals = count,
+        r_vectors = Tuple(
+            ntuple(axis -> Int(r_vectors[axis, index]), 3) for index in axes(r_vectors, 2)
+        ),
+        scalar_degeneracies = Tuple(Int(value) for value in degeneracies),
+    )
 end
 
-# Build a validated map and canonical target support from absolute physical images.
+"""Validate and own an actual complete replica map; its reference is descriptive."""
 function _real_space_replica_map(
     source::Symbol,
     source_r_vectors::AbstractMatrix{<:Integer},
@@ -345,7 +223,7 @@ function _real_space_replica_map(
         degeneracies,
         target_r_vectors,
         images,
-        _replica_mapping_sha256(source_vectors, degeneracies, images),
+        scientific_data_generation(ScientificDataOwner()),
     )
 end
 
@@ -364,7 +242,7 @@ function input_real_space_replica_map(
     return _real_space_replica_map(:input, r_vectors, degeneracies, images)
 end
 
-"""Bind strict Wannier90 `wsvec.dat` translations to absolute physical images."""
+"""Bind strict Wannier `wsvec.dat` translations to absolute physical images."""
 function real_space_replica_map_from_wsvec(
     r_vectors::AbstractMatrix{<:Integer},
     degeneracies::AbstractVector{<:Integer},
@@ -468,7 +346,7 @@ function materialize_replica_component(
     source::AbstractArray{ComplexF64, 3},
     input_degeneracies::Vector{Int},
     map::RealSpaceReplicaMap,
-    normalization::Union{SerializedWannier90ReplicaValues, PredividedReplicaValues},
+    normalization::Union{RawReplicaValues, PredividedReplicaValues},
 )
     return _materialize_replica_component(
         source,
@@ -484,7 +362,7 @@ function _materialize_replica_component(
     source::AbstractArray{ComplexF64, 3},
     input_degeneracies::Vector{Int},
     map::RealSpaceReplicaMap,
-    normalization::Union{SerializedWannier90ReplicaValues, PredividedReplicaValues},
+    normalization::Union{RawReplicaValues, PredividedReplicaValues},
     target_indices::Dict{NTuple{3, Int}, Int},
 )
     size(source, 3) == size(map.source_r_vectors, 2) ||
@@ -501,8 +379,7 @@ function _materialize_replica_component(
     for left in axes(source, 1), right in axes(source, 2), source_r_index in axes(source, 3)
         targets = map.images[left, right, source_r_index]
         scalar_weight =
-            normalization isa SerializedWannier90ReplicaValues ?
-            inv(input_degeneracies[source_r_index]) : 1.0
+            normalization isa RawReplicaValues ? inv(input_degeneracies[source_r_index]) : 1.0
         weight = scalar_weight / length(targets)
         for target in targets
             output[left, right, target_indices[target]] +=
@@ -560,7 +437,7 @@ function apply_real_space_replica_policy(
 end
 
 """
-Apply a replica policy to raw serialized Wannier90 values.
+Apply a replica policy to raw serialized Wannier values.
 
 For minimum-distance materialization each source contribution is divided by
 `N_R * N_pair` before it is accumulated onto unit-degeneracy physical images.
@@ -582,7 +459,7 @@ function apply_serialized_real_space_replica_policy(
         mp_grid,
         wannier_centers_fractional,
         policy,
-        SerializedWannier90ReplicaValues();
+        RawReplicaValues();
         tolerance,
         search_size,
     )
@@ -596,7 +473,7 @@ function _apply_real_space_replica_policy(
     mp_grid::NTuple{3, Int},
     wannier_centers_fractional::AbstractMatrix{<:Real},
     policy::Symbol,
-    normalization::Union{SerializedWannier90ReplicaValues, PredividedReplicaValues};
+    normalization::Union{RawReplicaValues, PredividedReplicaValues};
     tolerance::Real,
     search_size::Integer,
 )
@@ -640,7 +517,7 @@ function _apply_real_space_replica_policy(
             zeros(Int, num_wannier, num_wannier),
             input_lengths,
             copy(input_lengths),
-            map.mapping_sha256,
+            map.mapping_reference,
             map,
         )
     end
@@ -695,7 +572,7 @@ function _apply_real_space_replica_policy(
         pair_changed_counts,
         input_lengths,
         output_lengths,
-        map.mapping_sha256,
+        map.mapping_reference,
         map,
     )
 end

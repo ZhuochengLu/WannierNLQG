@@ -986,7 +986,7 @@ end
         @test !occursin("opposite Im:", report)
         @test occursin("full magnetic point group H-M (display)", report)
         @test occursin("active constraint group H-M (display)", report)
-        @test occursin("operation digest=", report)
+        @test !occursin("operation digest=", report)
         @test occursin("wanniernlqg.spglib-canonical/1.0", report)
         @test occursin("basis transform to input", report)
         summary = JSON3.read(
@@ -995,6 +995,11 @@ end
         )
         response = only(values(summary["responses"]))
         @test summary["schema"] == "wanniernlqg.response-symmetry-summary/1.0"
+        @test summary["status"] == "COMPUTATION_READY"
+        @test summary["integrand_covariance"]["status"] == "NOT_RUN"
+        @test occursin("RESPONSE_SYMMETRY_COVARIANCE_NOT_PASS", read(result.metadata_path, String))
+        @test !occursin("physical production eligibility remains blocked", report)
+        @test !occursin("DIAGNOSTIC_ONLY", report)
         @test summary["group_classification"]["structural_space_group"]["international_number"] ==
               221
         @test summary["active_constraint_group"]["hermann_mauguin"] == "m-3m1'"
@@ -1003,7 +1008,8 @@ end
             summary["active_constraint_group"],
         )
             @test group["magnetic_point_group_number"] in 1:122
-            @test length(group["operation_digest"]) == 64
+            @test occursin(r"^[0-9a-f]{64}$", group["operation_digest"])
+            @test !occursin(group["operation_digest"], report)
             @test group["operation_digest_contract"] ==
                   "wanniernlqg.magnetic-point-group-operations/1.0"
             @test group["symbol_convention"] == "wanniernlqg.spglib-canonical/1.0"
@@ -1481,7 +1487,7 @@ end
     historical = joinpath(fixture_root, "historical_complete_1_1.json")
     legacy_file = joinpath(fixture_root, "historical_diagnostic_1_0.json")
     @test bytes2hex(SHA.sha256(read(historical))) ==
-          "7e6cfc2984e463ba6beecfa2e76287550d52056c026b8e988db924a1959fe69a"
+          "5262fe5052786741527bfdb238b2054297bc3833ec2100bc2762d698e41a70cc"
     @test bytes2hex(SHA.sha256(read(legacy_file))) ==
           "798e8e6abaf45b1271c40faad67dae321615e0c4157394fef2d38bbc81059d8e"
     previous = RESPONSE_SYMMETRY_IO.read_response_symmetry_artifact(historical)

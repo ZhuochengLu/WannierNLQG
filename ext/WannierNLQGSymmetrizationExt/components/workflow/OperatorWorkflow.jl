@@ -1,12 +1,13 @@
 """
 Symmetrize the complete input-inferred real-space operator profile in one context.
 
-The workflow reads structure only from WIN, projects Hamiltonian/position first,
+The workflow consumes owned geometry or the legacy WIN adapter, projects Hamiltonian/position first,
 then derivative and spin families in registry order, and writes one Packed HDF5
 v5 model bundle in the serialized-degeneracy convention. Input files are
 read-only. No SCF k mesh is consumed and no legacy cache is created.
 """
 function symmetrize_wannier_operators(config::SymmetrizationConfig)
+    foreach(validate_scientific_source_state, config.geometry_source_states)
     paths = _validate_symmetrization_config(config)
     input_evidence_before = _input_file_evidence(paths)
     source_tree_digest = _source_tree_sha256()
@@ -106,7 +107,7 @@ function symmetrize_wannier_operators(config::SymmetrizationConfig)
             RealSpaceOperator(operator.spec, operator.r_vectors, serialized_values)
     end
     inventory = validate_operator_profile(paths.families.profile, keys(serialized_operators))
-    tb_digest = _sha256_file(paths.output_tb)
+    tb_observation = observe_scientific_source(realpath(paths.output_tb))
     validation_json = _json_validation(validation)
     durable_position = _normalized_real_space_operator(
         POSITION_SYMMETRY_SPEC,
@@ -126,13 +127,17 @@ function symmetrize_wannier_operators(config::SymmetrizationConfig)
         checkpoint_center_max_abs,
         checkpoint_center_tolerance,
     )
-    operator_qualification_hold = paths.families.profile in (:hamiltonian_position_spin, :full)
+    operator_qualification_hold =
+        paths.packed !== nothing || paths.families.profile in (:hamiltonian_position_spin, :full)
     if operator_qualification_hold
         geometry_metadata["center_geometry_production_eligible"] =
             geometry_metadata["production_eligible"]
         geometry_metadata["production_eligible"] = false
         geometry_metadata["model_status"] = "diagnostic_operator_qualification_not_provided"
-        geometry_metadata["qualification_hold"] = "spin-bearing Symmetrization output has no independent source/gauge qualification"
+        geometry_metadata["qualification_hold"] =
+            paths.packed !== nothing ?
+            "Packed reprojection does not transfer input physical qualification" :
+            "spin-bearing Symmetrization output has no independent source/gauge qualification"
     end
     symmetry_metadata = Dict(
         "symmetrization_status" => "applied",
@@ -149,7 +154,22 @@ function symmetrize_wannier_operators(config::SymmetrizationConfig)
         "covariance_tolerance" => config.covariance_tolerance,
         "idempotence_tolerance" => config.idempotence_tolerance,
     )
+    owned_geometry =
+        config.structure === nothing ? nothing :
+        Dict(
+            "lattice_angstrom"=>config.structure.lattice,
+            "species"=>config.structure.species,
+            "positions_fractional"=>config.structure.positions_fractional,
+            "magnetic_moments_cartesian"=>config.structure.magnetic_moments_cartesian,
+            "mp_grid"=>collect(something(config.mp_grid)),
+            "basis_input_values"=>repr(
+                projection_basis_input_values(something(config.projection_basis)),
+            ),
+        )
     provenance = Dict(
+        "owned_geometry" => owned_geometry,
+        "geometry_source_observations" =>
+            Dict(string(i) => state for (i, state) in enumerate(config.geometry_source_states)),
         "wanniernlqg_version" => string(Base.pkgversion(WannierNLQG)),
         "source_tree_sha256" => source_tree_digest,
         "julia_version" => string(VERSION),
@@ -176,7 +196,8 @@ function symmetrize_wannier_operators(config::SymmetrizationConfig)
         serialized_operators;
         profile = paths.families.profile,
         overwrite = config.overwrite,
-        paired_tb_sha256 = tb_digest,
+        paired_tb_file = paths.output_tb,
+        paired_tb_expected_state = tb_observation,
         provenance = provenance,
         symmetry = symmetry_metadata,
         geometry = geometry_metadata,
@@ -201,6 +222,7 @@ function symmetrize_wannier_operators(config::SymmetrizationConfig)
     roundtrip.operators[REAL_SPACE_POSITION].data == tb_roundtrip.position_r ||
         throw(ArgumentError("HDF5 position differs from paired TB readback"))
 
+    foreach(validate_scientific_source_state, config.geometry_source_states)
     input_evidence_after = _input_file_evidence(paths)
     input_evidence_after == input_evidence_before ||
         throw(ArgumentError("a scientific input changed during symmetrization"))
@@ -216,7 +238,7 @@ function symmetrize_wannier_operators(config::SymmetrizationConfig)
             "input_files" => input_evidence_before,
             "output_tb" => paths.output_tb,
             "real_space_operator_bundle" => paths.operator_bundle,
-            "output_tb_sha256" => tb_digest,
+            "output_tb_source_identity" => scientific_file_identity(tb_observation),
             "real_space_operator_bundle_sha256" => bundle_digest,
             "operator_profile" => String(paths.families.profile),
             "operator_inventory" => operator_storage_name.(inventory),

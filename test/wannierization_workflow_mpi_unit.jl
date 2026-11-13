@@ -1,6 +1,7 @@
 using MPI
 using Test
-using TOML
+using WannierNLQG
+import JSON3
 
 @testset "Wannierization MPI root-only workflow persistence" begin
     probe = joinpath(@__DIR__, "WannierizationWorkflowMpiProbe.jl")
@@ -29,10 +30,36 @@ using TOML
             "VECLIB_MAXIMUM_THREADS" => "1",
         )
         read(serial_command, String)
-        mpi_payload = TOML.parsefile(joinpath(directory, "numerical-payload.toml"))
-        serial_payload = TOML.parsefile(joinpath(serial_directory, "numerical-payload.toml"))
+        mpi_payload =
+            WannierNLQG.IO.read_task_input_file(joinpath(directory, "numerical-payload.toml")).document
+        serial_payload = WannierNLQG.IO.read_task_input_file(
+            joinpath(serial_directory, "numerical-payload.toml"),
+        ).document
         @test !isempty(mpi_payload)
+        differing = sort!([
+            key for key in union(keys(mpi_payload), keys(serial_payload)) if
+            get(mpi_payload, key, nothing) != get(serial_payload, key, nothing)
+        ])
+        if haskey(ENV, "WANNIERNLQG_WORKFLOW_MPI_DIAGNOSTIC")
+            diagnostic = Dict(
+                "schema" => "wanniernlqg.workflow-mpi-exact-diagnostic/1",
+                "source_root" => dirname(@__DIR__),
+                "mpi_payload" => mpi_payload,
+                "serial_payload" => serial_payload,
+                "differing_keys" => differing,
+                "exact" => mpi_payload == serial_payload,
+            )
+            open(ENV["WANNIERNLQG_WORKFLOW_MPI_DIAGNOSTIC"], "w") do stream
+                JSON3.write(stream, diagnostic)
+            end
+        end
+        if isempty(differing)
+            println("WANNIERIZATION_SERIAL_MPI_EXACT leaves=$(length(mpi_payload)) max_abs=0.0")
+        else
+            println(
+                "WANNIERIZATION_SERIAL_MPI_MISMATCH leaves=$(length(mpi_payload)) differing_keys=$(repr(differing))",
+            )
+        end
         @test mpi_payload == serial_payload
-        println("WANNIERIZATION_SERIAL_MPI_EXACT leaves=$(length(mpi_payload)) max_abs=0.0")
     end
 end

@@ -6,8 +6,6 @@ using ..Core
 import ..SymmetryFoundation
 import ..WannierProjection
 
-include("GaugeAwareSymmetrizationModels.jl")
-
 const OperatorValidationSummary =
     NamedTuple{(:covariance_error, :idempotence_error), Tuple{Float64, Float64}}
 
@@ -16,12 +14,6 @@ include("SymmetrizationExtensionLoading.jl")
 include("SymmetrizationExpertInterfaces.jl")
 
 export MagneticMomentConfig, MeshScreenConfig, SymmetrizationConfig, SymmetrizationResult
-export GaugeAwareSymmetrizationConfig, GaugeAwareSymmetrizationThresholds
-export GaugeAwareSymmetrizationStatus, GaugeAwareSymmetrizationResult, GaugeAwareThresholdEvent
-export PASS, PASS_WITH_WARNINGS, HOLD_POSITION_PENDING, FAILED_INPUT_PROVENANCE
-export FAILED_BAND_REPRESENTATION
-export FAILED_INPUT_SUBSPACE_NOT_CLOSED, FAILED_PHYSICAL_BAND_PRESERVATION
-export FAILED_POSITION_VALIDATION
 export RealSpaceOperatorKind, RealSpaceOperatorSymmetrySpec, RealSpaceOperator
 export REAL_SPACE_HAMILTONIAN, REAL_SPACE_POSITION
 export REAL_SPACE_HAMILTONIAN_WEIGHTED_CONNECTION
@@ -31,7 +23,6 @@ export REAL_SPACE_SYMMETRIC_DERIVATIVE_OVERLAP, REAL_SPACE_SPIN
 export REAL_SPACE_SPIN_TIMES_HAMILTONIAN, REAL_SPACE_SPIN_TIMES_POSITION
 export REAL_SPACE_SPIN_TIMES_HAMILTONIAN_POSITION
 export screen_wannier_mesh, symmetrize_wannier_operators
-export symmetrize_existing_wannier_model
-export write_response_symmetry_artifact, qualify_response_symmetry_wannier90
+export write_response_symmetry_artifact, qualify_response_symmetry_wannier_frame
 
 end

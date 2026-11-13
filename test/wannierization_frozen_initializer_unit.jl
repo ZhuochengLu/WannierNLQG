@@ -40,7 +40,7 @@ function frozen_initializer_fixture(; num_bands::Int = 22, num_wannier::Int = 18
         true,
     )
     basis = WannierNLQG.WannierProjection.WannierProjectionBasis([block], num_wannier, true)
-    config = FROZEN_WANNIERIZATION.SymmetryAdaptedWannierizationConfig(
+    config = FROZEN_WANNIERIZATION.WannierizationConfig(
         input = FROZEN_WANNIERIZATION.WannierizationInputConfig(
             wannierization_mode = :ordinary,
             win_file = "synthetic.win",
@@ -51,10 +51,7 @@ function frozen_initializer_fixture(; num_bands::Int = 22, num_wannier::Int = 18
             num_wannier = num_wannier,
             representation_tolerance = 1.0e-8,
         ),
-        solver = FROZEN_WANNIERIZATION.WannierizationSolverConfig(
-            algorithm_profile = :custom,
-            initialization = :amn,
-        ),
+        solver = FROZEN_WANNIERIZATION.WannierizationSolverConfig(initialization = :amn),
         checkpoint = FROZEN_WANNIERIZATION.WannierizationCheckpointConfig(),
         runtime = FROZEN_WANNIERIZATION.WannierizationRuntimeConfig(),
         output = FROZEN_WANNIERIZATION.WannierizationOutputConfig(),
@@ -65,6 +62,21 @@ end
 function frozen_projector_residual(frame, frozen)
     projector = frame * frame'
     return maximum(norm(@view(projector[:, band]) - (1:size(frame, 1) .== band)) for band in frozen)
+end
+
+# This retained kernel is also used by PAW-S seeds. It is no longer selected by
+# a custom ordinary optimizer. Preserve its original numerical assertions directly.
+function retained_rowspace_initializer(config, representation, outer, frozen, count, amn, restart)
+    @assert restart === nothing
+    implementation = first(FROZEN_WANNIERIZATION._load_wannierization_extension!())
+    return implementation.SolverCheckpoint._no_symmetry_exact_frozen_amn_initial_frames(
+        config,
+        representation,
+        outer,
+        frozen,
+        count,
+        amn,
+    )
 end
 
 @testset "no-symmetry exact-frozen AMN row-space initializer" begin
@@ -90,16 +102,15 @@ end
         amn,
         nothing,
     )
-    frames, diagnostics, invariants, report =
-        FROZEN_WANNIERIZATION._initial_frames_with_diagnostics(
-            fixture.config,
-            fixture.representation,
-            outer,
-            frozen,
-            num_wannier,
-            amn,
-            nothing,
-        )
+    frames, diagnostics, invariants, report = retained_rowspace_initializer(
+        fixture.config,
+        fixture.representation,
+        outer,
+        frozen,
+        num_wannier,
+        amn,
+        nothing,
+    )
     @test report.algorithm == :amn_full_bz_exact_frozen_embedding
     @test report.algorithm_version == "nosym_exact_frozen_rowspace_v2"
     @test report.status == :COMPLETED_WITH_WARNING
@@ -115,16 +126,15 @@ end
     partial = copy(amn)
     partial[15, 15, 1] = 1.0
     partial[16, 16, 1] = 1.0
-    partial_frames, partial_diagnostics, _, partial_report =
-        FROZEN_WANNIERIZATION._initial_frames_with_diagnostics(
-            fixture.config,
-            fixture.representation,
-            outer,
-            frozen,
-            num_wannier,
-            partial,
-            nothing,
-        )
+    partial_frames, partial_diagnostics, _, partial_report = retained_rowspace_initializer(
+        fixture.config,
+        fixture.representation,
+        outer,
+        frozen,
+        num_wannier,
+        partial,
+        nothing,
+    )
     @test partial_report.status == :COMPLETED_WITH_WARNING
     @test only(partial_diagnostics).projected_free_rank == 2
     @test only(partial_diagnostics).band_completion_count == 2
@@ -132,7 +142,7 @@ end
     @test frozen_projector_residual(partial_frames[1], only(frozen)) <= 1.0e-8
 
     # Geometry, capacity, and finite-value errors remain hard failures.
-    @test_throws ArgumentError FROZEN_WANNIERIZATION._initial_frames_with_diagnostics(
+    @test_throws ArgumentError retained_rowspace_initializer(
         fixture.config,
         fixture.representation,
         [collect(1:17)],
@@ -141,7 +151,7 @@ end
         amn,
         nothing,
     )
-    @test_throws ArgumentError FROZEN_WANNIERIZATION._initial_frames_with_diagnostics(
+    @test_throws ArgumentError retained_rowspace_initializer(
         fixture.config,
         fixture.representation,
         outer,
@@ -152,7 +162,7 @@ end
     )
     nonfinite = copy(amn)
     nonfinite[1, 1, 1] = ComplexF64(NaN, 0.0)
-    @test_throws ArgumentError FROZEN_WANNIERIZATION._initial_frames_with_diagnostics(
+    @test_throws ArgumentError retained_rowspace_initializer(
         fixture.config,
         fixture.representation,
         outer,
@@ -212,4 +222,29 @@ end
     )
     @test random_report === nothing
     @test maximum(abs, random_frames[1]' * random_frames[1] - I) <= 1.0e-8
+end
+
+@testset "Fixed FR frozen initializer entry" begin
+    fixture = frozen_initializer_fixture()
+    nb = size(fixture.representation.energies_ev, 1)
+    nw = fixture.basis.num_wannier
+    amn = zeros(ComplexF64, nb, nw, 1)
+    for j in 1:14
+        amn[j, j, 1] = 1
+    end
+    frames, diagnostics, invariants, report =
+        FROZEN_WANNIERIZATION._initial_frames_with_diagnostics(
+            fixture.config,
+            fixture.representation,
+            [collect(1:nb)],
+            [collect(1:14)],
+            nw,
+            amn,
+            nothing,
+        )
+    @test report.algorithm == :recursive_localization_amn_frozen_projection
+    @test maximum(abs, frames[1]' * frames[1] - I) <= 1.0e-8
+    @test frozen_projector_residual(frames[1], collect(1:14)) <= 1.0e-8
+    @test invariants.maximum_isometry <= 1.0e-8
+    @test invariants.maximum_frozen_residual <= 1.0e-8
 end

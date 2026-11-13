@@ -91,6 +91,16 @@ function release_tree_sha256()
     return value
 end
 
+"""Retain a normalized task's complete ordered header definition without hashing.
+
+The representation is compared as data, never parsed as executable Julia. Model
+and operator provenance fields retain their separate admission contracts.
+"""
+function spectral_task_definition(headers)
+    entries = Tuple(Pair{String, String}(String(key), String(value)) for (key, value) in headers)
+    return "wanniernlqg.spectral-task-definition/1:" * repr(entries)
+end
+
 """Read one vector response term and validate its local table contract."""
 function _read_vector_table(path, schema, quantity, term, labels, unit)
     isfile(path) || error("VECTOR_RESPONSE_FILE_MISSING: $(basename(path))")
@@ -112,7 +122,8 @@ function _read_vector_table(path, schema, quantity, term, labels, unit)
             push!(rows, parse.(Float64, split(stripped)))
         end
     end
-    get(headers, "schema", "") == schema || error("VECTOR_RESPONSE_SCHEMA_MISMATCH")
+    get(headers, "schema", "") in (schema isa AbstractString ? (schema,) : schema) ||
+        error("VECTOR_RESPONSE_SCHEMA_MISMATCH")
     get(headers, "quantity", "") == quantity || error("VECTOR_RESPONSE_QUANTITY_MISMATCH")
     get(headers, "term", "") == term || error("VECTOR_RESPONSE_TERM_MISMATCH")
     get(headers, "units", "") == unit || error("VECTOR_RESPONSE_UNIT_MISMATCH")
@@ -126,8 +137,8 @@ function _read_vector_table(path, schema, quantity, term, labels, unit)
     all(isfinite, table) || error("VECTOR_RESPONSE_NONFINITE")
     axis = table[:, 1]
     validated = validate_fermi_energies(Vector{Float64}(axis))
-    get(headers, "fermi_energies_sha256", "") == fermi_energy_axis_sha256(validated) ||
-        error("VECTOR_RESPONSE_AXIS_SHA256_MISMATCH")
+    get(headers, "fermi_energies_definition", "") == fermi_energy_axis_definition(validated) ||
+        error("VECTOR_RESPONSE_AXIS_DEFINITION_MISMATCH")
     values = zeros(ComplexF64, length(axis), length(labels))
     for column in eachindex(labels)
         values[:, column] .= table[:, 2column] .+ im .* table[:, 2column + 1]
@@ -138,15 +149,17 @@ end
 """Validate shared identity and execution metadata across vector response terms."""
 function _validate_vector_result_common(results, directory)
     first_result = first(values(results))
+    source_identity_key = "producer_package_version"
     common = (
+        "schema",
         "method",
         "temperature_K",
         "fermi_energies_count",
-        "fermi_energies_sha256",
-        "task_sha256",
-        "release_tree_sha256",
-        "model_sha256",
-        "input_identity_sha256",
+        "fermi_energies_definition",
+        "task_definition",
+        source_identity_key,
+        "model_identity",
+        "input_identity",
         "gamma_intra_ev",
         "gamma_inter_ev",
         "fs_kind",
@@ -156,10 +169,8 @@ function _validate_vector_result_common(results, directory)
         "qualification_status",
         "input_semantics",
         "operator_inventory",
-        "target_contract_sha256",
-        "authoritative_hamiltonian_sha256",
-        "band_frame_contract_sha256",
-        "operator_selection_sha256",
+        "operator_model_schema",
+        "content_authentication",
     )
     for result in values(results)
         result.axis == first_result.axis || error("VECTOR_RESPONSE_AXIS_MISMATCH")
@@ -168,8 +179,8 @@ function _validate_vector_result_common(results, directory)
                 error("VECTOR_RESPONSE_IDENTITY_MISMATCH: $key")
         end
     end
-    get(first_result.headers, "release_tree_sha256", "") == release_tree_sha256() ||
-        error("VECTOR_RESPONSE_RELEASE_TREE_SHA256_MISMATCH")
+    # Producer metadata is descriptive. Compare the actual file group's axis,
+    # normalized task definition and decomposition without scanning this package.
     parse(Int, get(first_result.headers, "fermi_energies_count", "-1")) ==
     length(first_result.axis) || error("VECTOR_RESPONSE_AXIS_COUNT_MISMATCH")
     get(first_result.headers, "method", "") in ("conventional", "projector") ||
@@ -181,16 +192,20 @@ function _validate_vector_result_common(results, directory)
         value = tryparse(Int, get(first_result.headers, key, ""))
         value !== nothing && value > 0 || error("VECTOR_RESPONSE_EXECUTION_SHAPE_INVALID: $key")
     end
-    for key in (
-        "fermi_energies_sha256",
-        "task_sha256",
-        "release_tree_sha256",
-        "model_sha256",
-        "input_identity_sha256",
-    )
-        occursin(r"^[0-9a-f]{64}$", get(first_result.headers, key, "")) ||
-            error("VECTOR_RESPONSE_SHA256_INVALID: $key")
+    for key in ("model_identity", "input_identity")
+        identity = get(first_result.headers, key, "")
+        # Descriptive source references may be paths or owned-data labels. They
+        # are not proof of input equality and never trigger file-content scans.
+        !isempty(strip(identity)) && !any(c -> c in ('\0', '\n', '\r'), identity) ||
+            error("VECTOR_RESPONSE_SOURCE_REFERENCE_INVALID: $key")
     end
+    get(first_result.headers, "content_authentication", "") == "NOT_PERFORMED" ||
+        error("VECTOR_RESPONSE_CONTENT_AUTHENTICATION_INVALID")
+    get(first_result.headers, "operator_model_schema", "") in
+    (OPERATOR_BUNDLE_SCHEMA_VERSION, "NOT_APPLICABLE_DEFINED_FINITE_MODEL") ||
+        error("VECTOR_RESPONSE_OPERATOR_MODEL_SCHEMA_INVALID")
+    isempty(strip(get(first_result.headers, source_identity_key, ""))) &&
+        error("VECTOR_RESPONSE_PRODUCER_VERSION_MISSING")
     # Runtime writes this identity in its semantic field order. Rebuild that order explicitly.
     ordered_keys = [
         "schema",
@@ -198,10 +213,10 @@ function _validate_vector_result_common(results, directory)
         "method",
         "temperature_K",
         "fermi_energies_count",
-        "fermi_energies_sha256",
-        "release_tree_sha256",
-        "model_sha256",
-        "input_identity_sha256",
+        "fermi_energies_definition",
+        source_identity_key,
+        "model_identity",
+        "input_identity",
         "gamma_intra_ev",
         "gamma_inter_ev",
         "fs_kind",
@@ -211,27 +226,87 @@ function _validate_vector_result_common(results, directory)
         "qualification_status",
         "input_semantics",
         "operator_inventory",
-        "target_contract_sha256",
-        "authoritative_hamiltonian_sha256",
-        "band_frame_contract_sha256",
-        "operator_selection_sha256",
+        "operator_model_schema",
+        "content_authentication",
     ]
-    identity = IOBuffer()
-    for key in ordered_keys
-        haskey(first_result.headers, key) || error("VECTOR_RESPONSE_IDENTITY_FIELD_MISSING: $key")
-        write(identity, key, '=', first_result.headers[key], '\0')
+    orbital_keys = (
+        "orbital_geometry_prescription",
+        "denominator_regularization_ev",
+        "zero_temperature_boundary",
+    )
+    if any(haskey(result.headers, key) for result in values(results) for key in orbital_keys)
+        get(first_result.headers, "quantity", "") == "orbital_magnetization" ||
+            error("ORBITAL_RESPONSE_IDENTITY_WRONG_QUANTITY")
+        all(haskey(first_result.headers, key) for key in orbital_keys) ||
+            error("ORBITAL_RESPONSE_IDENTITY_FIELD_MISSING")
+        for result in values(results), key in orbital_keys
+            get(result.headers, key, "") == first_result.headers[key] ||
+                error("VECTOR_RESPONSE_IDENTITY_MISMATCH: $key")
+        end
+        first_result.headers["orbital_geometry_prescription"] ==
+        "complete-V-regularized-Sylvester/1" || error("ORBITAL_RESPONSE_PRESCRIPTION_INVALID")
+        first_result.headers["zero_temperature_boundary"] ==
+        "symmetric-complete-subspace-response-average" || error("ORBITAL_RESPONSE_BOUNDARY_INVALID")
+        eta = tryparse(Float64, first_result.headers["denominator_regularization_ev"])
+        eta !== nothing && isfinite(eta) && eta > 0 ||
+            error("ORBITAL_RESPONSE_REGULARIZATION_INVALID")
+        append!(ordered_keys, orbital_keys)
     end
-    bytes2hex(sha256(take!(identity))) == get(first_result.headers, "task_sha256", "") ||
-        error("VECTOR_RESPONSE_TASK_SHA256_MISMATCH")
+    all(haskey(first_result.headers, key) for key in ordered_keys) ||
+        error("VECTOR_RESPONSE_IDENTITY_FIELD_MISSING")
+    expected_definition =
+        spectral_task_definition([key => first_result.headers[key] for key in ordered_keys])
+    expected_definition == get(first_result.headers, "task_definition", "") ||
+        error("VECTOR_RESPONSE_TASK_DEFINITION_MISMATCH")
     metadata = joinpath(directory, "spectral_response_metadata.txt")
     isfile(metadata) || error("VECTOR_RESPONSE_METADATA_MISSING")
-    text = read(metadata, String)
-    for key in common
-        value = get(first_result.headers, key, "")
-        occursin(key * " = " * repr(value), text) ||
-            error("VECTOR_RESPONSE_METADATA_MISMATCH: $key")
+    fragments = [key * " = " * repr(get(first_result.headers, key, "")) for key in common]
+    present = _spectral_metadata_contains_fragments(metadata, fragments)
+    for (key, found) in zip(common, present)
+        found || error("VECTOR_RESPONSE_METADATA_MISMATCH: $key")
     end
     return first_result
+end
+
+# Preserve exact substring validation while bounding memory by the requested
+# scalar fragments and one input chunk. Large descriptive definitions stay in
+# the original file; ordinary readback need not materialize their repr strings.
+function _spectral_metadata_contains_fragments(path, fragments; chunk_bytes::Int = 65536)
+    chunk_bytes > 0 || throw(ArgumentError("positive metadata chunk size required"))
+    needles = String[fragment for fragment in fragments]
+    found = BitVector(isempty.(needles))
+    retained = max(0, maximum(ncodeunits, needles; init = 0) - 1)
+    tail = UInt8[]
+    open(path, "r") do stream
+        while !all(found) && !eof(stream)
+            bytes = vcat(tail, read(stream, chunk_bytes))
+            text = String(copy(bytes))
+            for index in eachindex(needles)
+                found[index] || (found[index] = occursin(needles[index], text))
+            end
+            count = min(retained, length(bytes))
+            tail = count == 0 ? UInt8[] : bytes[(end - count + 1):end]
+        end
+    end
+    return found
+end
+
+# Require unique registered operator names containing all orbital-material inputs.
+function _validate_orbital_material_inventory(inventory)
+    length(unique(inventory)) == length(inventory) ||
+        error("ORBITAL_MATERIAL_OPERATOR_INVENTORY_DUPLICATE")
+    canonical = Set(real_space_operator_name.(REAL_SPACE_OPERATOR_REGISTRY))
+    all(name -> name in canonical, inventory) ||
+        error("ORBITAL_MATERIAL_OPERATOR_INVENTORY_UNKNOWN")
+    required = Set((
+        "hamiltonian",
+        "position",
+        "hamiltonian_weighted_connection",
+        "derivative_overlap_tensor",
+        "hamiltonian_weighted_axial_derivative_overlap",
+    ))
+    issubset(required, Set(inventory)) || error("ORBITAL_MATERIAL_FIVE_OPERATOR_INVENTORY_REQUIRED")
+    return nothing
 end
 
 """Strictly read and validate one vectorized Linear Transport result directory."""
@@ -249,7 +324,7 @@ function read_linear_transport_result(directory::AbstractString)
     results = Dict(
         term => _read_vector_table(
             joinpath(directory, "linear_transport_$(term).dat"),
-            "wanniernlqg.linear-transport-vector/2.0",
+            "wanniernlqg.linear-transport-vector/6.0",
             "linear_transport",
             string(term),
             labels,
@@ -277,7 +352,7 @@ function read_orbital_magnetization_result(directory::AbstractString)
     results = Dict(
         term => _read_vector_table(
             joinpath(directory, "orbital_magnetization_$(term).dat"),
-            "wanniernlqg.orbital-magnetization-vector/1.0",
+            "wanniernlqg.orbital-magnetization-vector/5.0",
             "orbital_magnetization",
             string(term),
             labels,
@@ -286,31 +361,22 @@ function read_orbital_magnetization_result(directory::AbstractString)
     )
     first_result = _validate_vector_result_common(results, directory)
     semantics = get(first_result.headers, "input_semantics", "")
+    semantics in ("defined_finite_model", "projected_energy_overlap", "direct_energy_overlap") ||
+        error("ORBITAL_INPUT_SEMANTICS_INVALID")
     inventory = split(get(first_result.headers, "operator_inventory", ""), ',')
-    target = get(first_result.headers, "target_contract_sha256", "")
+    model_schema = get(first_result.headers, "operator_model_schema", "")
     if semantics == "defined_finite_model"
         inventory == ["NOT_APPLICABLE_DEFINED_FINITE_MODEL"] ||
             error("ORBITAL_FINITE_MODEL_INVENTORY_CONFLICT")
-        target == "NOT_APPLICABLE_DEFINED_FINITE_MODEL" ||
-            error("ORBITAL_FINITE_MODEL_TARGET_CONTRACT_CONFLICT")
+        model_schema == "NOT_APPLICABLE_DEFINED_FINITE_MODEL" ||
+            error("ORBITAL_FINITE_MODEL_SCHEMA_CONFLICT")
     else
-        required = Set((
-            "hamiltonian",
-            "position",
-            "hamiltonian_weighted_connection",
-            "derivative_overlap_tensor",
-            "hamiltonian_weighted_axial_derivative_overlap",
-        ))
-        Set(inventory) == required || error("ORBITAL_MATERIAL_FIVE_OPERATOR_INVENTORY_REQUIRED")
-        occursin(r"^[0-9a-f]{64}$", target) || error("ORBITAL_MATERIAL_TARGET_CONTRACT_REQUIRED")
-        for key in (
-            "authoritative_hamiltonian_sha256",
-            "band_frame_contract_sha256",
-            "operator_selection_sha256",
-        )
-            occursin(r"^[0-9a-f]{64}$", get(first_result.headers, key, "")) ||
-                error("ORBITAL_MATERIAL_PROVENANCE_REQUIRED: $key")
-        end
+        _validate_orbital_material_inventory(inventory)
+        # Input admission already validates actual operators and their mathematical
+        # definitions. Result readback validates this recorded model schema and
+        # inventory; it does not revive retired source/target certificates.
+        model_schema == OPERATOR_BUNDLE_SCHEMA_VERSION ||
+            error("ORBITAL_MATERIAL_MODEL_SCHEMA_REQUIRED")
     end
     vectors = Dict(term => results[term].values for term in terms)
     isapprox(vectors[:total], vectors[:srocc] + vectors[:cmocc]; atol = 1e-20, rtol = 2e-12) ||

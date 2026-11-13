@@ -2,16 +2,16 @@
 abstract type AbstractWannierMatrixElementSource end
 
 """
-    ExternalWannier90Matrices(mmn_file, amn_file)
+    ExternalOverlapProjectionMatrices(mmn_file, amn_file)
 
-Use complete formatted Wannier90 MMN and AMN files. Both files are mandatory;
+Use complete formatted Wannier MMN and AMN files. Both files are mandatory;
 this type never permits an implicit pseudo-only VASP AMN fallback.
 """
-struct ExternalWannier90Matrices <: AbstractWannierMatrixElementSource
+struct ExternalOverlapProjectionMatrices <: AbstractWannierMatrixElementSource
     mmn_file::String
     amn_file::String
 
-    function ExternalWannier90Matrices(mmn_file::AbstractString, amn_file::AbstractString)
+    function ExternalOverlapProjectionMatrices(mmn_file::AbstractString, amn_file::AbstractString)
         isempty(strip(mmn_file)) && throw(ArgumentError("MMN path must not be empty"))
         isempty(strip(amn_file)) && throw(ArgumentError("AMN path must not be empty"))
         return new(String(mmn_file), String(amn_file))
@@ -222,7 +222,8 @@ The topology file supplies only neighbor indices and reciprocal shifts. Oracle
 files are validation-only and never provide matrix values to the generator.
 """
 struct NativeVASPPAWMatrices <: AbstractWannierMatrixElementSource
-    topology_mmn_file::String
+    topology_mmn_file::Union{Nothing, String}
+    topology::Union{Nothing, WannierNNKP}
     oracle_mmn_file::Union{Nothing, String}
     oracle_amn_file::Union{Nothing, String}
     artifact_dir::String
@@ -242,6 +243,26 @@ struct NativeVASPPAWMatrices <: AbstractWannierMatrixElementSource
         isempty(strip(artifact_dir)) && throw(ArgumentError("artifact_dir must not be empty"))
         return new(
             String(topology_mmn_file),
+            nothing,
+            oracle_mmn_file === nothing ? nothing : String(oracle_mmn_file),
+            oracle_amn_file === nothing ? nothing : String(oracle_amn_file),
+            String(artifact_dir),
+            thresholds,
+            require_oracle,
+        )
+    end
+    function NativeVASPPAWMatrices(
+        topology::WannierNNKP;
+        oracle_mmn_file::Union{Nothing, AbstractString} = nothing,
+        oracle_amn_file::Union{Nothing, AbstractString} = nothing,
+        artifact_dir::AbstractString,
+        thresholds::VASPPAWParityThresholds = VASPPAWParityThresholds(),
+        require_oracle::Bool = true,
+    )
+        isempty(strip(artifact_dir)) && throw(ArgumentError("artifact_dir must not be empty"))
+        return new(
+            nothing,
+            owned_wannier_topology(topology),
             oracle_mmn_file === nothing ? nothing : String(oracle_mmn_file),
             oracle_amn_file === nothing ? nothing : String(oracle_amn_file),
             String(artifact_dir),
@@ -264,7 +285,7 @@ struct QEPAWParityThresholds
     amn_projector_max_absolute::Float64
 end
 
-"""Fail-closed numerical gates for streamed first-principles Wannier90 uIu generation."""
+"""Fail-closed numerical gates for streamed first-principles Wannier uIu generation."""
 struct WannierUIUGenerationThresholds
     radial_q_max_absolute::Float64
     generalized_norm_max_absolute::Float64
@@ -308,258 +329,166 @@ struct WannierUIUParityMetrics
     finite::Bool
 end
 
-"""Digest-bound identities shared by operator generation, SAWF, and full export."""
+"""Actual source references and frame values shared by generation and export.
+
+The private MMN references retain complete bytes with bounded streaming checks.
+The definition describes the scientific target; it is not content authentication.
+"""
 struct WannierOperatorTargetContract
     operator_oracle_mmn_file::String
-    operator_oracle_mmn_sha256::String
+    operator_oracle_mmn_reference::IO.ScientificInputDefinition
     solver_mmn_file::String
-    solver_mmn_sha256::String
+    solver_mmn_reference::IO.ScientificInputDefinition
     source_band_gauge::String
     target_band_gauge::String
-    band_frame_transform_sha256::String
-    band_frame_contract_sha256::String
-    gauge_artifact_sha256::String
+    band_frame_transform_definition::String
+    band_frame_contract_definition::String
+    gauge_definition::String
     authoritative_hamiltonian::String
-    authoritative_hamiltonian_digest::String
+    authoritative_hamiltonian_definition::String
     num_bands::Int
     num_kpoints::Int
     num_neighbors::Int
     qualification_scope::SymmetryFoundation.BandRepresentationQualificationScope
     target_authority::String
     parent_audit_policy::String
-    contract_sha256::String
+    definition::String
 end
 
-"""Hash the immutable source, solver, gauge, and Hamiltonian target identities."""
-function wannier_operator_target_contract_sha256(
-    operator_oracle_mmn_file,
-    operator_oracle_mmn_sha256,
-    solver_mmn_file,
-    solver_mmn_sha256,
-    source_band_gauge,
-    target_band_gauge,
-    band_frame_transform_sha256,
-    band_frame_contract_sha256,
-    gauge_artifact_sha256,
-    authoritative_hamiltonian,
-    authoritative_hamiltonian_digest,
+"""Encode scientific target fields; source byte references are checked separately."""
+function wannier_operator_target_definition(
+    oracle_file,
+    solver_file,
+    source_gauge,
+    target_gauge,
+    transform,
+    frame,
+    gauge,
+    authority,
+    hamiltonian,
     num_bands,
     num_kpoints,
     num_neighbors,
-)
-    buffer = IOBuffer()
-    for value in (
-        "WannierNLQG.wannier_operator_target_contract/1.0",
-        operator_oracle_mmn_file,
-        operator_oracle_mmn_sha256,
-        solver_mmn_file,
-        solver_mmn_sha256,
-        source_band_gauge,
-        target_band_gauge,
-        band_frame_transform_sha256,
-        band_frame_contract_sha256,
-        gauge_artifact_sha256,
-        authoritative_hamiltonian,
-        authoritative_hamiltonian_digest,
-        num_bands,
-        num_kpoints,
-        num_neighbors,
-    )
-        write(buffer, string(value), '\0')
-    end
-    return bytes2hex(SHA.sha256(take!(buffer)))
-end
-
-"""Hash a scope-bound operator target without changing legacy contract identities."""
-function wannier_operator_target_contract_sha256(
-    operator_oracle_mmn_file,
-    operator_oracle_mmn_sha256,
-    solver_mmn_file,
-    solver_mmn_sha256,
-    source_band_gauge,
-    target_band_gauge,
-    band_frame_transform_sha256,
-    band_frame_contract_sha256,
-    gauge_artifact_sha256,
-    authoritative_hamiltonian,
-    authoritative_hamiltonian_digest,
-    num_bands,
-    num_kpoints,
-    num_neighbors,
-    outer_mask_sha256,
-    frozen_mask_sha256,
+    scope,
     target_authority,
     parent_audit_policy,
 )
-    buffer = IOBuffer()
-    for value in (
-        "WannierNLQG.wannier_operator_target_contract/1.1",
-        operator_oracle_mmn_file,
-        operator_oracle_mmn_sha256,
-        solver_mmn_file,
-        solver_mmn_sha256,
-        source_band_gauge,
-        target_band_gauge,
-        band_frame_transform_sha256,
-        band_frame_contract_sha256,
-        gauge_artifact_sha256,
-        authoritative_hamiltonian,
-        authoritative_hamiltonian_digest,
-        num_bands,
-        num_kpoints,
-        num_neighbors,
-        outer_mask_sha256,
-        frozen_mask_sha256,
-        target_authority,
-        parent_audit_policy,
+    buffer=IOBuffer()
+    IO.write_native_definition_value(
+        buffer,
+        (
+            schema = "WannierNLQG.wannier_operator_target_contract/2.0",
+            oracle_file = String(oracle_file),
+            solver_file = String(solver_file),
+            source_gauge = String(source_gauge),
+            target_gauge = String(target_gauge),
+            transform = String(transform),
+            frame = String(frame),
+            gauge = String(gauge),
+            authority = String(authority),
+            hamiltonian = String(hamiltonian),
+            dimensions = (Int(num_bands), Int(num_kpoints), Int(num_neighbors)),
+            outer = scope.outer_mask,
+            frozen = scope.frozen_mask,
+            target_authority = String(target_authority),
+            parent_audit_policy = String(parent_audit_policy),
+        ),
     )
-        write(buffer, string(value), '\0')
-    end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return "operator-target-values/2:" * bytes2hex(take!(buffer))
 end
 
-"""Construct a target contract and derive its digest from every bound field."""
+"""Construct a target from complete source references and current value definitions."""
 function WannierOperatorTargetContract(
-    operator_oracle_mmn_file,
-    operator_oracle_mmn_sha256,
-    solver_mmn_file,
-    solver_mmn_sha256,
-    source_band_gauge,
-    target_band_gauge,
-    band_frame_transform_sha256,
-    band_frame_contract_sha256,
-    gauge_artifact_sha256,
-    authoritative_hamiltonian,
-    authoritative_hamiltonian_digest,
+    oracle_file,
+    oracle_reference,
+    solver_file,
+    solver_reference,
+    source_gauge,
+    target_gauge,
+    transform,
+    frame,
+    gauge,
+    authority,
+    hamiltonian,
     num_bands,
     num_kpoints,
-    num_neighbors,
-    ;
+    num_neighbors;
     qualification_scope = nothing,
     target_authority::AbstractString = "full_parent",
     parent_audit_policy::AbstractString = "legacy_hard_gate",
 )
-    values = String.((
-        operator_oracle_mmn_file,
-        operator_oracle_mmn_sha256,
-        solver_mmn_file,
-        solver_mmn_sha256,
-        source_band_gauge,
-        target_band_gauge,
-        band_frame_transform_sha256,
-        band_frame_contract_sha256,
-        gauge_artifact_sha256,
-        authoritative_hamiltonian,
-        authoritative_hamiltonian_digest,
-    ),)
-    all(digest -> occursin(r"^[0-9a-f]{64}$", digest), values[[2, 4, 7, 8, 11]]) ||
-        throw(ArgumentError("operator target contract digests must be SHA-256"))
-    (values[9] == "NOT_APPLICABLE" || occursin(r"^[0-9a-f]{64}$", values[9])) || throw(
-        ArgumentError("operator target gauge artifact digest must be SHA-256 or NOT_APPLICABLE"),
+    oracle_reference isa IO.ScientificInputDefinition &&
+    solver_reference isa IO.ScientificInputDefinition || throw(
+        ArgumentError(
+            "OPERATOR_TARGET_EXPLICIT_MIGRATION_REQUIRED: complete MMN references are required",
+        ),
     )
+    startswith(transform, "band-frame-transform-values/2:") &&
+    startswith(frame, "band-frame-contract-values/2:") &&
+    startswith(hamiltonian, "authoritative-hamiltonian-values/4:") || throw(
+        ArgumentError(
+            "OPERATOR_TARGET_EXPLICIT_MIGRATION_REQUIRED: actual frame/Hamiltonian values are required",
+        ),
+    )
+    (gauge=="NOT_APPLICABLE" || startswith(gauge, "band-frame-contract-values/2:")) ||
+        throw(ArgumentError("OPERATOR_TARGET_GAUGE_DEFINITION_REQUIRED"))
     all(>(0), (num_bands, num_kpoints, num_neighbors)) ||
         throw(ArgumentError("operator target contract dimensions must be positive"))
-    scope = if qualification_scope === nothing
-        SymmetryFoundation.BandRepresentationQualificationScope(
-            trues(Int(num_bands), Int(num_kpoints)),
-            falses(Int(num_bands), Int(num_kpoints)),
-            diagnostic_status = :LEGACY_FULL_PARENT,
-        )
-    else
-        qualification_scope isa SymmetryFoundation.BandRepresentationQualificationScope ||
-            throw(ArgumentError("operator target qualification_scope has an unsupported type"))
-        qualification_scope
-    end
-    size(scope.outer_mask) == (Int(num_bands), Int(num_kpoints)) || throw(
-        ArgumentError("operator target qualification scope dimensions differ from the target"),
-    )
-    authority = String(target_authority)
-    audit_policy = String(parent_audit_policy)
-    scoped = qualification_scope !== nothing
-    scoped &&
-        authority != "outer_window" &&
-        throw(ArgumentError("scope-bound operator targets require target_authority=outer_window"))
-    scoped &&
-        audit_policy != "audit_only" &&
-        throw(ArgumentError("scope-bound operator targets require parent_audit_policy=audit_only"))
-    contract_sha256 = if scoped
-        wannier_operator_target_contract_sha256(
-            values...,
-            Int(num_bands),
-            Int(num_kpoints),
-            Int(num_neighbors),
-            scope.outer_mask_sha256,
-            scope.frozen_mask_sha256,
-            authority,
-            audit_policy,
-        )
-    else
-        wannier_operator_target_contract_sha256(
-            values...,
-            Int(num_bands),
-            Int(num_kpoints),
-            Int(num_neighbors),
-        )
-    end
-    return WannierOperatorTargetContract(
-        values...,
-        Int(num_bands),
-        Int(num_kpoints),
-        Int(num_neighbors),
-        scope,
-        authority,
-        audit_policy,
-        contract_sha256,
-    )
-end
-
-"""Preserve direct schema-1.0 construction used by historical fixtures."""
-function WannierOperatorTargetContract(
-    operator_oracle_mmn_file::String,
-    operator_oracle_mmn_sha256::String,
-    solver_mmn_file::String,
-    solver_mmn_sha256::String,
-    source_band_gauge::String,
-    target_band_gauge::String,
-    band_frame_transform_sha256::String,
-    band_frame_contract_sha256::String,
-    gauge_artifact_sha256::String,
-    authoritative_hamiltonian::String,
-    authoritative_hamiltonian_digest::String,
-    num_bands::Int,
-    num_kpoints::Int,
-    num_neighbors::Int,
-    contract_sha256::String,
-)
-    scope = SymmetryFoundation.BandRepresentationQualificationScope(
-        trues(num_bands, num_kpoints),
-        falses(num_bands, num_kpoints),
+    scope=qualification_scope === nothing ?
+          SymmetryFoundation.BandRepresentationQualificationScope(
+        trues(Int(num_bands), Int(num_kpoints)),
+        falses(Int(num_bands), Int(num_kpoints));
         diagnostic_status = :LEGACY_FULL_PARENT,
-    )
-    return WannierOperatorTargetContract(
-        operator_oracle_mmn_file,
-        operator_oracle_mmn_sha256,
-        solver_mmn_file,
-        solver_mmn_sha256,
-        source_band_gauge,
-        target_band_gauge,
-        band_frame_transform_sha256,
-        band_frame_contract_sha256,
-        gauge_artifact_sha256,
-        authoritative_hamiltonian,
-        authoritative_hamiltonian_digest,
+        content_authentication = false,
+    ) : qualification_scope
+    scope isa SymmetryFoundation.BandRepresentationQualificationScope ||
+        throw(ArgumentError("operator target qualification_scope has an unsupported type"))
+    size(scope.outer_mask)==(Int(num_bands), Int(num_kpoints)) ||
+        throw(ArgumentError("operator target qualification scope dimensions differ"))
+    qualification_scope === nothing ||
+        (target_authority=="outer_window" && parent_audit_policy=="audit_only") ||
+        throw(ArgumentError("scope-bound targets require outer_window and audit_only"))
+    definition=wannier_operator_target_definition(
+        oracle_file,
+        solver_file,
+        source_gauge,
+        target_gauge,
+        transform,
+        frame,
+        gauge,
+        authority,
+        hamiltonian,
         num_bands,
         num_kpoints,
         num_neighbors,
         scope,
-        "full_parent",
-        "legacy_hard_gate",
-        contract_sha256,
+        target_authority,
+        parent_audit_policy,
+    )
+    return WannierOperatorTargetContract(
+        String(oracle_file),
+        oracle_reference,
+        String(solver_file),
+        solver_reference,
+        String(source_gauge),
+        String(target_gauge),
+        String(transform),
+        String(frame),
+        String(gauge),
+        String(authority),
+        String(hamiltonian),
+        Int(num_bands),
+        Int(num_kpoints),
+        Int(num_neighbors),
+        scope,
+        String(target_authority),
+        String(parent_audit_policy),
+        definition,
     )
 end
 
 """
-Expert configuration for a resumable first-principles Wannier90 `.uIu` build.
+Expert configuration for a resumable first-principles Wannier `.uIu` build.
 
 The source is read-only. `topology_file` is either the same-run formatted MMN
 or NNKP. Publication is k-point checkpointed and atomic; an existing final
@@ -590,12 +519,15 @@ Base.@kwdef struct WannierUIUGenerationConfig
     max_cached_wavefunction_kpoints::Int = 8
     # Preparation scheduling/cache settings; resume above controls output checkpoints.
     execution::Union{Nothing, WavefunctionPreparationExecutionConfig} = nothing
+    source_reference_root::Union{Nothing, String} = nothing
 end
 
 """Preserve the positional constructor predating preparation execution settings."""
 function WannierUIUGenerationConfig(args::Vararg{Any, 16})
-    return WannierUIUGenerationConfig(args..., nothing)
+    return WannierUIUGenerationConfig(args..., nothing, nothing)
 end
+"""Preserve the positional uIu constructor with no source reference root."""
+WannierUIUGenerationConfig(args::Vararg{Any, 17}) = WannierUIUGenerationConfig(args..., nothing)
 
 """Dimension-only, hash-bound result of one streamed uIu generation attempt."""
 struct WannierUIUGenerationResult
@@ -645,7 +577,12 @@ Base.@kwdef struct WannierHamiltonianOperatorGenerationConfig
     overwrite::Bool = false
     max_cached_wavefunction_kpoints::Int = 8
     execution::WavefunctionPreparationExecutionConfig = WavefunctionPreparationExecutionConfig()
+    source_reference_root::Union{Nothing, String} = nothing
 end
+
+"""Preserve the positional Hamiltonian-operator constructor with no source reference root."""
+WannierHamiltonianOperatorGenerationConfig(args::Vararg{Any, 18}) =
+    WannierHamiltonianOperatorGenerationConfig(args..., nothing)
 
 """Preserve the positional constructor predating operator execution settings."""
 function WannierHamiltonianOperatorGenerationConfig(
@@ -751,8 +688,8 @@ function WannierHamiltonianOperatorGenerationResult(
     )
 end
 
-"""Inputs for a same-gauge schema-6 exact Wannier derivative operator bundle."""
-Base.@kwdef struct ExactWannierOperatorBundleConfig
+"""Inputs for a same-gauge bundle using full-Hilbert-space uIu derivative overlaps."""
+Base.@kwdef struct FullUIUDerivativeOperatorBundleConfig
     tb_file::String
     chk_file::String
     eig_file::String
@@ -766,13 +703,12 @@ Base.@kwdef struct ExactWannierOperatorBundleConfig
     wigner_seitz_search_size::Int = 3
 end
 
-"""Hash-bound artifact summary for a raw, unsymmetrized exact operator bundle."""
-struct ExactWannierOperatorBundleResult
+"""Hash-bound construction and readback summary; it does not qualify material physics."""
+struct FullUIUDerivativeOperatorBundleResult
     operator_bundle_file::String
-    operator_bundle_sha256::String
-    scientific_content_sha256::String
-    input_sha256::Dict{String, String}
-    passed::Bool
+    publication_identity::String
+    input_files::Dict{String, String}
+    content_authentication::String
 end
 
 # Construct and validate the complete native-QE parity threshold set.
@@ -888,7 +824,8 @@ only topology and trial-projection authority. Oracle files qualify generated
 arrays but never supply construction values.
 """
 struct NativeQEPAWMatrices <: AbstractWannierMatrixElementSource
-    nnkp_file::String
+    nnkp_file::Union{Nothing, String}
+    topology::Union{Nothing, WannierNNKP}
     oracle_mmn_file::Union{Nothing, String}
     oracle_amn_file::Union{Nothing, String}
     artifact_dir::String
@@ -907,6 +844,7 @@ struct NativeQEPAWMatrices <: AbstractWannierMatrixElementSource
         isempty(strip(artifact_dir)) && throw(ArgumentError("artifact_dir must not be empty"))
         return new(
             String(nnkp_file),
+            nothing,
             oracle_mmn_file === nothing ? nothing : String(oracle_mmn_file),
             oracle_amn_file === nothing ? nothing : String(oracle_amn_file),
             String(artifact_dir),
@@ -914,6 +852,42 @@ struct NativeQEPAWMatrices <: AbstractWannierMatrixElementSource
             Bool(require_oracle),
         )
     end
+    function NativeQEPAWMatrices(
+        topology::WannierNNKP;
+        artifact_dir::AbstractString,
+        oracle_mmn_file::Union{Nothing, AbstractString} = nothing,
+        oracle_amn_file::Union{Nothing, AbstractString} = nothing,
+        require_oracle::Bool = true,
+        thresholds::QEPAWParityThresholds = QEPAWParityThresholds(),
+    )
+        isempty(strip(artifact_dir)) && throw(ArgumentError("artifact_dir must not be empty"))
+        return new(
+            nothing,
+            owned_wannier_topology(topology),
+            oracle_mmn_file === nothing ? nothing : String(oracle_mmn_file),
+            oracle_amn_file === nothing ? nothing : String(oracle_amn_file),
+            String(artifact_dir),
+            thresholds,
+            require_oracle,
+        )
+    end
+end
+
+# Owned topology has no externally supplied EIG: it is an artifact of the same
+# selected wavefunction source as MMN/AMN. File-based expert callers keep their contract.
+uses_generated_native_eigenvalues(input) =
+    input.matrix_elements isa Union{NativeQEPAWMatrices, NativeVASPPAWMatrices} &&
+    input.matrix_elements.topology !== nothing
+
+# Return only the expected owned native EIG path in its configured matrix artifact directory.
+function generated_native_eigenvalue_path(input)
+    uses_generated_native_eigenvalues(input) ||
+        throw(ArgumentError("owned native topology required"))
+    name = input.matrix_elements isa NativeQEPAWMatrices ? "native_qe_paw.eig" : "native_paw.eig"
+    expected = abspath(input.matrix_elements.artifact_dir, name)
+    abspath(input.eig_file) == expected ||
+        throw(ArgumentError("owned native EIG must be generated in the matrix artifact directory"))
+    return expected
 end
 
 """
@@ -961,7 +935,7 @@ Base.@kwdef struct WannierizationInputConfig
     wavefunction_gauge_backend::AbstractWavefunctionGaugeBackend = NativeEigenstateGauge()
     authoritative_hamiltonian::AbstractAuthoritativeHamiltonian = NativeDFTHamiltonian()
     wavefunction_gauge_hdf5::Union{Nothing, String} = nothing
-    win_file::String
+    win_file::Union{Nothing, String} = nothing
     eig_file::String
     mmn_file::String
     amn_file::Union{Nothing, String} = nothing
@@ -983,56 +957,75 @@ Base.@kwdef struct WannierizationInputConfig
     compatibility_policy::Symbol = :warn
     preparation_execution::WavefunctionPreparationExecutionConfig =
         WavefunctionPreparationExecutionConfig()
+    geometry::Union{Nothing, WannierizationGeometry} = nothing
+    operation_indices::Union{Nothing, Vector{Int}} = nothing
 end
+
+# Preserve the older 29-argument input constructor by supplying the newly optional trailing field.
+WannierizationInputConfig(args::Vararg{Any, 29}) = WannierizationInputConfig(args..., nothing)
+
+# Preserve the older 28-argument input constructor through the compatible positional forwarding chain.
+WannierizationInputConfig(args::Vararg{Any, 28}) = WannierizationInputConfig(args..., nothing)
 
 # Preserve the former positional input constructor; scheduling is not solver identity.
 WannierizationInputConfig(args::Vararg{Any, 27}) =
-    WannierizationInputConfig(args..., WavefunctionPreparationExecutionConfig())
+    WannierizationInputConfig(args..., WavefunctionPreparationExecutionConfig(), nothing)
 
 """Immutable numerical solver, initialization, and deterministic execution controls."""
 Base.@kwdef struct WannierizationSolverConfig
-    algorithm_profile::Symbol = :auto
     smv_fletcher_reeves_two_stage_audit_thresholds::SMVFletcherReevesTwoStageAuditThresholds =
         SMVFletcherReevesTwoStageAuditThresholds()
     smv_fletcher_reeves_two_stage_audit_manifest::Union{Nothing, String} = nothing
     initialization::Symbol = :amn
     z_mix_ratio::Float64 = 0.5
     u_mix_ratio::Float64 = 1.0
-    acceleration::WannierizationAccelerationConfig = WannierizationAccelerationConfig()
+    stage_controls::WannierizationStageControls = WannierizationStageControls()
+    acceleration::WannierizationAccelerationConfig = WannierizationAccelerationConfig(
+        schedule = :two_stage,
+        strategy = :fixed,
+        disentanglement_max_steps = stage_controls.dis_num_iter,
+        disentanglement_objective_tolerance = stage_controls.dis_conv_tol,
+        z_stability_window = stage_controls.dis_conv_window,
+        localization_max_steps = stage_controls.num_iter,
+    )
     numerical_thresholds::WannierizationNumericalThresholds = WannierizationNumericalThresholds()
     initialization_backend::AbstractWannierInitializationBackend = AMNExactFrozenInitialization()
     paw_scdm_input_hdf5::Union{Nothing, String} = nothing
     multi_start::WannierizationMultiStartConfig = WannierizationMultiStartConfig()
-    max_iterations::Int = 1000
-    convergence_tolerance::Float64 = 1.0e-9
-    convergence_window::Int = 3
     little_group_tolerance::Float64 = 1.0e-6
     little_group_max_iterations::Int = 10
-    localize::Bool = true
     symmetrize_z::Bool = true
     parallel::Symbol = :serial
     random_seed::UInt64 = 0x6e6c716773617766
 end
 
-"""Immutable restart, fixed-subspace, and periodic-checkpoint controls."""
+"""Immutable restart and periodic-checkpoint controls."""
 Base.@kwdef struct WannierizationCheckpointConfig
     restart_hdf5::Union{Nothing, String} = nothing
-    fixed_subspace_hdf5::Union{Nothing, String} = nothing
     checkpoint_hdf5::Union{Nothing, String} = nothing
-    checkpoint_interval::Int = 10
+    num_dump_cycles::Int = 100
+    recovery::Symbol = :continue
+    storage::Symbol = :embedded
+    reference_root::Union{Nothing, String} = nothing
 end
+
+# Existing positional callers retain the embedded, self-contained format.
+WannierizationCheckpointConfig(restart, checkpoint, cycles, recovery) =
+    WannierizationCheckpointConfig(restart, checkpoint, cycles, recovery, :embedded, nothing)
 
 """Cold-path progress and observer controls kept outside numerical state."""
 Base.@kwdef struct WannierizationRuntimeConfig
-    progress_interval::Int = 10
+    num_print_cycles::Int = 1
+    detailed_progress::Bool = false
     iteration_observer::Any = nothing
 end
 
 """Immutable durable-output inventory and operator-qualification controls."""
 Base.@kwdef struct WannierizationOutputConfig
+    model_file::Union{Nothing, String} = nothing
     band_representation_output_hdf5::Union{Nothing, String} = nothing
     tb_output_formats::Tuple{Vararg{Symbol}} = (:packed_hdf5,)
-    write_wannier90_tb::Bool = false
+    write_model_tb::Bool = false
     profile::Union{Nothing, Symbol} = :hamiltonian_position
     operator_tasks::Tuple{Vararg{OperatorTask}} = ()
     spn_file::Union{Nothing, String} = nothing
@@ -1052,8 +1045,12 @@ Base.@kwdef struct WannierizationOutputConfig
     operator_closure_tolerance::Float64 = 1.0e-6
     spin_family_covariance_tolerance::Float64 = 1.0e-8
     spin_family_idempotence_tolerance::Float64 = 1.0e-9
+    # Explicit posthoc qualification opt-in. nothing/false records NOT_RUN.
     final_tb_symmetry_report_enabled::Union{Nothing, Bool} = nothing
 end
+
+# Preserve the existing positional Julia constructor; the new output path is optional.
+WannierizationOutputConfig(args::Vararg{Any, 21}) = WannierizationOutputConfig(nothing, args...)
 
 const WANNIERIZATION_INPUT_CONFIG_FIELDS = fieldnames(WannierizationInputConfig)
 const WANNIERIZATION_SOLVER_CONFIG_FIELDS = fieldnames(WannierizationSolverConfig)
@@ -1067,11 +1064,11 @@ const WANNIERIZATION_CONFIG_LEAF_FIELDS = (
     WANNIERIZATION_RUNTIME_CONFIG_FIELDS...,
     WANNIERIZATION_OUTPUT_CONFIG_FIELDS...,
 )
-@assert length(WANNIERIZATION_CONFIG_LEAF_FIELDS) == 75
-@assert length(unique(WANNIERIZATION_CONFIG_LEAF_FIELDS)) == 75
+@assert length(WANNIERIZATION_CONFIG_LEAF_FIELDS) == 77
+@assert length(unique(WANNIERIZATION_CONFIG_LEAF_FIELDS)) == 77
 
 # Store one native Wannierization workflow as five immutable configuration groups.
-Base.@kwdef struct SymmetryAdaptedWannierizationConfig
+Base.@kwdef struct WannierizationConfig
     input::WannierizationInputConfig
     solver::WannierizationSolverConfig = WannierizationSolverConfig()
     checkpoint::WannierizationCheckpointConfig = WannierizationCheckpointConfig()
@@ -1088,14 +1085,14 @@ end
 
 """Copy a grouped configuration while replacing only declared group leaves."""
 function _replace_wannierization_config(
-    config::SymmetryAdaptedWannierizationConfig;
+    config::WannierizationConfig;
     input::NamedTuple = NamedTuple(),
     solver::NamedTuple = NamedTuple(),
     checkpoint::NamedTuple = NamedTuple(),
     runtime::NamedTuple = NamedTuple(),
     output::NamedTuple = NamedTuple(),
 )
-    return SymmetryAdaptedWannierizationConfig(
+    return WannierizationConfig(
         input = _replace_wannierization_group(config.input, input),
         solver = _replace_wannierization_group(config.solver, solver),
         checkpoint = _replace_wannierization_group(config.checkpoint, checkpoint),
@@ -1105,9 +1102,9 @@ function _replace_wannierization_config(
 end
 
 @doc """
-    SymmetryAdaptedWannierizationConfig(; input, solver, checkpoint, runtime, output)
+    WannierizationConfig(; input, solver, checkpoint, runtime, output)
 
-Configure one WannierBerri-compatible symmetry-adapted disentanglement and
+Configure one ordinary or symmetry-adapted disentanglement and
 localization run from five immutable sub-configurations. Z and U mixing are
 independent. `solver.initialization` is `:amn`,
 `:random`, or `:restart`; `parallel` is `:serial`, `:threads`, or expert-only
@@ -1120,12 +1117,12 @@ or antiunitary constraints. Representation metadata remains input provenance and
 cannot activate symmetry projection, little-group processing, or covariance
 rejection in ordinary mode.
 
-With `wannierization_mode=:ordinary` and `algorithm_profile=:auto`, the solver
+With `wannierization_mode=:ordinary`, the solver
 always selects `:smv_fletcher_reeves_two_stage`. No audit manifest is required.
 The path uses separated SMV disentanglement and Fletcher--Reeves localization;
 the validated external-oracle envelope additionally fixes `schedule=:two_stage`,
 `AMNExactFrozenInitialization()`, identical WIN/EIG/MMN/AMN data and windows,
-Float64 arithmetic, five-step FR restarts, `u_w90_trial_step=2.0`, and identical
+Float64 arithmetic, five-step FR restarts, `u_recursive_localization_trial_step=2.0`, and identical
 iteration budgets. Runs outside that envelope remain valid default executions
 but do not inherit an external-oracle parity claim.
 
@@ -1143,10 +1140,10 @@ source dependency closure before generation and the final operator inventory.
 not enter the solver restart digest. Spin-family profiles fail closed when the
 formal source/gauge chain cannot be established; finite covariance or
 idempotence excess is retained only as explicitly diagnostic output.
-""" SymmetryAdaptedWannierizationConfig
+""" WannierizationConfig
 
 """
-Complete or retained SAWF state, including a directly consumable `WannierCHK`
+Complete or retained Wannierization state, including a directly consumable `WannierCHK`
 view when dimensions are valid. Non-success statuses may still carry the last
 finite iterate; diagnostics distinguish a warning-bearing result from a typed
 failure.

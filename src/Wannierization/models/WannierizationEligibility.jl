@@ -39,11 +39,12 @@ struct WannierizationEligibility
         unverified_contracts::Vector{String},
         conflicting_contracts::Vector{String},
     )
-        qualification_status in ("PASS", "DIAGNOSTIC_ONLY", "NOT_EVALUATED") || throw(
-            ArgumentError(
-                "invalid wannierization qualification status $(repr(qualification_status))",
-            ),
-        )
+        qualification_status in ("COMPUTATION_READY", "PASS", "DIAGNOSTIC_ONLY", "NOT_EVALUATED") ||
+            throw(
+                ArgumentError(
+                    "invalid wannierization qualification status $(repr(qualification_status))",
+                ),
+            )
         execution_eligible &&
             !isempty(conflicting_contracts) &&
             throw(
@@ -180,7 +181,8 @@ end
 function wannierization_eligibility_from_summary(summary::AbstractDict)
     status =
         String(get(summary, "wannierization_eligibility_qualification_status", "NOT_EVALUATED"))
-    status in ("PASS", "DIAGNOSTIC_ONLY", "NOT_EVALUATED") || (status = "NOT_EVALUATED")
+    status in ("COMPUTATION_READY", "PASS", "DIAGNOSTIC_ONLY", "NOT_EVALUATED") ||
+        (status = "NOT_EVALUATED")
     return WannierizationEligibility(
         _eligibility_bool(summary, "wannierization_eligibility_execution_eligible"),
         _eligibility_bool(summary, "wannierization_eligibility_export_eligible"),

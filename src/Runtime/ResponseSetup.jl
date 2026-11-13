@@ -4,7 +4,7 @@ function _prepare_projector_response_cache!(
     kpoint::Vector{Float64},
     finite_difference_vectors::Matrix{Float64},
     config::EffectiveTaskConfig,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     num_orbitals::Int,
     spatial_dimension::Int,
     ;
@@ -39,7 +39,7 @@ function _prepare_wilson_loop_response_cache!(
     finite_difference_vectors::Matrix{Float64},
     wannier_centers_fractional::Matrix{Float64},
     config::EffectiveTaskConfig,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     spatial_dimension::Int,
     ;
     axes::AbstractVector{<:Integer} = collect(1:spatial_dimension),

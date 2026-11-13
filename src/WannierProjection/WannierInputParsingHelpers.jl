@@ -1,4 +1,4 @@
-# Remove the shared Fortran/Wannier90/VASP inline comment syntax.
+# Remove the shared Fortran/Wannier/VASP inline comment syntax.
 function strip_input_comment(line::AbstractString)
     return strip(first(split(first(split(String(line), '!'; limit = 2)), '#'; limit = 2)))
 end

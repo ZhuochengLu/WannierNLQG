@@ -8,10 +8,10 @@ function _bind_conventional_offset!(
     return workspace.data
 end
 
-# Evaluate the external-band metric trace at a shifted point after binding its matrix-cache slot.
+# Evaluate the selected metric contribution at a shifted point in its owned cache slot.
 function _quantum_christoffel_metric_at!(
     ws::ConventionalQuantumGeometryWorkspace,
-    conventional_model::TightBindingModel,
+    conventional_model::AbstractResponseModel,
     kpoint::Vector{Float64},
     denominator_regularization::Float64,
     spatial_dimension::Int64,
@@ -21,6 +21,7 @@ function _quantum_christoffel_metric_at!(
     offset::KPointOffset,
 )
     _bind_conventional_offset!(ws, offset)
+    ws.data.metric_completion_required = ws.metric_contribution !== :internal
     compute_kpoint!(
         ws.data,
         ws.scratch,
@@ -29,12 +30,19 @@ function _quantum_christoffel_metric_at!(
         denominator_regularization = denominator_regularization,
         spatial_dimension = spatial_dimension,
     )
+    conventional_model isa NonorthogonalLocalizedModel &&
+        denominator_regularization == 0 &&
+        MatrixElements.geometry_isolated_spectrum_minimum_gap(
+            ws.data.spectrum.energies,
+            ws.data.spectral_gap_tolerance,
+        )
     return real(
-        interband_quantum_metric_group_sum_component(
+        quantum_metric_group_sum_component(
             ws.data,
             band_group,
             tensor_indices,
-            num_orbitals,
+            num_orbitals;
+            contribution = ws.metric_contribution,
         ),
     )
 end
@@ -42,7 +50,7 @@ end
 # Evaluate the target-subspace Berry curvature at a shifted point after binding its matrix-cache slot.
 function _berry_curvature_dipole_curvature_at!(
     ws::ConventionalQuantumGeometryWorkspace,
-    conventional_model::TightBindingModel,
+    conventional_model::AbstractResponseModel,
     kpoint::Vector{Float64},
     denominator_regularization::Float64,
     spatial_dimension::Int64,
@@ -60,6 +68,14 @@ function _berry_curvature_dipole_curvature_at!(
         denominator_regularization = denominator_regularization,
         spatial_dimension = spatial_dimension,
     )
+    if ws.isolation_threshold_ev !== nothing ||
+       (conventional_model isa NonorthogonalLocalizedModel && denominator_regularization == 0)
+        gap = MatrixElements.geometry_isolated_spectrum_minimum_gap(
+            ws.data.spectrum.energies,
+            something(ws.isolation_threshold_ev, ws.data.spectral_gap_tolerance),
+        )
+        ws.minimum_isolated_gap_ev = min(ws.minimum_isolated_gap_ev, gap)
+    end
     return real(
         berry_curvature_group_sum_component(ws.data, band_group, tensor_indices, num_orbitals),
     )
@@ -72,7 +88,7 @@ Return `Gamma_{r;lj}=(partial_j g_lr + partial_l g_rj - partial_r g_lj)/2` using
 """
 function quantum_christoffel_symbol_component!(
     ws::ConventionalQuantumGeometryWorkspace,
-    conventional_model::TightBindingModel,
+    conventional_model::AbstractResponseModel,
     kpoint::Vector{Float64},
     finite_difference_vectors::Matrix{Float64},
     band_group::Vector{Int},
@@ -132,7 +148,7 @@ Return the centered Cartesian derivative `partial_c g_ab` of the target-subspace
 """
 function quantum_metric_dipole_component!(
     ws::ConventionalQuantumGeometryWorkspace,
-    conventional_model::TightBindingModel,
+    conventional_model::AbstractResponseModel,
     kpoint::Vector{Float64},
     finite_difference_vectors::Matrix{Float64},
     band_group::Vector{Int},
@@ -176,7 +192,7 @@ Use `(a,b,c)` axes and a positive step matching the fractional displacement vect
 """
 function berry_curvature_dipole_component!(
     ws::ConventionalQuantumGeometryWorkspace,
-    conventional_model::TightBindingModel,
+    conventional_model::AbstractResponseModel,
     kpoint::Vector{Float64},
     finite_difference_vectors::Matrix{Float64},
     band_group::Vector{Int},
@@ -220,7 +236,7 @@ Cartesian step and fractional displacement columns must agree. Mutate reusable s
 """
 function quantum_metric_quadrupole_component!(
     ws::ConventionalQuantumGeometryWorkspace,
-    conventional_model::TightBindingModel,
+    conventional_model::AbstractResponseModel,
     kpoint::Vector{Float64},
     finite_difference_vectors::Matrix{Float64},
     band_group::Vector{Int},
@@ -324,7 +340,7 @@ Tensor order is `(a,b,c,d)` and the Cartesian step must match the fractional dis
 """
 function berry_curvature_quadrupole_component!(
     ws::ConventionalQuantumGeometryWorkspace,
-    conventional_model::TightBindingModel,
+    conventional_model::AbstractResponseModel,
     kpoint::Vector{Float64},
     finite_difference_vectors::Matrix{Float64},
     band_group::Vector{Int},

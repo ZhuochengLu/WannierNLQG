@@ -1,3 +1,24 @@
+# All normal geometry consumers use the explicit object; only legacy inputs read WIN.
+function _configured_projection_basis(input)
+    Wannierization.validate_wannierization_geometry_source(input)
+    return input.projection_basis === nothing ?
+           build_wannier_projection_basis(something(input.win_file)) : input.projection_basis
+end
+
+# Capture normalized geometry values or the observed explicit WIN bytes as the actual input definition.
+function _geometry_input_definition(input)
+    Wannierization.validate_wannierization_geometry_source(input)
+    if input.geometry !== nothing
+        return Wannierization.wannierization_geometry_definition(input.geometry)
+    end
+    # The legacy WIN bytes are the actual definition, not a fingerprint. Preserve
+    # the source observation while capturing the small explicit input document.
+    observed = IO.with_scientific_source(something(input.win_file)) do path
+        bytes2hex(read(path))
+    end
+    return "legacy-win-bytes/1:" * observed.value
+end
+
 """Select coefficient-normalized legacy input or strict raw full-cutoff input."""
 _read_band_sewing_source(source::AbstractWavefunctionSource, ::CoefficientMappingSewing) =
     read_native_source(source; purpose = :band_representation)
@@ -12,13 +33,15 @@ function _read_wavefunction_gauge_source(
     ::NativeEigenstateGauge,
     authority::AbstractAuthoritativeHamiltonian,
     gauge_hdf5;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
+    validate_ordinary_construction_policy(construction_policy)
     gauge_hdf5 === nothing || throw(ArgumentError("WAVEFUNCTION_GAUGE_BACKEND_MISMATCH"))
     return (
         native = _read_band_sewing_source(source, sewing_backend),
         strict_metric = nothing,
         artifact_sha256 = nothing,
+        gauge_reference = nothing,
         block_partition_metadata = star_authoritative_hamiltonian_metadata(authority),
     )
 end
@@ -30,42 +53,25 @@ function _read_wavefunction_gauge_source(
     backend::StarCovariantPAWGauge,
     authority::AbstractAuthoritativeHamiltonian,
     gauge_hdf5;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
     sewing_backend isa AugmentationAwareSewing ||
         throw(ArgumentError("WAVEFUNCTION_GAUGE_BACKEND_MISMATCH"))
     gauge_hdf5 === nothing && throw(ArgumentError("WAVEFUNCTION_GAUGE_ARTIFACT_REQUIRED"))
-    standard_requested =
-        backend.hamiltonian_correction isa FarBandCovarianceCorrection &&
-        (backend.hamiltonian_correction::FarBandCovarianceCorrection).qualification_mode ==
-        :standard
+    validate_ordinary_construction_policy(construction_policy)
     restored = read_star_covariant_paw_gauge_hdf5(
         something(gauge_hdf5);
-        require_pass = construction_policy == :strict && !standard_requested,
-        construction_policy = construction_policy == :standard ? :standard : nothing,
+        require_pass = false,
+        construction_policy = :standard,
         source,
     )
-    construction_policy == :strict &&
-        standard_requested &&
-        restored.status != :STANDARD &&
-        throw(
-            ArgumentError(
-                "WAVEFUNCTION_GAUGE_BACKEND_MISMATCH: standard correction requires a STANDARD artifact",
-            ),
-        )
-    construction_policy == :strict &&
-        !standard_requested &&
-        restored.status != :PASS &&
-        throw(ArgumentError("PAW_SEWING_HOLD: strict gauge artifact is not PASS"))
-    restored.status in (:PASS, :STANDARD) ||
-        throw(ArgumentError("PAW_SEWING_HOLD: gauge has no valid accepted-state payload"))
     validate_star_gauge_source_identity(source, restored.payload)
     recorded_correction =
         get(restored.payload.source_metadata, "discrete_hamiltonian_correction", "none")
     recorded_correction == discrete_hamiltonian_correction_key(backend.hamiltonian_correction) ||
         throw(ArgumentError("WAVEFUNCTION_GAUGE_BACKEND_MISMATCH: correction policy differs"))
-    expected_correction_sha = star_hamiltonian_correction_sha256(backend.hamiltonian_correction)
-    get(restored.payload.input_sha256, "DISCRETE_HAMILTONIAN_CORRECTION_SHA256", "MISSING") ==
+    expected_correction_sha = star_hamiltonian_correction_definition(backend.hamiltonian_correction)
+    get(restored.payload.input_sha256, "DISCRETE_HAMILTONIAN_CORRECTION_DEFINITION", "MISSING") ==
     expected_correction_sha ||
         throw(ArgumentError("WAVEFUNCTION_GAUGE_ARTIFACT_MISMATCH: correction digest differs"))
     recorded_authority =
@@ -77,7 +83,7 @@ function _read_wavefunction_gauge_source(
         ),
     )
     get(restored.payload.input_sha256, "AUTHORITATIVE_HAMILTONIAN_SHA256", "MISSING") ==
-    star_authoritative_hamiltonian_sha256(authority) ||
+    star_authoritative_hamiltonian_definition(authority) ||
         throw(ArgumentError("HAMILTONIAN_REFERENCE_MISMATCH: authority digest differs"))
     qualification_metadata = Dict(
         key => value for (key, value) in restored.payload.source_metadata if
@@ -116,26 +122,57 @@ function _read_wavefunction_gauge_source(
             "symmetrized_dft_hamiltonian_is_pure_gauge",
         )
     )
-    qualification_metadata["production_eligible"] = string(restored.status == :PASS)
-    qualification_metadata["quality_review_recommended"] = string(restored.status == :STANDARD)
+    # Carry the complete policies already validated on the actual gauge. These
+    # are canonical mathematical values, not retired authentication digests.
+    block_parameters = Dict(
+        key=>value for (key, value) in restored.payload.source_metadata if
+        (startswith(key, "block_partition_") && !endswith(key, "_definition")) ||
+        startswith(key, "far_") ||
+        startswith(key, "cancellation_") ||
+        key in ("pre_gauge_far_cumulative_mode", "post_gauge_hamiltonian_covariance_policy")
+    )
+    block_definition = restored.payload.input_sha256["BLOCK_PARTITION_POLICY_DEFINITION"]
+    merge!(qualification_metadata, block_parameters)
+    merge!(
+        qualification_metadata,
+        _star_hamiltonian_correction_metadata(backend.hamiltonian_correction),
+    )
+    qualification_metadata["block_partition_policy_definition"] = block_definition
+    qualification_metadata["discrete_hamiltonian_correction_definition"] = expected_correction_sha
+    qualification_metadata["quality_review_recommended"] = string(
+        any(
+            pair ->
+                startswith(first(pair), "construction_") &&
+                endswith(first(pair), "_failed") &&
+                isfinite(last(pair)) &&
+                last(pair) > 0,
+            pairs(restored.payload.maxima),
+        ),
+    )
     native_residual = get(
         restored.payload.maxima,
         "native_fidelity_projected_eigen_residual_ev",
         get(restored.payload.maxima, "projected_eigen_residual_ev", Inf),
     )
-    qualification_metadata["native_fidelity_status"] =
-        native_residual <= backend.thresholds.projected_eigen_residual_ev ?
-        "NATIVE_DFT_FIDELITY_PASS" : "NATIVE_DFT_FIDELITY_HOLD"
-    qualification_metadata["scoped_production_eligible"] =
-        string(restored.payload.qualification_scope !== nothing && restored.status == :PASS)
-    qualification_metadata["symmetrized_dft_hamiltonian_status"] =
-        authority isa SymmetrizedDFTHamiltonian && restored.status == :PASS ?
-        "SYMMETRIZED_DFT_HAMILTONIAN_PASS" : "NOT_APPLICABLE"
-    qualification_metadata["target_scope_production_eligible"] =
-        string(restored.payload.qualification_scope !== nothing && restored.status == :PASS)
-    qualification_metadata["global_production_eligible"] = "false"
-    if construction_policy == :standard
-        qualification_metadata["construction_gauge_status"] = String(restored.status)
+    qualification_metadata["native_fidelity_residual_ev"] = string(native_residual)
+    qualification_metadata["native_fidelity_reference_ev"] =
+        string(backend.thresholds.projected_eigen_residual_ev)
+    if !isfinite(native_residual) ||
+       native_residual > backend.thresholds.projected_eigen_residual_ev
+        @warn "Native fidelity residual is unavailable or exceeds its reference" residual_ev=native_residual reference_ev=backend.thresholds.projected_eigen_residual_ev
+    end
+    # Keep concrete calculation diagnostics; do not export qualification labels.
+    for key in (
+        "production_eligible",
+        "scoped_production_eligible",
+        "target_scope_production_eligible",
+        "global_production_eligible",
+        "symmetrized_dft_hamiltonian_status",
+        "native_fidelity_status",
+    )
+        pop!(qualification_metadata, key, nothing)
+    end
+    begin
         qualification_metadata["construction_gauge_metrics_json"] = JSON3.write(
             Dict(
                 key => value for (key, value) in restored.payload.maxima if
@@ -146,7 +183,12 @@ function _read_wavefunction_gauge_source(
     return (
         native = restored.payload.native,
         strict_metric = restored.payload.metric,
-        artifact_sha256 = sha256_file(something(gauge_hdf5)),
+        artifact_sha256 = restored.band_frame_contract === nothing ?
+                          throw(ArgumentError("WAVEFUNCTION_GAUGE_COMPLETE_FRAME_REQUIRED")) :
+                          restored.band_frame_contract.contract_definition,
+        gauge_reference = IO.scientific_source_collection_definition(
+            Dict("GAUGE"=>abspath(something(gauge_hdf5))),
+        ),
         block_partition_metadata = qualification_metadata,
     )
 end
@@ -214,8 +256,20 @@ function _validate_wavefunction_gauge_identity(
                 "WAVEFUNCTION_GAUGE_BACKEND_MISMATCH: correction policy is incompatible with representation schema $(representation.schema_version)",
             ),
         )
-        expected_sha = sha256_file(something(gauge_hdf5))
-        get(representation.conventions, "wavefunction_gauge_hdf5_sha256", "MISSING") ==
+        haskey(representation.input_definitions, "wavefunction_gauge") || throw(
+            ArgumentError(
+                "WAVEFUNCTION_GAUGE_COMPLETE_REFERENCE_REQUIRED: explicit regeneration or migration required",
+            ),
+        )
+        IO.validate_scientific_source_collection(
+            Dict("GAUGE"=>abspath(something(gauge_hdf5))),
+            representation.input_definitions["wavefunction_gauge"],
+        )
+        restored = read_star_covariant_paw_gauge_hdf5(something(gauge_hdf5))
+        restored.band_frame_contract === nothing &&
+            throw(ArgumentError("WAVEFUNCTION_GAUGE_COMPLETE_FRAME_REQUIRED"))
+        expected_sha = restored.band_frame_contract.contract_definition
+        get(representation.conventions, "wavefunction_gauge_definition", "MISSING") ==
         expected_sha || throw(ArgumentError("WAVEFUNCTION_GAUGE_ARTIFACT_MISMATCH"))
         expected_correction = discrete_hamiltonian_correction_key(backend.hamiltonian_correction)
         get(representation.conventions, "discrete_hamiltonian_correction", "none") ==
@@ -253,15 +307,22 @@ function _representation_with_wavefunction_gauge(
     backend::AbstractWavefunctionGaugeBackend,
     authority::AbstractAuthoritativeHamiltonian,
     artifact_sha256,
-    block_partition_metadata::AbstractDict = Dict{String, String}(),
+    block_partition_metadata::AbstractDict = Dict{String, String}();
+    gauge_reference = nothing,
 )
+    references=copy(representation.input_definitions)
+    if gauge_reference !== nothing
+        references["wavefunction_gauge"]=gauge_reference
+    elseif backend isa StarCovariantPAWGauge
+        throw(ArgumentError("WAVEFUNCTION_GAUGE_COMPLETE_REFERENCE_REQUIRED"))
+    end
     conventions = Dict{String, String}(representation.conventions)
     conventions["wavefunction_gauge_backend"] = wavefunction_gauge_backend_key(backend)
-    conventions["wavefunction_gauge_hdf5_sha256"] =
+    conventions["wavefunction_gauge_definition"] =
         artifact_sha256 === nothing ? "NOT_APPLICABLE" : String(artifact_sha256)
     conventions["authoritative_hamiltonian"] = authoritative_hamiltonian_key(authority)
     conventions["authoritative_hamiltonian_sha256"] =
-        star_authoritative_hamiltonian_sha256(authority)
+        star_authoritative_hamiltonian_definition(authority)
     conventions["global_production_eligible"] = "false"
     merge!(
         conventions,
@@ -286,23 +347,25 @@ function _representation_with_wavefunction_gauge(
         representation.full_to_operation;
         conventions,
         input_sha256 = representation.input_sha256,
+        input_definitions = references,
     )
 end
 
 # Final-TB covariance is a formal qualification gate. It deliberately does not
 # inherit the finite-cutoff empirical budget used by dynamic projector checks.
-_final_tb_hamiltonian_covariance_threshold(config::SymmetryAdaptedWannierizationConfig) =
+_final_tb_hamiltonian_covariance_threshold(config::WannierizationConfig) =
     config.input.representation_tolerance
 
 # A geometry-only qualification context, built after ordinary export. No band
 # sewing data are asserted: the zero-band carrier supplies only the full crystal
 # k action to the existing final-TB spectral check. It never enters the solver.
 function _ordinary_posthoc_qualification_context(config, mesh_representation)
-    win = WannierProjection.read_wannier_win(config.input.win_file)
-    basis =
-        config.input.projection_basis === nothing ?
-        build_wannier_projection_basis(config.input.win_file) : config.input.projection_basis
-    structure = WannierProjection.crystal_structure(win)
+    basis = _configured_projection_basis(config.input)
+    structure =
+        config.input.geometry === nothing ?
+        WannierProjection.crystal_structure(
+            WannierProjection.read_wannier_win(something(config.input.win_file)),
+        ) : config.input.geometry.structure
     inventory = detect_magnetic_symmetry_inventory(
         structure;
         include_time_reversal = config.input.source === nothing ? true :
@@ -314,11 +377,11 @@ function _ordinary_posthoc_qualification_context(config, mesh_representation)
         basis,
         operations;
         tolerance = config.input.target_center_matching_tolerance,
-        construction_policy = :strict,
+        construction_policy = :standard,
     )
     mesh_representation === nothing && throw(ArgumentError("ORDINARY_POSTHOC_WIN_MESH_UNAVAILABLE"))
     mesh = mesh_representation
-    maximum(abs, win.lattice - mesh.real_lattice) <= config.input.symmetry_tolerance ||
+    maximum(abs, structure.lattice - mesh.real_lattice) <= config.input.symmetry_tolerance ||
         throw(ArgumentError("ORDINARY_POSTHOC_WIN_LATTICE_MISMATCH"))
     basis.num_wannier ==
     (config.input.num_wannier == 0 ? basis.num_wannier : config.input.num_wannier) ||
@@ -350,8 +413,9 @@ function _ordinary_posthoc_qualification_context(config, mesh_representation)
         conventions = Dict(
             "authoritative_hamiltonian" =>
                 authoritative_hamiltonian_key(config.input.authoritative_hamiltonian),
-            "authoritative_hamiltonian_sha256" =>
-                star_authoritative_hamiltonian_sha256(config.input.authoritative_hamiltonian),
+            "authoritative_hamiltonian_sha256" => star_authoritative_hamiltonian_definition(
+                config.input.authoritative_hamiltonian,
+            ),
             "sewing_role" => "NOT_EVALUATED_GEOMETRY_ONLY_POSTHOC",
             "symmetry_constraints_applied" => "false",
         ),
@@ -367,32 +431,50 @@ function _validate_amn_projection_contract(
     root, _ = splitext(abspath(amn_filename))
     provenance = root * ".amn-provenance.h5"
     isfile(provenance) || return nothing
-    expected_basis = projection_basis_sha256(basis)
     expected_contract =
         WannierProjection.projection_radial_transform_contract(basis.radial_transform)
-    expected_radial = bytes2hex(SHA.sha256(codeunits(repr(expected_contract))))
     HDF5.h5open(provenance, "r") do handle
         attributes = HDF5.attributes(handle)
         String(read(attributes["schema"])) == "WannierNLQG.amn_provenance" ||
             throw(ArgumentError("AMN provenance has an unsupported schema"))
-        String(read(attributes["basis_sha256"])) == expected_basis || throw(
-            ArgumentError("AMN provenance projection basis does not match the configured basis"),
-        )
+        Int(read(attributes["num_wannier"])) == basis.num_wannier &&
+        Bool(read(attributes["spinor"])) == basis.spinor ||
+            throw(ArgumentError("AMN provenance projection basis dimensions differ"))
+        haskey(handle, "projection_expansion") ||
+            throw(ArgumentError("AMN provenance requires complete projection data"))
+        expansion = handle["projection_expansion"]
+        length(keys(expansion)) == length(basis.blocks) ||
+            throw(ArgumentError("AMN provenance projection block count differs"))
+        for (index, block) in enumerate(basis.blocks)
+            key = lpad(string(index), 6, '0')
+            haskey(expansion, key) || throw(ArgumentError("AMN projection block missing"))
+            group = expansion[key]
+            values = HDF5.attributes(group)
+            String(read(values["selector"])) == block.selector &&
+            String(read(values["orbital_set"])) == block.orbital_set &&
+            isequal(read(group["positions_fractional"]), block.positions_fractional) &&
+            isequal(read(group["indices"]), block.indices) &&
+            isequal(read(group["local_bases"]), block.local_bases) || throw(
+                ArgumentError(
+                    "AMN provenance projection basis does not match the configured basis",
+                ),
+            )
+        end
         haskey(handle, "radial_transform") ||
             throw(ArgumentError("AMN provenance omits the radial transform contract"))
         radial_attributes = HDF5.attributes(handle["radial_transform"])
-        String(read(radial_attributes["implementation_digest"])) == expected_radial || throw(
-            ArgumentError("AMN provenance radial transform does not match the configured backend"),
-        )
+        for (key, value) in pairs(expected_contract)
+            expected = value isa Symbol ? String(value) : value
+            haskey(radial_attributes, String(key)) &&
+            isequal(read(radial_attributes[String(key)]), expected) ||
+                throw(ArgumentError("AMN provenance radial transform differs: $(key)"))
+        end
     end
     return provenance
 end
 
 # Reconstruct an immutable config with the resolved projection basis and dimension.
-function _config_with_projection_basis(
-    config::SymmetryAdaptedWannierizationConfig,
-    basis::WannierProjectionBasis,
-)
+function _config_with_projection_basis(config::WannierizationConfig, basis::WannierProjectionBasis)
     dimension = config.input.num_wannier == 0 ? basis.num_wannier : config.input.num_wannier
     return replace_wannierization_config(
         config;
@@ -401,10 +483,7 @@ function _config_with_projection_basis(
 end
 
 # Copy an immutable solver config with the resolved effective compatibility policy.
-function _config_with_compatibility_policy(
-    config::SymmetryAdaptedWannierizationConfig,
-    policy::Symbol,
-)
+function _config_with_compatibility_policy(config::WannierizationConfig, policy::Symbol)
     return replace_wannierization_config(config; input = (compatibility_policy = policy,))
 end
 
@@ -426,7 +505,7 @@ end
 
 """Complete native VASP PAW matrices in the sealed representation star gauge."""
 function _complete_native_vasp_paw_matrices_in_star_gauge(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     native_source::NativeVASPPAWMatrices,
     result::VASPPAWMatrixElementResult,
 )
@@ -436,7 +515,7 @@ function _complete_native_vasp_paw_matrices_in_star_gauge(
     gauge_file = abspath(something(config.input.wavefunction_gauge_hdf5))
     restored = read_star_covariant_paw_gauge_hdf5(
         gauge_file;
-        require_pass = config.input.construction_policy == :strict,
+        require_pass = false,
         construction_policy = config.input.construction_policy,
         source = config.input.source,
     )
@@ -466,21 +545,18 @@ function _complete_native_vasp_paw_matrices_in_star_gauge(
     maximum(abs, amn_readback.data - rotated_amn.data) <= 5.0e-15 || throw(
         ArgumentError("PAW_PROPAGATION_IMPLEMENTATION_HOLD: symmetry-gauge AMN readback differs"),
     )
-    gauge_sha256 = sha256_file(gauge_file)
     provenance_file = joinpath(completed_dir, "native_paw.symmetry_gauge.provenance.h5")
     HDF5.enable_complex_support()
     atomic_hdf5_write(provenance_file) do temporary
         HDF5.h5open(temporary, "w") do handle
             attributes = HDF5.attributes(handle)
             attributes["schema"] = "WannierNLQG.native_vasp_paw_symmetry_gauge"
-            attributes["schema_version"] = "1.0"
-            attributes["gauge_sha256"] = gauge_sha256
+            attributes["schema_version"] = "2.0"
+            attributes["content_authentication"] = "NOT_PERFORMED"
             attributes["gauge_file"] = gauge_file
             attributes["rotation_convention"] = "A'=R_k^dagger*A;M'=R_k^dagger*M*R_kplusb"
             attributes["parent_band_count"] = parent_bands
             attributes["kpoint_count"] = parent_kpoints
-            attributes["mmn_sha256"] = sha256_file(mmn_file)
-            attributes["amn_sha256"] = sha256_file(amn_file)
             handle["native_to_completed_rotations"] = rotations
         end
     end
@@ -490,24 +566,33 @@ function _complete_native_vasp_paw_matrices_in_star_gauge(
         mmn_file,
         amn_file,
         provenance_file = abspath(provenance_file),
-        gauge_sha256,
     )
 end
 
 # Derive the native-VASP matrix-element authority from the exact solver windows.
-function _native_vasp_paw_qualification_contract(config::SymmetryAdaptedWannierizationConfig)
-    eig = IO.read_wannier_eig(config.input.eig_file)
+function _native_vasp_paw_qualification_contract(config::WannierizationConfig)
+    generated = Wannierization.uses_generated_native_eigenvalues(config.input)
+    metadata_source =
+        generated ? Wannierization.native_vasp_wannier_metadata(config.input.source) : nothing
+    eig =
+        generated ?
+        IO.WannierEIG(
+            size(metadata_source.energies_ev, 1),
+            size(metadata_source.energies_ev, 2),
+            metadata_source.energies_ev,
+        ) : IO.read_wannier_eig(config.input.eig_file)
     band_block_labels = canonical_band_block_labels(eig.data, config.input.degeneracy_tolerance_ev)
     outer_masks, frozen_masks = window_masks_from_energies(config, eig.data, band_block_labels)
     scope = BandRepresentationQualificationScope(
         BitMatrix(hcat(outer_masks...)),
-        BitMatrix(hcat(frozen_masks...)),
+        BitMatrix(hcat(frozen_masks...));
+        content_authentication = false,
     )
     metadata = Dict(
         "target_authority" => "outer_window",
         "parent_audit_policy" => "audit_only",
         "target_leakage_semantics" => TARGET_LEAKAGE_WEIGHT_SEMANTICS,
-        "target_leakage_formula_sha256" => TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256,
+        "target_leakage_formula_definition" => TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION,
         "target_leakage_threshold" => repr(
             config.input.wavefunction_gauge_backend isa StarCovariantPAWGauge ?
             config.input.wavefunction_gauge_backend.thresholds.target_leakage_weight :
@@ -520,10 +605,11 @@ function _native_vasp_paw_qualification_contract(config::SymmetryAdaptedWannieri
         "degeneracy_tolerance_ev" => string(config.input.degeneracy_tolerance_ev),
         "window_closure" => "complete_degeneracy_blocks",
     )
-    input_sha256 = Dict(
-        "EIG" => sha256_file(config.input.eig_file),
-        "WIN" => sha256_file(config.input.win_file),
-    )
+    metadata["content_authentication"] = "NOT_PERFORMED"
+    metadata["geometry_input_definition"] = _geometry_input_definition(config.input)
+    # EIG values and source scientific arrays are carried by the actual preparation
+    # objects; no digest-only source certificate is generated for this workflow.
+    input_sha256 = Dict{String, String}()
     return (; scope, metadata, input_sha256)
 end
 
@@ -531,8 +617,22 @@ end
 function _require_native_vasp_paw_qualification(
     result::VASPPAWMatrixElementResult,
     thresholds::VASPPAWParityThresholds;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
+    validate_ordinary_construction_policy(construction_policy)
+    all(isfinite, result.mmn.data) && all(isfinite, result.solver_amn.data) ||
+        throw(ArgumentError("VASP_PAW_NONFINITE_MATRICES: no finite matrices are available"))
+    for value in (result.radial_q_max_absolute, result.generalized_norm_max_absolute)
+        value === nothing ||
+            isfinite(value) ||
+            throw(ArgumentError("VASP_PAW_NONFINITE_RESIDUAL: native comparison is not finite"))
+    end
+    for parity in (result.mmn_parity, result.amn_parity)
+        parity === nothing && continue
+        parity.finite &&
+        all(isfinite, (parity.max_absolute, parity.root_mean_square, parity.relative_l2)) ||
+            throw(ArgumentError("VASP_PAW_NONFINITE_PARITY: reference comparison is invalid"))
+    end
     result.passed && return nothing
     engineering_failure = findfirst(
         diagnostic ->
@@ -548,31 +648,7 @@ function _require_native_vasp_paw_qualification(
             join(result.diagnostics, "; "),
         ),
     )
-    if construction_policy == :standard
-        all(isfinite, result.mmn.data) && all(isfinite, result.solver_amn.data) ||
-            throw(ArgumentError("VASP_PAW_NONFINITE_MATRICES: no finite matrices are available"))
-        return nothing
-    end
-    if result.mmn_parity === nothing ||
-       !paw_metric_passes(
-        something(result.mmn_parity),
-        thresholds.mmn_max_absolute,
-        thresholds.mmn_rms,
-        thresholds.mmn_relative_l2,
-    )
-        throw(
-            ArgumentError(
-                "VASP_PAW_MMN_PARITY_FAILED: native target MMN exceeds the strict threshold; " *
-                join(result.diagnostics, "; "),
-            ),
-        )
-    end
-    throw(
-        ArgumentError(
-            "VASP_PAW_AMN_PARITY_FAILED: native target AMN exceeds the strict threshold; " *
-            join(result.diagnostics, "; "),
-        ),
-    )
+    return nothing
 end
 
 # Preserve each native PAW quality result independently of standard admission.
@@ -622,9 +698,10 @@ end
 # Keep native QE quality residuals separate from data, rank, and propagation identity failures.
 function _require_native_qe_paw_qualification(
     result::Wannierization.QEPAWMatrixElementResult;
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
     propagation_identity::Bool = false,
 )
+    validate_ordinary_construction_policy(construction_policy)
     all(isfinite, result.mmn.data) && all(isfinite, result.amn.data) ||
         throw(ArgumentError("QE_PAW_NONFINITE_MATRICES: no finite matrices are available"))
     isfinite(result.generalized_norm_max_absolute) ||
@@ -663,9 +740,7 @@ function _require_native_qe_paw_qualification(
             )
         end
     end
-    construction_policy == :standard &&
-        any(diagnostic -> diagnostic in quality_codes, result.diagnostics) &&
-        return nothing
+    any(diagnostic -> diagnostic in quality_codes, result.diagnostics) && return nothing
     prefix =
         propagation_identity ?
         "PAW_PROPAGATION_IMPLEMENTATION_HOLD: completed QE MMN/AMN are standard; " :
@@ -719,26 +794,62 @@ function _native_qe_paw_gate_diagnostics(
     ]
 end
 
-"""Read a validated matrix checkpoint, preserving its typed PAW diagnostics."""
-function _cached_resolved_matrices(builder, path, binding; acceptance_identity = nothing)
-    saved = IO.read_preparation_checkpoint(path, binding)
-    if saved !== nothing
-        for (artifact, digest) in saved.artifact_sha256
-            isfile(artifact) && sha256_file(artifact) == digest ||
-                throw(ArgumentError("ACCEPTED_MATRIX_ARTIFACT_DRIFT: $(artifact)"))
+# Expand domain records into actual values without display abbreviations or addresses.
+function _native_acceptance_value(value)
+    value isa Union{Number, AbstractString, Symbol, Nothing, Bool} && return value
+    value isa AbstractArray && return map(_native_acceptance_value, value)
+    value isa Union{Tuple, NamedTuple} && return map(_native_acceptance_value, value)
+    value isa AbstractDict && return Dict(k => _native_acceptance_value(v) for (k, v) in value)
+    value isa Function && throw(ArgumentError("NATIVE_ACCEPTANCE_CALLABLE_INPUT_UNSUPPORTED"))
+    isstructtype(typeof(value)) || throw(ArgumentError("NATIVE_ACCEPTANCE_INPUT_UNSUPPORTED"))
+    return (
+        type = string(typeof(value)),
+        fields = [
+            (name, _native_acceptance_value(getfield(value, name))) for
+            name in fieldnames(typeof(value))
+        ],
+    )
+end
+
+"""Stream complete source bytes with framing and unchanged-source observations."""
+function _write_native_acceptance_inputs(stream, config, basis, files)
+    fields = [
+        (name, getfield(config.input, name)) for
+        name in fieldnames(typeof(config.input)) if name != :preparation_execution
+    ]
+    IO.write_native_definition_value(
+        stream,
+        (
+            "wanniernlqg.native-acceptance-input/2",
+            _native_acceptance_value(fields),
+            WannierProjection.projection_basis_input_values(basis),
+        ),
+    )
+    _write_native_acceptance_files(stream, files)
+    return nothing
+end
+
+# Serialize sorted unique artifact paths, sizes and observed file bytes into the native input definition.
+function _write_native_acceptance_files(stream, files)
+    paths = sort!(unique(realpath.(files)))
+    IO.write_native_definition_value(stream, length(paths))
+    scratch = Vector{UInt8}(undef, 65536)
+    for path in paths
+        IO.with_scientific_source(path) do filename
+            IO.write_native_definition_value(stream, (path, filesize(filename)))
+            open(filename, "r") do input
+                while !eof(input)
+                    count = readbytes!(input, scratch, length(scratch))
+                    write(stream, @view scratch[1:count])
+                end
+            end
         end
-        all(isfinite, saved.resolved.mmn.data) || throw(ArgumentError("ACCEPTED_MATRIX_NONFINITE"))
-        saved.resolved.amn === nothing ||
-            all(isfinite, saved.resolved.amn) ||
-            throw(ArgumentError("ACCEPTED_MATRIX_NONFINITE"))
-        return _resolved_matrices_with_acceptance(
-            saved.resolved,
-            path,
-            binding,
-            acceptance_identity,
-        )
     end
-    resolved = builder()
+    return nothing
+end
+
+# Collect the resolved MMN, optional AMN/gauge files and existing PAW artifacts needed by native restore.
+function _native_resolved_artifacts(resolved)
     artifacts = String[resolved.mmn_file]
     for name in (:amn_file, :raw_amn_file, :gauge_provenance_file)
         value = getproperty(resolved, name)
@@ -747,70 +858,87 @@ function _cached_resolved_matrices(builder, path, binding; acceptance_identity =
     if resolved.paw_result !== nothing
         append!(artifacts, filter(isfile, collect(values(resolved.paw_result.artifacts))))
     end
-    digests = Dict(realpath(file)=>sha256_file(file) for file in unique(artifacts))
-    IO.write_preparation_checkpoint(path, binding, (; resolved, artifact_sha256 = digests))
-    return _resolved_matrices_with_acceptance(resolved, path, binding, acceptance_identity)
+    return sort!(unique(realpath.(artifacts)))
 end
 
-"""Bind the full typed result to checkpoint metadata without copying its scientific arrays."""
-function _resolved_matrices_with_acceptance(resolved, path, binding, identity)
-    identity === nothing && return resolved
-    reference = Dict(
-        "schema" => "native-matrix-acceptance-v1",
-        "path" => abspath(path),
-        "binding" => binding,
-        "payload_sha256" => sha256_file(path),
-        "input_identity_sha256" => identity,
+# Reject nonfinite accepted MMN or AMN values before they enter the restored solver state.
+function _validate_native_resolved_values(resolved)
+    all(isfinite, resolved.mmn.data) || throw(ArgumentError("ACCEPTED_MATRIX_NONFINITE"))
+    resolved.amn === nothing ||
+        all(isfinite, resolved.amn) ||
+        throw(ArgumentError("ACCEPTED_MATRIX_NONFINITE"))
+    return nothing
+end
+
+"""Restore only complete actual input and artifact definitions, without content authentication."""
+function _restore_accepted_matrix_reference(reference, config, basis, files)
+    get(reference, "schema", "") == "native-matrix-acceptance-v2" || throw(
+        ArgumentError(
+            "ACCEPTED_MATRIX_REFERENCE_ACTUAL_INPUTS_REQUIRED: explicit source-backed migration is required",
+        ),
     )
-    merge(resolved, (accepted_matrix_reference = reference,))
-end
-
-"""Restore the producer's complete matrix result before considering consumer implementation caches."""
-function _restore_accepted_matrix_reference(reference, identity)
-    get(reference, "schema", "") == "native-matrix-acceptance-v1" ||
+    get(reference, "content_authentication", "") == "NOT_PERFORMED" ||
         throw(ArgumentError("ACCEPTED_MATRIX_REFERENCE_SCHEMA_MISMATCH"))
-    get(reference, "input_identity_sha256", "") == identity ||
-        throw(ArgumentError("ACCEPTED_MATRIX_REFERENCE_INPUT_MISMATCH"))
-    path = String(reference["path"])
-    isfile(path) && sha256_file(path) == reference["payload_sha256"] ||
-        throw(ArgumentError("ACCEPTED_MATRIX_REFERENCE_PAYLOAD_MISMATCH"))
-    resolved = _cached_resolved_matrices(path, String(reference["binding"])) do
-        throw(ArgumentError("ACCEPTED_MATRIX_REFERENCE_UNREADABLE"))
+    saved = IO.read_preparation_checkpoint(String(reference["path"]), "native-matrix-acceptance/2")
+    saved === nothing && throw(ArgumentError("ACCEPTED_MATRIX_REFERENCE_UNREADABLE"))
+    keys(saved) == (:resolved, :inputs, :artifacts, :artifact_definitions) ||
+        throw(ArgumentError("ACCEPTED_MATRIX_REFERENCE_SCHEMA_MISMATCH"))
+    IO.validate_scientific_input_definition_bytes(
+        saved.inputs;
+        mismatch_error = "ACCEPTED_MATRIX_REFERENCE_INPUT_MISMATCH",
+    ) do stream
+        _write_native_acceptance_inputs(stream, config, basis, files)
     end
-    # The reference hash was verified above; do not stream the payload a second time.
-    merge(resolved, (accepted_matrix_reference = copy(reference),))
+    saved.artifacts == _native_resolved_artifacts(saved.resolved) ||
+        throw(ArgumentError("ACCEPTED_MATRIX_ARTIFACT_INVENTORY_MISMATCH"))
+    IO.validate_scientific_input_definition_bytes(
+        saved.artifact_definitions;
+        mismatch_error = "ACCEPTED_MATRIX_ARTIFACT_DRIFT",
+    ) do stream
+        _write_native_acceptance_files(stream, saved.artifacts)
+    end
+    _validate_native_resolved_values(saved.resolved)
+    return merge(saved.resolved, (accepted_matrix_reference = copy(reference),))
 end
 
-"""Reuse native matrices at the main solver and target entries before invoking a generator."""
-function _resolve_wannier_matrix_elements(
-    config::SymmetryAdaptedWannierizationConfig,
-    basis::WannierProjectionBasis;
-    generator = _generate_or_read_wannier_matrix_elements,
-    accepted_result = nothing,
-    implementation_catalog = preparation_implementation_paths,
-)
+"""Publish a fresh owned acceptance record; never reuse a digest-only implementation cache."""
+function _capture_native_matrix_acceptance(builder, config, basis, files, artifact_dir)
+    root = joinpath(artifact_dir, "accepted-matrix-resolution-v2")
+    mkpath(root)
+    directory = mktempdir(root; cleanup = false)
+    inputs = IO.scientific_input_definition_bytes(; directory) do stream
+        _write_native_acceptance_inputs(stream, config, basis, files)
+    end
+    resolved = builder()
+    _validate_native_resolved_values(resolved)
+    # Generation must not modify the declared scientific source inputs.
+    IO.validate_scientific_input_definition_bytes(
+        inputs;
+        mismatch_error = "NATIVE_INPUT_CHANGED_DURING_GENERATION",
+    ) do stream
+        _write_native_acceptance_inputs(stream, config, basis, files)
+    end
+    artifacts = _native_resolved_artifacts(resolved)
+    artifact_definitions = IO.scientific_input_definition_bytes(; directory) do stream
+        _write_native_acceptance_files(stream, artifacts)
+    end
+    path = joinpath(directory, "accepted.bin")
+    IO.write_preparation_checkpoint(
+        path,
+        "native-matrix-acceptance/2",
+        (; resolved, inputs, artifacts, artifact_definitions),
+    )
+    reference = Dict(
+        "schema" => "native-matrix-acceptance-v2",
+        "content_authentication" => "NOT_PERFORMED",
+        "path" => abspath(path),
+    )
+    return merge(resolved, (accepted_matrix_reference = reference,))
+end
+
+"""Enumerate the same complete native sources for generation and explicit input reuse."""
+function _native_matrix_source_files(config::WannierizationConfig)
     configured = config.input.matrix_elements
-    if accepted_result !== nothing &&
-       configured isa SymmetryCompletedQEPAWMatrices &&
-       config.input.preparation_execution.mode != :dense_reference &&
-       config.input.preparation_execution.resume &&
-       config.input.construction_policy == :standard &&
-       accepted_result.status in (COMPLETED, COMPLETED_WITH_WARNINGS, Wannierization.MAX_ITERATIONS)
-        return _resolve_accepted_operator_matrices(
-            config,
-            basis,
-            something(config.checkpoint.restart_hdf5);
-            accepted = accepted_result,
-        )
-    end
-    if !(
-           configured isa
-           Union{NativeQEPAWMatrices, NativeVASPPAWMatrices, SymmetryCompletedQEPAWMatrices}
-       ) ||
-       config.input.preparation_execution.mode == :dense_reference ||
-       !config.input.preparation_execution.resume
-        return generator(config, basis)
-    end
     files = collect(values(native_preparation_source_files(config.input.source)))
     if config.input.source isa VASPWavefunctionSource
         outcar = config.input.source.outcar_file
@@ -822,6 +950,7 @@ function _resolve_wannier_matrix_elements(
         value isa AbstractString && isfile(value) && push!(files, String(value))
     end
     for value in (
+        Wannierization.uses_generated_native_eigenvalues(config.input) ? nothing :
         config.input.eig_file,
         config.input.win_file,
         config.input.band_representation_hdf5,
@@ -829,52 +958,61 @@ function _resolve_wannier_matrix_elements(
     )
         value === nothing || (isfile(value) && push!(files, String(value)))
     end
-    return SymmetryFoundation.with_verified_file_digests(files) do
-        inputs = sort!([(realpath(path), sha256_file(path)) for path in unique(files)])
-        input_config = [
-            (name, getfield(config.input, name)) for
-            name in fieldnames(typeof(config.input)) if name != :preparation_execution
-        ]
-        identity = bytes2hex(SHA.sha256(repr((input_config, basis, inputs))))
-        if accepted_result !== nothing &&
-           haskey(accepted_result.input_summary, "native_matrix_acceptance_json")
-            reference = JSON3.read(
-                accepted_result.input_summary["native_matrix_acceptance_json"],
-                Dict{String, String},
-            )
-            return _restore_accepted_matrix_reference(reference, identity)
-        end
-        implementation_root, implementation = implementation_catalog()
-        return SymmetryFoundation.with_verified_file_digests(implementation) do
-            code =
-                [(relpath(path, implementation_root), sha256_file(path)) for path in implementation]
-            binding = bytes2hex(
-                SHA.sha256(
-                    "native-matrix-resolution-v1"*string(VERSION)*repr((
-                        input_config,
-                        basis,
-                        inputs,
-                        code,
-                    )),
-                ),
-            )
-            path = joinpath(configured.artifact_dir, "accepted-matrix-resolution", binding*".bin")
-            _cached_resolved_matrices(path, binding; acceptance_identity = identity) do
-                generator(config, basis)
-            end
-        end
+    return files
+end
+
+"""Reuse native matrices at the main solver and target entries before invoking a generator."""
+function _resolve_wannier_matrix_elements(
+    config::WannierizationConfig,
+    basis::WannierProjectionBasis;
+    generator = _generate_or_read_wannier_matrix_elements,
+    accepted_result = nothing,
+    implementation_catalog = preparation_implementation_paths,
+)
+    configured = config.input.matrix_elements
+    owned_native = Wannierization.uses_generated_native_eigenvalues(config.input)
+    is_native =
+        configured isa
+        Union{NativeQEPAWMatrices, NativeVASPPAWMatrices, SymmetryCompletedQEPAWMatrices}
+    if is_native && accepted_result !== nothing
+        haskey(accepted_result.input_summary, "native_matrix_acceptance_json") ||
+            throw(ArgumentError("NATIVE_RESTART_ACTUAL_INPUTS_REQUIRED"))
+        accepted_result.status in
+        (COMPLETED, COMPLETED_WITH_WARNINGS, Wannierization.MAX_ITERATIONS) ||
+            throw(ArgumentError("ACCEPTED_OPERATOR_CHECKPOINT_NOT_TERMINAL"))
+    elseif !is_native || (
+        !owned_native && (
+            config.input.preparation_execution.mode == :dense_reference ||
+            !config.input.preparation_execution.resume
+        )
+    )
+        return generator(config, basis)
+    end
+    files = _native_matrix_source_files(config)
+    if accepted_result !== nothing &&
+       haskey(accepted_result.input_summary, "native_matrix_acceptance_json")
+        reference = JSON3.read(
+            accepted_result.input_summary["native_matrix_acceptance_json"],
+            Dict{String, String},
+        )
+        return _restore_accepted_matrix_reference(reference, config, basis, files)
+    end
+    return _capture_native_matrix_acceptance(config, basis, files, configured.artifact_dir) do
+        generator(config, basis)
     end
 end
 
 # Resolve old MMN/AMN fields or one typed matrix-element source before solver entry.
 function _generate_or_read_wannier_matrix_elements(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     basis::WannierProjectionBasis,
 )
     configured = config.input.matrix_elements
     if configured === nothing && config.input.amn_file !== nothing
-        configured =
-            ExternalWannier90Matrices(config.input.mmn_file, something(config.input.amn_file))
+        configured = ExternalOverlapProjectionMatrices(
+            config.input.mmn_file,
+            something(config.input.amn_file),
+        )
     end
     if configured === nothing
         config.solver.initialization == :amn &&
@@ -892,11 +1030,10 @@ function _generate_or_read_wannier_matrix_elements(
             raw_amn_file = nothing,
             source_kind = "legacy_mmn_only",
             paw_result = nothing,
-            gauge_sha256 = "",
             gauge_provenance_file = nothing,
         )
-    elseif configured isa ExternalWannier90Matrices
-        external = configured::ExternalWannier90Matrices
+    elseif configured isa ExternalOverlapProjectionMatrices
+        external = configured::ExternalOverlapProjectionMatrices
         _validate_amn_projection_contract(external.amn_file, basis)
         return (
             mmn = IO.read_wannier_mmn(external.mmn_file),
@@ -904,9 +1041,8 @@ function _generate_or_read_wannier_matrix_elements(
             mmn_file = external.mmn_file,
             amn_file = external.amn_file,
             raw_amn_file = nothing,
-            source_kind = "external_wannier90",
+            source_kind = "external_overlap_projection",
             paw_result = nothing,
-            gauge_sha256 = "",
             gauge_provenance_file = nothing,
         )
     end
@@ -924,8 +1060,7 @@ function _generate_or_read_wannier_matrix_elements(
             completed_source.nnkp_file;
             artifact_dir = completed_source.artifact_dir,
             thresholds = completed_source.thresholds,
-            qualification_mode = config.input.construction_policy == :standard ? :standard :
-                                 completed_source.qualification_mode,
+            qualification_mode = :standard,
         )
         _require_native_qe_paw_qualification(
             result;
@@ -938,11 +1073,8 @@ function _generate_or_read_wannier_matrix_elements(
             mmn_file = result.artifacts["mmn"],
             amn_file = result.artifacts["amn"],
             raw_amn_file = result.artifacts["amn"],
-            source_kind = config.input.construction_policy == :strict &&
-                          completed_source.qualification_mode == :strict ?
-                          "symmetry_completed_qe_paw" : "symmetry_completed_qe_paw_STANDARD",
+            source_kind = "symmetry_completed_qe_paw_STANDARD",
             paw_result = result,
-            gauge_sha256 = sha256_file(completed_source.gauge_hdf5),
             gauge_provenance_file = get(result.artifacts, "provenance_hdf5", nothing),
         )
     end
@@ -954,10 +1086,34 @@ function _generate_or_read_wannier_matrix_elements(
                 "QE_AUGMENTATION_METRIC_REQUIRED: native QE matrices require a QE source",
             ),
         )
+        if native_source.topology !== nothing
+            Wannierization.generated_native_eigenvalue_path(config.input)
+            geometry = something(config.input.geometry)
+            current = Wannierization.native_qe_wannier_metadata(config.input.source)
+            actual = current.structure
+            frozen = geometry.structure
+            frozen.species == actual.species &&
+            isapprox(frozen.lattice, actual.lattice; atol = 1e-10, rtol = 0) &&
+            isapprox(
+                frozen.positions_fractional,
+                actual.positions_fractional;
+                atol = 1e-10,
+                rtol = 0,
+            ) &&
+            isequal(frozen.magnetic_moments_cartesian, actual.magnetic_moments_cartesian) &&
+            size(geometry.kpoints_fractional) == size(current.kpoints_fractional) &&
+            isapprox(
+                geometry.kpoints_fractional,
+                current.kpoints_fractional;
+                atol = 1e-10,
+                rtol = 0,
+            ) || throw(ArgumentError("NATIVE_GEOMETRY_SOURCE_DRIFT"))
+        end
         mkpath(native_source.artifact_dir)
         result = generate_qe_paw_matrix_elements(
             config.input.source::QuantumEspressoWavefunctionSource,
-            native_source.nnkp_file;
+            native_source.topology === nothing ? something(native_source.nnkp_file) :
+            native_source.topology;
             artifact_dir = native_source.artifact_dir,
             oracle_mmn_file = native_source.oracle_mmn_file,
             oracle_amn_file = native_source.oracle_amn_file,
@@ -976,7 +1132,6 @@ function _generate_or_read_wannier_matrix_elements(
             raw_amn_file = result.artifacts["amn"],
             source_kind = "native_qe_paw",
             paw_result = result,
-            gauge_sha256 = "",
             gauge_provenance_file = nothing,
         )
     end
@@ -993,7 +1148,8 @@ function _generate_or_read_wannier_matrix_elements(
     result = generate_vasp_paw_matrix_elements_impl(
         config.input.source::VASPWavefunctionSource,
         basis,
-        native_source.topology_mmn_file;
+        native_source.topology === nothing ? something(native_source.topology_mmn_file) :
+        native_source.topology;
         output_mmn_file = mmn_file,
         output_amn_file = raw_amn_file,
         output_solver_amn_file = amn_file,
@@ -1004,7 +1160,7 @@ function _generate_or_read_wannier_matrix_elements(
         require_oracle = native_source.require_oracle,
         qualification_scope = qualification.scope,
         qualification_metadata = qualification.metadata,
-        qualification_input_sha256 = qualification.input_sha256,
+        qualification_input_definitions = qualification.input_sha256,
     )
     _require_native_vasp_paw_qualification(
         result,
@@ -1020,7 +1176,6 @@ function _generate_or_read_wannier_matrix_elements(
         raw_amn_file,
         source_kind = completed === nothing ? "native_vasp_paw" : "native_vasp_paw_symmetry_gauge",
         paw_result = result,
-        gauge_sha256 = completed === nothing ? "" : completed.gauge_sha256,
         gauge_provenance_file = completed === nothing ? nothing : completed.provenance_file,
     )
 end
@@ -1041,105 +1196,46 @@ function _resolve_accepted_operator_matrices(
     checkpoint_file::AbstractString;
     accepted = nothing,
 )
-    accepted === nothing && (accepted = read_wannierization_checkpoint_hdf5(checkpoint_file))
+    accepted === nothing && (
+        accepted = read_wannierization_checkpoint_hdf5(
+            checkpoint_file;
+            reference_root = config.checkpoint.reference_root,
+        )
+    )
     accepted.status in (COMPLETED, COMPLETED_WITH_WARNINGS, Wannierization.MAX_ITERATIONS) ||
         throw(ArgumentError("ACCEPTED_OPERATOR_CHECKPOINT_NOT_TERMINAL"))
     configured = config.input.matrix_elements
     configured isa SymmetryCompletedQEPAWMatrices ||
         throw(ArgumentError("ACCEPTED_OPERATOR_MATRIX_SOURCE_UNSUPPORTED"))
-    config.input.construction_policy == :standard ||
-        throw(ArgumentError("ACCEPTED_OPERATOR_POLICY_UNSUPPORTED"))
-    summary = accepted.input_summary
-    projection_basis_sha256(basis) == summary["projection_basis_sha256"] ||
-        throw(ArgumentError("ACCEPTED_OPERATOR_PROJECTION_BASIS_MISMATCH"))
-    star_authoritative_hamiltonian_sha256(config.input.authoritative_hamiltonian) ==
-    summary["authoritative_hamiltonian_sha256"] ||
-        throw(ArgumentError("ACCEPTED_OPERATOR_AUTHORITY_CONFIG_MISMATCH"))
-    directory = configured.artifact_dir
-    mmn_file = joinpath(directory, "STANDARD_symmetry_completed_qe_paw.mmn")
-    amn_file = joinpath(directory, "STANDARD_symmetry_completed_qe_paw.amn")
-    provenance_file = joinpath(directory, "STANDARD_symmetry_completed_qe_paw.provenance.h5")
-    hashes = HDF5.h5open(config.input.band_representation_hdf5, "r") do handle
-        attributes = HDF5.attributes(handle["input_sha256"])
-        Dict(String(key) => String(read(attributes[key])) for key in keys(attributes))
-    end
-    for (key, path) in (("EIG", config.input.eig_file), ("WIN", config.input.win_file))
-        get(hashes, key, "MISSING") == sha256_file(path) ||
-            throw(ArgumentError("ACCEPTED_OPERATOR_INPUT_MISMATCH: $(key)"))
-    end
-    hashes["MMN"] = sha256_file(mmn_file)
-    input_digest = bytes2hex(
-        SHA.sha256(
-            join(
-                [string(key, Char(0), hashes[key]) for key in sort!(collect(keys(hashes)))],
-                Char(10),
-            ),
-        ),
-    )
-    input_digest == summary["input_sha256"] ||
-        throw(ArgumentError("ACCEPTED_OPERATOR_MATRIX_DIGEST_MISMATCH"))
-    sha256_file(amn_file) == summary["amn_sha256"] ||
-        throw(ArgumentError("ACCEPTED_OPERATOR_AMN_DIGEST_MISMATCH"))
-    gauge_digest = sha256_file(configured.gauge_hdf5)
-    gauge_digest == summary["matrix_element_gauge_sha256"] ||
-        throw(ArgumentError("ACCEPTED_OPERATOR_GAUGE_DIGEST_MISMATCH"))
-    HDF5.h5open(provenance_file, "r") do handle
-        attributes = HDF5.attributes(handle)
-        Bool(read(attributes["passed"])) ||
-            throw(ArgumentError("ACCEPTED_OPERATOR_PROVENANCE_NOT_PASSED"))
-        String(read(attributes["qualification_mode"])) == "standard" ||
-            throw(ArgumentError("ACCEPTED_OPERATOR_PROVENANCE_POLICY_MISMATCH"))
-        String(read(attributes["gauge_hdf5_sha256"])) == gauge_digest ||
-            throw(ArgumentError("ACCEPTED_OPERATOR_PROVENANCE_GAUGE_MISMATCH"))
-        String(read(attributes["nnkp_sha256"])) == sha256_file(configured.nnkp_file) ||
-            throw(ArgumentError("ACCEPTED_OPERATOR_TOPOLOGY_MISMATCH"))
-    end
-    _validate_amn_projection_contract(amn_file, basis)
-    mmn = IO.read_wannier_mmn(mmn_file)
-    amn = read_wannier_amn(amn_file)
-    (mmn.num_bands, mmn.num_kpts) ==
-    (parse(Int, summary["num_bands"]), parse(Int, summary["num_kpoints"])) ||
-        throw(ArgumentError("ACCEPTED_OPERATOR_MATRIX_DIMENSION_MISMATCH"))
-    size(amn) == (mmn.num_bands, basis.num_wannier, mmn.num_kpts) ||
-        throw(ArgumentError("ACCEPTED_OPERATOR_AMN_DIMENSION_MISMATCH"))
-    all(isfinite, mmn.data) && all(isfinite, amn) ||
-        throw(ArgumentError("ACCEPTED_OPERATOR_MATRIX_NONFINITE"))
-    return (;
-        mmn,
-        amn,
-        mmn_file,
-        amn_file,
-        raw_amn_file = amn_file,
-        source_kind = get(summary, "matrix_element_source", "symmetry_completed_qe_paw_STANDARD"),
-        paw_result = nothing,
-        gauge_sha256 = gauge_digest,
-        gauge_provenance_file = abspath(provenance_file),
-    )
+    validate_ordinary_construction_policy(config.input.construction_policy)
+    return _resolve_wannier_matrix_elements(config, basis; accepted_result = accepted)
 end
 
 """Prepare the shared operator target before any uIu/uHu/sIu/sHu generation."""
-function prepare_wannier_operator_target_contract(
-    original_config::SymmetryAdaptedWannierizationConfig,
-)
+function prepare_wannier_operator_target_contract(original_config::WannierizationConfig)
     validate_wannierization_config(original_config)
     # A qualified-source delivery contract is needed whenever the resolved selection
     # binds `:operator_target_contract`, not only for the historical `:full` profile.
     operator_output_requires_target_contract(original_config) ||
         throw(ArgumentError("OPERATOR_TARGET_CONTRACT_REQUIRES_QUALIFIED_SOURCE_SELECTION"))
-    eig = IO.read_wannier_eig(original_config.input.eig_file)
-    basis =
-        original_config.input.projection_basis === nothing ?
-        build_wannier_projection_basis(original_config.input.win_file) :
-        original_config.input.projection_basis
+    generated_eig = Wannierization.uses_generated_native_eigenvalues(original_config.input)
+    eig = generated_eig ? nothing : IO.read_wannier_eig(original_config.input.eig_file)
+    basis = _configured_projection_basis(original_config.input)
     config = _config_with_projection_basis(original_config, basis)
     resolved_matrices =
         if config.checkpoint.restart_hdf5 !== nothing &&
-           config.input.matrix_elements isa SymmetryCompletedQEPAWMatrices &&
-           config.input.construction_policy == :standard
+           config.input.matrix_elements isa SymmetryCompletedQEPAWMatrices
             _resolve_accepted_operator_matrices(config, basis, config.checkpoint.restart_hdf5)
         else
             _resolve_wannier_matrix_elements(config, basis)
         end
+    if generated_eig
+        expected = Wannierization.generated_native_eigenvalue_path(config.input)
+        resolved_matrices.paw_result !== nothing &&
+        abspath(resolved_matrices.paw_result.artifacts["eig"]) == expected ||
+            throw(ArgumentError("owned native generated EIG artifact binding mismatch"))
+        eig = IO.read_wannier_eig(expected)
+    end
     return wannier_operator_target_contract(
         config,
         eig,
@@ -1149,10 +1245,10 @@ function prepare_wannier_operator_target_contract(
     )
 end
 
-# Copy a band representation while extending its provenance dictionary.
-function _representation_with_hashes(
+# Copy actual representation values with an explicit non-authenticated input definition.
+function _representation_with_input_definition(
     representation::BandRepresentation,
-    additional_hashes::Dict{String, String},
+    geometry_definition::String,
 )
     return BandRepresentation(
         representation.schema_version,
@@ -1171,14 +1267,20 @@ function _representation_with_hashes(
         representation.irreducible_indices,
         representation.full_to_irreducible,
         representation.full_to_operation;
-        conventions = representation.conventions,
-        input_sha256 = merge(representation.input_sha256, additional_hashes),
+        conventions = merge(
+            representation.conventions,
+            Dict(
+                "content_authentication" => "NOT_PERFORMED",
+                "geometry_input_definition" => geometry_definition,
+            ),
+        ),
+        input_sha256 = Dict{String, String}(),
+        input_definitions = representation.input_definitions,
     )
 end
 
 # Seal the unified mode contract into every newly prepared representation.
-_requested_wannierization_mode(config::SymmetryAdaptedWannierizationConfig) =
-    config.input.wannierization_mode
+_requested_wannierization_mode(config::WannierizationConfig) = config.input.wannierization_mode
 # Read the preparation-specific mode without routing through the SAWF groups.
 _requested_wannierization_mode(config::BandRepresentationPreparationConfig) =
     config.wannierization_mode
@@ -1186,7 +1288,7 @@ _requested_wannierization_mode(config::BandRepresentationPreparationConfig) =
 # Persist the requested and effective modes in the prepared representation.
 function _representation_with_mode_contract(
     representation::BandRepresentation,
-    config::Union{SymmetryAdaptedWannierizationConfig, BandRepresentationPreparationConfig};
+    config::Union{WannierizationConfig, BandRepresentationPreparationConfig};
     preserve_public_origin_absence::Bool = false,
 )
     conventions = Dict{String, String}(representation.conventions)
@@ -1221,6 +1323,7 @@ function _representation_with_mode_contract(
         representation.full_to_operation;
         conventions,
         input_sha256 = representation.input_sha256,
+        input_definitions = representation.input_definitions,
     )
 end
 
@@ -1234,11 +1337,11 @@ function _validate_existing_target_subspace_contract(
     conventions = representation.conventions
     get(conventions, "qualification_scope", "") == "target_subspace" || return nothing
     for (key, expected) in (
-        ("outer_mask_sha256", qualification_scope.outer_mask_sha256),
-        ("frozen_mask_sha256", qualification_scope.frozen_mask_sha256),
-        ("target_subspace_contract_sha256", contract.contract_sha256),
+        ("outer_mask_definition", qualification_scope.outer_mask_definition),
+        ("frozen_mask_definition", qualification_scope.frozen_mask_definition),
+        ("target_subspace_contract_definition", contract.contract_definition),
         ("target_leakage_semantics", TARGET_LEAKAGE_WEIGHT_SEMANTICS),
-        ("target_leakage_formula_sha256", TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256),
+        ("target_leakage_formula_definition", TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION),
         ("target_leakage_threshold", repr(contract.scoped_paw_thresholds.target_leakage_weight)),
     )
         get(conventions, key, "MISSING") == expected || throw(
@@ -1247,26 +1350,19 @@ function _validate_existing_target_subspace_contract(
             ),
         )
     end
-    if haskey(representation.input_sha256, "TARGET_SUBSPACE_CONTRACT_SHA256")
-        representation.input_sha256["TARGET_SUBSPACE_CONTRACT_SHA256"] ==
-        contract.contract_sha256 || throw(
-            ArgumentError(
-                "TARGET_SUBSPACE_CONTRACT_MISMATCH: input-bound target contract digest differs",
-            ),
-        )
-    end
+
     return nothing
 end
 
 """Bind a symmetry-adapted representation to its authoritative target-subspace contract."""
-_workflow_input_config(config::SymmetryAdaptedWannierizationConfig) = config.input
+_workflow_input_config(config::WannierizationConfig) = config.input
 # Preserve the independent preparation config API behind the same narrow input view.
 _workflow_input_config(config::BandRepresentationPreparationConfig) = config
 
 # Bind a representation to the target-subspace contract owned by its input view.
 function _representation_with_target_subspace_contract(
     representation::BandRepresentation,
-    config::Union{SymmetryAdaptedWannierizationConfig, BandRepresentationPreparationConfig},
+    config::Union{WannierizationConfig, BandRepresentationPreparationConfig},
     qualification_scope::BandRepresentationQualificationScope,
 )
     input = _workflow_input_config(config)
@@ -1301,25 +1397,23 @@ function _representation_with_target_subspace_contract(
     conventions["authoritative_hamiltonian"] =
         authoritative_hamiltonian_key(input.authoritative_hamiltonian)
     conventions["authoritative_hamiltonian_sha256"] =
-        star_authoritative_hamiltonian_sha256(input.authoritative_hamiltonian)
+        star_authoritative_hamiltonian_definition(input.authoritative_hamiltonian)
     conventions["qualification_scope"] = "target_subspace"
     conventions["target_authority"] = "outer_window"
     conventions["parent_audit_policy"] = "audit_only"
-    conventions["outer_mask_sha256"] = qualification_scope.outer_mask_sha256
-    conventions["frozen_mask_sha256"] = qualification_scope.frozen_mask_sha256
-    conventions["target_subspace_contract_sha256"] = contract.contract_sha256
+    conventions["outer_mask_definition"] = qualification_scope.outer_mask_definition
+    conventions["frozen_mask_definition"] = qualification_scope.frozen_mask_definition
+    conventions["target_subspace_contract_definition"] = contract.contract_definition
     conventions["target_leakage_semantics"] = TARGET_LEAKAGE_WEIGHT_SEMANTICS
-    conventions["target_leakage_formula_sha256"] = TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256
+    conventions["target_leakage_formula_definition"] = TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION
     conventions["target_leakage_threshold"] =
         repr(contract.scoped_paw_thresholds.target_leakage_weight)
     conventions["target_scope_production_eligible"] =
         get(conventions, "target_scope_production_eligible", "false")
     conventions["scoped_production_eligible"] =
         get(conventions, "scoped_production_eligible", "false")
-    input_sha256 = merge(
-        representation.input_sha256,
-        Dict("TARGET_SUBSPACE_CONTRACT_SHA256" => contract.contract_sha256),
-    )
+    input_sha256 = Dict{String, String}()
+    conventions["content_authentication"] = "NOT_PERFORMED"
     return BandRepresentation(
         "1.17",
         representation.source_code,
@@ -1339,6 +1433,7 @@ function _representation_with_target_subspace_contract(
         representation.full_to_operation;
         conventions,
         input_sha256,
+        input_definitions = representation.input_definitions,
     )
 end
 
@@ -1373,6 +1468,7 @@ function _completed_public_band_representation(representation::BandRepresentatio
         representation.full_to_operation;
         conventions = representation.conventions,
         input_sha256 = representation.input_sha256,
+        input_definitions = representation.input_definitions,
     )
     SymmetryFoundation.validate_public_band_representation_contract(completed)
     return completed
@@ -1425,11 +1521,11 @@ function _result_for_terminal_persistence(result::WannierizationResult)
 end
 
 # A downstream model may use only a finite, invariant-valid accepted boundary.
-function _has_accepted_wannierization_state(result::WannierizationResult)
-    return result.restart_state !== nothing &&
-           result.wannier_chk !== nothing &&
-           get(result.input_summary, "has_accepted_state", "false") == "true" &&
-           wannierization_result_is_finite(result)
+function _has_accepted_wannierization_state(
+    result::WannierizationResult,
+    config::WannierizationConfig,
+)
+    return accepted_state_tb_export_gate(result, config).allowed
 end
 
 # The primary terminal failure reason for a result that failed before or outside
@@ -1447,24 +1543,14 @@ end
 # Derive the single typed eligibility block from the authoritative gates.  This
 # is the only place that assigns execution/export/production eligibility, so the
 # persisted qualification can no longer disagree with itself.
-function _wannierization_eligibility(
-    result::WannierizationResult,
-    config::SymmetryAdaptedWannierizationConfig,
-)
-    execution_eligible = _has_accepted_wannierization_state(result)
+function _wannierization_eligibility(result::WannierizationResult, config::WannierizationConfig)
     export_gate = accepted_state_tb_export_gate(result, config)
+    execution_eligible = export_gate.allowed
     export_eligible = export_gate.allowed
     strictly_converged_z_seal = get(result.input_summary, "z_seal_class", "") == "CONVERGED"
-    # The production contract reads the persisted typed export/Z evidence, so
-    # stage exactly those two derived values before asking the authoritative
-    # predicate.  No evidence is fabricated: both values come from the same
-    # structural gate and Z-stability signal recorded above.
-    staged_summary = Dict{String, String}(result.input_summary)
-    staged_summary["wannierization_eligibility_export_eligible"] = string(export_eligible)
-    staged_summary["wannierization_eligibility_strictly_converged_z_seal"] =
-        string(strictly_converged_z_seal)
-    staged_result = updated_wannierization_result(result; input_summary = staged_summary)
-    production_eligible = wannierization_scoped_production_eligible(staged_result)
+    # Ordinary readiness is derived from the accepted/export gates. Material
+    # production qualification remains independent evidence.
+    production_eligible = false
     reasons = String[]
     verified_contracts = String[]
     unverified_contracts = String[]
@@ -1500,14 +1586,16 @@ function _wannierization_eligibility(
         push!(unverified_contracts, "SCOPED_PRODUCTION_CONTRACT")
     end
     qualification_status =
-        production_eligible ? "PASS" :
-        (execution_eligible || export_eligible) ? "DIAGNOSTIC_ONLY" : "NOT_EVALUATED"
+        (execution_eligible || export_eligible) ? "COMPUTATION_READY" : "NOT_EVALUATED"
+    quality_review =
+        get(result.input_summary, "construction_quality_failed", "false") == "true" ||
+        !(result.status in (COMPLETED, COMPLETED_WITH_WARNINGS))
     return WannierizationEligibility(
         execution_eligible,
         export_eligible,
         production_eligible,
         qualification_status,
-        !production_eligible,
+        quality_review,
         strictly_converged_z_seal,
         reasons,
         verified_contracts,
@@ -1520,7 +1608,7 @@ end
 # checkpoint write so every persisted boundary carries a self-consistent block.
 function _with_wannierization_eligibility(
     result::WannierizationResult,
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
 )
     summary = Dict{String, String}(result.input_summary)
     merge!(summary, wannierization_eligibility_summary(_wannierization_eligibility(result, config)))
@@ -1532,7 +1620,7 @@ function _workflow_failure(
     status::WannierizationStatus,
     code::Symbol,
     exception,
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     backtrace = nothing,
     ;
     stage = "NOT_RECORDED",
@@ -1541,7 +1629,8 @@ function _workflow_failure(
     last_successful_operation = "NOT_RECORDED",
 )
     summary = Dict(
-        "win_file" => abspath(config.input.win_file),
+        "win_file" =>
+            config.input.win_file === nothing ? "NOT_USED" : abspath(config.input.win_file),
         "eig_file" => abspath(config.input.eig_file),
         "mmn_file" => abspath(config.input.mmn_file),
         "initialization" => String(config.solver.initialization),
@@ -1594,7 +1683,7 @@ end
 
 # Materialize the exact solver windows once for the static compatibility preflight.
 function _compatibility_window_masks(
-    config::Union{SymmetryAdaptedWannierizationConfig, BandRepresentationPreparationConfig},
+    config::Union{WannierizationConfig, BandRepresentationPreparationConfig},
     representation::BandRepresentation,
 )
     return window_masks_from_energies(
@@ -1664,7 +1753,11 @@ function _mapped_representation_raw_diagnostics(
                     source_kpoint,
                 ]
             )
+            all(isfinite, block) ||
+                throw(ArgumentError("NONFINITE_SEWING_BLOCK: required sewing data must be finite"))
             singular_values = svdvals(block)
+            all(isfinite, singular_values) ||
+                throw(ArgumentError("NONFINITE_SEWING_SPECTRUM: singular values must be finite"))
             maximum_singular = isempty(singular_values) ? 0.0 : maximum(singular_values)
             minimum_singular = isempty(singular_values) ? 0.0 : minimum(singular_values)
             rank_threshold = max(size(block)...) * eps(Float64) * max(maximum_singular, 1.0)
@@ -1765,12 +1858,12 @@ function _requalified_stored_raw_diagnostics(
     stored_scope = stored_metadata.qualification_scope
     stored_scope.diagnostic_status == :UNAVAILABLE_LEGACY_SCHEMA &&
         return stored_metadata.raw_diagnostics
-    stored_scope.outer_mask_sha256 == qualification_scope.outer_mask_sha256 || throw(
+    stored_scope.outer_mask_definition == qualification_scope.outer_mask_definition || throw(
         ArgumentError(
             "RAW_DIAGNOSTIC_REQUALIFICATION_REQUIRES_DETECTED_SOURCE: outer mask changed",
         ),
     )
-    stored_scope.frozen_mask_sha256 == qualification_scope.frozen_mask_sha256 &&
+    stored_scope.frozen_mask_definition == qualification_scope.frozen_mask_definition &&
         return stored_metadata.raw_diagnostics
     any(qualification_scope.frozen_mask) && throw(
         ArgumentError(
@@ -1805,7 +1898,7 @@ function _center_mapping_diagnostics(records)
         WannierizationDiagnostic(
             Symbol(record.code),
             :warning,
-            "A projection-plan quality check exceeded its strict tolerance.";
+            "A projection-plan quality check exceeded its reporting tolerance.";
             context = merge(
                 Dict(
                     string(key) => string(value) for (key, value) in pairs(record) if key != :code
@@ -1822,34 +1915,10 @@ function _effective_compatibility_policy(
     representation::BandRepresentation,
     inventory;
     public_origin_fallback_validated::Bool = false,
-    construction_policy::Symbol = :strict,
+    construction_policy::Symbol = :standard,
 )
-    construction_policy == :standard && return requested
-    magnetic =
-        inventory !== nothing ? inventory.magnetic :
-        lowercase(get(representation.conventions, "magnetic_structure", "unknown")) == "true"
-    antiunitary = any(operation.antiunitary for operation in representation.operations)
-    recorded_origin =
-        get(representation.conventions, "pre_unified_schema_version", representation.schema_version)
-    legacy_uncertain = !(
-        (public_origin_fallback_validated && recorded_origin == "1.0") || recorded_origin in (
-            "1.4",
-            "1.5",
-            "1.6",
-            "1.7",
-            "1.8",
-            "1.9",
-            "1.10",
-            "1.11",
-            "1.12",
-            "1.13",
-            "1.14",
-            "1.15",
-            "1.16",
-            "1.17",
-        )
-    )
-    return magnetic || antiunitary || legacy_uncertain ? :strict : requested
+    validate_ordinary_construction_policy(construction_policy)
+    return requested
 end
 
 # Copy a preparation config with its resolved projection basis and dimension.
@@ -1867,11 +1936,8 @@ end
 
 """Prepare and optionally persist one complete public schema-1.0 band representation."""
 function prepare_band_representation(original_config::BandRepresentationPreparationConfig)
-    original_config.construction_policy in (:standard, :strict) ||
-        throw(ArgumentError("construction_policy must be :standard or :strict"))
-    basis =
-        original_config.projection_basis === nothing ?
-        build_wannier_projection_basis(original_config.win_file) : original_config.projection_basis
+    validate_ordinary_construction_policy(original_config.construction_policy)
+    basis = _configured_projection_basis(original_config)
     config = _preparation_with_projection_basis(original_config, basis)
     eig = IO.read_wannier_eig(config.eig_file)
     num_wannier = configured_num_wannier(config)
@@ -1880,11 +1946,17 @@ function prepare_band_representation(original_config::BandRepresentationPreparat
     detected_raw_diagnostics = nothing
     representation_source_kind = representation_source(config)
     ordinary = effective_wannierization_mode(config) == :ordinary
+    config.operation_indices === nothing ||
+        (!ordinary && representation_source_kind == :detected) ||
+        throw(ArgumentError("operation selection requires a detected native SAWF representation"))
     representation = if ordinary
         if config.band_representation_hdf5 === nothing
             identity_band_representation(config, basis, eig)
         else
-            supplied = read_band_representation_hdf5(something(config.band_representation_hdf5))
+            supplied = read_band_representation_hdf5(
+                something(config.band_representation_hdf5);
+                content_authentication = false,
+            )
             supplied.schema_version == "1.0" || throw(
                 ArgumentError(
                     "ORDINARY_IDENTITY_REPRESENTATION_REGENERATION_REQUIRED: legacy identity " *
@@ -1893,7 +1965,8 @@ function prepare_band_representation(original_config::BandRepresentationPreparat
             )
             stored_metadata = read_band_representation_preparation_hdf5(
                 something(config.band_representation_hdf5),
-                supplied,
+                supplied;
+                content_authentication = false,
             )
             inventory = stored_metadata.inventory
             validate_no_symmetry_identity_representation(supplied, config.representation_tolerance)
@@ -1903,10 +1976,14 @@ function prepare_band_representation(original_config::BandRepresentationPreparat
         if config.band_representation !== nothing
             config.band_representation
         else
-            supplied = read_band_representation_hdf5(something(config.band_representation_hdf5))
+            supplied = read_band_representation_hdf5(
+                something(config.band_representation_hdf5);
+                content_authentication = false,
+            )
             stored_metadata = read_band_representation_preparation_hdf5(
                 something(config.band_representation_hdf5),
-                supplied,
+                supplied;
+                content_authentication = false,
             )
             inventory = stored_metadata.inventory
             supplied
@@ -1926,15 +2003,16 @@ function prepare_band_representation(original_config::BandRepresentationPreparat
             include_time_reversal = config.source.include_time_reversal,
             symmetry_tolerance = config.symmetry_tolerance,
         )
+        selection = select_detected_operations(inventory, config.operation_indices)
         labels = canonical_band_block_labels(eig.data, config.degeneracy_tolerance_ev)
         diagnostic_outer_masks, diagnostic_frozen_masks =
             window_masks_from_energies(config, eig.data, labels)
         built = build_band_representation(
             native,
             eig.data,
-            inventory.operations,
+            selection.operations,
             config.degeneracy_tolerance_ev;
-            symmetry_inventory = inventory,
+            symmetry_inventory = selection.inventory,
             diagnostic_outer_masks,
             diagnostic_frozen_masks,
             source = config.source,
@@ -1943,6 +2021,8 @@ function prepare_band_representation(original_config::BandRepresentationPreparat
             construction_policy = config.construction_policy,
             return_diagnostics = true,
         )
+        merge!(built.representation.conventions, selection.conventions)
+        inventory = selection.inventory
         detected_raw_diagnostics =
             _construction_raw_diagnostics(built.construction_diagnostics, built.representation)
         _representation_with_wavefunction_gauge(
@@ -1950,7 +2030,8 @@ function prepare_band_representation(original_config::BandRepresentationPreparat
             config.wavefunction_gauge_backend,
             config.authoritative_hamiltonian,
             gauge_source.artifact_sha256,
-            gauge_source.block_partition_metadata,
+            gauge_source.block_partition_metadata;
+            gauge_reference = gauge_source.gauge_reference,
         )
     end
     # Remember a validated public input before the binders can complete a legacy object.
@@ -1984,10 +2065,8 @@ function prepare_band_representation(original_config::BandRepresentationPreparat
     _validate_kpoint_action(representation)
     size(representation.energies_ev) == size(eig.data) ||
         throw(ArgumentError("band representation and EIG dimensions disagree"))
-    representation = _representation_with_hashes(
-        representation,
-        Dict("WIN" => sha256_file(config.win_file), "EIG" => sha256_file(config.eig_file)),
-    )
+    representation =
+        _representation_with_input_definition(representation, _geometry_input_definition(config))
     mapping_diagnostics = NamedTuple[]
     plan =
         ordinary ? identity_wannier_plan(num_wannier, only(representation.operations)) :
@@ -1998,7 +2077,7 @@ function prepare_band_representation(original_config::BandRepresentationPreparat
             construction_policy = config.construction_policy,
             mapping_diagnostics,
         )
-    if config.construction_policy == :standard
+    begin
         representation.conventions["construction_policy"] = "standard"
         representation.conventions["construction_mapping_diagnostics"] = JSON3.write([
             Dict(
@@ -2011,7 +2090,8 @@ function prepare_band_representation(original_config::BandRepresentationPreparat
     outer_masks, frozen_masks = _compatibility_window_masks(config, representation)
     qualification_scope = BandRepresentationQualificationScope(
         BitMatrix(hcat(outer_masks...)),
-        BitMatrix(hcat(frozen_masks...)),
+        BitMatrix(hcat(frozen_masks...));
+        content_authentication = false,
     )
     representation =
         _representation_with_target_subspace_contract(representation, config, qualification_scope)
@@ -2084,7 +2164,13 @@ function prepare_band_representation(original_config::BandRepresentationPreparat
             )
         end
     end
-    if !compatibility_report.passed && config.construction_policy == :standard
+    structural_compatibility_failure = any(
+        d -> d.severity == :error && !construction_compatibility_quality_failure(d),
+        compatibility_report.diagnostics,
+    )
+    if !compatibility_report.passed &&
+       effective_policy != :strict &&
+       !structural_compatibility_failure
         push!(
             diagnostics,
             WannierizationDiagnostic(
@@ -2116,7 +2202,7 @@ function prepare_band_representation(original_config::BandRepresentationPreparat
     status =
         compatibility_report.passed ?
         (isempty(filter(d -> d.severity == :warning, diagnostics)) ? :PASS : :PASS_WITH_WARNINGS) :
-        config.construction_policy == :strict && effective_policy == :strict ? :FAILED :
+        (structural_compatibility_failure || effective_policy == :strict) ? :FAILED :
         :PASS_WITH_WARNINGS
     representation = _completed_public_band_representation(representation)
     output_hdf5 = if config.output_hdf5 === nothing
@@ -2132,9 +2218,9 @@ function prepare_band_representation(original_config::BandRepresentationPreparat
             requested_policy = config.compatibility_policy,
             effective_policy,
             symmetry_tolerance_status = tolerance_status,
+            content_authentication = false,
         )
     end
-    artifact_sha256 = output_hdf5 === nothing ? nothing : sha256_file(something(output_hdf5))
     return BandRepresentationPreparationResult(
         status,
         representation,
@@ -2146,7 +2232,7 @@ function prepare_band_representation(original_config::BandRepresentationPreparat
         effective_policy,
         tolerance_status,
         output_hdf5,
-        artifact_sha256,
+        "NOT_PERFORMED",
         diagnostics,
     )
 end
@@ -2154,7 +2240,7 @@ end
 # Reject only restarts whose numerical trajectory used the affected
 # no-symmetry frozen initializer. Other restart modes remain schema-compatible.
 function _validate_restart_initializer_algorithm(
-    config::SymmetryAdaptedWannierizationConfig,
+    config::WannierizationConfig,
     frozen_masks,
     restart_result,
 )
@@ -2165,28 +2251,17 @@ function _validate_restart_initializer_algorithm(
         get(restart_result.input_summary, "initializer_algorithm_version", "NOT_RECORDED")
     recorded_algorithm == "nosym_exact_frozen_rowspace_v2" && return nothing
     effective_algorithms = effective_wannierization_algorithms(config)
-    if recorded_algorithm == "wannier90-4.0.1-dis_project-dis_proj_froz-v1" &&
+    if recorded_algorithm == "wannier-4.0.1-dis_project-dis_proj_froz-v1" &&
        effective_algorithms.disentanglement == :smv_fletcher_reeves_two_stage &&
        config.solver.initialization_backend isa Wannierization.AMNExactFrozenInitialization
-        # A two-stage Wannier90-reference restart owns the already sealed
+        # A two-stage Wannier-reference restart owns the already sealed
         # dis_project/dis_proj_froz result.  It must not be reclassified as the
         # generic no-symmetry row-space initializer merely because the public
         # initialization selector is now `:restart`.
         return nothing
     end
-    if recorded_algorithm == "NOT_RECORDED" &&
-       config.solver.initialization_backend isa Wannierization.PAWSCDMInitialization &&
-       get(restart_result.input_summary, "checkpoint_schema_version", "") == "2.24" &&
-       restart_result.restart_state !== nothing &&
-       something(restart_result.restart_state).config_sha256 == restart_config_sha256(config)
-        # Durable in-progress schema-2.24 checkpoints may predate terminal-summary
-        # enrichment and may omit the human-readable initializer version.  For
-        # PAW-SCDM, the same checkpoint binds the initialization backend and the
-        # complete PAW-SCDM artifact digest in `config_sha256`; accepting only an
-        # exact contract match preserves fail-closed provenance without making
-        # a long Z stage non-restartable.
-        return nothing
-    end
+    # Digest-only historical initializer claims cannot establish the actual
+    # initialization algorithm; explicit source-backed migration is required.
     throw(
         ArgumentError(
             "RESTART_INITIALIZER_ALGORITHM_MISMATCH: no-symmetry frozen restart " *
@@ -2216,6 +2291,14 @@ function _validate_restart_schema_for_continuation(restart_result::Wannierizatio
         )
     end
     version = get(restart_result.input_summary, "checkpoint_schema_version", "unknown")
+    if version=="1.4" &&
+       get(restart_result.input_summary, "restart_input_definition_status", "")=="NOT_RECORDED"
+        throw(
+            ArgumentError(
+                "RESTART_INPUT_DEFINITION_REQUIRED: archived state retains its accepted values/history but current continuation needs the actual original input definition",
+            ),
+        )
+    end
     throw(
         ArgumentError(
             "RESTART_SEMANTICS_INCOMPATIBLE: checkpoint schema $(version) is read-only; " *
@@ -2252,7 +2335,6 @@ function _compatibility_failure_result(
         Dict(
             "source_code" => String(representation.source_code),
             "schema_version" => representation.schema_version,
-            "representation_sha256" => report.representation_sha256,
             "failure_class" => undetermined ? "NONE" : "REPRESENTATION_A",
             "gate_definition_status" => string(report.gate_definition_status),
             "representation_assessment_status" => string(report.assessment_status),
@@ -2262,24 +2344,506 @@ function _compatibility_failure_result(
     )
 end
 
+"""Keep large posthoc provenance on the publishing rank; retain explicit peer status."""
+function _posthoc_nonroot_profile_summary(profile)
+    omitted = (
+        "band_frame_contract_definition",
+        "authoritative_hamiltonian_definition",
+        "operator_target_contract_definition",
+    )
+    small = Dict(k => v for (k, v) in profile if !(k in omitted))
+    small["nonroot_metadata_scope"] = "COMPLETE_DEFINITIONS_ON_PUBLISHING_RANK"
+    return small
+end
+
+"""Finish a local preparation phase on every rank before propagating any failure."""
+function _native_input_reuse_phase(f::F, mpi_execution::Bool, phase::String) where {F}
+    println(
+        stderr,
+        "WN_PHASE begin ",
+        phase,
+        " rank=",
+        mpi_execution ? MPI.Comm_rank(MPI.COMM_WORLD) : 0,
+    );
+    flush(stderr)
+    value = nothing
+    packet = try
+        value = f()
+        (; ok = true, error = "")
+    catch exception
+        (; ok = false, error = sprint(showerror, exception))
+    end
+    if mpi_execution
+        comm = MPI.COMM_WORLD
+        rank = MPI.Comm_rank(comm)
+        for owner in 0:(MPI.Comm_size(comm) - 1)
+            received = MPI.bcast(rank == owner ? packet : nothing, owner, comm)
+            received.ok || throw(
+                ArgumentError(
+                    "NATIVE_INPUT_REUSE_PREPARATION_FAILED phase=$phase rank=$owner: $(received.error)",
+                ),
+            )
+        end
+    else
+        packet.ok || throw(
+            ArgumentError("NATIVE_INPUT_REUSE_PREPARATION_FAILED phase=$phase: $(packet.error)"),
+        )
+    end
+    println(
+        stderr,
+        "WN_PHASE end ",
+        phase,
+        " rank=",
+        mpi_execution ? MPI.Comm_rank(MPI.COMM_WORLD) : 0,
+    );
+    flush(stderr)
+    return value
+end
+
+"""Keep dense preparation in memory and install disk storage only for streaming modes."""
+function _with_native_input_preparation_storage(f::F, execution, context) where {F}
+    execution.mode == :dense_reference && return f()
+    return IO.with_preparation_storage_context(f, context)
+end
+
+"""Replace only large native MMN arrays by immutable same-host workspace views.
+
+Raw and solver MMN roles are retained separately. Identity-based publication and
+path-based adoption preserve any original array alias without assuming the two
+roles were equal. All PAW diagnostics, AMN values and provenance remain present.
 """
-Construct symmetry-adapted Wannier functions from native Julia DFT adapters.
+function _publish_native_input_views(resolved, directory)
+    publications = IdDict{Any, Any}()
+    pack_mmn = function (mmn)
+        descriptor = get!(publications, mmn.data) do
+            IO.publish_preparation_shared_array(directory, mmn.data)
+        end
+        (;
+            descriptor,
+            num_bands = mmn.num_bands,
+            num_kpts = mmn.num_kpts,
+            num_neighbors = mmn.num_neighbors,
+            neighbors = mmn.neighbors,
+            reciprocal_shifts = mmn.reciprocal_shifts,
+        )
+    end
+    paw = resolved.paw_result
+    packed_paw =
+        paw === nothing ? nothing :
+        (;
+            constructor = typeof(paw),
+            fields = map(fieldnames(typeof(paw))) do name
+                value = getfield(paw, name)
+                value isa IO.WannierMMN ? pack_mmn(value) : value
+            end,
+        )
+    return merge(resolved, (; mmn = pack_mmn(resolved.mmn), paw_result = packed_paw))
+end
+
+"""Adopt shared MMN views, checking file extent, finite values and lifetime."""
+function _adopt_native_input_views(packed; finite_partition = nothing)
+    views = Dict{String, Array{ComplexF64, 4}}()
+    unpack_mmn = function (record)
+        data = get!(views, record.descriptor.path) do
+            IO.read_preparation_shared_array(record.descriptor; finite_partition)
+        end
+        IO.WannierMMN(
+            record.num_bands,
+            record.num_kpts,
+            record.num_neighbors,
+            data,
+            record.neighbors,
+            record.reciprocal_shifts,
+        )
+    end
+    paw = packed.paw_result
+    unpacked_paw = if paw === nothing
+        nothing
+    else
+        fields = map(paw.fields) do value
+            value isa NamedTuple && haskey(value, :descriptor) ? unpack_mmn(value) : value
+        end
+        paw.constructor(fields...)
+    end
+    return merge(packed, (; mmn = unpack_mmn(packed.mmn), paw_result = unpacked_paw))
+end
+
+"""Keep shared views under their original observations through the complete solve."""
+function _validate_native_input_view_lifetimes(packed)
+    records = Any[packed.mmn]
+    packed.paw_result === nothing || append!(
+        records,
+        filter(
+            value -> value isa NamedTuple && haskey(value, :descriptor),
+            collect(packed.paw_result.fields),
+        ),
+    )
+    for record in records
+        IO.validate_scientific_source_state(
+            record.descriptor.state;
+            declared_path = record.descriptor.path,
+        )
+    end
+    return nothing
+end
+
+"""Start a new trajectory from validated native inputs, never from old optimizer state.
+
+The entry is collective when configured for MPI. Each rank validates the complete
+source/artifact definitions before the original distributed solver starts. No rank
+invokes a native generator, changes the provider to external matrices, or writes
+into the immutable acceptance directory.
+"""
+function construct_wannier_functions_with_native_inputs(
+    original_config::WannierizationConfig,
+    reference;
+    run_record = nothing,
+)
+    mpi_execution = original_config.solver.parallel == :mpi
+    mpi_execution && !MPI.Initialized() && MPI.Init()
+    if mpi_execution
+        host = MPI.Get_processor_name()
+        root_host =
+            MPI.bcast(MPI.Comm_rank(MPI.COMM_WORLD) == 0 ? host : nothing, 0, MPI.COMM_WORLD)
+        _native_input_reuse_phase(mpi_execution, "shared_workspace_host") do
+            host == root_host || throw(ArgumentError("NATIVE_INPUT_REUSE_SHARED_HOST_REQUIRED"))
+        end
+    end
+    prepared_storage = _native_input_reuse_phase(mpi_execution, "workspace") do
+        effective_wannierization_mode(original_config) == :ordinary ||
+            throw(ArgumentError("NATIVE_INPUT_REUSE_ORDINARY_REQUIRED"))
+        execution = original_config.input.preparation_execution
+        execution.mode in (:dense_reference, :streaming_serial, :streaming_threads) ||
+            throw(ArgumentError("invalid preparation execution mode"))
+        1 <= execution.max_workers <= 4 ||
+            throw(ArgumentError("preparation workers must be between 1 and 4"))
+        base = something(execution.checkpoint_directory, tempdir())
+        mkpath(base)
+        directory = mktempdir(base; prefix = "native-input-reuse-", cleanup = false)
+        (; directory, context = IO.prepare_preparation_storage_context(directory))
+    end
+    execution = original_config.input.preparation_execution
+    return with_spn_provenance_reuse() do
+        task_local_storage(:wannier_preparation_execution, execution) do
+            _with_native_input_preparation_storage(execution, prepared_storage.context) do
+                prepared = _native_input_reuse_phase(mpi_execution, "native_inputs") do
+                    validate_wannierization_config(original_config)
+                    original_config.checkpoint.recovery == :continue ||
+                        throw(ArgumentError("NATIVE_INPUT_REUSE_EXPORT_RECOVERY_UNSUPPORTED"))
+                    (original_config.solver.initialization == :restart) ==
+                    (original_config.checkpoint.restart_hdf5 !== nothing) || throw(
+                        ArgumentError("NATIVE_INPUT_REUSE_RESTART_CONFIGURATION_MISMATCH"),
+                    )
+                    operator_paths =
+                        Wannierization.validate_native_operator_artifact_paths(original_config)
+                    external_operator_paths = false
+                    if !isempty(operator_paths)
+                        directory = joinpath(
+                            dirname(abspath(original_config.output.model_file)),
+                            "native-operators",
+                        )
+                        external_operator_paths =
+                            any(path -> dirname(path) != directory, values(operator_paths))
+                        external_operator_paths &&
+                            !(
+                                original_config.solver.initialization == :restart &&
+                                original_config.input.preparation_execution.resume
+                            ) &&
+                            throw(
+                                ArgumentError(
+                                    "NATIVE_INPUT_REUSE_RAW_OPERATOR_OUTPUT_NOT_ISOLATED",
+                                ),
+                            )
+                    end
+                    original_config.output.band_representation_output_hdf5 === nothing || throw(
+                        ArgumentError(
+                            "NATIVE_INPUT_REUSE_REPRESENTATION_OUTPUT_REQUIRES_SINGLE_OWNER",
+                        ),
+                    )
+                    provider = original_config.input.matrix_elements
+                    provider isa Union{
+                        NativeQEPAWMatrices,
+                        NativeVASPPAWMatrices,
+                        SymmetryCompletedQEPAWMatrices,
+                    } || throw(ArgumentError("NATIVE_INPUT_REUSE_NATIVE_PROVIDER_REQUIRED"))
+                    reference isa AbstractDict &&
+                    Set(keys(reference)) == Set(("path", "schema", "content_authentication")) &&
+                    all(value -> value isa AbstractString, values(reference)) ||
+                        throw(ArgumentError("NATIVE_INPUT_REUSE_REFERENCE_INVALID"))
+                    record =
+                        Dict{String, String}(String(k) => String(v) for (k, v) in reference)
+                    path = record["path"]
+                    isabspath(path) && isfile(path) && !islink(path) && path == realpath(path) ||
+                        throw(ArgumentError("NATIVE_INPUT_REUSE_CANONICAL_FILE_REQUIRED"))
+                    state = IO.scientific_file_state(path)
+                    generated_eig =
+                        Wannierization.uses_generated_native_eigenvalues(original_config.input)
+                    eig =
+                        generated_eig ? nothing :
+                        IO.read_wannier_eig(original_config.input.eig_file)
+                    basis = _configured_projection_basis(original_config.input)
+                    config = _config_with_projection_basis(original_config, basis)
+                    restart_result = _read_workflow_restart(config)
+                    if restart_result !== nothing
+                        terminal_hr_posthoc =
+                            restart_result.status in (
+                                COMPLETED,
+                                COMPLETED_WITH_WARNINGS,
+                                Wannierization.MAX_ITERATIONS,
+                            ) &&
+                            config.output.profile == :full &&
+                            restart_result.restart_state !== nothing &&
+                            restart_result.restart_state.input_definition !== nothing &&
+                            !haskey(
+                                restart_result.restart_state.input_definition.auxiliary_sources,
+                                "operator_profile_sources",
+                            ) &&
+                            get(
+                                restart_result.input_summary,
+                                "operator_profile_preflight_profile",
+                                "",
+                            ) == "hamiltonian_position" &&
+                            get(
+                                restart_result.input_summary,
+                                "operator_profile_preflight_status",
+                                "",
+                            ) == "NOT_APPLICABLE"
+                        terminal_full_posthoc =
+                            restart_result.status in (
+                                COMPLETED,
+                                COMPLETED_WITH_WARNINGS,
+                                Wannierization.MAX_ITERATIONS,
+                            ) &&
+                            config.output.profile == :full &&
+                            restart_result.restart_state !== nothing &&
+                            restart_result.restart_state.input_definition !== nothing &&
+                            haskey(
+                                restart_result.restart_state.input_definition.auxiliary_sources,
+                                "operator_profile_sources",
+                            )
+                        (
+                            restart_result.status == Wannierization.IN_PROGRESS_CHECKPOINT ||
+                            terminal_hr_posthoc ||
+                            terminal_full_posthoc
+                        ) || throw(
+                            ArgumentError(
+                                "NATIVE_INPUT_REUSE_RESTART_NOT_PERIODIC_OR_TERMINAL_POSTHOC",
+                            ),
+                        )
+                        external_operator_paths &&
+                            !(terminal_full_posthoc || terminal_hr_posthoc) &&
+                            throw(
+                                ArgumentError(
+                                    "NATIVE_INPUT_REUSE_RAW_OPERATOR_OUTPUT_NOT_ISOLATED",
+                                ),
+                            )
+                        haskey(restart_result.input_summary, "native_matrix_acceptance_json") ||
+                            throw(ArgumentError("NATIVE_INPUT_REUSE_RESTART_ACCEPTANCE_MISSING"))
+                        saved_reference = JSON3.read(
+                            restart_result.input_summary["native_matrix_acceptance_json"],
+                            Dict{String, String},
+                        )
+                        saved_reference == record || throw(
+                            ArgumentError("NATIVE_INPUT_REUSE_RESTART_ACCEPTANCE_MISMATCH"),
+                        )
+                    end
+                    external_operator_paths &&
+                        restart_result === nothing &&
+                        throw(ArgumentError("NATIVE_INPUT_REUSE_RAW_OPERATOR_OUTPUT_NOT_ISOLATED"))
+                    (; config, basis, eig, record, state, generated_eig, restart_result)
+                end
+                packed = _native_input_reuse_phase(mpi_execution, "shared_native_publication") do
+                    if !mpi_execution || MPI.Comm_rank(MPI.COMM_WORLD) == 0
+                        matrices = _restore_accepted_matrix_reference(
+                            prepared.record,
+                            prepared.config,
+                            prepared.basis,
+                            _native_matrix_source_files(prepared.config),
+                        )
+                        mpi_execution ?
+                        _publish_native_input_views(matrices, prepared_storage.directory) :
+                        matrices
+                    else
+                        nothing
+                    end
+                end
+                _native_input_reuse_phase(mpi_execution, "shared_native_release_private_restore") do
+                    # The published packet contains only mapped-array descriptors
+                    # and the small retained metadata. Reclaim the root's temporary
+                    # deserialized MMN and publication-verification map before all
+                    # peers fault shared pages. This cost remains inside the call.
+                    mpi_execution && MPI.Comm_rank(MPI.COMM_WORLD) == 0 && GC.gc()
+                    nothing
+                end
+                mpi_execution && (packed = MPI.bcast(packed, 0, MPI.COMM_WORLD))
+                prepared = _native_input_reuse_phase(mpi_execution, "shared_native_adoption") do
+                    # The enclosing collective phase propagates a failure from
+                    # any rank, so these disjoint scans cover the entire MMN.
+                    finite_partition =
+                        mpi_execution ?
+                        (MPI.Comm_rank(MPI.COMM_WORLD), MPI.Comm_size(MPI.COMM_WORLD)) : nothing
+                    matrices =
+                        mpi_execution ? _adopt_native_input_views(packed; finite_partition) : packed
+                    config, basis, eig = prepared.config, prepared.basis, prepared.eig
+                    record, state = prepared.record, prepared.state
+                    generated_eig = prepared.generated_eig
+                    if generated_eig
+                        expected = Wannierization.generated_native_eigenvalue_path(config.input)
+                        result = matrices.paw_result
+                        result !== nothing && abspath(result.artifacts["eig"]) == expected ||
+                            throw(
+                                ArgumentError(
+                                    "owned native generated EIG artifact binding mismatch",
+                                ),
+                            )
+                        eig = IO.read_wannier_eig(expected)
+                    end
+                    IO.validate_scientific_source_state(state; declared_path = record["path"])
+                    (;
+                        config,
+                        basis,
+                        eig,
+                        resolved_matrices = matrices,
+                        record,
+                        state,
+                        restart_result = prepared.restart_result,
+                        shared_views = mpi_execution ? packed : nothing,
+                    )
+                end
+                if mpi_execution
+                    canonical = MPI.bcast(
+                        MPI.Comm_rank(MPI.COMM_WORLD) == 0 ? prepared.record : nothing,
+                        0,
+                        MPI.COMM_WORLD,
+                    )
+                    _native_input_reuse_phase(mpi_execution, "reference_binding") do
+                        prepared.record == canonical ||
+                            throw(ArgumentError("NATIVE_INPUT_REUSE_REFERENCE_RANK_MISMATCH"))
+                    end
+                    # The complete numerical/configuration values are compared, not
+                    # object identities, abbreviated displays or digest credentials.
+                    agree_scientific_definition_stream() do
+                        IO.scientific_definition_stream(;
+                            directory = prepared_storage.directory,
+                        ) do stream
+                            IO.write_native_definition_value(
+                                stream,
+                                _native_acceptance_value((
+                                    original_config.input,
+                                    original_config.solver,
+                                    original_config.checkpoint,
+                                    original_config.output,
+                                )),
+                            )
+                        end
+                    end
+                    agree_scientific_definition_stream() do
+                        IO.validate_scientific_source_state(
+                            prepared.state;
+                            declared_path = prepared.record["path"],
+                        )
+                        definition = IO.ScientificInputDefinition(
+                            prepared.record["path"],
+                            prepared.state,
+                            Int(prepared.state.bytes),
+                        )
+                        referenced = IO.scientific_input_definition_reference(
+                            definition,
+                            dirname(prepared.record["path"]),
+                        )
+                        IO.scientific_input_reference_reader(referenced; owns_backing = false)
+                    end
+                end
+                _native_input_reuse_phase(mpi_execution, "accepted_input_lifetime") do
+                    IO.validate_scientific_source_state(
+                        prepared.state;
+                        declared_path = prepared.record["path"],
+                    )
+                end
+                # The shared mapped MMN remains strongly owned by `prepared` and
+                # `packed`. Reclaim rank-local verification allocations before the
+                # first optimizer workspace is materialized on all MPI ranks.
+                # This changes memory lifetime only; it does not change any input,
+                # physical parameter, convergence check, or numerical operation.
+                if mpi_execution
+                    _native_input_reuse_phase(mpi_execution, "shared_native_gc_before_solve") do
+                        GC.gc()
+                        nothing
+                    end
+                end
+                result = task_local_storage(
+                    :wannier_native_input_shared_fresh_definition,
+                    mpi_execution,
+                ) do
+                    _construct_wannierization_workflow(
+                        original_config;
+                        run_record,
+                        native_reuse_preparation = prepared,
+                    )
+                end
+                mpi_execution && _native_input_reuse_phase(
+                    mpi_execution,
+                    "shared_native_lifetime_after_solve",
+                ) do
+                    _validate_native_input_view_lifetimes(packed)
+                end
+                return result
+            end
+        end
+    end
+end
+
+"""
+Construct ordinary or symmetry-adapted Wannier functions from native Julia DFT adapters.
 
 The workflow keeps DFT input read-only, materializes only versioned HDF5
 artifacts, runs the static operation/band/window/target compatibility preflight
 before the numerical solver, and uses independent Z/U mixing.
 """
-function construct_symmetry_adapted_wannier_functions(
-    original_config::SymmetryAdaptedWannierizationConfig,
-)
+function construct_wannier_functions(original_config::WannierizationConfig; run_record = nothing)
+    # A fresh native generator writes shared MMN/AMN/EIG/provenance paths.  The
+    # ordinary MPI entry has no single publisher for those files; concurrent
+    # ranks could bind different provenance bytes to the same accepted state.
+    # A terminal native restart reads accepted artifacts, while fresh MPI
+    # trajectories must use construct_wannier_functions_with_native_inputs.
+    if original_config.solver.parallel == :mpi &&
+       original_config.checkpoint.restart_hdf5 === nothing &&
+       original_config.input.matrix_elements isa
+       Union{NativeQEPAWMatrices, NativeVASPPAWMatrices, SymmetryCompletedQEPAWMatrices}
+        throw(ArgumentError("NATIVE_MPI_SINGLE_PUBLISHER_REQUIRED"))
+    end
     return with_spn_provenance_reuse() do
-        _construct_wannierization_with_preparation(original_config)
+        _construct_wannierization_with_preparation(original_config; run_record)
+    end
+end
+
+"""Distinguish an absent accepted initializer by complete encoded values, not labels.
+
+Random initialization records `nothing` even when a native source also produces
+AMN for qualification. Continuation must not introduce that unused AMN as a
+new Z-to-U reference. The ordinary restart validator still observes every
+retained byte and all representation/overlap/configuration contracts.
+"""
+function _restart_initializer_absent(result)
+    result === nothing && return false
+    state = result.restart_state
+    state === nothing && return false
+    definition = state.input_definition
+    definition === nothing && return false
+    buffer = IOBuffer()
+    IO.write_native_definition_value(buffer, ("wanniernlqg.wannierization-initializer/1", nothing))
+    expected = take!(buffer)
+    return IO.with_scientific_input_definition_bytes(definition.initialization) do source
+        definition.initialization.byte_count == length(expected) || return false
+        actual = read(source, length(expected))
+        return actual == expected && eof(source)
     end
 end
 
 """Select preparation storage without changing the solver or export arithmetic."""
 function _construct_wannierization_with_preparation(
-    original_config::SymmetryAdaptedWannierizationConfig,
+    original_config::WannierizationConfig;
+    run_record = nothing,
 )
     if effective_wannierization_mode(original_config) == :ordinary
         execution = original_config.input.preparation_execution
@@ -2289,775 +2853,1262 @@ function _construct_wannierization_with_preparation(
             throw(ArgumentError("preparation workers must be between 1 and 4"))
         return task_local_storage(:wannier_preparation_execution, execution) do
             if execution.mode == :dense_reference
-                return _construct_wannierization_workflow(original_config)
+                return _construct_wannierization_workflow(original_config; run_record)
             end
             directory = execution.checkpoint_directory
             if directory === nothing
                 return mktempdir() do workspace
                     IO.with_preparation_storage(
-                        () -> _construct_wannierization_workflow(original_config),
+                        () -> _construct_wannierization_workflow(original_config; run_record),
                         workspace,
                     )
                 end
             end
             IO.with_preparation_storage(
-                () -> _construct_wannierization_workflow(original_config),
+                () -> _construct_wannierization_workflow(original_config; run_record),
                 joinpath(directory, "workspace"),
             )
         end
     end
-    return _construct_wannierization_workflow(original_config)
+    return _construct_wannierization_workflow(original_config; run_record)
+end
+
+# Explicit recovery changes the active-attempt classification, never the saved
+# failed checkpoint. Every failure remains in the new diagnostic history with
+# its original code, message and severity recorded; unrelated errors still block.
+function _explicit_export_recovery_view(result, config::WannierizationConfig)
+    failures = [d for d in result.diagnostics if d.severity == :error]
+    !isempty(failures) && all(d -> d.code == :TB_EXPORT_FAILED, failures) || throw(
+        ArgumentError("EXPORT_RECOVERY_REJECTED: only failed-export checkpoints may be retried"),
+    )
+    get(result.input_summary, "tb_export_status", "") == "NOT_EXPORTED" ||
+        throw(ArgumentError("EXPORT_RECOVERY_REJECTED: checkpoint already records an export"))
+    result.artifacts.packed_hdf5 === nothing && result.artifacts.model_tb === nothing ||
+        throw(ArgumentError("EXPORT_RECOVERY_REJECTED: existing exported artifacts"))
+    source = something(config.checkpoint.restart_hdf5)
+    diagnostics = WannierizationDiagnostic[
+        d.severity == :error && d.code == :TB_EXPORT_FAILED ?
+        WannierizationDiagnostic(
+            :PREVIOUS_TB_EXPORT_FAILED,
+            :info,
+            d.message;
+            context = merge(
+                copy(d.context),
+                Dict(
+                    "original_code"=>String(d.code),
+                    "original_severity"=>String(d.severity),
+                    "checkpoint_source"=>abspath(source),
+                    "content_authentication"=>"NOT_PERFORMED",
+                    "recovery"=>"EXPLICIT_EXPORT_RETRY",
+                ),
+            ),
+        ) : d for d in result.diagnostics
+    ]
+    summary = copy(result.input_summary)
+    summary["export_recovery_checkpoint_source"] = abspath(source)
+    summary["export_recovery_content_authentication"] = "NOT_PERFORMED"
+    summary["export_recovery_status"] = "RETRY_REQUESTED_NOT_QUALIFIED"
+    summary["previous_tb_export_failure_class"] = get(summary, "tb_export_failure_class", "")
+    delete!(summary, "tb_export_failure_class")
+    summary["numerical_quality"] = "PENDING_EXPORT_VALIDATION"
+    view = updated_wannierization_result(result; diagnostics, input_summary = summary)
+    gate = accepted_state_tb_export_gate(view, config)
+    gate.allowed || throw(ArgumentError("EXPORT_RECOVERY_REJECTED: $(gate.reason)"))
+    return view
 end
 
 """Read and qualify restart identity before any native matrix or representation preparation."""
 function _read_workflow_restart(
-    config::SymmetryAdaptedWannierizationConfig;
+    config::WannierizationConfig;
     reader = read_wannierization_checkpoint_hdf5,
 )
     config.solver.initialization == :restart || return nothing
-    result = reader(config.checkpoint.restart_hdf5)
+    result =
+        config.checkpoint.reference_root === nothing ? reader(config.checkpoint.restart_hdf5) :
+        reader(config.checkpoint.restart_hdf5; reference_root = config.checkpoint.reference_root)
     get(result.input_summary, "construction_policy", "strict") ==
     String(config.input.construction_policy) ||
         throw(ArgumentError("RESTART_CONSTRUCTION_POLICY_MISMATCH"))
     _validate_restart_schema_for_continuation(result)
     result.restart_state === nothing &&
         throw(ArgumentError("checkpoint schema does not contain a complete restart state"))
-    return result
+    return config.checkpoint.recovery == :export ? _explicit_export_recovery_view(result, config) :
+           result
 end
 
 # Run the original solver/export workflow under its selected preparation scope.
-function _construct_wannierization_workflow(original_config::SymmetryAdaptedWannierizationConfig)
-    mpi_execution = original_config.solver.parallel == :mpi
-    mpi_execution && !MPI.Initialized() && MPI.Init()
-    root_process = !mpi_execution || MPI.Comm_rank(MPI.COMM_WORLD) == 0
-    configured_paths =
-        original_config.checkpoint.checkpoint_hdf5 === nothing ? nothing :
-        wannierization_output_paths(original_config.checkpoint.checkpoint_hdf5)
-    # Durable output has one authoritative owner. Non-root ranks execute the
-    # identical numerical trajectory but never open logs/checkpoints/TB files.
-    paths = root_process ? configured_paths : nothing
-    log_io = nothing
-    eig_for_tb = nothing
-    mmn_for_tb = nothing
-    representation_for_tb = nothing
-    plan_for_tb = nothing
-    operator_target_contract_for_tb = nothing
-    # Failure-locator state.  Each phase stamps the stage it is entering and the
-    # last operation that completed, so an exception receipt names exactly where
-    # the construction stopped instead of reporting an anonymous failure.  The
-    # holders are `Ref`s so the `try` scope and the observer closure mutate the
-    # same slots without any scope-shadowing ambiguity.
-    failure_stage = Ref("NOT_RECORDED")
-    failure_substage_id = Ref("NOT_RECORDED")
-    failure_iteration = Ref("NOT_RECORDED")
-    failure_last_operation = Ref("NOT_RECORDED")
-    timed = @timed try
-        failure_stage[] = "config_validation"
-        failure_substage_id[] = "validate_wannierization_config"
-        validate_wannierization_config(original_config)
-        failure_last_operation[] = "config_validated"
-        failure_stage[] = "restart_read"
-        failure_substage_id[] = "_read_workflow_restart"
-        restart_result = _read_workflow_restart(original_config)
-        failure_last_operation[] = "restart_read"
-        failure_stage[] = "input_read"
-        failure_substage_id[] = "read_wannier_eig"
-        eig = IO.read_wannier_eig(original_config.input.eig_file)
-        eig_for_tb = eig
-        basis =
-            original_config.input.projection_basis === nothing ?
-            build_wannier_projection_basis(original_config.input.win_file) :
-            original_config.input.projection_basis
-        config = _config_with_projection_basis(original_config, basis)
-        resolved_matrices =
-            _resolve_wannier_matrix_elements(config, basis; accepted_result = restart_result)
-        failure_last_operation[] = "matrix_elements_resolved"
-        failure_stage[] = "representation_preparation"
-        failure_substage_id[] = "prepare_band_representation"
-        operator_oracle_mmn_file = _operator_oracle_mmn_file(resolved_matrices)
-        mmn = resolved_matrices.mmn
-        mmn_for_tb = mmn
-        num_wannier = configured_num_wannier(config)
-        preparation = prepare_band_representation(
-            BandRepresentationPreparationConfig(
-                construction_policy = config.input.construction_policy,
-                wannierization_mode = config.input.wannierization_mode,
-                source = config.input.source,
-                sewing_backend = config.input.sewing_backend,
-                wavefunction_gauge_backend = config.input.wavefunction_gauge_backend,
-                wavefunction_gauge_hdf5 = config.input.wavefunction_gauge_hdf5,
-                authoritative_hamiltonian = config.input.authoritative_hamiltonian,
-                win_file = config.input.win_file,
-                eig_file = config.input.eig_file,
-                projection_basis = basis,
-                band_representation = config.input.band_representation,
-                band_representation_hdf5 = config.input.band_representation_hdf5,
-                output_hdf5 = config.output.band_representation_output_hdf5,
-                outer_min_ev = config.input.outer_min_ev,
-                outer_max_ev = config.input.outer_max_ev,
-                frozen_min_ev = config.input.frozen_min_ev,
-                frozen_max_ev = config.input.frozen_max_ev,
-                frozen_states = config.input.frozen_states,
-                num_wannier = num_wannier,
-                symmetry_tolerance = config.input.symmetry_tolerance,
-                degeneracy_tolerance_ev = config.input.degeneracy_tolerance_ev,
-                representation_tolerance = config.input.representation_tolerance,
-                target_center_matching_tolerance = config.input.target_center_matching_tolerance,
-                compatibility_policy = config.input.compatibility_policy,
-            ),
-        )
-        parent_representation = _representation_with_hashes(
-            preparation.representation,
-            Dict("MMN" => sha256_file(resolved_matrices.mmn_file)),
-        )
-        operator_target_contract =
-            operator_output_requires_target_contract(config) ?
-            wannier_operator_target_contract(
-                config,
-                eig,
-                mmn,
-                operator_oracle_mmn_file,
-                resolved_matrices.mmn_file,
-            ) : nothing
-        operator_target_contract_for_tb = operator_target_contract
-        operator_profile_preflight = preflight_wannierization_operator_profile(
-            config,
-            eig,
-            mmn,
-            operator_target_contract,
-        )
-        operator_profile_checkpoint_summary = Dict{String, String}(
-            "operator_profile_preflight_$(key)" => value for
-            (key, value) in operator_profile_preflight
-        )
-        scope = config.solver.acceleration.constraint_operation_scope
-        scoped = constraint_scoped_representation(parent_representation, scope)
-        representation = scoped.representation
-        representation_for_tb = representation
-        plan =
-            effective_wannierization_mode(config) == :ordinary ?
-            identity_wannier_plan(num_wannier, only(representation.operations)) :
-            build_wannier_symmetry_plan(
-                basis,
-                representation.operations;
-                tolerance = config.input.target_center_matching_tolerance,
-                construction_policy = config.input.construction_policy,
-            )
-        plan_for_tb = plan
-        outer_masks = [
-            BitVector(preparation.qualification_scope.outer_mask[:, kpoint]) for
-            kpoint in axes(preparation.qualification_scope.outer_mask, 2)
-        ]
-        frozen_masks = [
-            BitVector(preparation.qualification_scope.frozen_mask[:, kpoint]) for
-            kpoint in axes(preparation.qualification_scope.frozen_mask, 2)
-        ]
-        compatibility_report = if scope == :full
-            preparation.compatibility_report
-        else
-            validate_band_representation_compatibility(
-                representation,
-                plan;
-                outer_mask = outer_masks,
-                frozen_mask = frozen_masks,
-                tolerance = config.input.representation_tolerance,
-            )
-        end
-        requested_policy = config.input.compatibility_policy
-        config = _config_with_compatibility_policy(
-            config,
-            preparation.effective_compatibility_policy,
-        )
-        paths === nothing || (
-            log_io = open_wannierization_log(
-                paths.log,
-                config,
-                representation;
-                compatibility = compatibility_report,
-                restart = config.solver.initialization == :restart,
-            )
-        )
-        if !compatibility_report.passed &&
-           config.input.construction_policy == :strict &&
-           preparation.effective_compatibility_policy == :strict
-            _compatibility_failure_result(representation, compatibility_report)
-        else
-            need_native = config.solver.initialization == :amn && resolved_matrices.amn === nothing
-            native =
-                need_native ?
-                read_native_source(something(config.input.source); purpose = :physical_overlap) : nothing
-            amn = if config.solver.initialization == :amn
-                resolved_matrices.amn === nothing ? generate_amn(native, basis) : resolved_matrices.amn
-            elseif config.solver.initialization == :restart
-                # A checkpoint taken during Z does not own the yet-unstarted U
-                # gauge.  The two-stage contract requires the sealed subspace
-                # to reproject the same frozen raw AMN at Z->U, exactly as a
-                # from-scratch run does.  Once optimizer_phase=:localization,
-                # the persisted recursive M/U state remains authoritative and
-                # this read-only AMN reference is not used to overwrite it.
-                resolved_matrices.amn
-            else
-                nothing
+# The accepted terminal H/r state's origin records how it was reached, not a
+# different matrix identity; callers must still enforce all source/snapshot gates.
+function _terminal_hr_origin_transition_allowed(from_owned_hr, previous, current)
+    return from_owned_hr &&
+           current == "VALIDATED_ACCEPTED_INPUT_REUSE_TERMINAL_OPERATOR_POSTHOC" &&
+           previous in (
+               "VALIDATED_ACCEPTED_INPUT_REUSE_NEW_OPTIMIZER_TRAJECTORY",
+               "VALIDATED_ACCEPTED_INPUT_REUSE_PERIODIC_OPTIMIZER_RESTART",
+           )
+end
+
+# Construct the qualified workflow and adopt a terminal result only through its state checks.
+function _construct_wannierization_workflow(
+    original_config::WannierizationConfig;
+    run_record = nothing,
+    native_reuse_preparation = nothing,
+)
+    try
+        # Refuse collisions before opening any log or entering terminal persistence.
+        if original_config.checkpoint.recovery == :export
+            validate_wannierization_config(original_config)
+            for path in values(wannierization_output_paths(original_config))
+                path!==nothing &&
+                    ispath(path) &&
+                    throw(ArgumentError("export recovery requires unused output paths: $path"))
             end
-            if restart_result !== nothing
-                if operator_output_requires_target_contract(config)
-                    for (key, value) in operator_profile_checkpoint_summary
-                        get(restart_result.input_summary, key, "MISSING") == value || throw(
-                            ArgumentError(
-                                "OPERATOR_PROFILE_RESTART_SNAPSHOT_MISMATCH: $(key) differs",
-                            ),
-                        )
-                    end
+        end
+        mpi_execution = original_config.solver.parallel == :mpi
+        mpi_execution && !MPI.Initialized() && MPI.Init()
+        root_process = !mpi_execution || MPI.Comm_rank(MPI.COMM_WORLD) == 0
+        configured_paths = wannierization_output_paths(original_config)
+        output_collision=nothing
+        if root_process && configured_paths!==nothing
+            for path in (configured_paths.packed, configured_paths.report, configured_paths.log)
+                if ispath(path)
+                    output_collision="refusing to overwrite model output: $path"
+                    break
                 end
             end
-            fixed_subspace =
-                config.solver.initialization == :fixed_subspace ?
-                read_wannierization_fixed_subspace_hdf5(config.checkpoint.fixed_subspace_hdf5) :
-                nothing
-            paw_scdm_input =
-                if config.solver.initialization_backend isa Wannierization.PAWSCDMInitialization
-                    artifact = read_paw_scdm_input_artifact(
-                        something(config.solver.paw_scdm_input_hdf5),
+        end
+        mpi_execution && (
+            output_collision=MPI.bcast(
+                root_process ? output_collision : nothing,
+                0,
+                MPI.COMM_WORLD,
+            )
+        )
+        output_collision===nothing || throw(ArgumentError(output_collision))
+        # Durable output has one authoritative owner. Non-root ranks execute the
+        # identical numerical trajectory but never open logs/checkpoints/TB files.
+        paths = root_process ? configured_paths : nothing
+        log_io = nothing
+        eig_for_tb = nothing
+        mmn_for_tb = nothing
+        representation_for_tb = nothing
+        plan_for_tb = nothing
+        operator_target_contract_for_tb = nothing
+        # Record only paths already resolved by the source preflight. Live bytes
+        # are still compared with the accepted source snapshot before export.
+        resolved_profile_sources_for_export = Ref{Union{Nothing, Dict{String, String}}}(nothing)
+        # Failure-locator state.  Each phase stamps the stage it is entering and the
+        # last operation that completed, so an exception receipt names exactly where
+        # the construction stopped instead of reporting an anonymous failure.  The
+        # holders are `Ref`s so the `try` scope and the observer closure mutate the
+        # same slots without any scope-shadowing ambiguity.
+        failure_stage = Ref("NOT_RECORDED")
+        failure_substage_id = Ref("NOT_RECORDED")
+        failure_iteration = Ref("NOT_RECORDED")
+        failure_last_operation = Ref("NOT_RECORDED")
+        timed = @timed try
+            failure_stage[] = "config_validation"
+            failure_substage_id[] = "validate_wannierization_config"
+            if native_reuse_preparation === nothing
+                validate_wannierization_config(original_config)
+                failure_last_operation[] = "config_validated"
+                failure_stage[] = "restart_read"
+                failure_substage_id[] = "_read_workflow_restart"
+                restart_result = _read_workflow_restart(original_config)
+                failure_last_operation[] = "restart_read"
+                failure_stage[] = "input_read"
+                failure_substage_id[] = "read_wannier_eig"
+                generated_eig =
+                    Wannierization.uses_generated_native_eigenvalues(original_config.input)
+                eig =
+                    generated_eig ? nothing : IO.read_wannier_eig(original_config.input.eig_file)
+                basis = _configured_projection_basis(original_config.input)
+                config = _config_with_projection_basis(original_config, basis)
+                resolved_matrices = _resolve_wannier_matrix_elements(
+                    config,
+                    basis;
+                    accepted_result = restart_result,
+                )
+                if generated_eig
+                    expected = Wannierization.generated_native_eigenvalue_path(config.input)
+                    result = resolved_matrices.paw_result
+                    result !== nothing && abspath(result.artifacts["eig"]) == expected || throw(
+                        ArgumentError("owned native generated EIG artifact binding mismatch"),
                     )
-                    config.input.construction_policy == :strict &&
-                        get(artifact.source_identity, "gauge_quality_status", "PASS") != "PASS" &&
-                        throw(ArgumentError("SCDM_QUALITY_WARNING_REQUIRES_STANDARD_CONSTRUCTION"))
-                    ordinary = effective_wannierization_mode(config) == :ordinary
-                    if ordinary
-                        # The strict gauge/representation authority is the
-                        # self-contained PAW-S input provenance only. It must
-                        # not become the ordinary solver's symmetry authority.
-                        get(artifact.source_identity, "source_gauge_sha256", "MISSING") ==
-                        artifact.source_gauge_sha256 || throw(
-                            ArgumentError(
-                                "SCDM_INPUT_PRECONDITION: source gauge provenance differs",
-                            ),
-                        )
-                        get(artifact.source_identity, "strict_representation_sha256", "MISSING") == artifact.strict_representation_sha256 || throw(
-                            ArgumentError(
-                                "SCDM_INPUT_PRECONDITION: strict representation provenance differs",
-                            ),
-                        )
-                        get(artifact.source_identity, "metric_sha256", "MISSING") ==
-                        artifact.metric_sha256 || throw(
-                            ArgumentError("SCDM_INPUT_PRECONDITION: PAW metric provenance differs"),
-                        )
-                    else
-                        config.input.wavefunction_gauge_hdf5 === nothing && throw(
-                            ArgumentError("SCDM_INPUT_PRECONDITION: strict gauge HDF5 is required"),
-                        )
-                        gauge_sha256 =
-                            sha256_file(something(config.input.wavefunction_gauge_hdf5))
-                        if config.input.band_representation_hdf5 !== nothing
-                            representation_sha256 =
-                                sha256_file(something(config.input.band_representation_hdf5))
-                            artifact.strict_representation_sha256 == representation_sha256 ||
-                                throw(
-                                    ArgumentError(
-                                        "SCDM_INPUT_PRECONDITION: strict representation digest differs",
-                                    ),
-                                )
-                        elseif representation_source(config) != :detected
-                            throw(
-                                ArgumentError(
-                                    "SCDM_INPUT_PRECONDITION: strict representation HDF5 or detected rebuild is required",
-                                ),
-                            )
+                    eig = IO.read_wannier_eig(expected)
+                end
+            else
+                # This tuple was validated and agreed collectively by the explicit
+                # native-input entry. A periodic restart retains its accepted
+                # optimizer state; a terminal H/r posthoc call retains the
+                # same accepted state for full-operator export.
+                restart_result = native_reuse_preparation.restart_result
+                config = native_reuse_preparation.config
+                basis = native_reuse_preparation.basis
+                eig = native_reuse_preparation.eig
+                resolved_matrices = native_reuse_preparation.resolved_matrices
+            end
+            eig_for_tb = eig
+            failure_last_operation[] = "matrix_elements_resolved"
+            failure_stage[] = "representation_preparation"
+            failure_substage_id[] = "prepare_band_representation"
+            local operator_oracle_mmn_file, mmn, num_wannier, preparation
+            local parent_representation, operator_target_contract, operator_profile_preflight
+            local operator_profile_checkpoint_summary, auxiliary_sources, profile_files
+            local scope, scoped, representation, plan, outer_masks, frozen_masks
+            local compatibility_report, requested_policy
+            native_preflight_error = nothing
+            try
+                operator_oracle_mmn_file = _operator_oracle_mmn_file(resolved_matrices)
+                mmn = resolved_matrices.mmn
+                mmn_for_tb = mmn
+                num_wannier = configured_num_wannier(config)
+                println(
+                    stderr,
+                    "WN_PHASE begin band_representation rank=",
+                    mpi_execution ? MPI.Comm_rank(MPI.COMM_WORLD) : 0,
+                );
+                flush(stderr)
+                preparation = prepare_band_representation(
+                    BandRepresentationPreparationConfig(
+                        construction_policy = config.input.construction_policy,
+                        wannierization_mode = config.input.wannierization_mode,
+                        source = config.input.source,
+                        sewing_backend = config.input.sewing_backend,
+                        wavefunction_gauge_backend = config.input.wavefunction_gauge_backend,
+                        wavefunction_gauge_hdf5 = config.input.wavefunction_gauge_hdf5,
+                        authoritative_hamiltonian = config.input.authoritative_hamiltonian,
+                        win_file = config.input.win_file,
+                        geometry = config.input.geometry,
+                        operation_indices = config.input.operation_indices,
+                        eig_file = config.input.eig_file,
+                        projection_basis = basis,
+                        band_representation = config.input.band_representation,
+                        band_representation_hdf5 = config.input.band_representation_hdf5,
+                        output_hdf5 = config.output.band_representation_output_hdf5,
+                        outer_min_ev = config.input.outer_min_ev,
+                        outer_max_ev = config.input.outer_max_ev,
+                        frozen_min_ev = config.input.frozen_min_ev,
+                        frozen_max_ev = config.input.frozen_max_ev,
+                        frozen_states = config.input.frozen_states,
+                        num_wannier = num_wannier,
+                        symmetry_tolerance = config.input.symmetry_tolerance,
+                        degeneracy_tolerance_ev = config.input.degeneracy_tolerance_ev,
+                        representation_tolerance = config.input.representation_tolerance,
+                        target_center_matching_tolerance = config.input.target_center_matching_tolerance,
+                        compatibility_policy = config.input.compatibility_policy,
+                    ),
+                )
+                println(
+                    stderr,
+                    "WN_PHASE end band_representation rank=",
+                    mpi_execution ? MPI.Comm_rank(MPI.COMM_WORLD) : 0,
+                );
+                flush(stderr)
+                # The restart input definition retains every MMN value and neighbour.
+                # Do not reread the source file merely to attach an unused digest.
+                parent_representation = preparation.representation
+                println(
+                    stderr,
+                    "WN_PHASE begin operator_target rank=",
+                    mpi_execution ? MPI.Comm_rank(MPI.COMM_WORLD) : 0,
+                );
+                flush(stderr)
+                operator_target_contract = if operator_output_requires_target_contract(config)
+                    if mpi_execution && native_reuse_preparation !== nothing
+                        root_target = _native_input_reuse_phase(
+                            mpi_execution,
+                            "operator_target_single_publisher",
+                        ) do
+                            root_process ?
+                            wannier_operator_target_contract(
+                                config,
+                                eig,
+                                mmn,
+                                operator_oracle_mmn_file,
+                                resolved_matrices.mmn_file,
+                            ) : nothing
                         end
-                        artifact.source_gauge_sha256 == gauge_sha256 || throw(
-                            ArgumentError("SCDM_INPUT_PRECONDITION: strict gauge digest differs"),
-                        )
-                        authority = get(
-                            representation.conventions,
-                            "authoritative_hamiltonian",
-                            "native_dft",
-                        )
-                        authority_sha256 = get(
-                            representation.conventions,
-                            "authoritative_hamiltonian_sha256",
-                            "LEGACY_NATIVE_DFT",
-                        )
-                        artifact.authoritative_hamiltonian == authority || throw(
-                            ArgumentError("SCDM_INPUT_PRECONDITION: Hamiltonian authority differs"),
-                        )
-                        artifact.authoritative_hamiltonian_sha256 == authority_sha256 || throw(
-                            ArgumentError("SCDM_INPUT_PRECONDITION: authority digest differs"),
+                        # The target owns complete source references. The native
+                        # publisher, profile validator and TB writer are rank 0;
+                        # sending this object to every rank duplicates its large
+                        # backing graph without adding a numerical check.
+                        root_target
+                    else
+                        wannier_operator_target_contract(
+                            config,
+                            eig,
+                            mmn,
+                            operator_oracle_mmn_file,
+                            resolved_matrices.mmn_file,
                         )
                     end
-                    artifact
                 else
                     nothing
                 end
-            if fixed_subspace !== nothing
-                fixed_subspace = constraint_scoped_fixed_subspace(
-                    something(fixed_subspace),
-                    representation,
-                    scoped.parent_sha256,
-                    scoped.subgroup_sha256,
-                    scope,
+                println(
+                    stderr,
+                    "WN_PHASE end operator_target rank=",
+                    mpi_execution ? MPI.Comm_rank(MPI.COMM_WORLD) : 0,
+                );
+                flush(stderr)
+                operator_target_contract_for_tb = operator_target_contract
+            catch exception
+                !(mpi_execution || native_reuse_preparation !== nothing) && rethrow()
+                native_preflight_error = sprint(showerror, exception)
+            end
+            if mpi_execution || native_reuse_preparation !== nothing
+                _native_input_reuse_phase(mpi_execution, "representation_before_operators") do
+                    native_preflight_error === nothing ||
+                        throw(ArgumentError(native_preflight_error))
+                end
+            end
+            failure_stage[] = "native_operator_generation"
+            failure_substage_id[] = "generate_native_operator_outputs"
+            # Native operator files have one authoritative publisher.  The
+            # preceding phase first agrees that every rank prepared the same
+            # representation, avoiding a collective inside a rank-local try.
+            local adopted_operator_profile
+            if mpi_execution
+                println(
+                    stderr,
+                    "WN_PHASE begin native_operator_generation rank=",
+                    MPI.Comm_rank(MPI.COMM_WORLD),
+                );
+                flush(stderr)
+                adopted_operator_profile =
+                    _native_input_reuse_phase(mpi_execution, "native_operator_generation") do
+                        root_process ?
+                        generate_native_operator_outputs(
+                            config,
+                            resolved_matrices,
+                            operator_target_contract;
+                            accepted_result = restart_result,
+                            eig,
+                        ) : nothing
+                    end
+                println(
+                    stderr,
+                    "WN_PHASE end native_operator_generation rank=",
+                    MPI.Comm_rank(MPI.COMM_WORLD),
+                );
+                flush(stderr)
+            else
+                adopted_operator_profile = generate_native_operator_outputs(
+                    config,
+                    resolved_matrices,
+                    operator_target_contract;
+                    accepted_result = restart_result,
+                    eig,
                 )
             end
-            restart_result === nothing ||
-                _validate_restart_initializer_algorithm(config, frozen_masks, restart_result)
-            upstream_diagnostics = WannierizationDiagnostic[preparation.diagnostics...]
-            restart_result === nothing ||
-                append!(upstream_diagnostics, restart_result.diagnostics)
-            if config.input.construction_policy == :standard &&
-               resolved_matrices.paw_result isa VASPPAWMatrixElementResult &&
-               config.input.matrix_elements isa NativeVASPPAWMatrices
-                append!(
-                    upstream_diagnostics,
-                    _native_vasp_paw_gate_diagnostics(
-                        resolved_matrices.paw_result,
-                        config.input.matrix_elements.thresholds,
-                    ),
+            terminal_full_posthoc = false
+            terminal_profile_posthoc = false
+            try
+                # A terminal H/r posthoc export writes its durable result on rank 0.
+                # Keep full preflight values there; the other ranks need the small
+                # status fields for the already accepted solver state only.
+                # External H/r states retain their exact MMN/AMN and can acquire
+                # separately generated, fully preflighted operators.  They may
+                # not be relabelled as an accepted native-matrix provider.  Only
+                # unchanged stopping controls request postprocessing here; an
+                # explicit extension of the optimizer budget still resumes it.
+                external_terminal_posthoc =
+                    config.input.matrix_elements isa ExternalOverlapProjectionMatrices &&
+                    restart_result !== nothing &&
+                    config.solver.stage_controls !== nothing &&
+                    all(
+                        name ->
+                            get(
+                                restart_result.input_summary,
+                                "solver_" * String(name),
+                                "MISSING",
+                            ) == string(getfield(config.solver.stage_controls, name)),
+                        fieldnames(typeof(config.solver.stage_controls)),
+                    )
+                posthoc_execution =
+                    (mpi_execution && native_reuse_preparation !== nothing) ||
+                    external_terminal_posthoc
+                terminal_hr_posthoc =
+                    posthoc_execution &&
+                    restart_result !== nothing &&
+                    restart_result.status in
+                    (COMPLETED, COMPLETED_WITH_WARNINGS, Wannierization.MAX_ITERATIONS) &&
+                    config.output.profile == :full &&
+                    restart_result.restart_state !== nothing &&
+                    restart_result.restart_state.input_definition !== nothing &&
+                    !haskey(
+                        restart_result.restart_state.input_definition.auxiliary_sources,
+                        "operator_profile_sources",
+                    ) &&
+                    get(restart_result.input_summary, "operator_profile_preflight_profile", "") == "hamiltonian_position" &&
+                    get(restart_result.input_summary, "operator_profile_preflight_status", "") == "NOT_APPLICABLE"
+                terminal_full_posthoc =
+                    posthoc_execution &&
+                    restart_result !== nothing &&
+                    restart_result.status in
+                    (COMPLETED, COMPLETED_WITH_WARNINGS, Wannierization.MAX_ITERATIONS) &&
+                    config.output.profile == :full &&
+                    restart_result.restart_state !== nothing &&
+                    restart_result.restart_state.input_definition !== nothing &&
+                    haskey(
+                        restart_result.restart_state.input_definition.auxiliary_sources,
+                        "operator_profile_sources",
+                    )
+                terminal_profile_posthoc = terminal_hr_posthoc || terminal_full_posthoc
+                operator_profile_preflight =
+                    if mpi_execution && native_reuse_preparation !== nothing
+                        root_profile = _native_input_reuse_phase(
+                            mpi_execution,
+                            "operator_profile_single_validator",
+                        ) do
+                            root_process ?
+                            (
+                                adopted_operator_profile === nothing ?
+                                preflight_wannierization_operator_profile(
+                                    config,
+                                    eig,
+                                    mmn,
+                                    operator_target_contract,
+                                ) : adopted_operator_profile
+                            ) : nothing
+                        end
+                        if terminal_profile_posthoc
+                            small =
+                                root_process ? _posthoc_nonroot_profile_summary(root_profile) :
+                                nothing
+                            received = MPI.bcast(small, 0, MPI.COMM_WORLD)
+                            root_process ? root_profile : received
+                        else
+                            MPI.bcast(root_profile, 0, MPI.COMM_WORLD)
+                        end
+                    else
+                        adopted_operator_profile === nothing ?
+                        preflight_wannierization_operator_profile(
+                            config,
+                            eig,
+                            mmn,
+                            operator_target_contract;
+                            native_source_files = config.input.matrix_elements isa
+                                                  ExternalOverlapProjectionMatrices &&
+                                                  config.input.source !== nothing ?
+                                                  native_preparation_source_files(
+                                config.input.source,
+                            ) : nothing,
+                        ) : adopted_operator_profile
+                    end
+                operator_profile_checkpoint_summary = Dict{String, String}(
+                    "operator_profile_preflight_$(key)" => value for
+                    (key, value) in operator_profile_preflight
                 )
-            end
-            if config.input.construction_policy == :standard &&
-               resolved_matrices.paw_result isa Wannierization.QEPAWMatrixElementResult &&
-               config.input.matrix_elements isa
-               Union{NativeQEPAWMatrices, SymmetryCompletedQEPAWMatrices}
-                append!(
-                    upstream_diagnostics,
-                    _native_qe_paw_gate_diagnostics(
-                        resolved_matrices.paw_result,
-                        config.input.matrix_elements.thresholds,
-                    ),
+                # Both periodic accepted checkpoints and the terminal result must carry
+                # the same immutable input references before any solver callback runs.
+                if hasproperty(resolved_matrices, :accepted_matrix_reference)
+                    operator_profile_checkpoint_summary["native_matrix_acceptance_json"] =
+                        JSON3.write(resolved_matrices.accepted_matrix_reference)
+                end
+                if native_reuse_preparation !== nothing
+                    operator_profile_checkpoint_summary["native_matrix_input_origin"] =
+                        restart_result === nothing ?
+                        "VALIDATED_ACCEPTED_INPUT_REUSE_NEW_OPTIMIZER_TRAJECTORY" :
+                        restart_result.status == Wannierization.IN_PROGRESS_CHECKPOINT ?
+                        "VALIDATED_ACCEPTED_INPUT_REUSE_PERIODIC_OPTIMIZER_RESTART" :
+                        "VALIDATED_ACCEPTED_INPUT_REUSE_TERMINAL_OPERATOR_POSTHOC"
+                end
+                auxiliary_sources=copy(parent_representation.input_definitions)
+                if terminal_profile_posthoc
+                    root_reference = _native_input_reuse_phase(
+                        mpi_execution,
+                        "operator_profile_source_single_publisher",
+                    ) do
+                        if root_process
+                            captured = operator_profile_source_files(
+                                config;
+                                observe_sidecar_lifetimes = true,
+                            )
+                            profile_files = captured.files
+                            isempty(profile_files) && throw(
+                                ArgumentError("OPERATOR_PROFILE_COMPLETE_SNAPSHOT_REQUIRED"),
+                            )
+                            definition = IO.scientific_source_collection_definition(
+                                profile_files;
+                                reference_root = config.checkpoint.reference_root,
+                                directory = something(config.checkpoint.reference_root, tempdir()),
+                            )
+                            # The references extracted from sidecars must refer to
+                            # the same sidecar observations captured in the snapshot.
+                            for (name, state) in captured.sidecar_states
+                                IO.validate_scientific_source_state(
+                                    state;
+                                    declared_path = profile_files[name],
+                                )
+                            end
+                            resolved_profile_sources_for_export[] = copy(profile_files)
+                            definition
+                        else
+                            nothing
+                        end
+                    end
+                    auxiliary_sources["operator_profile_sources"] =
+                        mpi_execution ? MPI.bcast(root_reference, 0, MPI.COMM_WORLD) :
+                        root_reference
+                else
+                    profile_files=operator_profile_source_files(config)
+                    isempty(profile_files) || (
+                        auxiliary_sources["operator_profile_sources"] =
+                            IO.scientific_source_collection_definition(
+                                profile_files;
+                                reference_root = config.checkpoint.reference_root,
+                                directory = something(config.checkpoint.reference_root, tempdir()),
+                            )
+                    )
+                end
+                parent_representation=BandRepresentation(
+                    (
+                        getfield(parent_representation, name) for
+                        name in fieldnames(BandRepresentation)[1:16]
+                    )...;
+                    conventions = parent_representation.conventions,
+                    input_sha256 = parent_representation.input_sha256,
+                    input_definitions = auxiliary_sources,
                 )
-            end
-            if resolved_matrices.paw_result !== nothing && !resolved_matrices.paw_result.passed
-                push!(
-                    upstream_diagnostics,
-                    WannierizationDiagnostic(
-                        :NATIVE_PAW_QUALITY_STANDARD_CONTINUE,
-                        :warning,
-                        join(resolved_matrices.paw_result.diagnostics, "; ");
-                        context = Dict(
-                            "stage" => "matrix_preparation",
-                            "gate_result" => "FAIL",
-                            "action" => "CONTINUE_STANDARD",
-                        ),
-                    ),
+                scope = config.solver.acceleration.constraint_operation_scope
+                scoped = constraint_scoped_representation(parent_representation, scope)
+                representation = scoped.representation
+                representation_for_tb = representation
+                plan =
+                    effective_wannierization_mode(config) == :ordinary ?
+                    identity_wannier_plan(num_wannier, only(representation.operations)) :
+                    build_wannier_symmetry_plan(
+                        basis,
+                        representation.operations;
+                        tolerance = config.input.target_center_matching_tolerance,
+                        construction_policy = config.input.construction_policy,
+                    )
+                plan_for_tb = plan
+                outer_masks = [
+                    BitVector(preparation.qualification_scope.outer_mask[:, kpoint]) for
+                    kpoint in axes(preparation.qualification_scope.outer_mask, 2)
+                ]
+                frozen_masks = [
+                    BitVector(preparation.qualification_scope.frozen_mask[:, kpoint]) for
+                    kpoint in axes(preparation.qualification_scope.frozen_mask, 2)
+                ]
+                compatibility_report = if scope == :full
+                    preparation.compatibility_report
+                else
+                    validate_band_representation_compatibility(
+                        representation,
+                        plan;
+                        outer_mask = outer_masks,
+                        frozen_mask = frozen_masks,
+                        tolerance = config.input.representation_tolerance,
+                    )
+                end
+                requested_policy = config.input.compatibility_policy
+                config = _config_with_compatibility_policy(
+                    config,
+                    preparation.effective_compatibility_policy,
                 )
+                paths === nothing || (
+                    log_io = open_wannierization_log(
+                        paths.log,
+                        config,
+                        representation;
+                        compatibility = compatibility_report,
+                        restart = config.solver.initialization == :restart,
+                    )
+                )
+            catch exception
+                !(mpi_execution || native_reuse_preparation !== nothing) && rethrow()
+                native_preflight_error = sprint(showerror, exception)
             end
-            durable_observer =
-                paths === nothing ? nothing :
-                wannierization_observer(
+            if mpi_execution || native_reuse_preparation !== nothing
+                _native_input_reuse_phase(mpi_execution, "representation_operator_and_log") do
+                    native_preflight_error === nothing ||
+                        throw(ArgumentError(native_preflight_error))
+                end
+            end
+            begin
+                local need_native, native, amn, paw_scdm_input, upstream_diagnostics
+                local durable_observer, observer
+                native_initializer_error = nothing
+                try
+                    need_native =
+                        config.solver.initialization == :amn && resolved_matrices.amn === nothing
+                    native =
+                        need_native ?
+                        read_native_source(
+                            something(config.input.source);
+                            purpose = :physical_overlap,
+                        ) : nothing
+                    amn = if config.solver.initialization == :amn
+                        resolved_matrices.amn === nothing ? generate_amn(native, basis) :
+                        resolved_matrices.amn
+                    elseif config.solver.initialization == :restart
+                        # A checkpoint taken during Z does not own the yet-unstarted U
+                        # gauge.  The two-stage contract requires the sealed subspace
+                        # to reproject the same frozen raw AMN at Z->U, exactly as a
+                        # from-scratch run does.  Once optimizer_phase=:localization,
+                        # the persisted recursive M/U state remains authoritative and
+                        # this read-only AMN reference is not used to overwrite it.
+                        _restart_initializer_absent(restart_result) ? nothing : resolved_matrices.amn
+                    else
+                        nothing
+                    end
+                    if restart_result !== nothing
+                        if operator_output_requires_target_contract(config)
+                            # A retained owned-native H/r checkpoint has no raw
+                            # operator sources or full-profile preflight to compare.
+                            # The full preflight above validates the newly generated
+                            # files and target on this run. Keep comparing every
+                            # non-profile identity, including the accepted matrices.
+                            old_definition = restart_result.restart_state.input_definition
+                            from_owned_hr =
+                                (
+                                    Wannierization.uses_native_operator_generation(config.input) ||
+                                    config.input.matrix_elements isa
+                                    ExternalOverlapProjectionMatrices
+                                ) &&
+                                old_definition !== nothing &&
+                                !haskey(
+                                    old_definition.auxiliary_sources,
+                                    "operator_profile_sources",
+                                ) &&
+                                get(
+                                    restart_result.input_summary,
+                                    "operator_profile_preflight_profile",
+                                    "",
+                                ) == "hamiltonian_position" &&
+                                get(
+                                    restart_result.input_summary,
+                                    "operator_profile_preflight_status",
+                                    "",
+                                ) == "NOT_APPLICABLE"
+                            for (key, value) in operator_profile_checkpoint_summary
+                                # The peer-only marker is not part of the checkpoint;
+                                # rank zero compares the complete persisted fields.
+                                terminal_full_posthoc &&
+                                    !root_process &&
+                                    key == "operator_profile_preflight_nonroot_metadata_scope" &&
+                                    continue
+                                from_owned_hr &&
+                                    startswith(key, "operator_profile_preflight_") &&
+                                    continue
+                                # Origin records the previous execution phase, not matrix identity.
+                                # A terminal H/r checkpoint may result either from an accepted new
+                                # trajectory or a validated periodic restart. All source, target,
+                                # checkpoint and other snapshot checks remain in force.
+                                if key == "native_matrix_input_origin" &&
+                                   _terminal_hr_origin_transition_allowed(
+                                    from_owned_hr,
+                                    get(restart_result.input_summary, key, "MISSING"),
+                                    value,
+                                )
+                                    continue
+                                end
+                                get(restart_result.input_summary, key, "MISSING") == value ||
+                                    throw(
+                                        ArgumentError(
+                                            "OPERATOR_PROFILE_RESTART_SNAPSHOT_MISMATCH: $(key) differs",
+                                        ),
+                                    )
+                            end
+                        end
+                    end
+                    paw_scdm_input =
+                        if config.solver.initialization_backend isa
+                           Wannierization.PAWSCDMInitialization
+                            artifact = read_paw_scdm_input_artifact(
+                                something(config.solver.paw_scdm_input_hdf5),
+                            )
+                            ordinary = effective_wannierization_mode(config) == :ordinary
+                            artifact.content_authentication == "NOT_PERFORMED" || throw(
+                                ArgumentError(
+                                    "SCDM_INPUT_PRECONDITION: unsupported authentication contract",
+                                ),
+                            )
+                            if !ordinary
+                                config.input.wavefunction_gauge_hdf5 === nothing && throw(
+                                    ArgumentError(
+                                        "SCDM_INPUT_PRECONDITION: strict gauge HDF5 is required",
+                                    ),
+                                )
+                                IO.validate_scientific_source_collection(
+                                    Dict(
+                                        "GAUGE"=>abspath(
+                                            something(config.input.wavefunction_gauge_hdf5),
+                                        ),
+                                    ),
+                                    artifact.source_gauge_reference,
+                                )
+                                if config.input.band_representation_hdf5 !== nothing
+                                    IO.validate_scientific_source_collection(
+                                        Dict(
+                                            "REPRESENTATION"=>abspath(
+                                                something(config.input.band_representation_hdf5),
+                                            ),
+                                        ),
+                                        artifact.strict_representation_reference,
+                                    )
+                                elseif representation_source(config) != :detected
+                                    throw(
+                                        ArgumentError(
+                                            "SCDM_INPUT_PRECONDITION: representation input or detected rebuild required",
+                                        ),
+                                    )
+                                end
+                                authority = get(
+                                    representation.conventions,
+                                    "authoritative_hamiltonian",
+                                    "native_dft",
+                                )
+                                authority_sha256 = get(
+                                    representation.conventions,
+                                    "authoritative_hamiltonian_sha256",
+                                    "LEGACY_NATIVE_DFT",
+                                )
+                                artifact.authoritative_hamiltonian == authority || throw(
+                                    ArgumentError(
+                                        "SCDM_INPUT_PRECONDITION: Hamiltonian authority differs",
+                                    ),
+                                )
+                                artifact.authoritative_hamiltonian_definition == authority_sha256 || throw(
+                                    ArgumentError(
+                                        "SCDM_INPUT_PRECONDITION: authority digest differs",
+                                    ),
+                                )
+                            end
+                            artifact
+                        else
+                            nothing
+                        end
+                    restart_result === nothing || _validate_restart_initializer_algorithm(
+                        config,
+                        frozen_masks,
+                        restart_result,
+                    )
+                    upstream_diagnostics = WannierizationDiagnostic[preparation.diagnostics...]
+                    restart_result === nothing ||
+                        append!(upstream_diagnostics, restart_result.diagnostics)
+                    if resolved_matrices.paw_result isa VASPPAWMatrixElementResult &&
+                       config.input.matrix_elements isa NativeVASPPAWMatrices
+                        append!(
+                            upstream_diagnostics,
+                            _native_vasp_paw_gate_diagnostics(
+                                resolved_matrices.paw_result,
+                                config.input.matrix_elements.thresholds,
+                            ),
+                        )
+                    end
+                    if resolved_matrices.paw_result isa Wannierization.QEPAWMatrixElementResult &&
+                       config.input.matrix_elements isa
+                       Union{NativeQEPAWMatrices, SymmetryCompletedQEPAWMatrices}
+                        append!(
+                            upstream_diagnostics,
+                            _native_qe_paw_gate_diagnostics(
+                                resolved_matrices.paw_result,
+                                config.input.matrix_elements.thresholds,
+                            ),
+                        )
+                    end
+                    if resolved_matrices.paw_result !== nothing &&
+                       !resolved_matrices.paw_result.passed
+                        push!(
+                            upstream_diagnostics,
+                            WannierizationDiagnostic(
+                                :NATIVE_PAW_QUALITY_STANDARD_CONTINUE,
+                                :warning,
+                                join(resolved_matrices.paw_result.diagnostics, "; ");
+                                context = Dict(
+                                    "stage" => "matrix_preparation",
+                                    "gate_result" => "FAIL",
+                                    "action" => "CONTINUE_STANDARD",
+                                ),
+                            ),
+                        )
+                    end
+                    durable_observer =
+                        paths === nothing ? nothing :
+                        wannierization_observer(
+                            config,
+                            representation,
+                            paths,
+                            log_io,
+                            operator_profile_checkpoint_summary,
+                        )
+                    observer = if durable_observer === nothing
+                        config.runtime.iteration_observer
+                    else
+                        function (summary, state, history, diagnostics)
+                            iteration_label =
+                                hasproperty(summary, :iteration) ?
+                                string(summary.iteration) : "NOT_RECORDED"
+                            failure_iteration[] = iteration_label
+                            failure_substage_id[] =
+                                hasproperty(summary, :optimizer_phase) ?
+                                string(summary.optimizer_phase) : "solver_iteration"
+                            failure_last_operation[] = "accepted_iteration_$(iteration_label)"
+                            stage_boundary =
+                                hasproperty(summary, :completed_stage) &&
+                                summary.completed_stage == :disentanglement &&
+                                summary.optimizer_phase == :localization
+                            accepted_step =
+                                config.solver.stage_controls === nothing ?
+                                summary.iteration :
+                                summary.completed_stage == :disentanglement ?
+                                summary.z_steps : summary.u_steps
+                            checkpoint_due =
+                                stage_boundary || (
+                                    config.checkpoint.num_dump_cycles > 0 &&
+                                    accepted_step > 0 &&
+                                    accepted_step % config.checkpoint.num_dump_cycles == 0
+                                )
+                            report_due = (
+                                stage_boundary || (
+                                    config.runtime.num_print_cycles > 0 &&
+                                    accepted_step > 0 &&
+                                    accepted_step % config.runtime.num_print_cycles == 0
+                                )
+                            )
+                            if checkpoint_due || report_due
+                                # This callback already participates in the solver's
+                                # original observer-error protocol; do not introduce
+                                # a root-only MPI collective here.
+                                if native_reuse_preparation !== nothing && mpi_execution
+                                    _validate_native_input_view_lifetimes(
+                                        native_reuse_preparation.shared_views,
+                                    )
+                                end
+                                durable_diagnostics = _unique_construction_diagnostics(
+                                    vcat(diagnostics, upstream_diagnostics),
+                                )
+                                durable_observer(summary, state, history, durable_diagnostics)
+                            end
+                            config.runtime.iteration_observer === nothing ||
+                                config.runtime.iteration_observer(
+                                    summary,
+                                    state,
+                                    history,
+                                    diagnostics,
+                                )
+                        end
+                    end
+                catch exception
+                    native_reuse_preparation === nothing && rethrow()
+                    native_initializer_error = sprint(showerror, exception)
+                end
+                if native_reuse_preparation !== nothing
+                    _native_input_reuse_phase(mpi_execution, "initializer_and_observer") do
+                        native_initializer_error === nothing ||
+                            throw(ArgumentError(native_initializer_error))
+                    end
+                end
+                failure_stage[] = "solver"
+                failure_substage_id[] = "solver_initialization"
+                failure_last_operation[] = "representation_prepared"
+                if native_reuse_preparation !== nothing && mpi_execution
+                    _native_input_reuse_phase(mpi_execution, "shared_native_before_solver") do
+                        _validate_native_input_view_lifetimes(native_reuse_preparation.shared_views)
+                    end
+                end
+                solved = solve_symmetry_adapted_wannierization(
                     config,
                     representation,
-                    paths,
-                    log_io,
-                    operator_profile_checkpoint_summary,
-                )
-            observer = if durable_observer === nothing
-                config.runtime.iteration_observer
-            else
-                function (summary, state, history, diagnostics)
-                    iteration_label =
-                        hasproperty(summary, :iteration) ? string(summary.iteration) :
-                        "NOT_RECORDED"
-                    failure_iteration[] = iteration_label
-                    failure_substage_id[] =
-                        hasproperty(summary, :optimizer_phase) ?
-                        string(summary.optimizer_phase) : "solver_iteration"
-                    failure_last_operation[] = "accepted_iteration_$(iteration_label)"
-                    durable_diagnostics = _unique_construction_diagnostics(
-                        vcat(diagnostics, upstream_diagnostics),
-                    )
-                    durable_observer(summary, state, history, durable_diagnostics)
-                    config.runtime.iteration_observer === nothing ||
-                        config.runtime.iteration_observer(summary, state, history, diagnostics)
-                end
-            end
-            failure_stage[] = "solver"
-            failure_substage_id[] = "solver_initialization"
-            failure_last_operation[] = "representation_prepared"
-            solved = solve_symmetry_adapted_wannierization(
-                config,
-                representation,
-                eig,
-                mmn,
-                plan;
-                amn,
-                restart = restart_result === nothing ? nothing : restart_result.v_matrix,
-                restart_state = restart_result === nothing ? nothing : restart_result.restart_state,
-                restart_history = restart_result === nothing ? WannierizationIteration[] :
-                                  restart_result.history,
-                restart_input_summary = restart_result === nothing ?
-                                        Dict{String, String}() :
-                                        restart_result.input_summary,
-                fixed_subspace,
-                observer,
-                compatibility_report,
-                initialization_amn_sha256 = resolved_matrices.amn_file === nothing ? "" :
-                                            sha256_file(resolved_matrices.amn_file),
-                paw_scdm_input,
-            )
-            failure_last_operation[] = "solver_completed"
-            summary = Dict{String, String}(solved.input_summary)
-            merge!(summary, operator_profile_checkpoint_summary)
-            summary["construction_policy"] = String(config.input.construction_policy)
-            summary["quality_review_recommended"] =
-                string(config.input.construction_policy == :standard)
-            summary["construction_gauge_metrics_json"] =
-                get(representation.conventions, "construction_gauge_metrics_json", "")
-            summary["compatibility_policy_requested"] = String(requested_policy)
-            summary["compatibility_policy_effective"] =
-                String(preparation.effective_compatibility_policy)
-            summary["symmetry_tolerance"] = string(config.input.symmetry_tolerance)
-            summary["symmetry_tolerance_status"] = String(preparation.symmetry_tolerance_status)
-            if hasproperty(resolved_matrices, :accepted_matrix_reference)
-                summary["native_matrix_acceptance_json"] =
-                    JSON3.write(resolved_matrices.accepted_matrix_reference)
-            end
-            summary["matrix_element_source"] = resolved_matrices.source_kind
-            summary["matrix_element_gauge_sha256"] = resolved_matrices.gauge_sha256
-            summary["matrix_element_gauge_provenance_file"] =
-                resolved_matrices.gauge_provenance_file === nothing ? "" :
-                abspath(resolved_matrices.gauge_provenance_file)
-            summary["matrix_element_solver_amn_sha256"] =
-                resolved_matrices.amn_file === nothing ? "" :
-                sha256_file(resolved_matrices.amn_file)
-            summary["matrix_element_raw_amn_sha256"] =
-                resolved_matrices.raw_amn_file === nothing ? "" :
-                sha256_file(resolved_matrices.raw_amn_file)
-            if solved.restart_state !== nothing &&
-               size(solved.v_matrix) == (
-                size(representation.energies_ev, 1),
-                num_wannier,
-                size(representation.energies_ev, 2),
-            )
-                link_diagnostics = wannier_gauge_link_diagnostics(
-                    solved.v_matrix,
+                    eig,
                     mmn,
-                    solved.restart_state.stencil.weights,
+                    plan;
+                    amn,
+                    restart = restart_result === nothing ? nothing : restart_result.v_matrix,
+                    restart_state = restart_result === nothing ? nothing :
+                                    restart_result.restart_state,
+                    restart_history = restart_result === nothing ?
+                                      WannierizationIteration[] : restart_result.history,
+                    restart_input_summary = restart_result === nothing ?
+                                            Dict{String, String}() :
+                                            restart_result.input_summary,
+                    observer,
+                    compatibility_report,
+                    paw_scdm_input,
+                    terminal_postprocess_result = terminal_profile_posthoc ?
+                                                  restart_result : nothing,
                 )
-                record_wannier_gauge_link_summary!(summary, link_diagnostics)
-            end
-            summary["constraint_operation_scope"] = String(scope)
-            summary["constraint_operation_parent_representation_sha256"] = scoped.parent_sha256
-            summary["constraint_operation_subgroup_sha256"] = scoped.subgroup_sha256
-            summary["constraint_operation_parent_indices"] =
-                join(scoped.parent_operation_indices, ',')
-            if scope != :full
-                summary["symmetry_ablation_classification"] = "DIAGNOSTIC_SYMMETRY_ABLATION"
-            end
-            diagnostics =
-                _unique_construction_diagnostics(vcat(solved.diagnostics, upstream_diagnostics))
-            updated_wannierization_result(solved; input_summary = summary, diagnostics)
-        end
-    catch exception
-        backtrace = catch_backtrace()
-        status = exception isa ArgumentError ? INVALID_INPUT : IO_FAILURE
-        code = status == INVALID_INPUT ? :INVALID_INPUT : :IO_FAILURE
-        _workflow_failure(
-            status,
-            code,
-            exception,
-            original_config,
-            backtrace;
-            stage = failure_stage[],
-            substage_id = failure_substage_id[],
-            current_iteration = failure_iteration[],
-            last_successful_operation = failure_last_operation[],
-        )
-    end
-    result = timed.value
-    policy_summary = copy(result.input_summary)
-    policy_summary["construction_policy"] = String(original_config.input.construction_policy)
-    policy_summary["quality_review_recommended"] =
-        string(original_config.input.construction_policy == :standard)
-    if original_config.input.construction_policy == :standard
-        policy_summary["model_qualification"] = "STANDARD"
-        if any(
-            diagnostic -> get(diagnostic.context, "gate_result", "") == "FAIL",
-            result.diagnostics,
-        )
-            policy_summary["construction_quality_failed"] = "true"
-        end
-    end
-    result = updated_wannierization_result(result; input_summary = policy_summary)
-    if mpi_execution
-        terminal = _result_for_terminal_persistence(result)
-        digest = hex2bytes(wannierization_checkpoint_sha256_v2_22(terminal))
-        minimum_digest = copy(digest)
-        maximum_digest = copy(digest)
-        MPI.Allreduce!(minimum_digest, min, MPI.COMM_WORLD)
-        MPI.Allreduce!(maximum_digest, max, MPI.COMM_WORLD)
-        if minimum_digest != maximum_digest
-            # Emit a layered scientific-digest inventory before failing.  The
-            # inventory contains hashes only and lets MPI regressions identify
-            # whether divergence first entered the accepted arrays, the
-            # initializer evidence, the two-stage history, the sealed
-            # projector, or the carried Wannier90 state.  The mismatch remains
-            # fail-closed; no rank-local payload is persisted as authoritative.
-            inventory =
-                "base=$(wannierization_checkpoint_sha256(terminal)) " *
-                "v1_2=$(wannierization_checkpoint_sha256_v1_2(terminal)) " *
-                "v2_2=$(wannierization_checkpoint_sha256_v2_2(terminal)) " *
-                "v2_3=$(wannierization_checkpoint_sha256_v2_3(terminal)) " *
-                "v2_4=$(wannierization_checkpoint_sha256_v2_4(terminal)) " *
-                "v2_6=$(wannierization_checkpoint_sha256_v2_6(terminal)) " *
-                "v2_21=$(wannierization_checkpoint_sha256_v2_21(terminal)) " *
-                "v2_22=$(wannierization_checkpoint_sha256_v2_22(terminal))"
-            encoded_inventory = collect(codeunits(inventory))
-            gathered_inventory = MPI.Allgather(encoded_inventory, MPI.COMM_WORLD)
-            if MPI.Comm_rank(MPI.COMM_WORLD) == 0
-                width = length(encoded_inventory)
-                for rank in 0:(MPI.Comm_size(MPI.COMM_WORLD) - 1)
-                    selected = @view gathered_inventory[(rank * width + 1):((rank + 1) * width)]
-                    println(stderr, "MPI_PAYLOAD_DIGEST_STAGE rank=$(rank) " * String(selected))
+                if (native_reuse_preparation !== nothing || terminal_profile_posthoc) &&
+                   restart_result !== nothing &&
+                   restart_result.status in
+                   (COMPLETED, COMPLETED_WITH_WARNINGS, Wannierization.MAX_ITERATIONS)
+                    # Full operators may be added to a retained terminal H/r gauge,
+                    # but this posthoc operation may not relabel its convergence or
+                    # change a single accepted optimizer value.
+                    solved.status == restart_result.status &&
+                    isequal(solved.v_matrix, restart_result.v_matrix) &&
+                    isequal(
+                        solved.wannier_centers_cartesian,
+                        restart_result.wannier_centers_cartesian,
+                    ) &&
+                    isequal(solved.spreads_angstrom2, restart_result.spreads_angstrom2) &&
+                    length(solved.history) == length(restart_result.history) ||
+                        throw(ArgumentError("NATIVE_OPERATOR_POSTHOC_ACCEPTED_STATE_CHANGED"))
                 end
-            end
-            throw(
-                ArgumentError(
-                    "MPI_PAYLOAD_DIGEST_MISMATCH: ranks disagree before root-only persistence",
-                ),
-            )
-        end
-        MPI.Barrier(MPI.COMM_WORLD)
-    end
-    checkpoint_path = nothing
-    packed_path = nothing
-    wannier90_path = nothing
-    validated_path = nothing
-    tb_export_attempted = false
-    diagnostics = WannierizationDiagnostic[result.diagnostics...]
-    outcome_summary = Dict{String, String}(result.input_summary)
-    accepted_state_gate = accepted_state_tb_export_gate(result, original_config)
-    # Preserve the primary failure reason: a hard input/IO failure (or an
-    # identity/provenance/contract blocking error already recorded on the
-    # result) must not be overwritten by a secondary export gate.
-    primary_failure_reason = _primary_terminal_failure_reason(result)
-    if primary_failure_reason === nothing
-        outcome_summary["model_availability"] =
-            result.status in (COMPLETED, COMPLETED_WITH_WARNINGS) ? "CONVERGED" :
-            accepted_state_gate.classification
-        outcome_summary["accepted_state_export_gate_reason"] =
-            result.status in (COMPLETED, COMPLETED_WITH_WARNINGS) ? "CONVERGED_EXPORT_PATH" :
-            accepted_state_gate.reason
-    else
-        outcome_summary["model_availability"] = "UNAVAILABLE"
-        outcome_summary["accepted_state_export_gate_reason"] = primary_failure_reason
-    end
-    outcome_summary["tb_export_status"] = "NOT_EXPORTED"
-    outcome_summary["numerical_quality"] =
-        _has_accepted_wannierization_state(result) ? "PENDING_EXPORT_VALIDATION" : "NO_VALID_STATE"
-    controlled_diagnostic =
-        get(outcome_summary, "controlled_symmetrization_quality_review_recommended", "false") ==
-        "true"
-    if controlled_diagnostic
-        outcome_summary["physics_qualification"] = "CONTROLLED_SYMMETRIZATION_HOLD"
-        outcome_summary["tb_export_classification"] = "STANDARD_CONTROLLED_SYMMETRIZATION"
-        outcome_summary["band_result_classification"] = "STANDARD_CONTROLLED_SYMMETRIZATION"
-    end
-    result = updated_wannierization_result(result; input_summary = outcome_summary)
-    terminal_state = true
-    if paths !== nothing
-        try
-            result = _with_wannierization_eligibility(
-                _result_for_terminal_persistence(result),
-                original_config,
-            )
-            checkpoint_path = write_wannierization_checkpoint_hdf5(paths.checkpoint, result)
-        catch exception
-            push!(
-                diagnostics,
-                WannierizationDiagnostic(:IO_FAILURE, :error, sprint(showerror, exception)),
-            )
-            result = updated_wannierization_result(result; status = IO_FAILURE, diagnostics)
-            terminal_state = false
-        end
-    end
-    if paths !== nothing &&
-       terminal_state &&
-       (
-           original_config.output.write_wannier90_tb ||
-           !isempty(original_config.output.tb_output_formats)
-       ) &&
-       (
-           result.status in (COMPLETED, COMPLETED_WITH_WARNINGS) ||
-           accepted_state_tb_export_allowed(result, original_config)
-       ) &&
-       _has_accepted_wannierization_state(result)
-        tb_export_attempted = true
-        try
-            packed_path, wannier90_path, export_metadata = export_wannierization_tb(
-                result,
-                something(eig_for_tb),
-                something(mmn_for_tb),
-                original_config,
-                paths,
-                effective_wannierization_mode(original_config) == :ordinary ? nothing : plan_for_tb,
-                operator_target_contract = operator_target_contract_for_tb,
-            )
-            outcome_summary = Dict{String, String}(result.input_summary)
-            merge!(outcome_summary, export_metadata)
-            result = updated_wannierization_result(result; input_summary = outcome_summary)
-        catch exception
-            push!(
-                diagnostics,
-                WannierizationDiagnostic(:TB_EXPORT_FAILED, :error, sprint(showerror, exception)),
-            )
-            outcome_summary = Dict{String, String}(result.input_summary)
-            outcome_summary["tb_export_status"] = "NOT_EXPORTED"
-            outcome_summary["model_availability"] = "UNAVAILABLE"
-            outcome_summary["accepted_state_export_gate_reason"] = "TB_EXPORT_FAILED: $(sprint(showerror, exception))"
-            outcome_summary["tb_export_failure_class"] = "FATAL_INTEGRITY"
-            outcome_summary["numerical_quality"] =
-                get(outcome_summary, "numerical_quality", "INVALID_ACCEPTED_STATE")
-            result = updated_wannierization_result(result; input_summary = outcome_summary)
-        end
-    end
-    hamiltonian_covariance_threshold = _final_tb_hamiltonian_covariance_threshold(original_config)
-    qualification = if packed_path === nothing
-        tb_symmetry_unavailable(
-            tb_export_attempted ? "TB_EXPORT_FAILED" : "TB_NOT_AVAILABLE",
-            hamiltonian_covariance_threshold;
-            input_summary = result.input_summary,
-        )
-    else
-        try
-            diagnostic_representation = representation_for_tb
-            diagnostic_plan = plan_for_tb
-            if effective_wannierization_mode(original_config) == :ordinary
-                diagnostic_representation = nothing
-                diagnostic_plan = nothing
-                if original_config.output.final_tb_symmetry_report_enabled === true
-                    context = _ordinary_posthoc_qualification_context(
-                        original_config,
-                        representation_for_tb,
+                failure_last_operation[] = "solver_completed"
+                summary = Dict{String, String}(solved.input_summary)
+                merge!(summary, operator_profile_checkpoint_summary)
+                for (key, value) in representation.conventions
+                    startswith(key, "operation_selection_") && (summary[key] = value)
+                end
+                summary["construction_policy"] = String(config.input.construction_policy)
+                summary["quality_review_recommended"] = string(
+                    get(summary, "construction_quality_failed", "false") == "true" ||
+                    !(solved.status in (COMPLETED, COMPLETED_WITH_WARNINGS)),
+                )
+                summary["construction_gauge_metrics_json"] =
+                    get(representation.conventions, "construction_gauge_metrics_json", "")
+                summary["compatibility_policy_requested"] = String(requested_policy)
+                summary["compatibility_policy_effective"] =
+                    String(preparation.effective_compatibility_policy)
+                summary["symmetry_tolerance"] = string(config.input.symmetry_tolerance)
+                summary["symmetry_tolerance_status"] =
+                    String(preparation.symmetry_tolerance_status)
+                if hasproperty(resolved_matrices, :accepted_matrix_reference)
+                    summary["native_matrix_acceptance_json"] =
+                        JSON3.write(resolved_matrices.accepted_matrix_reference)
+                end
+                summary["matrix_element_source"] = resolved_matrices.source_kind
+                summary["matrix_element_content_authentication"] = "NOT_PERFORMED"
+                summary["matrix_element_gauge_provenance_file"] =
+                    resolved_matrices.gauge_provenance_file === nothing ? "" :
+                    abspath(resolved_matrices.gauge_provenance_file)
+                if solved.restart_state !== nothing &&
+                   size(solved.v_matrix) == (
+                    size(representation.energies_ev, 1),
+                    num_wannier,
+                    size(representation.energies_ev, 2),
+                )
+                    link_diagnostics = wannier_gauge_link_diagnostics(
+                        solved.v_matrix,
+                        mmn,
+                        solved.restart_state.stencil.weights,
                     )
-                    diagnostic_representation = context.representation
-                    diagnostic_plan = context.plan
+                    record_wannier_gauge_link_summary!(summary, link_diagnostics)
                 end
+                summary["constraint_operation_scope"] = String(scope)
+                summary["constraint_operation_parent_indices"] =
+                    join(scoped.parent_operation_indices, ',')
+                if scope != :full
+                    summary["symmetry_ablation_classification"] = "DIAGNOSTIC_SYMMETRY_ABLATION"
+                end
+                diagnostics = _unique_construction_diagnostics(
+                    vcat(solved.diagnostics, upstream_diagnostics),
+                )
+                updated_wannierization_result(solved; input_summary = summary, diagnostics)
             end
-            qualify_exported_wannierization_tb(
-                packed_path,
-                diagnostic_representation,
-                diagnostic_plan;
-                hamiltonian_covariance_threshold,
-                persist_hdf5 = false,
-            )
         catch exception
-            push!(
-                diagnostics,
-                WannierizationDiagnostic(
-                    :TB_SYMMETRY_QUALIFICATION_FAILED,
-                    :error,
-                    sprint(showerror, exception),
-                ),
+            backtrace = catch_backtrace()
+            status = exception isa ArgumentError ? INVALID_INPUT : IO_FAILURE
+            code = status == INVALID_INPUT ? :INVALID_INPUT : :IO_FAILURE
+            _workflow_failure(
+                status,
+                code,
+                exception,
+                original_config,
+                backtrace;
+                stage = failure_stage[],
+                substage_id = failure_substage_id[],
+                current_iteration = failure_iteration[],
+                last_successful_operation = failure_last_operation[],
             )
-            tb_symmetry_incomplete(
-                effective_wannierization_mode(original_config) == :ordinary ?
-                "ORDINARY_POSTHOC_CONTEXT_OR_EVALUATION_FAILED: $(sprint(showerror, exception))" :
-                "QUALIFICATION_EVALUATION_FAILED",
+        end
+        result = timed.value
+        if native_reuse_preparation !== nothing && mpi_execution
+            _native_input_reuse_phase(mpi_execution, "shared_native_before_persistence") do
+                _validate_native_input_view_lifetimes(native_reuse_preparation.shared_views)
+            end
+        end
+        policy_summary = copy(result.input_summary)
+        policy_summary["construction_policy"] = String(original_config.input.construction_policy)
+        policy_summary["ordinary_calculation_policy_version"] = "1.0"
+        quality_failed =
+            get(policy_summary, "construction_quality_failed", "false") == "true" || any(
+                diagnostic -> get(diagnostic.context, "gate_result", "") == "FAIL",
+                result.diagnostics,
+            )
+        policy_summary["quality_review_recommended"] =
+            string(quality_failed || !(result.status in (COMPLETED, COMPLETED_WITH_WARNINGS)))
+        policy_summary["model_qualification"] = "COMPUTATION_READY"
+        policy_summary["construction_quality_failed"] = string(quality_failed)
+        result = updated_wannierization_result(result; input_summary = policy_summary)
+        if mpi_execution
+            terminal = _result_for_terminal_persistence(result)
+            agree_terminal_checkpoint_definition(
+                terminal;
+                comm = MPI.COMM_WORLD,
+                reference_root = original_config.checkpoint.reference_root,
+            )
+            MPI.Barrier(MPI.COMM_WORLD)
+        end
+        checkpoint_path = nothing
+        packed_path = nothing
+        exported_operators = nothing
+        reference_checkpoint_path = nothing
+        validated_path = nothing
+        tb_export_attempted = false
+        diagnostics = WannierizationDiagnostic[result.diagnostics...]
+        outcome_summary = Dict{String, String}(result.input_summary)
+        accepted_state_gate = accepted_state_tb_export_gate(result, original_config)
+        # Preserve the primary failure reason: a hard input/IO failure (or an
+        # identity/provenance/contract blocking error already recorded on the
+        # result) must not be overwritten by a secondary export gate.
+        primary_failure_reason = _primary_terminal_failure_reason(result)
+        if primary_failure_reason === nothing
+            outcome_summary["model_availability"] =
+                result.status in (COMPLETED, COMPLETED_WITH_WARNINGS) ? "CONVERGED" :
+                accepted_state_gate.classification
+            outcome_summary["accepted_state_export_gate_reason"] =
+                result.status in (COMPLETED, COMPLETED_WITH_WARNINGS) ? "CONVERGED_EXPORT_PATH" :
+                accepted_state_gate.reason
+        else
+            outcome_summary["model_availability"] = "UNAVAILABLE"
+            outcome_summary["accepted_state_export_gate_reason"] = primary_failure_reason
+        end
+        outcome_summary["tb_export_status"] = "NOT_EXPORTED"
+        outcome_summary["numerical_quality"] =
+            _has_accepted_wannierization_state(result, original_config) ?
+            "PENDING_EXPORT_VALIDATION" : "NO_VALID_STATE"
+        controlled_diagnostic =
+            get(outcome_summary, "controlled_symmetrization_quality_review_recommended", "false") ==
+            "true"
+        if controlled_diagnostic
+            outcome_summary["physics_qualification"] = "CONTROLLED_SYMMETRIZATION_HOLD"
+            outcome_summary["tb_export_classification"] = "STANDARD_CONTROLLED_SYMMETRIZATION"
+            outcome_summary["band_result_classification"] = "STANDARD_CONTROLLED_SYMMETRIZATION"
+        end
+        result = updated_wannierization_result(result; input_summary = outcome_summary)
+        terminal_state = true
+        if paths !== nothing && paths.checkpoint!==nothing
+            try
+                result = _with_wannierization_eligibility(
+                    _result_for_terminal_persistence(result),
+                    original_config,
+                )
+                checkpoint_path = write_wannierization_checkpoint_hdf5(
+                    paths.checkpoint,
+                    result;
+                    reference_root = original_config.checkpoint.reference_root,
+                )
+            catch exception
+                push!(
+                    diagnostics,
+                    WannierizationDiagnostic(:IO_FAILURE, :error, sprint(showerror, exception)),
+                )
+                result = updated_wannierization_result(result; status = IO_FAILURE, diagnostics)
+                terminal_state = false
+            end
+        end
+        if paths !== nothing &&
+           terminal_state &&
+           (
+               original_config.output.write_model_tb ||
+               !isempty(original_config.output.tb_output_formats)
+           ) &&
+           (
+               result.status in (COMPLETED, COMPLETED_WITH_WARNINGS) ||
+               accepted_state_tb_export_allowed(result, original_config)
+           ) &&
+           _has_accepted_wannierization_state(result, original_config)
+            tb_export_attempted = true
+            try
+                packed_path, reference_checkpoint_path, export_metadata, exported_operators =
+                    export_wannierization_tb(
+                        result,
+                        something(eig_for_tb),
+                        something(mmn_for_tb),
+                        original_config,
+                        paths,
+                        effective_wannierization_mode(original_config) == :ordinary ? nothing :
+                        plan_for_tb,
+                        operator_target_contract = operator_target_contract_for_tb,
+                        return_operators = true,
+                        resolved_profile_sources = resolved_profile_sources_for_export[],
+                    )
+                outcome_summary = Dict{String, String}(result.input_summary)
+                merge!(outcome_summary, export_metadata)
+                original_config.checkpoint.recovery == :export &&
+                    (outcome_summary["export_recovery_status"] = "EXPORTED")
+                result = updated_wannierization_result(result; input_summary = outcome_summary)
+            catch exception
+                push!(
+                    diagnostics,
+                    WannierizationDiagnostic(
+                        :TB_EXPORT_FAILED,
+                        :error,
+                        sprint(showerror, exception, catch_backtrace()),
+                    ),
+                )
+                outcome_summary = Dict{String, String}(result.input_summary)
+                outcome_summary["tb_export_status"] = "NOT_EXPORTED"
+                outcome_summary["model_availability"] = "UNAVAILABLE"
+                outcome_summary["accepted_state_export_gate_reason"] = "TB_EXPORT_FAILED: $(sprint(showerror, exception))"
+                outcome_summary["tb_export_failure_class"] = "FATAL_INTEGRITY"
+                original_config.checkpoint.recovery == :export &&
+                    (outcome_summary["export_recovery_status"] = "FAILED")
+                outcome_summary["numerical_quality"] =
+                    get(outcome_summary, "numerical_quality", "INVALID_ACCEPTED_STATE")
+                result = updated_wannierization_result(result; input_summary = outcome_summary)
+            end
+        end
+        hamiltonian_covariance_threshold =
+            _final_tb_hamiltonian_covariance_threshold(original_config)
+        qualification = if packed_path === nothing
+            tb_symmetry_unavailable(
+                tb_export_attempted ? "TB_EXPORT_FAILED" : "TB_NOT_AVAILABLE",
                 hamiltonian_covariance_threshold;
                 input_summary = result.input_summary,
             )
-        end
-    end
-    if paths !== nothing
-        try
-            packed_path === nothing || HDF5.h5open(packed_path, "r+") do handle
-                write_tb_symmetry_qualification_group(handle, qualification)
+        elseif original_config.output.final_tb_symmetry_report_enabled !== true
+            # Posthoc qualification is opt-in; absence of a check is never a PASS.
+            tb_symmetry_unavailable(
+                "EXPLICIT_SYMMETRY_CHECK_NOT_REQUESTED",
+                hamiltonian_covariance_threshold;
+                input_summary = result.input_summary,
+            )
+        else
+            try
+                diagnostic_representation = representation_for_tb
+                diagnostic_plan = plan_for_tb
+                if effective_wannierization_mode(original_config) == :ordinary
+                    diagnostic_representation = nothing
+                    diagnostic_plan = nothing
+                    if original_config.output.final_tb_symmetry_report_enabled === true
+                        context = _ordinary_posthoc_qualification_context(
+                            original_config,
+                            representation_for_tb,
+                        )
+                        diagnostic_representation = context.representation
+                        diagnostic_plan = context.plan
+                    end
+                end
+                if diagnostic_plan!==nothing
+                    summary=copy(result.input_summary)
+                    summary["final_tb_checked_operation_count"]=string(
+                        length(diagnostic_plan.operations),
+                    )
+                    result=updated_wannierization_result(result; input_summary = summary)
+                end
+                qualify_exported_wannierization_tb(
+                    packed_path,
+                    something(exported_operators),
+                    diagnostic_representation,
+                    diagnostic_plan;
+                    hamiltonian_covariance_threshold,
+                    persist_hdf5 = false,
+                )
+            catch exception
+                push!(
+                    diagnostics,
+                    WannierizationDiagnostic(
+                        :TB_SYMMETRY_CHECK_FAILED,
+                        :error,
+                        sprint(showerror, exception),
+                    ),
+                )
+                tb_symmetry_incomplete(
+                    effective_wannierization_mode(original_config) == :ordinary ?
+                    "ORDINARY_POSTHOC_CONTEXT_OR_EVALUATION_FAILED: $(sprint(showerror, exception))" :
+                    "SYMMETRY_CHECK_EVALUATION_FAILED",
+                    hamiltonian_covariance_threshold;
+                    input_summary = result.input_summary,
+                )
             end
-            write_tb_symmetry_json(paths.tb_symmetry_json, qualification)
-        catch exception
-            push!(
-                diagnostics,
-                WannierizationDiagnostic(
-                    :TB_SYMMETRY_QUALIFICATION_PERSISTENCE_FAILED,
-                    :error,
-                    sprint(showerror, exception),
-                ),
-            )
         end
-    end
-    outcome_summary = Dict{String, String}(result.input_summary)
-    outcome_summary["final_tb_hamiltonian_covariance_threshold"] =
-        string(hamiltonian_covariance_threshold)
-    outcome_summary["final_tb_hamiltonian_covariance_threshold_contract"] = "FORMAL_REPRESENTATION_TOLERANCE"
-    outcome_summary["tb_symmetry_qualification"] = qualification.overall
-    outcome_summary["tb_qualification_failure_class"] =
-        qualification.overall == "FAIL" ? "QUALIFICATION_FAIL" : qualification.overall
-    outcome_summary["tb_symmetry_qualification_reason"] = qualification.reason
-    outcome_summary["tb_symmetry_qualification_sha256"] = qualification.payload_sha256
-    if get(outcome_summary, "controlled_symmetrization_quality_review_recommended", "false") ==
-       "true"
-        outcome_summary["physics_qualification"] = "CONTROLLED_SYMMETRIZATION_HOLD"
-        outcome_summary["tb_export_classification"] = "STANDARD_CONTROLLED_SYMMETRIZATION"
-        outcome_summary["band_result_classification"] = "STANDARD_CONTROLLED_SYMMETRIZATION"
-    end
-    result = updated_wannierization_result(
-        result;
-        input_summary = outcome_summary,
-        tb_symmetry_qualification = qualification,
-    )
-    artifacts = WannierizationArtifacts(
-        checkpoint_hdf5 = checkpoint_path,
-        validated_checkpoint_hdf5 = validated_path,
-        wannierization_log = paths === nothing ? nothing : paths.log,
-        packed_hdf5 = packed_path,
-        wannier90_tb = wannier90_path,
-        tb_symmetry_json = paths === nothing || !isfile(paths.tb_symmetry_json) ? nothing :
-                           paths.tb_symmetry_json,
-    )
-    result = updated_wannierization_result(
-        result;
-        diagnostics,
-        checkpoint_file = checkpoint_path,
-        artifacts,
-    )
-    if checkpoint_path !== nothing
-        try
-            result = _with_wannierization_eligibility(
-                _result_for_terminal_persistence(result),
-                original_config,
-            )
-            checkpoint_path = write_wannierization_checkpoint_hdf5(paths.checkpoint, result)
-            packed_path === nothing || bind_packed_checkpoint_sha256!(packed_path, checkpoint_path)
-        catch exception
-            diagnostics = WannierizationDiagnostic[
-                result.diagnostics...,
-                WannierizationDiagnostic(:IO_FAILURE, :error, sprint(showerror, exception)),
-            ]
-            result = updated_wannierization_result(result; status = IO_FAILURE, diagnostics)
+        outcome_summary = Dict{String, String}(result.input_summary)
+        outcome_summary["final_tb_hamiltonian_covariance_threshold"] =
+            string(hamiltonian_covariance_threshold)
+        outcome_summary["final_tb_hamiltonian_covariance_threshold_contract"] = "FORMAL_REPRESENTATION_TOLERANCE"
+        outcome_summary["tb_symmetry_qualification"] = qualification.overall
+        outcome_summary["tb_qualification_failure_class"] =
+            qualification.overall == "FAIL" ? "QUALIFICATION_FAIL" : qualification.overall
+        outcome_summary["tb_symmetry_qualification_reason"] = qualification.reason
+        outcome_summary["tb_symmetry_content_authentication"] = "NOT_PERFORMED"
+        if get(outcome_summary, "controlled_symmetrization_quality_review_recommended", "false") ==
+           "true"
+            outcome_summary["physics_qualification"] = "CONTROLLED_SYMMETRIZATION_HOLD"
+            outcome_summary["tb_export_classification"] = "STANDARD_CONTROLLED_SYMMETRIZATION"
+            outcome_summary["band_result_classification"] = "STANDARD_CONTROLLED_SYMMETRIZATION"
         end
-    end
-    if checkpoint_path !== nothing && wannierization_production_eligible(result)
-        try
-            validated_path = atomic_checkpoint_copy(checkpoint_path, paths.validated)
-        catch exception
-            diagnostics = WannierizationDiagnostic[
-                result.diagnostics...,
-                WannierizationDiagnostic(:IO_FAILURE, :error, sprint(showerror, exception)),
-            ]
-            result = updated_wannierization_result(result; status = IO_FAILURE, diagnostics)
-        end
-    end
-    artifacts = WannierizationArtifacts(
-        checkpoint_hdf5 = checkpoint_path,
-        validated_checkpoint_hdf5 = validated_path,
-        wannierization_log = paths === nothing ? nothing : paths.log,
-        packed_hdf5 = packed_path,
-        wannier90_tb = wannier90_path,
-        tb_symmetry_json = paths === nothing || !isfile(paths.tb_symmetry_json) ? nothing :
-                           paths.tb_symmetry_json,
-    )
-    result = updated_wannierization_result(result; checkpoint_file = checkpoint_path, artifacts)
-    if log_io !== nothing
-        write_wannierization_final(
-            log_io,
-            result,
-            original_config,
-            artifacts;
-            wall_time = timed.time,
-            allocated_bytes = timed.bytes,
-            gc_time = timed.gctime,
+        result = updated_wannierization_result(
+            result;
+            input_summary = outcome_summary,
+            tb_symmetry_qualification = qualification,
         )
-        close(log_io)
+        artifacts = WannierizationArtifacts(
+            checkpoint_hdf5 = checkpoint_path,
+            validated_checkpoint_hdf5 = validated_path,
+            wannierization_log = paths === nothing ? nothing : paths.log,
+            packed_hdf5 = packed_path,
+            model_tb = reference_checkpoint_path,
+            tb_symmetry_json = nothing,
+        )
+        result = updated_wannierization_result(
+            result;
+            diagnostics,
+            checkpoint_file = checkpoint_path,
+            artifacts,
+        )
+        if checkpoint_path !== nothing
+            try
+                result = _with_wannierization_eligibility(
+                    _result_for_terminal_persistence(result),
+                    original_config,
+                )
+                checkpoint_path = write_wannierization_checkpoint_hdf5(
+                    paths.checkpoint,
+                    result;
+                    reference_root = original_config.checkpoint.reference_root,
+                )
+            catch exception
+                diagnostics = WannierizationDiagnostic[
+                    result.diagnostics...,
+                    WannierizationDiagnostic(:IO_FAILURE, :error, sprint(showerror, exception)),
+                ]
+                result = updated_wannierization_result(result; status = IO_FAILURE, diagnostics)
+            end
+        end
+        artifacts = WannierizationArtifacts(
+            checkpoint_hdf5 = checkpoint_path,
+            validated_checkpoint_hdf5 = validated_path,
+            wannierization_log = paths === nothing ? nothing : paths.log,
+            packed_hdf5 = packed_path,
+            model_tb = reference_checkpoint_path,
+            tb_symmetry_json = nothing,
+        )
+        result = updated_wannierization_result(result; checkpoint_file = checkpoint_path, artifacts)
+        report_error = nothing
+        if log_io !== nothing
+            try
+                write_wannierization_final(
+                    log_io,
+                    result,
+                    original_config,
+                    artifacts;
+                    wall_time = timed.time,
+                    allocated_bytes = timed.bytes,
+                    gc_time = timed.gctime,
+                    run_record,
+                )
+            catch exception
+                report_error = sprint(showerror, exception)
+            finally
+                isopen(log_io) && close(log_io)
+            end
+        end
+        # All ranks observe a rank-zero report failure before leaving the workflow.
+        mpi_execution &&
+            (report_error = MPI.bcast(root_process ? report_error : nothing, 0, MPI.COMM_WORLD))
+        report_error===nothing || error("model report write failed: $report_error")
+        return result
+    finally
+        if @isdefined(log_io)
+            log_io===nothing || !isopen(log_io) || close(log_io)
+        end
     end
-    mpi_execution && MPI.Barrier(MPI.COMM_WORLD)
-    return result
 end

@@ -1,4 +1,4 @@
-# Independently compiled Wannier90 PR 907008d; zero-temperature raw alpha/sigma.
+# Independent reference calculation; zero-temperature raw alpha/sigma.
 # Flattened (frequency,component,quantity), real imaginary; synthetic_runtime TB.
 -0.0007113501373408049 -0.02368085964541739
 -0.4690191152320521 0.17880570610493488

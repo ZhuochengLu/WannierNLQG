@@ -39,6 +39,10 @@ function compute_geometric_loop_shifted_overlaps!(
     wannier_centers_fractional::AbstractMatrix{<:Real},
     frame_phase_factors::AbstractVector{ComplexF64},
     frame_rotated_eigenvectors::AbstractMatrix{ComplexF64},
+    ;
+    valence_columns = nothing,
+    conduction_columns = nothing,
+    optical_q_link::Bool = false,
 )
     compute_convention_covariant_overlap!(
         forward_overlap_1,
@@ -47,17 +51,20 @@ function compute_geometric_loop_shifted_overlaps!(
         frame_connector,
         wannier_centers_fractional,
         frame_phase_factors,
-        frame_rotated_eigenvectors,
+        frame_rotated_eigenvectors;
+        output_columns = valence_columns,
     )
-    compute_convention_covariant_overlap!(
-        forward_overlap_2,
-        valence_forward_data,
-        conduction_forward_data,
-        frame_connector,
-        wannier_centers_fractional,
-        frame_phase_factors,
-        frame_rotated_eigenvectors,
-    )
+    if !optical_q_link
+        compute_convention_covariant_overlap!(
+            forward_overlap_2,
+            valence_forward_data,
+            conduction_forward_data,
+            frame_connector,
+            wannier_centers_fractional,
+            frame_phase_factors,
+            frame_rotated_eigenvectors,
+        )
+    end
     compute_convention_covariant_overlap!(
         forward_overlap_3,
         conduction_forward_data,
@@ -65,7 +72,8 @@ function compute_geometric_loop_shifted_overlaps!(
         frame_connector,
         wannier_centers_fractional,
         frame_phase_factors,
-        frame_rotated_eigenvectors,
+        frame_rotated_eigenvectors;
+        output_columns = conduction_columns,
     )
     compute_convention_covariant_overlap!(
         backward_overlap_1,
@@ -74,17 +82,20 @@ function compute_geometric_loop_shifted_overlaps!(
         frame_connector,
         wannier_centers_fractional,
         frame_phase_factors,
-        frame_rotated_eigenvectors,
+        frame_rotated_eigenvectors;
+        output_columns = valence_columns,
     )
-    compute_convention_covariant_overlap!(
-        backward_overlap_2,
-        valence_backward_data,
-        conduction_backward_data,
-        frame_connector,
-        wannier_centers_fractional,
-        frame_phase_factors,
-        frame_rotated_eigenvectors,
-    )
+    if !optical_q_link
+        compute_convention_covariant_overlap!(
+            backward_overlap_2,
+            valence_backward_data,
+            conduction_backward_data,
+            frame_connector,
+            wannier_centers_fractional,
+            frame_phase_factors,
+            frame_rotated_eigenvectors,
+        )
+    end
     compute_convention_covariant_overlap!(
         backward_overlap_3,
         conduction_backward_data,
@@ -92,7 +103,8 @@ function compute_geometric_loop_shifted_overlaps!(
         frame_connector,
         wannier_centers_fractional,
         frame_phase_factors,
-        frame_rotated_eigenvectors,
+        frame_rotated_eigenvectors;
+        output_columns = conduction_columns,
     )
     return nothing
 end
@@ -103,7 +115,7 @@ function _align_geometric_source_external_connection!(
     data::GeometricLoopMatrixData,
     ::IdentityConventionFrameConnector,
     wannier_centers_fractional::Matrix{Float64},
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     frame_rotated_eigenvectors::Matrix{ComplexF64},
     frame_generator_band::Matrix{ComplexF64},
     directions,
@@ -117,7 +129,7 @@ function _align_geometric_source_external_connection!(
     data::GeometricLoopMatrixData,
     ::WannierCenterConventionFrameConnector,
     wannier_centers_fractional::Matrix{Float64},
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     frame_rotated_eigenvectors::Matrix{ComplexF64},
     frame_generator_band::Matrix{ComplexF64},
     directions,
@@ -143,10 +155,10 @@ function _align_geometric_source_external_connection!(
 end
 
 """
-Reconstruct and frame-align the external Wannier-basis connection in place.
+Read and frame-align the raw external Wannier-basis connection in place.
 
-The reconstructed matrix is `A_source + i*H_source*N`, with the regularized
-inverse energy difference already stored in `data`. Convention II subtracts the
+Raw A is rotated directly from the shared endpoint payload, without constructing
+r or cancelling its inverse-gap contribution. Convention II subtracts the
 band-space center generator because the same contribution is carried by the
 frame-corrected links. Only the requested derivative directions are written.
 """
@@ -155,21 +167,18 @@ function prepare_geometric_source_external_connection!(
     data::GeometricLoopMatrixData,
     frame_connector::ConventionFrameConnector,
     wannier_centers_fractional::Matrix{Float64},
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     frame_rotated_eigenvectors::Matrix{ComplexF64},
     frame_generator_band::Matrix{ComplexF64},
     directions,
 )
-    source_connection = data.source_gauge_berry_connection
-    source_hamiltonian_derivatives = data.source_gauge_hamiltonian_derivatives
-    inverse_energy_differences = data.inverse_energy_differences
-    @inbounds for direction in directions, column in axes(output, 2), row in axes(output, 1)
-        output[row, column, direction] =
-            source_connection[row, column, direction] +
-            1.0im *
-            source_hamiltonian_derivatives[row, column, direction] *
-            inverse_energy_differences[row, column]
-    end
+    MatrixElements.raw_position_connections!(
+        output,
+        data.common;
+        source_gauge = true,
+        directions,
+        scratch = frame_generator_band,
+    )
     return _align_geometric_source_external_connection!(
         output,
         data,
@@ -186,9 +195,10 @@ end
 function prepare_geometric_loop_covariant_center!(
     ws::GeometricLoopResponseWorkspace,
     wannier_centers_fractional::Matrix{Float64},
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     second_directions,
-    third_directions,
+    third_directions;
+    use_full_velocity_vertices::Bool = false,
 )
     num_orbitals = ws.valence_central_data.num_orbitals
     size(wannier_centers_fractional) == (3, num_orbitals) || throw(
@@ -199,28 +209,63 @@ function prepare_geometric_loop_covariant_center!(
     )
     all(isfinite, wannier_centers_fractional) ||
         error("Geometric-loop Wannier centers contain non-finite fractional coordinates.")
-    compute_geometric_loop_central_overlap!(
-        ws.central_overlap_4,
-        ws.conduction_central_data,
-        ws.valence_central_data,
-        ws.frame_connector,
-        wannier_centers_fractional,
-        ws.frame_phase_factors,
-        ws.frame_rotated_eigenvectors,
-    )
+    if use_full_velocity_vertices
+        MatrixElements.compute_optical_momentum_overlap!(
+            ws.central_overlap_4,
+            ws.conduction_central_data.common,
+            ws.valence_central_data.common,
+            ws.optical_center_data.common,
+            model,
+            ws.scratch.matrix_elements.plan,
+            wannier_centers_fractional,
+            ws.optical_q_cartesian,
+            ws.optical_orbital_link,
+            ws.optical_temporary,
+        )
+    else
+        compute_geometric_loop_central_overlap!(
+            ws.central_overlap_4,
+            ws.conduction_central_data,
+            ws.valence_central_data,
+            ws.frame_connector,
+            wannier_centers_fractional,
+            ws.frame_phase_factors,
+            ws.frame_rotated_eigenvectors,
+        )
+    end
+    valence_velocity =
+        use_full_velocity_vertices ?
+        MatrixElements.physical_velocity_vertices(
+            ws.valence_central_data.common;
+            source_gauge = true,
+        ) : nothing
+    conduction_velocity =
+        use_full_velocity_vertices ?
+        MatrixElements.physical_velocity_vertices(
+            ws.conduction_central_data.common;
+            source_gauge = true,
+        ) : nothing
     compute_geometric_loop_second_insertions!(
         ws.central_second_insertions,
         ws.valence_central_data,
         ws.conduction_central_data,
         ws.central_overlap_4,
-        second_directions,
+        second_directions;
+        valence_velocity_vertices = valence_velocity,
+        conduction_velocity_vertices = conduction_velocity,
+        use_blas = use_full_velocity_vertices &&
+                   num_orbitals >= _GEOMETRIC_FULL_V_BLAS_MIN_ORBITALS,
     )
     compute_geometric_loop_third_insertions!(
         ws.central_third_insertions,
         ws.valence_central_data,
         ws.conduction_central_data,
         adjoint(ws.central_overlap_4),
-        third_directions,
+        third_directions;
+        valence_velocity_vertices = valence_velocity,
+        conduction_velocity_vertices = conduction_velocity,
+        use_blas = use_full_velocity_vertices &&
+                   num_orbitals >= _GEOMETRIC_FULL_V_BLAS_MIN_ORBITALS,
     )
     return ws
 end
@@ -229,7 +274,7 @@ end
 function prepare_geometric_loop_external_connections!(
     ws::GeometricLoopResponseWorkspace,
     wannier_centers_fractional::Matrix{Float64},
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     derivative_axes,
 )
     prepare_geometric_source_external_connection!(
@@ -265,9 +310,10 @@ function prepare_geometric_loop_frame_axis!(
     denominator_regularization::Float64,
     finite_difference_step::Float64,
     spatial_dimension::Int64,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     derivative_axis::Int,
-    insertion_directions,
+    insertion_directions;
+    use_full_velocity_vertices::Bool = false,
 )
     has_photon_shift = any(!iszero, photon_momentum_fractional)
     valence_photon_step = has_photon_shift ? -1 : 0
@@ -303,7 +349,7 @@ function prepare_geometric_loop_frame_axis!(
         model,
         kv_0 + finite_difference_vectors[:, derivative_axis];
         denominator_regularization,
-        spatial_dimension,
+        spatial_dimension = ws.scratch.matrix_elements.plan.spatial_dimension,
     )
     compute_kpoint!(
         ws.conduction_forward_data,
@@ -311,7 +357,7 @@ function prepare_geometric_loop_frame_axis!(
         model,
         kc_0 + finite_difference_vectors[:, derivative_axis];
         denominator_regularization,
-        spatial_dimension,
+        spatial_dimension = ws.scratch.matrix_elements.plan.spatial_dimension,
     )
     compute_kpoint!(
         ws.valence_backward_data,
@@ -319,7 +365,7 @@ function prepare_geometric_loop_frame_axis!(
         model,
         kv_0 - finite_difference_vectors[:, derivative_axis];
         denominator_regularization,
-        spatial_dimension,
+        spatial_dimension = ws.scratch.matrix_elements.plan.spatial_dimension,
     )
     compute_kpoint!(
         ws.conduction_backward_data,
@@ -327,7 +373,7 @@ function prepare_geometric_loop_frame_axis!(
         model,
         kc_0 - finite_difference_vectors[:, derivative_axis];
         denominator_regularization,
-        spatial_dimension,
+        spatial_dimension = ws.scratch.matrix_elements.plan.spatial_dimension,
     )
 
     compute_geometric_loop_shifted_overlaps!(
@@ -346,21 +392,86 @@ function prepare_geometric_loop_frame_axis!(
         ws.frame_connector,
         wannier_centers_fractional,
         ws.frame_phase_factors,
-        ws.frame_rotated_eigenvectors,
+        ws.frame_rotated_eigenvectors;
+        optical_q_link = use_full_velocity_vertices,
     )
+    if use_full_velocity_vertices
+        for (output, left, right, offset, midpoint) in (
+            (
+                ws.forward_overlap_2,
+                ws.valence_forward_data,
+                ws.conduction_forward_data,
+                forward_offset,
+                kpoint + finite_difference_vectors[:, derivative_axis],
+            ),
+            (
+                ws.backward_overlap_2,
+                ws.valence_backward_data,
+                ws.conduction_backward_data,
+                backward_offset,
+                kpoint - finite_difference_vectors[:, derivative_axis],
+            ),
+        )
+            bind_kpoint_offset!(ws.optical_center_data, ws.scratch, KPointOffset(offset, 0))
+            compute_kpoint!(
+                ws.optical_center_data,
+                ws.scratch,
+                model,
+                midpoint;
+                denominator_regularization,
+                spatial_dimension = ws.scratch.matrix_elements.plan.spatial_dimension,
+            )
+            MatrixElements.compute_optical_momentum_overlap!(
+                output,
+                left.common,
+                right.common,
+                ws.optical_center_data.common,
+                model,
+                ws.scratch.matrix_elements.plan,
+                wannier_centers_fractional,
+                .-ws.optical_q_cartesian,
+                ws.optical_orbital_link,
+                ws.optical_temporary,
+            )
+        end
+    end
     compute_geometric_loop_third_insertions!(
         ws.forward_third_insertions,
         ws.valence_forward_data,
         ws.conduction_forward_data,
         ws.forward_overlap_2,
-        insertion_directions,
+        insertion_directions;
+        valence_velocity_vertices = use_full_velocity_vertices ?
+                                    MatrixElements.physical_velocity_vertices(
+            ws.valence_forward_data.common;
+            source_gauge = true,
+        ) : nothing,
+        conduction_velocity_vertices = use_full_velocity_vertices ?
+                                       MatrixElements.physical_velocity_vertices(
+            ws.conduction_forward_data.common;
+            source_gauge = true,
+        ) : nothing,
+        use_blas = use_full_velocity_vertices &&
+                   ws.valence_central_data.num_orbitals >= _GEOMETRIC_FULL_V_BLAS_MIN_ORBITALS,
     )
     compute_geometric_loop_third_insertions!(
         ws.backward_third_insertions,
         ws.valence_backward_data,
         ws.conduction_backward_data,
         ws.backward_overlap_2,
-        insertion_directions,
+        insertion_directions;
+        valence_velocity_vertices = use_full_velocity_vertices ?
+                                    MatrixElements.physical_velocity_vertices(
+            ws.valence_backward_data.common;
+            source_gauge = true,
+        ) : nothing,
+        conduction_velocity_vertices = use_full_velocity_vertices ?
+                                       MatrixElements.physical_velocity_vertices(
+            ws.conduction_backward_data.common;
+            source_gauge = true,
+        ) : nothing,
+        use_blas = use_full_velocity_vertices &&
+                   ws.valence_central_data.num_orbitals >= _GEOMETRIC_FULL_V_BLAS_MIN_ORBITALS,
     )
 
     return ws
@@ -462,9 +573,10 @@ function prepare_geometric_loop_covariant_axis!(
     denominator_regularization::Float64,
     finite_difference_step::Float64,
     spatial_dimension::Int64,
-    model::TightBindingModel,
+    model::AbstractResponseModel,
     derivative_axis::Int,
-    insertion_directions,
+    insertion_directions;
+    use_full_velocity_vertices::Bool = false,
 )
     prepare_geometric_loop_frame_axis!(
         ws,
@@ -477,7 +589,8 @@ function prepare_geometric_loop_covariant_axis!(
         spatial_dimension,
         model,
         derivative_axis,
-        insertion_directions,
+        insertion_directions;
+        use_full_velocity_vertices,
     )
     fill!(ws.covariant_derivative_valid, false)
     ws.covariant_derivative_axis = derivative_axis
@@ -579,4 +692,138 @@ function geometric_loop_covariant_block_contraction(
     return conduction_data.degeneracy_weights[conduction_band] *
            valence_data.degeneracy_weights[valence_band] *
            total
+end
+
+# Rebuild the union from this kernel's actual mask, closing every central group.
+# No selection, derivative, or validity bit survives a point/q/component change.
+function prepare_active_geometric_bands!(ws, active_pair_mask, band_start, band_end)
+    work = ws.active_insertions
+    fill!(work.valence_active, false)
+    fill!(work.conduction_active, false)
+    empty!(work.valence_bands)
+    empty!(work.conduction_bands)
+    for m in band_start:band_end, n in band_start:band_end
+        active_pair_mask[n, m] || continue
+        valence = ws.valence_central_data
+        conduction = ws.conduction_central_data
+        work.valence_active[valence.degeneracy_group_starts[n]:valence.degeneracy_group_stops[n]] .=
+            true
+        work.conduction_active[conduction.degeneracy_group_starts[m]:conduction.degeneracy_group_stops[m]] .=
+            true
+    end
+    for n in eachindex(work.valence_active)
+        work.valence_active[n] && push!(work.valence_bands, n)
+        work.conduction_active[n] && push!(work.conduction_bands, n)
+    end
+    # Retain full preparation for unprunable work; sparse output only is optimized.
+    return !isempty(work.valence_bands) &&
+           !isempty(work.conduction_bands) &&
+           length(work.valence_bands) + length(work.conduction_bands) <= length(work.valence_active)
+end
+
+"""Fill active central velocity insertions for both complete selected subspaces and clear their external source-frame connections."""
+function prepare_active_geometric_center!(ws, model, directions, centers)
+    work = ws.active_insertions
+    valence = ws.valence_central_data.common
+    conduction = ws.conduction_central_data.common
+    n = length(valence.spectrum.energies)
+    size(centers) == (3, n) ||
+        throw(DimensionMismatch("Geometric-loop centers must have size (3, $n)."))
+    valence_gradient = MatrixElements.active_velocity_gradient(valence, model)
+    conduction_gradient = MatrixElements.active_velocity_gradient(conduction, model)
+    MatrixElements.active_velocity_paired_insertions!(
+        ws.central_third_insertions,
+        ws.central_second_insertions,
+        valence,
+        conduction,
+        work.valence_bands,
+        work.conduction_bands,
+        directions,
+        valence_gradient,
+        conduction_gradient,
+        work,
+        ws.central_overlap_4,
+    )
+    fill!(ws.valence_source_external_connection, COMPLEX_ZERO)
+    fill!(ws.conduction_source_external_connection, COMPLEX_ZERO)
+    return ws
+end
+
+"""Prepare forward and backward photon endpoints for one finite-difference axis and fill their active geometric overlaps and insertions."""
+function prepare_active_geometric_axis!(
+    ws,
+    kpoint,
+    photon_momentum,
+    finite_difference_vectors,
+    model,
+    axis,
+    directions,
+    centers,
+)
+    work = ws.active_insertions
+    for (data, photon, sign) in (
+        (ws.valence_forward_data, -1, 1),
+        (ws.conduction_forward_data, 1, 1),
+        (ws.valence_backward_data, -1, -1),
+        (ws.conduction_backward_data, 1, -1),
+    )
+        offset = ntuple(direction -> direction == axis ? sign : 0, 3)
+        bind_kpoint_offset!(data, ws.scratch, KPointOffset(offset, photon))
+        endpoint =
+            kpoint + 0.5 * photon * photon_momentum + sign * finite_difference_vectors[:, axis]
+        compute_spectrum!(data.common, ws.scratch.matrix_elements, model, endpoint)
+    end
+    # Keep the original frame connector and GEMM layout, including zero-center phases.
+    compute_geometric_loop_shifted_overlaps!(
+        ws.forward_overlap_1,
+        ws.forward_overlap_2,
+        ws.forward_overlap_3,
+        ws.backward_overlap_1,
+        ws.backward_overlap_2,
+        ws.backward_overlap_3,
+        ws.valence_central_data,
+        ws.conduction_central_data,
+        ws.valence_forward_data,
+        ws.conduction_forward_data,
+        ws.valence_backward_data,
+        ws.conduction_backward_data,
+        ws.frame_connector,
+        centers,
+        ws.frame_phase_factors,
+        ws.frame_rotated_eigenvectors;
+        valence_columns = work.valence_bands,
+        conduction_columns = work.conduction_bands,
+    )
+    for (left, right, overlap, insertion) in (
+        (
+            ws.valence_forward_data,
+            ws.conduction_forward_data,
+            ws.forward_overlap_2,
+            ws.forward_third_insertions,
+        ),
+        (
+            ws.valence_backward_data,
+            ws.conduction_backward_data,
+            ws.backward_overlap_2,
+            ws.backward_third_insertions,
+        ),
+    )
+        left_gradient = MatrixElements.active_velocity_gradient(left.common, model)
+        right_gradient = MatrixElements.active_velocity_gradient(right.common, model)
+        MatrixElements.active_velocity_insertions!(
+            insertion,
+            left.common,
+            right.common,
+            work.valence_bands,
+            work.conduction_bands,
+            directions,
+            left_gradient,
+            right_gradient,
+            work;
+            overlap,
+        )
+    end
+    fill!(ws.covariant_derivative_valid, false)
+    ws.covariant_derivative_axis = axis
+    return ws
 end

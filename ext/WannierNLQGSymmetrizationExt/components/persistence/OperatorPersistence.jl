@@ -93,7 +93,7 @@ function _geometry_metadata(
         "rms_raw_branch_displacement_cartesian" =>
             isempty(raw_branch_displacement_norms) ? 0.0 :
             sqrt(sum(abs2, raw_branch_displacement_norms) / length(raw_branch_displacement_norms)),
-        "replica_mapping_sha256" => replica_result.mapping_sha256,
+        "replica_mapping_reference" => replica_result.mapping_reference,
         "replica_total_assignment_count" => replica_result.total_assignment_count,
         "replica_changed_assignment_count" => replica_result.changed_assignment_count,
         "replica_changed_pair_count" => replica_result.changed_pair_count,
@@ -121,6 +121,7 @@ function _input_file_evidence(paths)
     for (name, path) in (
         ("win_file", paths.win),
         ("tb_file", paths.tb),
+        ("packed_file", paths.packed),
         ("chk_file", paths.chk),
         ("eig_file", paths.eig),
         ("mmn_file", paths.mmn),

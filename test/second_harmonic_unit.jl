@@ -14,10 +14,15 @@ end
     response = WannierNLQG.Responses
     matrices = WannierNLQG.MatrixElements
     root = dirname(@__DIR__)
+    reference_provenance=read(joinpath(@__DIR__, "fixtures/second_harmonic/README.md"), String)
+    @test occursin("907008d5aa9cbacf888d470c6b5aad3beb40bc04", reference_provenance)
+    @test length(
+        filter(p->endswith(p, ".dat"), readdir(joinpath(@__DIR__, "fixtures/second_harmonic"))),
+    )==24
     theory_text = read(joinpath(root, "theory", "SecondHarmonicGeneration.md"), String)
     @test startswith(theory_text, "# Second-harmonic generation\n")
-    @test !occursin("Wannier90", theory_text)
-    @test !occursin("wannier90", theory_text)
+    @test occursin("Hamiltonian-gauge Wannier vertices", theory_text)
+    @test occursin("## Optional normalized source jet for metric cutoff optics", theory_text)
     @test occursin("6. P. Garcia-Goiricelaya", theory_text)
     @test !occursin(r"(?m)^7\. ", theory_text)
     model_path = joinpath(root, "examples", "fixtures", "synthetic_runtime", "synthetic_tb.dat")
@@ -132,7 +137,7 @@ end
             sampling;
             output = :both,
             quantity = :both,
-            numerics = SHGNumerics(),
+            numerics = Numerics(),
             energy = [0.1],
             execution = ExecutionOptions(fourier_backend = "Direct"),
         )
@@ -177,7 +182,7 @@ end
         sliced=WannierNLQG.run(configuration(slice))
         @test all(
             result.qualification.execution_eligible &&
-            result.qualification.qualification_status=="DIAGNOSTIC_ONLY" &&
+            result.qualification.qualification_status=="COMPUTATION_READY" &&
             !result.qualification.production_eligible for result in (integral, sliced)
         )
         @test length(integral.outputs)==36
@@ -223,9 +228,9 @@ end
             @test size(values, 2)==(selection==:total ? 6 : 18)
         end
         for numerics in (
-            SHGNumerics(broadening = -1.0),
-            SHGNumerics(low_frequency_broadening = 0.0),
-            SHGNumerics(broadening_type = "invalid"),
+            Numerics(broadening = -1.0),
+            Numerics(low_frequency_broadening = 0.0),
+            Numerics(broadening_type = "invalid"),
         )
             @test_throws ArgumentError WannierNLQG.Runtime.compile_task_configs(
                 configuration(mesh; numerics),

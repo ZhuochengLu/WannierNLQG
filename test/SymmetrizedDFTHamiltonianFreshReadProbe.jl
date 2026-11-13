@@ -1,3 +1,6 @@
+if !isdefined(@__MODULE__, :CurrentScientificValues)
+    include(joinpath(@__DIR__, "support/CurrentScientificValues.jl"))
+end
 using EzXML
 using HDF5
 using JSON3
@@ -29,8 +32,16 @@ else
         include_time_reversal = false,
     )
 end
-gauge = Base.invokelatest(extension._read_star_covariant_paw_gauge_hdf5, gauge_path; source)
-representation = WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(representation_path)
+gauge = Base.invokelatest(
+    extension._read_star_covariant_paw_gauge_hdf5,
+    gauge_path;
+    source,
+    require_pass = false,
+)
+representation = WannierNLQG.SymmetryFoundation.read_band_representation_hdf5(
+    representation_path;
+    content_authentication = false,
+)
 authority = get(representation.conventions, "authoritative_hamiltonian", "")
 expected_schema = "1.0"
 representation.schema_version == expected_schema ||
@@ -54,5 +65,5 @@ gauge.payload.source_metadata["auxiliary_parent_qualification"] == "audit_only" 
     error("fresh read promoted the auxiliary parent")
 digest = bytes2hex(SHA.sha256(vcat(read(gauge_path), read(representation_path))))
 println("SYMMETRIZED_DFT_HAMILTONIAN_FRESH_READ_DIGEST=$(digest)")
-payload_sha256 = Base.invokelatest(extension._star_payload_sha256, gauge.payload)
-println("SYMMETRIZED_DFT_HAMILTONIAN_FRESH_READ_PAYLOAD_SHA256=$(payload_sha256)")
+payload_sha256 = Base.invokelatest(CurrentScientificValues.payload_values, gauge.payload)
+println("SYMMETRIZED_DFT_HAMILTONIAN_FRESH_READ_PAYLOAD_VALUES=$(payload_sha256)")

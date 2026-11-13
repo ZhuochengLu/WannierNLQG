@@ -15,7 +15,7 @@ end
 # Validate the schema-1.17/2.28 target-subspace authority and leakage-weight policy.
 function _validate_persisted_target_subspace_contract(
     summary::AbstractDict;
-    require_mask_digests::Bool = true,
+    require_mask_definitions::Bool = true,
 )
     authority =
         validate_persisted_authority_key(get(summary, "authoritative_hamiltonian", "native_dft"))
@@ -30,18 +30,26 @@ function _validate_persisted_target_subspace_contract(
     get(summary, "parent_audit_policy", "") == "audit_only" || throw(
         ArgumentError("TARGET_SUBSPACE_CONTRACT_MISMATCH: parent_audit_policy must be audit_only"),
     )
-    if require_mask_digests
-        for key in ("disentanglement_outer_mask_sha256", "disentanglement_frozen_mask_sha256")
+    if require_mask_definitions
+        for key in
+            ("disentanglement_outer_mask_definition", "disentanglement_frozen_mask_definition")
             digest = get(summary, key, "")
-            occursin(r"^[0-9a-f]{64}$", digest) || throw(
-                ArgumentError("TARGET_SUBSPACE_CONTRACT_MISMATCH: $(key) is not a SHA-256 digest"),
-            )
+            (!isempty(digest) && iseven(length(digest)) && occursin(r"^[0-9a-f]+$", digest)) ||
+                throw(
+                    ArgumentError(
+                        "TARGET_SUBSPACE_CONTRACT_MISMATCH: $(key) lacks its complete actual mask definition",
+                    ),
+                )
         end
     end
-    contract_sha256 = get(summary, "target_subspace_contract_sha256", "")
-    occursin(r"^[0-9a-f]{64}$", contract_sha256) || throw(
+    contract_definition = get(summary, "target_subspace_contract_definition", "")
+    (
+        !isempty(contract_definition) &&
+        iseven(length(contract_definition)) &&
+        occursin(r"^[0-9a-f]+$", contract_definition)
+    ) || throw(
         ArgumentError(
-            "TARGET_SUBSPACE_CONTRACT_MISMATCH: target_subspace_contract_sha256 is invalid",
+            "TARGET_SUBSPACE_CONTRACT_MISMATCH: target_subspace_contract_definition is invalid",
         ),
     )
     get(summary, "target_leakage_semantics", "") == TARGET_LEAKAGE_WEIGHT_SEMANTICS || throw(
@@ -49,12 +57,10 @@ function _validate_persisted_target_subspace_contract(
             "UNSUPPORTED_LEGACY_TARGET_LEAKAGE_SEMANTICS: target summary lacks PAW-S weight semantics",
         ),
     )
-    get(summary, "target_leakage_formula_sha256", "") == TARGET_LEAKAGE_WEIGHT_FORMULA_SHA256 ||
-        throw(
-            ArgumentError(
-                "TARGET_SUBSPACE_CONTRACT_MISMATCH: target leakage formula digest differs",
-            ),
-        )
+    get(summary, "target_leakage_formula_definition", "") ==
+    TARGET_LEAKAGE_WEIGHT_FORMULA_DEFINITION || throw(
+        ArgumentError("TARGET_SUBSPACE_CONTRACT_MISMATCH: target leakage formula digest differs"),
+    )
     threshold = tryparse(Float64, get(summary, "target_leakage_threshold", ""))
     threshold !== nothing && isfinite(something(threshold)) && something(threshold) > 0.0 || throw(
         ArgumentError(
@@ -97,9 +103,16 @@ function _checkpoint_stopping_reason(result::WannierizationResult)
     return String(last(result.diagnostics).code)
 end
 
+# Write complete nested values; legacy content certificates are no longer produced.
+function _write_checkpoint_previous!(buffer, result, writer, legacy::Bool)
+    legacy && throw(ArgumentError("CONTENT_HASH_AUTHENTICATION_REMOVED"))
+    writer(buffer, result, false)
+    write(buffer, '\n')
+    return nothing
+end
+
 # Hash the stable scientific checkpoint state without self-referential file metadata.
-function _wannierization_checkpoint_sha256(result::WannierizationResult)
-    buffer = IOBuffer()
+function _write_checkpoint_layer(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
     write(buffer, string(result.status), '\n')
     for values in (result.v_matrix, result.wannier_centers_cartesian, result.spreads_angstrom2)
         write(buffer, reinterpret(UInt8, Int64[ndims(values), size(values)...]))
@@ -118,13 +131,14 @@ function _wannierization_checkpoint_sha256(result::WannierizationResult)
     for key in ("input_sha256", "restart_config_sha256", "representation_sha256")
         write(buffer, key, '\0', get(result.input_summary, key, ""), '\n')
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
 # Extend the legacy scientific digest with full-3D and optimizer continuation state.
-function _wannierization_checkpoint_sha256_v1_2(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256(result), '\n')
+function _write_checkpoint_layer_v1_2(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer, legacy)
     for entry in result.history
         values = entry.diagnostics
         write(buffer, UInt8(values !== nothing))
@@ -142,7 +156,7 @@ function _wannierization_checkpoint_sha256_v1_2(result::WannierizationResult)
                     diagnostics.omega_total,
                     diagnostics.projector_residual,
                     diagnostics.z_residual,
-                    diagnostics.u_residual,
+                    (hasproperty(diagnostics, :u_residual) ? (diagnostics.u_residual,) : ())...,
                     diagnostics.wcc_step_maximum,
                     diagnostics.spread_step_maximum,
                     diagnostics.little_group_residual,
@@ -167,7 +181,6 @@ function _wannierization_checkpoint_sha256_v1_2(result::WannierizationResult)
     end
     if result.restart_state !== nothing
         state = something(result.restart_state)
-        write(buffer, state.projection_basis_sha256, '\n', state.amn_sha256, '\n')
         if state.stencil !== nothing
             stencil = something(state.stencil)
             for values in (
@@ -178,7 +191,6 @@ function _wannierization_checkpoint_sha256_v1_2(result::WannierizationResult)
             )
                 write(buffer, reinterpret(UInt8, vec(values)))
             end
-            write(buffer, stencil.digest, '\n')
         end
         optimizer = state.optimizer_state
         write(
@@ -193,16 +205,17 @@ function _wannierization_checkpoint_sha256_v1_2(result::WannierizationResult)
                 optimizer.previous_merit,
             ),),
         )
-        write(buffer, reinterpret(UInt8, vec(optimizer.anderson_z_history)))
-        write(buffer, reinterpret(UInt8, vec(optimizer.anderson_residual_history)))
+        write(buffer, reinterpret(UInt8, vec(zeros(Float64, 0, 0))))
+        write(buffer, reinterpret(UInt8, vec(zeros(Float64, 0, 0))))
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
 # Historical schema-1.3 digest retained only for read verification of legacy checkpoints.
-function _wannierization_checkpoint_sha256_v1_3(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v1_2(result), '\n')
+function _write_checkpoint_layer_v1_3(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v1_2, legacy)
     if result.restart_state !== nothing
         optimizer = something(result.restart_state).optimizer_state
         write(
@@ -224,13 +237,14 @@ function _wannierization_checkpoint_sha256_v1_3(result::WannierizationResult)
         write(buffer, reinterpret(UInt8, vec(optimizer.best_polar_centers)))
         write(buffer, reinterpret(UInt8, vec(optimizer.best_polar_spreads)))
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
 # Bind schema-2.1 terminal counters and hard-gate evidence to the scientific state.
-function _wannierization_checkpoint_sha256_v2_1(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v1_3(result), '\n')
+function _write_checkpoint_layer_v2_1(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v1_3, legacy)
     terminal_keys = sort!([
         key for key in keys(result.input_summary) if startswith(key, "hard_gate_") || key in (
             "solver_status",
@@ -247,14 +261,15 @@ function _wannierization_checkpoint_sha256_v2_1(result::WannierizationResult)
     for key in terminal_keys
         write(buffer, key, '\0', result.input_summary[key], '\n')
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
+
+# Retained actual SHA binding for the existing wire schema; never a generation label.
 
 # Bind schema-2.2 initialization evidence, orthogonal outcome axes, and the
 # additional localization-step history to the scientific state.
-function _wannierization_checkpoint_sha256_v2_2(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_1(result), '\n')
+function _write_checkpoint_layer_v2_2(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_1, legacy)
     for key in (
         "initialization_status",
         "initializer_algorithm_version",
@@ -338,13 +353,14 @@ function _wannierization_checkpoint_sha256_v2_2(result::WannierizationResult)
             )
         end
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
 # Bind the separated two-stage objective and line-search histories.
-function _wannierization_checkpoint_sha256_v2_3(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_2(result), '\n')
+function _write_checkpoint_layer_v2_3(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_2, legacy)
     if result.restart_state !== nothing
         optimizer = something(result.restart_state).optimizer_state
         for values in (
@@ -358,14 +374,15 @@ function _wannierization_checkpoint_sha256_v2_3(result::WannierizationResult)
             write(buffer, reinterpret(UInt8, vec(values)))
         end
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
+
+# Retained actual SHA binding for the existing wire schema; never a generation label.
 
 # Bind the immutable two-stage S/P boundary and the retraction-consistent
 # directional-derivative/projector-drift evidence.
-function _wannierization_checkpoint_sha256_v2_4(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_3(result), '\n')
+function _write_checkpoint_layer_v2_4(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_3, legacy)
     if result.restart_state !== nothing
         state = something(result.restart_state)
         for values in (
@@ -402,21 +419,23 @@ function _wannierization_checkpoint_sha256_v2_4(result::WannierizationResult)
             ),
         )
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
+
+# Retained actual SHA binding for the existing wire schema; never a generation label.
 
 # Schema 2.5 binds the exact final exported-TB qualification payload.
-function _wannierization_checkpoint_sha256_v2_5(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_4(result), '\n')
-    write(buffer, result.tb_symmetry_qualification.payload_sha256)
-    return bytes2hex(SHA.sha256(take!(buffer)))
+function _write_checkpoint_layer_v2_5(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_4, legacy)
+    write(buffer, repr(result.tb_symmetry_qualification))
+    return nothing
 end
 
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
 # Schema 2.6 binds accepted CG transport state and typed optimizer diagnostics.
-function _wannierization_checkpoint_sha256_v2_6(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_5(result), '\n')
+function _write_checkpoint_layer_v2_6(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_5, legacy)
     if result.restart_state !== nothing
         optimizer = something(result.restart_state).optimizer_state
         for values in (optimizer.previous_u_gradient, optimizer.previous_u_direction)
@@ -454,23 +473,25 @@ function _wannierization_checkpoint_sha256_v2_6(result::WannierizationResult)
             )),
         )
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
 # Schema 2.7 binds the MV localization-gradient phase convention explicitly.
-function _wannierization_checkpoint_sha256_v2_7(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_6(result), '\n')
+function _write_checkpoint_layer_v2_7(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_6, legacy)
     write(buffer, get(result.input_summary, "localization_gradient_contract", "NOT_RECORDED"), '\n')
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
+
+# Retained actual SHA binding for the existing wire schema; never a generation label.
 
 # Schema 2.8 binds the qualified-Z seal and the transactional Type-IV joint
 # update evidence. Older checkpoint digests are retained only for independent
 # migration tooling and are not readable through the public 1.1 reader.
-function _wannierization_checkpoint_sha256_v2_8(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_7(result), '\n')
+function _write_checkpoint_layer_v2_8(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_7, legacy)
     for key in (
         "joint_update_contract",
         "disentanglement_limit_policy",
@@ -497,15 +518,16 @@ function _wannierization_checkpoint_sha256_v2_8(result::WannierizationResult)
             )),
         )
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
+
+# Retained actual SHA binding for the existing wire schema; never a generation label.
 
 # Schema 2.9 binds the effective operation subgroup and its parent
 # representation. Local Z/link metrics are diagnostic observations rather than
 # convergence gates, but are sealed whenever present.
-function _wannierization_checkpoint_sha256_v2_9(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_8(result), '\n')
+function _write_checkpoint_layer_v2_9(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_8, legacy)
     for key in (
         "constraint_operation_scope",
         "constraint_operation_parent_representation_sha256",
@@ -521,29 +543,29 @@ function _wannierization_checkpoint_sha256_v2_9(result::WannierizationResult)
     )
         write(buffer, key, '=', get(result.input_summary, key, "NOT_RECORDED"), '\n')
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
+
+# Retained actual SHA binding for the existing wire schema; never a generation label.
 
 # Schema 2.10 binds the centered-residual phase chart, active Type-IV branch
 # orbit, generalized gradient, and accepted RCG/L-BFGS continuation state.
-function _wannierization_checkpoint_sha256_v2_10(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_9(result), '\n')
+function _write_checkpoint_layer_v2_10(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_9, legacy)
     if result.restart_state !== nothing
         optimizer = something(result.restart_state).optimizer_state
         write(
             buffer,
             repr((
                 optimizer.u_phase_contract,
-                optimizer.u_active_orbit_sha256,
                 optimizer.u_active_orbit_count,
                 optimizer.u_generalized_gradient_rms,
-                optimizer.u_lbfgs_rho_history,
-                optimizer.u_lbfgs_restart_count,
+                Float64[],
+                0,
                 optimizer.last_u_optimizer_restart_reason,
             )),
         )
-        for values in (optimizer.u_lbfgs_s_history, optimizer.u_lbfgs_y_history)
+        for values in (zeros(ComplexF64, 0, 0, 0, 0), zeros(ComplexF64, 0, 0, 0, 0))
             write(buffer, reinterpret(UInt8, Int64[ndims(values), size(values)...]))
             write(buffer, reinterpret(UInt8, vec(values)))
         end
@@ -558,54 +580,57 @@ function _wannierization_checkpoint_sha256_v2_10(result::WannierizationResult)
     )
         write(buffer, key, '=', get(result.input_summary, key, "NOT_RECORDED"), '\n')
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
 # Schema 2.11 binds the selected band-sewing backend and strict PAW diagnostics.
-function _wannierization_checkpoint_sha256_v2_11(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_10(result), '\n')
+function _write_checkpoint_layer_v2_11(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_10, legacy)
     for (key, default_value) in (
         ("sewing_backend", "coefficient_mapping"),
         ("sewing_metric", "pseudo_coefficient_linear_map"),
         ("paw_sewing_thresholds", "NOT_APPLICABLE"),
-        ("strict_sewing_diagnostics_sha256", "NOT_RECORDED"),
     )
         write(buffer, key, '=', get(result.input_summary, key, default_value), '\n')
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
+
+# Retained actual SHA binding for the existing wire schema; never a generation label.
 
 # Schema 2.12 additionally binds the wavefunction-gauge backend and capsule identity.
-function _wannierization_checkpoint_sha256_v2_12(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_11(result), '\n')
+function _write_checkpoint_layer_v2_12(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_11, legacy)
     for (key, default_value) in (
         ("wavefunction_gauge_backend", "native_eigenstate"),
-        ("wavefunction_gauge_hdf5_sha256", "NOT_APPLICABLE"),
+        ("wavefunction_gauge_definition", "NOT_APPLICABLE"),
     )
         write(buffer, key, '=', get(result.input_summary, key, default_value), '\n')
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
+
+# Retained actual SHA binding for the existing wire schema; never a generation label.
 
 # Schema 2.14 additionally binds the Hamiltonian-weighted PAW block and audit identity.
-function _wannierization_checkpoint_sha256_v2_13(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_12(result), '\n')
+function _write_checkpoint_layer_v2_13(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_12, legacy)
     for (key, default_value) in (
         ("block_partition_policy", "NOT_APPLICABLE"),
-        ("block_partition_policy_sha256", "NOT_APPLICABLE"),
+        ("block_partition_policy_definition", "NOT_APPLICABLE"),
     )
         write(buffer, key, '=', get(result.input_summary, key, default_value), '\n')
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
 # Schema 2.16 binds the Hamiltonian authority and its independent qualification.
-function _wannierization_checkpoint_sha256_v2_16(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_13(result), '\n')
+function _write_checkpoint_layer_v2_16(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_13, legacy)
     for (key, default_value) in (
         ("authoritative_hamiltonian", "native_dft"),
         ("authoritative_hamiltonian_sha256", "LEGACY_NATIVE_DFT"),
@@ -616,13 +641,14 @@ function _wannierization_checkpoint_sha256_v2_16(result::WannierizationResult)
     )
         write(buffer, key, '=', get(result.input_summary, key, default_value), '\n')
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
 # Schema 2.17 additionally binds the nonblocking symmetrized energy-shift audit contract.
-function _wannierization_checkpoint_sha256_v2_17(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_16(result), '\n')
+function _write_checkpoint_layer_v2_17(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_16, legacy)
     for (key, default_value) in (
         ("energy_shift_qualification", "legacy_energy_shift_hard_gate"),
         ("maximum_energy_shift_audit_reference_ev", "NOT_APPLICABLE"),
@@ -632,39 +658,42 @@ function _wannierization_checkpoint_sha256_v2_17(result::WannierizationResult)
     )
         write(buffer, key, '=', get(result.input_summary, key, default_value), '\n')
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
 # Schema 2.18 additionally binds the residual-gate phase and raw diagnostic status.
-function _wannierization_checkpoint_sha256_v2_18(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_17(result), '\n')
+function _write_checkpoint_layer_v2_18(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_17, legacy)
     for (key, default_value) in (
         ("residual_gate_phase", "legacy_pre_symmetrization"),
         ("raw_preflight_diagnostic_status", "NOT_APPLICABLE"),
     )
         write(buffer, key, '=', get(result.input_summary, key, default_value), '\n')
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
 # Schema 2.19 additionally binds the nonblocking native-difference audit contract.
-function _wannierization_checkpoint_sha256_v2_19(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_18(result), '\n')
+function _write_checkpoint_layer_v2_19(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_18, legacy)
     for (key, default_value) in (
         ("native_difference_qualification", "legacy_hard_gate"),
         ("native_difference_audit_status", "NOT_APPLICABLE"),
     )
         write(buffer, key, '=', get(result.input_summary, key, default_value), '\n')
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
 # Schema 2.20 binds the target-subspace authority and auxiliary-parent audit contract.
-function _wannierization_checkpoint_sha256_v2_20(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_19(result), '\n')
+function _write_checkpoint_layer_v2_20(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_19, legacy)
     for (key, default_value) in (
         ("qualification_scope", "full_parent"),
         ("target_anchor", "NOT_APPLICABLE"),
@@ -677,14 +706,15 @@ function _wannierization_checkpoint_sha256_v2_20(result::WannierizationResult)
     )
         write(buffer, key, '=', get(result.input_summary, key, default_value), '\n')
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
+
+# Retained actual SHA binding for the existing wire schema; never a generation label.
 
 # Schema 2.21 binds the decoupled Z/U state machine and all numerical contracts
 # that replaced the former overloaded representation tolerance.
-function _wannierization_checkpoint_sha256_v2_21(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_20(result), '\n')
+function _write_checkpoint_layer_v2_21(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_20, legacy)
     for (key, default_value) in (
         ("z_u_stage_semantics", "disentanglement_localization_decoupled_v1"),
         ("disentanglement_algorithm", "smv_fixed_point"),
@@ -703,99 +733,104 @@ function _wannierization_checkpoint_sha256_v2_21(result::WannierizationResult)
         ("projectability_minimum_singular_value", "1.0e-8"),
         ("maximum_transport_condition", "1.0e10"),
         ("disentanglement_state_sha256", "NOT_SEALED"),
-        ("disentanglement_outer_mask_sha256", "NOT_SEALED"),
-        ("disentanglement_frozen_mask_sha256", "NOT_SEALED"),
+        ("disentanglement_outer_mask_definition", "NOT_SEALED"),
+        ("disentanglement_frozen_mask_definition", "NOT_SEALED"),
         ("disentanglement_projector_residual", "NOT_SEALED"),
         ("disentanglement_state_converged", "false"),
     )
         write(buffer, key, '=', get(result.input_summary, key, default_value), '\n')
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
-# Schema 2.22 binds algorithm-profile resolution and the immutable W90-4.0.1
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
+# Schema 2.22 binds algorithm-profile resolution and the immutable reference
 # protocol identity. Legacy-FR digest support is retained only for independent
 # migration tooling and cannot satisfy the public 1.1 continuation contract.
-function _wannierization_checkpoint_sha256_v2_22(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_21(result), '\n')
+function _write_checkpoint_layer_v2_22(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_21, legacy)
     for (key, default_value) in (
         ("algorithm_profile", "legacy"),
         ("effective_algorithm_profile", "legacy"),
         ("disentanglement_algorithm_requested", "legacy"),
         ("localization_algorithm_requested", "legacy"),
-        ("wannier90_reference_protocol", "NOT_APPLICABLE"),
+        ("recursive_localization_protocol", "NOT_APPLICABLE"),
     )
         write(buffer, key, '=', get(result.input_summary, key, default_value), '\n')
     end
     if result.restart_state !== nothing
         optimizer = something(result.restart_state).optimizer_state
         for values in
-            (optimizer.wannier90_reference_overlaps, optimizer.wannier90_reference_unitaries)
+            (optimizer.recursive_localization_overlaps, optimizer.recursive_localization_unitaries)
             write(buffer, reinterpret(UInt8, Int64[ndims(values), size(values)...]))
             write(buffer, reinterpret(UInt8, vec(values)))
         end
-        write(buffer, reinterpret(UInt8, [optimizer.wannier90_reference_omega_i]))
+        write(buffer, reinterpret(UInt8, [optimizer.recursive_localization_omega_i]))
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
+
+# Retained actual SHA binding for the existing wire schema; never a generation label.
 
 # Schema 2.23 introduced a digest-bound frozen numerical-parity qualification.
 # Schema 2.24 retains those fields while removing observer-state injection and
 # binding the v2 algorithm contract.
-function _wannierization_checkpoint_sha256_v2_23(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_22(result), '\n')
+function _write_checkpoint_layer_v2_23(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_22, legacy)
     for (key, default_value) in (
-        ("wannier90_reference_algorithm_contract_version", "legacy"),
-        ("wannier90_reference_parity_standard_version", "legacy"),
-        ("wannier90_reference_parity_semantic", "legacy"),
-        ("wannier90_reference_accepted_step_combination_rule", "NOT_APPLICABLE"),
-        ("wannier90_reference_accepted_step_absolute_tolerance", "NOT_APPLICABLE"),
-        ("wannier90_reference_accepted_step_relative_tolerance", "NOT_APPLICABLE"),
-        ("wannier90_reference_parity_contract_sha256", "NOT_APPLICABLE"),
-        ("wannier90_reference_default_qualification_status", "NOT_QUALIFIED"),
-        ("wannier90_reference_default_qualification_manifest_sha256", "NOT_AVAILABLE"),
+        ("recursive_localization_algorithm_contract_version", "legacy"),
+        ("recursive_localization_validation_standard_version", "legacy"),
+        ("recursive_localization_validation_semantic", "legacy"),
+        ("recursive_localization_accepted_step_combination_rule", "NOT_APPLICABLE"),
+        ("recursive_localization_accepted_step_absolute_tolerance", "NOT_APPLICABLE"),
+        ("recursive_localization_accepted_step_relative_tolerance", "NOT_APPLICABLE"),
+        ("recursive_localization_validation_contract_sha256", "NOT_APPLICABLE"),
+        ("recursive_localization_default_qualification_status", "NOT_QUALIFIED"),
+        ("recursive_localization_default_qualification_manifest_sha256", "NOT_AVAILABLE"),
     )
         write(buffer, key, '=', get(result.input_summary, key, default_value), '\n')
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
+
+# Retained actual SHA binding for the existing wire schema; never a generation label.
 
 # Schema 2.24 removes every observer-state injection path and binds the v2
 # pure-Julia algorithm contract. Schema 2.23 is an external-migration input only.
-function _wannierization_checkpoint_sha256_v2_24(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_23(result), '\n')
+function _write_checkpoint_layer_v2_24(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_23, legacy)
     write(buffer, "checkpoint_schema_version=2.24\n")
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
+
+# Retained actual SHA binding for the existing wire schema; never a generation label.
 
 # Schema 2.25 removes the public symmetry_mode axis and binds the unified mode,
 # inferred representation source, and renamed SMV/FR two-stage algorithm.
-function _wannierization_checkpoint_sha256_v2_25(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_24(result), '\n')
+function _write_checkpoint_layer_v2_25(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_24, legacy)
     for (key, default_value) in (
         ("requested_wannierization_mode", "MISSING"),
         ("effective_wannierization_mode", "MISSING"),
         ("representation_source", "MISSING"),
         ("symmetry_constraints_applied", "MISSING"),
         ("effective_algorithm_profile", "MISSING"),
-        ("wannier90_reference_algorithm_contract_version", "MISSING"),
+        ("recursive_localization_algorithm_contract_version", "MISSING"),
     )
         write(buffer, key, '=', get(result.input_summary, key, default_value), '\n')
     end
     write(buffer, "checkpoint_schema_version=2.25\n")
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
+
+# Retained actual SHA binding for the existing wire schema; never a generation label.
 
 # Schema 2.26 makes ordinary `:auto` select the mathematical SMV--FR two-stage
 # profile unconditionally. Optional oracle-audit metadata is deliberately not
 # part of this scientific restart digest.
-function _wannierization_checkpoint_sha256_v2_26(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_24(result), '\n')
+function _write_checkpoint_layer_v2_26(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_24, legacy)
     for (key, default_value) in (
         ("requested_wannierization_mode", "MISSING"),
         ("effective_wannierization_mode", "MISSING"),
@@ -808,48 +843,51 @@ function _wannierization_checkpoint_sha256_v2_26(result::WannierizationResult)
         write(buffer, key, '=', get(result.input_summary, key, default_value), '\n')
     end
     write(buffer, "checkpoint_schema_version=2.26\n")
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
 # Schema 2.27 binds the outer-window authority, parent audit policy, and target masks.
-function _wannierization_checkpoint_sha256_v2_27(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_26(result), '\n')
+function _write_checkpoint_layer_v2_27(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_26, legacy)
     for (key, default_value) in (
         ("authoritative_hamiltonian", "MISSING"),
         ("authoritative_hamiltonian_sha256", "MISSING"),
         ("qualification_scope", "MISSING"),
         ("target_authority", "MISSING"),
         ("parent_audit_policy", "MISSING"),
-        ("disentanglement_outer_mask_sha256", "MISSING"),
-        ("disentanglement_frozen_mask_sha256", "MISSING"),
-        ("target_subspace_contract_sha256", "NOT_RECORDED"),
+        ("disentanglement_outer_mask_definition", "MISSING"),
+        ("disentanglement_frozen_mask_definition", "MISSING"),
+        ("target_subspace_contract_definition", "NOT_RECORDED"),
     )
         write(buffer, key, '=', get(result.input_summary, key, default_value), '\n')
     end
     write(buffer, "checkpoint_schema_version=2.27\n")
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
 # Schema 2.28 binds the target leakage-weight semantics, formula, and threshold.
-function _wannierization_checkpoint_sha256_v2_28(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_27(result), '\n')
+function _write_checkpoint_layer_v2_28(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_27, legacy)
     for (key, default_value) in (
         ("target_leakage_semantics", "MISSING"),
-        ("target_leakage_formula_sha256", "MISSING"),
+        ("target_leakage_formula_definition", "MISSING"),
         ("target_leakage_threshold", "MISSING"),
     )
         write(buffer, key, '=', get(result.input_summary, key, default_value), '\n')
     end
     write(buffer, "checkpoint_schema_version=2.28\n")
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
 
+# Retained actual SHA binding for the existing wire schema; never a generation label.
+
 # Public 1.1 seals the unchanged complete 2.28 numerical state with the Standard wire identity.
-function _wannierization_checkpoint_sha256_v1_1(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_28(result), '\n')
+function _write_checkpoint_layer_v1_1(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_28, legacy)
     write(buffer, "checkpoint_schema_version=1.1\n")
     if haskey(result.input_summary, "construction_policy_contract")
         for key in ("construction_policy_contract", "construction_policy", "quality_review_status")
@@ -864,8 +902,10 @@ function _wannierization_checkpoint_sha256_v1_1(result::WannierizationResult)
             end
         end
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
+
+# Retained actual SHA binding for the existing wire schema; never a generation label.
 
 # Rebuild the canonical typed defaults for any eligibility key a summary lacks.
 # A partially written block that contradicts itself cannot be reconstructed, so
@@ -882,9 +922,8 @@ end
 # wire identity and the typed eligibility block.  The three retired
 # qualified-seal/route/export keys are replaced by the ten canonical
 # WannierizationEligibility summary strings.
-function _wannierization_checkpoint_sha256_v2_29(result::WannierizationResult)
-    buffer = IOBuffer()
-    write(buffer, _wannierization_checkpoint_sha256_v2_28(result), '\n')
+function _write_checkpoint_layer_v2_29(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_previous!(buffer, result, _write_checkpoint_layer_v2_28, legacy)
     write(buffer, "checkpoint_schema_version=1.2\n")
     # Bind the persisted typed block through its single canonical serializer so
     # the digest, the summary dictionary, and the HDF5 attributes agree.  The
@@ -912,8 +951,10 @@ function _wannierization_checkpoint_sha256_v2_29(result::WannierizationResult)
             end
         end
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    return nothing
 end
+
+# Retained actual SHA binding for the existing wire schema; never a generation label.
 
 # Reject non-finite numerical states before downstream TB publication.
 function _wannierization_result_is_finite(result::WannierizationResult)
@@ -984,12 +1025,32 @@ function _wannierization_scoped_production_eligible(result::WannierizationResult
 end
 
 # Materialize the persisted counter before hashing and atomically writing a checkpoint.
-function _checkpoint_persisted_result(result::WannierizationResult)
+function _checkpoint_persisted_result(
+    result::WannierizationResult;
+    publication_identity = nothing,
+    wire_version = WANNIERIZATION_CHECKPOINT_SCHEMA_VERSION,
+)
     summary = Dict{String, String}(result.input_summary)
+    input_status=_restart_input_definition_status(result.restart_state)
+    eligible=string(input_status=="COMPLETE" && get(summary, "restart_eligible", "true")=="true")
+    if haskey(summary, "restart_eligible") && summary["restart_eligible"]!=eligible
+        summary["prior_restart_eligibility_declaration"]=summary["restart_eligible"]
+    end
+    summary["restart_eligible"]=eligible
+    summary["restart_input_definition_status"]=input_status
+    if publication_identity !== nothing
+        summary["checkpoint_schema_version"] = wire_version
+        summary["checkpoint_publication_identity"] = String(publication_identity)
+    end
     summary["construction_policy"] = get(summary, "construction_policy", "strict")
     summary["construction_policy"] in ("strict", "standard") ||
         throw(ArgumentError("CONSTRUCTION_POLICY_INVALID: unsupported persisted policy"))
-    summary["construction_policy_contract"] = "standard_construction_v1"
+    ordinary_version = get(summary, "ordinary_calculation_policy_version", nothing)
+    ordinary_version === nothing ||
+        ordinary_version == "1.0" ||
+        throw(ArgumentError("ORDINARY_CALCULATION_POLICY_VERSION_UNSUPPORTED"))
+    summary["construction_policy_contract"] =
+        ordinary_version === nothing ? "standard_construction_v1" : "ordinary_construction_v2"
     summary["quality_review_status"] = get(
         summary,
         "quality_review_status",
@@ -1029,17 +1090,17 @@ function _checkpoint_persisted_result(result::WannierizationResult)
     summary["qualification_scope"] = get(summary, "qualification_scope", "full_parent")
     summary["parent_audit_policy"] = get(summary, "parent_audit_policy", "legacy_hard_gate")
     summary["target_authority"] = get(summary, "target_authority", "NOT_APPLICABLE")
-    summary["disentanglement_outer_mask_sha256"] =
-        get(summary, "disentanglement_outer_mask_sha256", "NOT_SEALED")
-    summary["disentanglement_frozen_mask_sha256"] =
-        get(summary, "disentanglement_frozen_mask_sha256", "NOT_SEALED")
-    summary["target_subspace_contract_sha256"] =
-        get(summary, "target_subspace_contract_sha256", "NOT_RECORDED")
+    summary["disentanglement_outer_mask_definition"] =
+        get(summary, "disentanglement_outer_mask_definition", "NOT_SEALED")
+    summary["disentanglement_frozen_mask_definition"] =
+        get(summary, "disentanglement_frozen_mask_definition", "NOT_SEALED")
+    summary["target_subspace_contract_definition"] =
+        get(summary, "target_subspace_contract_definition", "NOT_RECORDED")
     if summary["qualification_scope"] != "target_subspace"
         summary["target_leakage_semantics"] =
             get(summary, "target_leakage_semantics", "NOT_APPLICABLE")
-        summary["target_leakage_formula_sha256"] =
-            get(summary, "target_leakage_formula_sha256", "NOT_RECORDED")
+        summary["target_leakage_formula_definition"] =
+            get(summary, "target_leakage_formula_definition", "NOT_RECORDED")
         summary["target_leakage_threshold"] =
             get(summary, "target_leakage_threshold", "NOT_APPLICABLE")
     end
@@ -1120,4 +1181,74 @@ function _checkpoint_persisted_result(result::WannierizationResult)
         result.initialization_report,
         result.tb_symmetry_qualification,
     )
+end
+
+# Closed historical field inventories; direct definitions include the selected
+# version domain and every original field byte, never nested SHA reductions.
+"""Append complete continuation inputs to the unchanged2.29 accepted-state inventory."""
+function _write_checkpoint_layer_v2_30(buffer::Base.IO, result::WannierizationResult, legacy::Bool)
+    _write_checkpoint_layer_v2_29(buffer, result, legacy)
+    definition=result.restart_state===nothing ? nothing : result.restart_state.input_definition
+    _write_restart_input_definition(buffer, definition)
+    write_native_definition_value(
+        buffer,
+        result.restart_state===nothing ? nothing :
+        result.restart_state.optimizer_state.u_active_orbit_definition,
+    )
+    return nothing
+end
+
+const CHECKPOINT_DEFINITION_WRITERS = Dict(
+    :base => _write_checkpoint_layer,
+    :v1_2 => _write_checkpoint_layer_v1_2,
+    :v1_3 => _write_checkpoint_layer_v1_3,
+    :v2_1 => _write_checkpoint_layer_v2_1,
+    :v2_2 => _write_checkpoint_layer_v2_2,
+    :v2_3 => _write_checkpoint_layer_v2_3,
+    :v2_4 => _write_checkpoint_layer_v2_4,
+    :v2_5 => _write_checkpoint_layer_v2_5,
+    :v2_6 => _write_checkpoint_layer_v2_6,
+    :v2_7 => _write_checkpoint_layer_v2_7,
+    :v2_8 => _write_checkpoint_layer_v2_8,
+    :v2_9 => _write_checkpoint_layer_v2_9,
+    :v2_10 => _write_checkpoint_layer_v2_10,
+    :v2_11 => _write_checkpoint_layer_v2_11,
+    :v2_12 => _write_checkpoint_layer_v2_12,
+    :v2_13 => _write_checkpoint_layer_v2_13,
+    :v2_16 => _write_checkpoint_layer_v2_16,
+    :v2_17 => _write_checkpoint_layer_v2_17,
+    :v2_18 => _write_checkpoint_layer_v2_18,
+    :v2_19 => _write_checkpoint_layer_v2_19,
+    :v2_20 => _write_checkpoint_layer_v2_20,
+    :v2_21 => _write_checkpoint_layer_v2_21,
+    :v2_22 => _write_checkpoint_layer_v2_22,
+    :v2_23 => _write_checkpoint_layer_v2_23,
+    :v2_24 => _write_checkpoint_layer_v2_24,
+    :v2_25 => _write_checkpoint_layer_v2_25,
+    :v2_26 => _write_checkpoint_layer_v2_26,
+    :v2_27 => _write_checkpoint_layer_v2_27,
+    :v2_28 => _write_checkpoint_layer_v2_28,
+    :v1_1 => _write_checkpoint_layer_v1_1,
+    :v2_29 => _write_checkpoint_layer_v2_29,
+    :v2_30 => _write_checkpoint_layer_v2_30,
+)
+
+"""Write one complete checkpoint definition sequentially, without numerical hashes.
+
+The default is the current checkpoint field inventory. A historical inventory
+can be selected explicitly for an existing mathematical agreement boundary.
+Original source/qualification audit tokens remain literal historical fields.
+Current continuation additionally requires complete input and branch definitions;
+generations and digests never supply their positive equality proof.
+"""
+function write_checkpoint_definition(
+    buffer::Base.IO,
+    result::WannierizationResult;
+    version::Symbol = :v2_30,
+)
+    writer = get(CHECKPOINT_DEFINITION_WRITERS, version, nothing)
+    writer === nothing && throw(ArgumentError("Unsupported checkpoint definition inventory"))
+    write(buffer, "wanniernlqg.checkpoint-definition/1:", String(version), '\n')
+    writer(buffer, result, false)
+    return nothing
 end

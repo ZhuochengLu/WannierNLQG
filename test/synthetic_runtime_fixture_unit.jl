@@ -1,6 +1,7 @@
 using LinearAlgebra
 
-include(joinpath(@__DIR__, "support", "SyntheticRuntimeFixture.jl"))
+isdefined(@__MODULE__, :SyntheticRuntimeFixture) ||
+    include(joinpath(@__DIR__, "support", "SyntheticRuntimeFixture.jl"))
 using .SyntheticRuntimeFixture
 
 function synthetic_numeric_payload(path)
@@ -36,9 +37,9 @@ end
     @test length(wsvec.translations) == 4 * 4 * 2
     @test all(length(wsvec.translations[left, right, 2]) == 2 for left in 1:4 for right in 1:4)
     manifest = WannierNLQG.IO.read_real_space_operator_bundle_manifest(
-        SyntheticRuntimeFixture.OPERATOR_BUNDLE_FILE,
+        SyntheticRuntimeFixture.operator_bundle_file(),
     )
-    @test manifest.schema_version == "1.1"
+    @test manifest.schema_version == WannierNLQG.IO.OPERATOR_BUNDLE_SCHEMA_VERSION
     @test manifest.profile == :full
     @test manifest.num_orbitals == 4
     @test manifest.degeneracies == [2, 4]

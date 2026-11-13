@@ -10,8 +10,31 @@ function _run_integral_bundle_fused!(
     shared_sources = nothing,
     mixed_memory_limit_bytes::Int = mixed_fourier_memory_limit(),
 )
+    if any(spec -> spec.quantity in BERRY_MULTIPOLE_QUANTITIES, specs)
+        return prepare_berry_multipole(
+            cfg,
+            ctx,
+            specs;
+            prepare_only,
+            progress_owner,
+            shared_sources,
+            mixed_memory_limit_bytes,
+        )
+    end
     if any(spec->spec.quantity in SPECTRAL_RESPONSE_QUANTITIES, specs)
         return prepare_spectral_response(
+            cfg,
+            ctx,
+            specs;
+            prepare_only,
+            block_local_order,
+            progress_owner,
+            shared_sources,
+            mixed_memory_limit_bytes,
+        )
+    end
+    if any(spec -> spec.quantity in (:jerk_current, :third_harmonic_generation), specs)
+        return prepare_third_order(
             cfg,
             ctx,
             specs;
@@ -38,10 +61,7 @@ function _run_integral_bundle_fused!(
     function cleanup!()
         cleaned[] && return nothing
         cleaned[] = true
-        for workspace in cleanup_workspaces
-            disable_mixed_fourier!(workspace)
-            disable_fourier_timing!(workspace)
-        end
+        release_mixed_worker_buffers!(cleanup_workspaces; timing = true)
         if shared_sources === nothing && loaded_sources_ref[] !== nothing
             release_runtime_storage!(loaded_sources_ref[])
         end
@@ -83,6 +103,8 @@ function _run_integral_bundle_owned!(
     shared_sources = nothing,
     mixed_memory_limit_bytes::Int = mixed_fourier_memory_limit(),
 )
+    adaptive = cfg.integration_algorithm isa HAdaptiveCubature
+    adaptive_result = Ref{Any}(nothing)
     debug_lock = ReentrantLock()
     total_t0 = time()
     progress_percent_interval = effective_progress_percent_interval(cfg)
@@ -117,6 +139,9 @@ function _run_integral_bundle_owned!(
     bundle_debug_log(debug_lock, "[read] start load_runtime_model_and_sources")
     loaded_sources =
         shared_sources === nothing ? load_runtime_model_and_sources(ctx, cfg) : shared_sources
+    cfg.photon_momentum_path !== nothing &&
+        shared_sources === nothing &&
+        (loaded_sources = freeze_paired_runtime_sources(loaded_sources))
     loaded_sources_ref[] = loaded_sources
     model = loaded_sources.model
     spin_real_space = loaded_sources.spin
@@ -128,7 +153,9 @@ function _run_integral_bundle_owned!(
         "[read] end load_runtime_model_and_sources mode=$(loaded_sources.read_mode) elapsed=$(format_seconds(time() - read_t0))s",
     )
     progress_system_summary!(model)
-    response_symmetry_plan = prepare_response_symmetry_execution_plan(cfg, ctx, specs, comm)
+    response_symmetry_plan =
+        cfg.integration_bounds===nothing && !adaptive ?
+        prepare_response_symmetry_execution_plan(cfg, ctx, specs, comm) : nothing
     response_symmetry_plan === nothing ||
         progress_response_symmetry!(response_symmetry_metadata(response_symmetry_plan))
     qualification = assess_response_qualification(
@@ -143,7 +170,7 @@ function _run_integral_bundle_owned!(
         response_symmetry_plan === nothing || response_symmetry_plan.explanation_only ? nothing :
         response_symmetry_plan
 
-    cell_volume = det(model.lattice)
+    cell_volume = integration_cell_measure(cfg, model)
     num_r_vectors = model.num_r_vectors
     num_orbitals = model.num_orbitals
     spatial_dimension = Int(cfg.spatial_dimension)
@@ -162,6 +189,7 @@ function _run_integral_bundle_owned!(
     end
     block_local_requested =
         block_local_order &&
+        cfg.integration_bounds === nothing &&
         cfg.fourier_backend == "mixed" &&
         cfg.NKdiv !== nothing &&
         cfg.NKFFT !== nothing &&
@@ -170,9 +198,11 @@ function _run_integral_bundle_owned!(
         only(specs).quantity == :shift_current &&
         only(specs).method == :conventional &&
         !nonzero_photon_momentum(cfg.photon_momentum)
-    num_reduction_lanes = _deterministic_integral_lane_count(
-        block_local_requested ? prod(cfg.NKdiv) : num_evaluation_kpoints,
-    )
+    num_reduction_lanes =
+        adaptive ? 1 :
+        _deterministic_integral_lane_count(
+            block_local_requested ? prod(cfg.NKdiv) : num_evaluation_kpoints,
+        )
     shared_matrix_plan = bundle_matrix_element_plan(specs, cfg)
     matrix_sources = MatrixElementSources(
         spin = spin_velocity_real_space === nothing ? spin_real_space : nothing,
@@ -184,14 +214,16 @@ function _run_integral_bundle_owned!(
             model,
             shared_matrix_plan,
             KPointOffset[KPointOffset()],
-            matrix_sources,
+            matrix_sources;
+            spectral_gap_tolerance = cfg.spectral_gap_tolerance,
         ) for _ in 1:num_workers
     ]
     shared_matrix_workspaces = [batch.matrix_elements for batch in shared_matrix_batches]
     shared_central_data = [matrix_data!(batch, KPointOffset()) for batch in shared_matrix_batches]
-    photon_shift_step = nonzero_photon_momentum(cfg.photon_momentum) ? 1 : 0
+    photon_shift_step =
+        nonzero_photon_momentum(cfg.photon_momentum) || cfg.photon_momentum_path !== nothing ? 1 : 0
 
-    k_grid = _integral_k_grid(cfg.k_mesh)
+    k_grid = _integral_k_grid(cfg, model)
     states = [
         _make_integral_state(
             cfg,
@@ -203,15 +235,32 @@ function _run_integral_bundle_owned!(
         ) for spec in specs
     ]
 
-    sc_conv_state = _find_integral_state(states, :shift_current, :conventional, Val(4))
-    ic_state = _find_integral_state(states, :injection_current, :conventional, Val(4))
-    isc_state = _find_integral_state(states, :injection_spin_current, :conventional, Val(5))
-    ssc_state = _find_integral_state(states, :shift_spin_current, :conventional, Val(5))
-    sc_proj_state = _find_integral_state(states, :shift_current, :projector, Val(4))
-    sc_geo_state = _find_integral_state(states, :shift_current, :geometric_loop, Val(4))
-    pdsc_state = _find_integral_state(states, :photon_drag_shift_current, :geometric_loop, Val(4))
-    sc_wilson_state = _find_integral_state(states, :shift_current, :wilson_loop, Val(4))
-    pdic_state = _find_integral_state(states, :photon_drag_injection_current, :conventional, Val(4))
+    point_elements =
+        foldl(Base.checked_add, (length(state.local_data) for state in states); init = 0)
+    # Check ordinary point scratch for size overflow. The Mixed limit bounds
+    # Fourier caches, not Direct response scratch; process/RSS guards still apply.
+    WorkspacePlanning.checked_array_bytes(ComplexF64, (2num_workers, point_elements))
+    point_states = [response_point_state(state, num_workers) for state in states]
+    sc_conv_state = _find_integral_point_state(point_states, :shift_current, :conventional, Val(4))
+    ic_state = _find_integral_point_state(point_states, :injection_current, :conventional, Val(4))
+    isc_state =
+        _find_integral_point_state(point_states, :injection_spin_current, :conventional, Val(5))
+    ssc_state = _find_integral_point_state(point_states, :shift_spin_current, :conventional, Val(5))
+    sc_proj_state = _find_integral_point_state(point_states, :shift_current, :projector, Val(4))
+    sc_geo_state = _find_integral_point_state(point_states, :shift_current, :geometric_loop, Val(4))
+    pdsc_state = _find_integral_point_state(
+        point_states,
+        :photon_drag_shift_current,
+        :geometric_loop,
+        Val(4),
+    )
+    sc_wilson_state = _find_integral_point_state(point_states, :shift_current, :wilson_loop, Val(4))
+    pdic_state = _find_integral_point_state(
+        point_states,
+        :photon_drag_injection_current,
+        :conventional,
+        Val(4),
+    )
 
     need_conv =
         sc_conv_state !== nothing ||
@@ -225,6 +274,22 @@ function _run_integral_bundle_owned!(
     need_pdic = pdic_state !== nothing
     need_transition_screen = need_conv || need_proj || need_geo_q0 || need_wilson
     need_photon_drag_transition_screen = need_geo_q || need_pdic
+    paired_blocks =
+        cfg.photon_momentum_path === nothing ? nothing :
+        make_paired_photon_momentum_blocks(cfg, model, pdsc_state, pdic_state)
+    if paired_blocks !== nothing
+        all(
+            spec -> spec.quantity in (:photon_drag_shift_current, :photon_drag_injection_current),
+            specs,
+        ) || error("paired photon momenta only apply to the declared photon-drag families")
+        num_photon_energies = maximum(block -> length(block.config.photon_energies), paired_blocks)
+    end
+    paired_geometric_counter =
+        need_geo_q && paired_blocks !== nothing ?
+        counters["geometric_loop_shift_current_paired_q"] : nothing
+    paired_injection_counter =
+        need_pdic && paired_blocks !== nothing ?
+        counters["conventional_finite_q_photon_drag_injection"] : nothing
 
     cal_band_projector = _effective_window_band_count(cfg.band_window_size, num_orbitals)
     cal_band_geometric = _effective_window_band_count(cfg.band_window_size, num_orbitals)
@@ -261,18 +326,19 @@ function _run_integral_bundle_owned!(
         ] : PhotonDragTransitionScreenWorkspace[]
     conv_workspaces =
         need_conv ?
-        [
-            make_shift_current_conventional_workspace(
-                num_orbitals,
-                num_r_vectors,
-                spatial_dimension,
-                num_photon_energies,
-                matrix_elements = shared_matrix_workspaces[worker_id],
-                central_data = shared_central_data[worker_id],
-            ) for worker_id in 1:num_workers
-        ] : ShiftCurrentConventionalWorkspace[]
+        _make_conventional_current_worker_workspaces(
+            num_workers,
+            num_orbitals,
+            num_r_vectors,
+            spatial_dimension,
+            num_photon_energies,
+            shared_matrix_workspaces,
+            shared_central_data;
+            shift_current_required = sc_conv_state !== nothing || isc_state === nothing,
+            frequency_contraction_required = true,
+        ) : ShiftCurrentConventionalWorkspace[]
     conv_injection_qg =
-        need_conv ?
+        ic_state !== nothing ?
         [
             zeros(
                 ComplexF64,
@@ -298,16 +364,16 @@ function _run_integral_bundle_owned!(
         ] : Array{ComplexF64, 6}[]
     shift_spin_current_workspaces =
         ssc_state !== nothing ?
-        [
-            make_shift_spin_current_conventional_workspace(
-                num_orbitals,
-                num_r_vectors,
-                spatial_dimension,
-                num_photon_energies,
-                matrix_elements = shared_matrix_workspaces[worker_id],
-                central_data = shared_central_data[worker_id],
-            ) for worker_id in 1:num_workers
-        ] : ShiftSpinCurrentConventionalWorkspace[]
+        _make_conventional_shift_spin_worker_workspaces(
+            num_workers,
+            num_orbitals,
+            num_r_vectors,
+            spatial_dimension,
+            num_photon_energies,
+            shared_matrix_workspaces,
+            shared_central_data;
+            frequency_contraction_required = true,
+        ) : ShiftSpinCurrentConventionalWorkspace[]
     projector_response_workspaces =
         need_proj ?
         [
@@ -370,7 +436,7 @@ function _run_integral_bundle_owned!(
                 num_r_vectors,
                 spatial_dimension,
                 num_photon_energies,
-                photon_energies = cfg.photon_energies,
+                photon_energies = paired_blocks === nothing ? cfg.photon_energies : nothing,
                 denominator_regularization = cfg.denominator_regularization,
                 matrix_elements = shared_matrix_workspaces[worker_id],
                 valence_data = photon_drag_transition_screen_workspaces[worker_id].valence_data,
@@ -462,7 +528,8 @@ function _run_integral_bundle_owned!(
     mixed_grid = fourier_plan.grid
     # Restrict this experimental traversal to the tested single-task, full-mesh SC path.
     use_block_order = block_local_requested && mixed_grid !== nothing
-    block_indices = use_block_order ? mixed_fourier_local_k_indices(mixed_grid, 0, 1) : nothing
+    block_access = use_block_order ? mixed_block_access(mixed_grid, 0, 1) : nothing
+    block_indices = block_access === nothing ? nothing : block_access.indices
     point_order =
         block_indices === nothing ? nothing :
         Dict{Int, Int}(point => ordinal for (ordinal, point) in enumerate(block_indices))
@@ -476,9 +543,9 @@ function _run_integral_bundle_owned!(
                 lane_id,
             )
         end
-        block_points = prod(mixed_grid.nkfft)
+        block_points = block_access.points_per_block
         return [
-            index for block in lane_id:num_reduction_lanes:prod(mixed_grid.nkdiv) for
+            index for block in lane_id:num_reduction_lanes:block_access.block_count for
             index in ((block - 1) * block_points + 1):(block * block_points)
         ]
     end
@@ -494,16 +561,13 @@ function _run_integral_bundle_owned!(
         "local_k_points=$(local_total_k) reduction_lanes=$(num_reduction_lanes) local_lanes=$(length(local_lane_ids))",
     )
     if mixed_grid !== nothing
-        for worker_id in 1:num_workers
-            enable_mixed_fourier!(
-                shared_matrix_workspaces[worker_id],
-                model,
-                mixed_grid;
-                memory_limit_bytes = per_workspace_memory_limit,
-            )
-            use_block_order &&
-                MatrixElements.reuse_completed_mixed_blocks!(shared_matrix_workspaces[worker_id])
-        end
+        prepare_mixed_worker_buffers!(
+            shared_matrix_workspaces,
+            model,
+            mixed_grid;
+            memory_limit_bytes = per_workspace_memory_limit,
+            completed_block_reuse = use_block_order,
+        )
     end
     initial_fourier_summary = fourier_execution_summary(cfg, fourier_plan, shared_matrix_workspaces)
     progress_fourier_backend!(
@@ -525,30 +589,25 @@ function _run_integral_bundle_owned!(
         "[kloop] start local_k_points=$(local_total_k), total_work_items_global=$(num_evaluation_kpoints), full_grid_k_points=$(num_kpoints), progress_percent_interval=$(progress_percent_interval), slow_k_seconds=$(slow_k_seconds)",
     )
     point_buffers = [zeros(Float64, 3) for _ in 1:num_workers]
-    function execute_point!(worker_id::Int, evaluation_index::Int, lane_id::Int)
-        kpoint = point_buffers[worker_id]
+    paired_point_seconds = zeros(Float64, num_workers)
+    point_values = [zeros(ComplexF64, point_elements) for _ in 1:num_workers]
+    point_active = fill(false, num_workers)
+    function point_value!(worker_id, kpoint)
+        for state in point_states
+            fill!(state.worker_data[worker_id], 0)
+        end
+        lane_id = worker_id
+        kpoint_weight = 1
+        active_any = false
         transition_screen =
             need_transition_screen ? transition_screen_workspaces[worker_id] : nothing
         photon_drag_transition_screen =
             need_photon_drag_transition_screen ?
             photon_drag_transition_screen_workspaces[worker_id] : nothing
-        k_t0 = time()
-        active_any = false
-        kpoint_index =
-            numerical_response_symmetry_plan === nothing ? evaluation_index :
-            numerical_response_symmetry_plan.representatives[evaluation_index]
-        kpoint_weight =
-            numerical_response_symmetry_plan === nothing ? 1 :
-            numerical_response_symmetry_plan.multiplicities[evaluation_index]
-        numerical_response_symmetry_plan === nothing ||
-            prepare_integral_symmetry_scratch!(states, worker_id)
-        integral_kpoint!(kpoint, k_grid, kpoint_index)
-        mixed_grid === nothing || begin_mixed_kpoint!(shared_matrix_workspaces[worker_id], kpoint)
-
         if need_transition_screen
             _prepare_transition_screen!(transition_screen, kpoint, cfg, model, num_orbitals)
         end
-        if need_photon_drag_transition_screen
+        if need_photon_drag_transition_screen && paired_blocks === nothing
             _prepare_photon_drag_transition_screen!(
                 photon_drag_transition_screen,
                 kpoint,
@@ -566,7 +625,7 @@ function _run_integral_bundle_owned!(
                 lane_id,
                 model,
                 conv_workspaces[worker_id],
-                conv_injection_qg[worker_id],
+                ic_state === nothing ? nothing : conv_injection_qg[worker_id],
                 isc_state === nothing ? nothing : conv_spin_injection_qg[worker_id],
                 ssc_state === nothing ? nothing : shift_spin_current_workspaces[worker_id],
                 sc_conv_state,
@@ -574,7 +633,7 @@ function _run_integral_bundle_owned!(
                 isc_state,
                 ssc_state,
                 cfg,
-                num_kpoints,
+                1,
                 cell_volume,
                 num_orbitals,
                 spatial_dimension,
@@ -594,7 +653,7 @@ function _run_integral_bundle_owned!(
                 sc_proj_state,
                 controls.tensor_indices,
                 cfg,
-                num_kpoints,
+                1,
                 cell_volume,
                 num_orbitals,
                 spatial_dimension,
@@ -616,7 +675,7 @@ function _run_integral_bundle_owned!(
                 sc_geo_state,
                 controls.tensor_indices,
                 cfg,
-                num_kpoints,
+                1,
                 cell_volume,
                 num_orbitals,
                 spatial_dimension,
@@ -627,7 +686,7 @@ function _run_integral_bundle_owned!(
                 transition_screen = transition_screen,
             )
         end
-        if need_geo_q
+        if need_geo_q && paired_blocks === nothing
             active_any |= _run_integral_geometric_loop_shift_current_family!(
                 kpoint,
                 lane_id,
@@ -639,7 +698,7 @@ function _run_integral_bundle_owned!(
                 pdsc_state,
                 controls.tensor_indices,
                 cfg,
-                num_kpoints,
+                1,
                 cell_volume,
                 num_orbitals,
                 spatial_dimension,
@@ -659,7 +718,7 @@ function _run_integral_bundle_owned!(
                 wc_d_geo,
                 sc_wilson_state,
                 cfg,
-                num_kpoints,
+                1,
                 cell_volume,
                 num_orbitals,
                 spatial_dimension,
@@ -669,7 +728,7 @@ function _run_integral_bundle_owned!(
                 scratch_worker_id = worker_id,
             )
         end
-        if need_pdic
+        if need_pdic && paired_blocks === nothing
             active_any |= _run_integral_photon_drag_injection_current_family!(
                 kpoint,
                 photon_drag_transition_screen,
@@ -681,7 +740,7 @@ function _run_integral_bundle_owned!(
                 pdic_state,
                 controls.tensor_indices,
                 cfg,
-                num_kpoints,
+                1,
                 cell_volume,
                 num_orbitals,
                 spatial_dimension,
@@ -689,9 +748,93 @@ function _run_integral_bundle_owned!(
             )
         end
 
+        if paired_blocks !== nothing
+            paired_start = time_ns()
+            active_any |= execute_paired_photon_momentum_point!(
+                paired_blocks,
+                kpoint,
+                photon_drag_transition_screen,
+                lane_id,
+                model,
+                need_geo_q ? geo_q_workspaces[worker_id] : nothing,
+                need_pdic ? pdic_workspaces[worker_id] : nothing,
+                p_d_geo,
+                need_geo_q ? wc_d_geo : wc_d_pdic,
+                controls.tensor_indices,
+                1,
+                cell_volume,
+                num_orbitals,
+                spatial_dimension,
+                cal_band_geometric,
+                paired_geometric_counter,
+                paired_injection_counter,
+            )
+            paired_point_seconds[worker_id] += (time_ns() - paired_start) / 1.0e9
+        end
+
+        values = point_values[worker_id]
+        offset = 0
+        for state in point_states
+            source = state.worker_data[worker_id]
+            for index in eachindex(source)
+                values[offset + index] = source[index]
+            end
+            offset += length(source)
+        end
+        point_active[worker_id] = active_any
+        return values
+    end
+    point_evaluators = [
+        ResponsePointEvaluator(
+            point_value!,
+            worker,
+            (
+                shape = (point_elements,),
+                prefactor = :physical_current_density_without_quadrature_weights,
+                arbitrary_k = mixed_grid === nothing && paired_blocks === nothing,
+                channels = [(state.spec.quantity, Base.size(state.local_data)) for state in states],
+            ),
+        ) for worker in 1:num_workers
+    ]
+    point_started = zeros(Float64, num_workers)
+    function locate_point!(point, grid, evaluation_index)
+        index =
+            numerical_response_symmetry_plan === nothing ? evaluation_index :
+            numerical_response_symmetry_plan.representatives[evaluation_index]
+        integral_kpoint!(point, grid, index)
+        return nothing
+    end
+    function request_point!(worker_id, point, evaluation_index)
+        point_started[worker_id] = time()
+        mixed_grid === nothing || begin_mixed_kpoint!(shared_matrix_workspaces[worker_id], point)
+        return nothing
+    end
+    function consume_point!(worker_id, evaluation_index, lane_id, values)
+        k_t0 = point_started[worker_id]
+        kpoint_index =
+            numerical_response_symmetry_plan === nothing ? evaluation_index :
+            numerical_response_symmetry_plan.representatives[evaluation_index]
+        kpoint_weight =
+            numerical_response_symmetry_plan === nothing ? 1 :
+            numerical_response_symmetry_plan.multiplicities[evaluation_index]
+        scale = kpoint_weight / num_kpoints
+        offset = 0
+        for state in states
+            target = integral_accumulator_target(state, lane_id, worker_id)
+            if state.tensor_symmetry_plan === nothing
+                for index in eachindex(target)
+                    target[index] += scale * values[offset + index]
+                end
+            else
+                for index in eachindex(target)
+                    target[index] = scale * values[offset + index]
+                end
+            end
+            offset += length(target)
+        end
         numerical_response_symmetry_plan === nothing ||
             accumulate_integral_symmetry_coefficients!(states, lane_id, worker_id)
-
+        active_any = point_active[worker_id]
         if active_any
             Threads.atomic_add!(active_count, 1)
         else
@@ -721,6 +864,14 @@ function _run_integral_bundle_owned!(
         end
         return nothing
     end
+    execute_point! = ResponseGridConsumer(
+        point_evaluators,
+        k_grid,
+        point_buffers,
+        locate_point!,
+        request_point!,
+        consume_point!,
+    )
     units = NTuple{3, Int}[]
     for lane_id in local_lane_ids
         for ordinal in point_lane_indices(lane_id)
@@ -731,66 +882,143 @@ function _run_integral_bundle_owned!(
             push!(units, (index, evaluation_index, lane_id))
         end
     end
+    function execute_adaptive!(worker, index, lane)
+        domain = response_integration_domain(cfg)
+        evaluator = ResponseNodeEvaluator(point_evaluators[worker], domain, model)
+        adaptive_result[] = integrate_response_mpi(
+            evaluator,
+            domain,
+            cfg.integration_algorithm;
+            normalization = :domain_average,
+            comm,
+        )
+        if rank == root
+            finished_count[] = adaptive_result[].evaluations
+            represented_weight[] = adaptive_result[].evaluations
+        end
+        return nothing
+    end
     function finish!()
         try
-            if progress_owner
-                local_progress_counts =
-                    Int[finished_count[], represented_weight[], active_count[], skipped_count[]]
-                global_progress_counts =
-                    size > 1 ? bundle_mpi_reduce_sum(local_progress_counts, root, comm) :
-                    local_progress_counts
-                if rank == root
-                    global_finished = global_progress_counts[1]
-                    global_represented = global_progress_counts[2]
-                    global_active = global_progress_counts[3]
-                    global_skipped = global_progress_counts[4]
-                    if size > 1
+            bundle_mpi_collective_call(; enabled = true, comm) do
+                progress_localized_run_diagnostics!(shared_matrix_workspaces, comm)
+            end
+            bundle_mpi_collective_call(; enabled = true, comm) do
+                if progress_owner
+                    local_progress_counts =
+                        Int[finished_count[], represented_weight[], active_count[], skipped_count[]]
+                    global_progress_counts =
+                        size > 1 ? bundle_mpi_reduce_sum(local_progress_counts, root, comm) :
+                        local_progress_counts
+                    if rank == root
+                        global_finished = global_progress_counts[1]
+                        global_represented = global_progress_counts[2]
+                        global_active = global_progress_counts[3]
+                        global_skipped = global_progress_counts[4]
+                        if size > 1
+                            bundle_debug_log(
+                                debug_lock,
+                                "[kloop] progress finished=$(global_finished)/$(num_evaluation_kpoints) local_finished=$(finished_count[])/$(local_total_k) total_work_items_global=$(num_evaluation_kpoints) full_grid_k_points=$(num_kpoints) representatives=$(global_finished)/$(num_evaluation_kpoints) represented_weight=$(global_represented) active=$(global_active) skipped=$(global_skipped) elapsed=$(format_seconds(time() - kloop_t0))s scope=global",
+                            )
+                        end
                         bundle_debug_log(
                             debug_lock,
-                            "[kloop] progress finished=$(global_finished)/$(num_evaluation_kpoints) local_finished=$(finished_count[])/$(local_total_k) total_work_items_global=$(num_evaluation_kpoints) full_grid_k_points=$(num_kpoints) representatives=$(global_finished)/$(num_evaluation_kpoints) represented_weight=$(global_represented) active=$(global_active) skipped=$(global_skipped) elapsed=$(format_seconds(time() - kloop_t0))s scope=global",
+                            "[kloop] end finished=$(global_finished)/$(num_evaluation_kpoints) local_finished=$(finished_count[])/$(local_total_k) total_work_items_global=$(num_evaluation_kpoints) full_grid_k_points=$(num_kpoints) representatives=$(global_finished)/$(num_evaluation_kpoints) represented_weight=$(global_represented) active=$(global_active) skipped=$(global_skipped) elapsed=$(format_seconds(time() - kloop_t0))s scope=global",
                         )
                     end
-                    bundle_debug_log(
-                        debug_lock,
-                        "[kloop] end finished=$(global_finished)/$(num_evaluation_kpoints) local_finished=$(finished_count[])/$(local_total_k) total_work_items_global=$(num_evaluation_kpoints) full_grid_k_points=$(num_kpoints) representatives=$(global_finished)/$(num_evaluation_kpoints) represented_weight=$(global_represented) active=$(global_active) skipped=$(global_skipped) elapsed=$(format_seconds(time() - kloop_t0))s scope=global",
+                end
+                for worker_id in 1:num_workers
+                    write_fourier_timing(
+                        ctx.run_dir,
+                        rank * num_workers + worker_id - 1,
+                        time() - kloop_t0,
+                        shared_matrix_workspaces[worker_id],
+                        fourier_plan,
                     )
                 end
+                if mixed_grid !== nothing
+                    for worker_id in 1:num_workers
+                        stats = mixed_fourier_stats(shared_matrix_workspaces[worker_id])
+                        bundle_debug_log(
+                            debug_lock,
+                            "[fourier] worker=$(worker_id) stats=$(repr(stats))",
+                        )
+                    end
+                end
+
+                bundle_debug_log(debug_lock, "[reduce] start deterministic task reductions")
             end
-            for worker_id in 1:num_workers
-                write_fourier_timing(
-                    ctx.run_dir,
-                    rank * num_workers + worker_id - 1,
-                    time() - kloop_t0,
-                    shared_matrix_workspaces[worker_id],
-                    fourier_plan,
+            reduce_t0 = time()
+            if adaptive
+                if rank == root
+                    offset = 0
+                    for state in states
+                        for index in eachindex(state.global_data)
+                            state.global_data[index] = adaptive_result[].value[offset + index]
+                        end
+                        offset += length(state.global_data)
+                    end
+                end
+            else
+                _reduce_integral_states!(states, root, rank, comm)
+            end
+            reduction_seconds = time() - reduce_t0
+            bundle_mpi_collective_call(; enabled = true, comm) do
+                bundle_debug_log(
+                    debug_lock,
+                    "[reduce] end deterministic task reductions elapsed=$(format_seconds(time() - reduce_t0))s",
+                )
+            end
+
+            write_start = time()
+            write_outputs! = function ()
+                outputs = _write_integral_states!(cfg, ctx, states, debug_lock)
+                adaptive && push!(
+                    outputs,
+                    write_response_integration_diagnostics(
+                        ctx.run_dir,
+                        adaptive_result[],
+                        cfg.integration_algorithm,
+                        cfg,
+                    ),
+                )
+                return outputs
+            end
+            root_outputs =
+                size == 1 ? write_outputs!() : bundle_mpi_root_call(write_outputs!; root, comm)
+            outputs =
+                rank == root ? root_outputs :
+                reduce(vcat, [state.outputs for state in states]; init = String[])
+            writing_seconds = time() - write_start
+            fourier_summary = fourier_execution_summary(cfg, fourier_plan, shared_matrix_workspaces)
+            if adaptive
+                fourier_summary = merge(
+                    fourier_summary,
+                    (
+                        reason = "arbitrary adaptive nodes",
+                        integration = integration_algorithm_summary(cfg.integration_algorithm),
+                        executed_response_evaluations = adaptive_result[].evaluations,
+                    ),
+                )
+            end
+            if paired_blocks !== nothing
+                fourier_summary = merge(
+                    fourier_summary,
+                    (;
+                        paired_path_rows = length(cfg.photon_energies),
+                        paired_path_exact_groups = length(cfg.photon_momentum_path.groups),
+                        paired_path_frequency_blocks = length(paired_blocks),
+                        paired_path_frequency_capacity = num_photon_energies,
+                        paired_path_initialization_seconds = kloop_t0 - total_t0,
+                        paired_path_worker_point_seconds = sum(paired_point_seconds),
+                        paired_path_reduction_seconds = reduction_seconds,
+                        paired_path_write_seconds = writing_seconds,
+                        paired_path_timing_scope = "rank-local wall spans; worker point sum includes screening and response; matrix/eigen spans in sharing.worker_statistics; not pure compute or cold",
+                    ),
                 )
             end
             if mixed_grid !== nothing
-                for worker_id in 1:num_workers
-                    stats = mixed_fourier_stats(shared_matrix_workspaces[worker_id])
-                    bundle_debug_log(
-                        debug_lock,
-                        "[fourier] worker=$(worker_id) stats=$(repr(stats))",
-                    )
-                end
-            end
-
-            reduce_t0 = time()
-            bundle_debug_log(debug_lock, "[reduce] start deterministic task reductions")
-            _reduce_integral_states!(states, root, rank, comm)
-            bundle_debug_log(
-                debug_lock,
-                "[reduce] end deterministic task reductions elapsed=$(format_seconds(time() - reduce_t0))s",
-            )
-
-            outputs =
-                rank == root ? _write_integral_states!(cfg, ctx, states, debug_lock) :
-                reduce(vcat, [state.outputs for state in states]; init = String[])
-            fourier_summary = fourier_execution_summary(cfg, fourier_plan, shared_matrix_workspaces)
-            if mixed_grid !== nothing
-                for workspace in shared_matrix_workspaces
-                    disable_mixed_fourier!(workspace)
-                end
+                release_mixed_worker_buffers!(shared_matrix_workspaces)
             end
             if fourier_timing_enabled()
                 for workspace in shared_matrix_workspaces
@@ -804,22 +1032,38 @@ function _run_integral_bundle_owned!(
             response_symmetry_summary =
                 response_symmetry_plan === nothing ? NamedTuple() :
                 response_symmetry_metadata(response_symmetry_plan)
+            legacy_adaptive_current =
+                adaptive &&
+                length(specs) == 1 &&
+                only(specs).quantity in (:shift_current, :injection_current) &&
+                only(specs).method == :conventional
             result = FusedBundleRunResult(
                 outputs,
-                families,
-                _family_counts(counters, families),
+                legacy_adaptive_current ?
+                ["adaptive_conventional_" * String(only(specs).quantity)] : families,
+                legacy_adaptive_current ? NamedTuple[] : _family_counts(counters, families),
                 fourier_summary,
                 response_symmetry_summary,
                 NamedTuple(),
                 runtime_replica_summary(loaded_sources.replica_summary),
                 qualification,
+                runtime_model_geometry(model),
             )
             return result
         finally
             cleanup!()
         end
     end
-    prepared = PreparedResponseTask(units, execute_point!, finish!, cleanup!, point_order)
+    prepared = PreparedResponseTask(
+        adaptive ? [(1, 1, 1)] : units,
+        adaptive ? execute_adaptive! : execute_point!,
+        finish!,
+        cleanup!,
+        point_order,
+        paired_blocks === nothing ? nothing : paired_photon_interpolation_limits(),
+        nothing,
+        point_evaluators,
+    )
     prepare_only && return prepared
     try
         execute_prepared_tasks!([prepared])
