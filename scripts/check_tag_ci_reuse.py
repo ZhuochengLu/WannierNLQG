@@ -16,9 +16,9 @@ from typing import Any
 
 EXPECTED_JOB_NAMES = {
     "fast (ubuntu-latest, Julia 1.10)",
-    "fast (ubuntu-latest, Julia current)",
+    "fast (ubuntu-latest, Julia 1.13.0)",
     "fast (macos-latest, Julia 1.10)",
-    "fast (macos-latest, Julia current)",
+    "fast (macos-latest, Julia 1.13.0)",
     "full-shard (interfaces-and-symmetry)",
     "full-shard (wannier-core)",
     "full-shard (scientific-contracts)",

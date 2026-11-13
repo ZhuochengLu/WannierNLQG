@@ -136,9 +136,11 @@ using Test, LinearAlgebra, WannierNLQG
             for l in 1:model.num_orbitals
                 l==n && continue
                 gap=data.spectrum.energies[n]-data.spectrum.energies[l]
+                # Evaluate the regularized inverse gap before the contraction;
+                # retain the exact comparison without multiplication/division reassociation.
                 ref+=2real(
                     data.hamiltonian_derivatives[n, l, a]*data.hamiltonian_derivatives[l, n, d],
-                )*gap/(gap^2+eta^2)
+                )*(gap/(gap^2+eta^2))
             end
             @test geometry.hessians[n, a, d]==ref
         end

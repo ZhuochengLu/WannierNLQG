@@ -3,8 +3,9 @@ using Test, WannierNLQG
 @testset "Original progress readiness uses the explicitly admitted declared input" begin
     root = realpath(joinpath(@__DIR__, ".."))
     script = joinpath(root, "scripts", "check_progress_output.jl")
+    compiled_modules = VERSION < v"1.11" ? "--compiled-modules=yes" : "--compiled-modules=existing"
     command =
-        `$(Base.julia_cmd()) --startup-file=no --compiled-modules=existing --threads=1 --gcthreads=1 --project=$root $script`
+        `$(Base.julia_cmd()) --startup-file=no $compiled_modules --threads=1 --gcthreads=1 --project=$root $script`
     output = read(command, String)
     @test occursin("[progress-check] ok", output)
     location = match(r"(?m)^\[progress-check\] root=(.+)$", output)

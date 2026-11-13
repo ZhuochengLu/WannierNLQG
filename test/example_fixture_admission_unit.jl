@@ -3,8 +3,9 @@ using Test, WannierNLQG, JSON3
 @testset "Declared miniature admission preserves lazy TB and read-only source" begin
     root = realpath(joinpath(@__DIR__, ".."))
     probe = joinpath(@__DIR__, "ExampleFixtureInputProbe.jl")
+    compiled_modules = VERSION < v"1.11" ? "--compiled-modules=yes" : "--compiled-modules=existing"
     command =
-        `$(Base.julia_cmd()) --startup-file=no --compiled-modules=existing --threads=1 --gcthreads=1 --project=$root $probe $root`
+        `$(Base.julia_cmd()) --startup-file=no $compiled_modules --threads=1 --gcthreads=1 --project=$root $probe $root`
     report = JSON3.read(read(command, String))
     @test report.source_root == root
     @test report.threads == 1

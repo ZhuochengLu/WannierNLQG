@@ -13,23 +13,33 @@ runs:
           root = pwd()
           locked_path = joinpath(root, "Manifest.toml")
           locked_bytes = read(locked_path)
+          project_bytes = read(joinpath(root, "Project.toml"))
           locked_version = VersionNumber(TOML.parse(String(copy(locked_bytes)))["julia_version"])
-          if (VERSION.major, VERSION.minor) != (locked_version.major, locked_version.minor)
-              VERSION >= v"1.10.8" || error("CI requires version-specific manifest support")
-              project = TOML.parsefile(joinpath(root, "Project.toml"))
-              target = joinpath(root, "Manifest-v$(VERSION.major).$(VERSION.minor).toml")
-              ispath(target) && error("Unexpected existing CI version-specific manifest")
-              mktempdir() do directory
-                  open(joinpath(directory, "Project.toml"), "w") do stream
-                      TOML.print(stream, Dict("deps" => project["deps"], "compat" => project["compat"]))
-                  end
-                  Pkg.activate(directory)
-                  Pkg.instantiate(; allow_autoprecomp = false)
-                  cp(joinpath(directory, "Manifest.toml"), target)
-                  Pkg.activate(root)
-              end
+          project = TOML.parse(String(copy(project_bytes)))
+          consumer = mktempdir(ENV["RUNNER_TEMP"]; prefix = "wanniernlqg-ci-")
+          open(joinpath(consumer, "Project.toml"), "w") do stream
+              TOML.print(stream, Dict("deps" => project["deps"], "compat" => project["compat"]))
           end
+          if (VERSION.major, VERSION.minor) == (locked_version.major, locked_version.minor)
+              cp(locked_path, joinpath(consumer, "Manifest.toml"))
+          end
+          Pkg.activate(consumer)
+          Pkg.develop(Pkg.PackageSpec(path = root); preserve = Pkg.PRESERVE_ALL)
           Pkg.instantiate(; allow_autoprecomp = false)
           Pkg.precompile(; strict = true)
           read(locked_path) == locked_bytes || error("Released dependency lock changed in CI")
+          read(joinpath(root, "Project.toml")) == project_bytes || error("Released project changed in CI")
+          bootstrap = joinpath(consumer, "test_load_path.jl")
+          open(bootstrap, "w") do stream
+              println(stream, "test_environments = [path for path in LOAD_PATH if isabspath(path) && path != ", repr(consumer), " && isfile(joinpath(path, \"Project.toml\"))]")
+              println(stream, "length(test_environments) == 1 || error(\"Expected the explicit Pkg.test sandbox environment\")")
+              println(stream, "test_environment = only(test_environments)")
+              println(stream, "empty!(LOAD_PATH)")
+              println(stream, "append!(LOAD_PATH, unique([test_environment, ", repr(consumer), ", \"@stdlib\"]))")
+              println(stream, "ENV[\"JULIA_LOAD_PATH\"] = join(LOAD_PATH, Sys.iswindows() ? Char(59) : Char(58))")
+          end
+          open(ENV["GITHUB_ENV"], "a") do stream
+              println(stream, "WANNIERNLQG_CI_PROJECT=", consumer)
+              println(stream, "WANNIERNLQG_CI_LOAD_PATH_BOOTSTRAP=", bootstrap)
+          end
         '

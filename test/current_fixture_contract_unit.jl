@@ -25,8 +25,9 @@ include(joinpath(@__DIR__, "fixtures", "first_use_portable", "PortableFixturePay
     @test !occursin("bind_packed_checkpoint_sha256!", text)
     @test occursin("bind_packed_checkpoint_publication!", text)
     checker = joinpath(root, "scripts", "check_structure_boundaries.jl")
+    compiled_modules = VERSION < v"1.11" ? "--compiled-modules=yes" : "--compiled-modules=existing"
     command =
-        `$(Base.julia_cmd()) --startup-file=no --compiled-modules=existing --threads=1 --gcthreads=1 --project=$root $checker`
+        `$(Base.julia_cmd()) --startup-file=no $compiled_modules --threads=1 --gcthreads=1 --project=$root $checker`
     @test success(pipeline(command; stdout = stdout, stderr = stderr))
 end
 

@@ -2,7 +2,8 @@ module OrdinaryIOCallBoundaryUnit
 using Test
 @testset "Fresh-process ordinary IO audit boundary" begin
     probe=joinpath(@__DIR__, "OrdinaryIOCallBoundaryProbe.jl")
-    command=`$(Base.julia_cmd()) --compiled-modules=existing --startup-file=no --threads=1 --project=$(dirname(Base.active_project())) $probe`
+    compiled_modules = VERSION < v"1.11" ? "--compiled-modules=yes" : "--compiled-modules=existing"
+    command=`$(Base.julia_cmd()) $compiled_modules --startup-file=no --threads=1 --project=$(dirname(Base.active_project())) $probe`
     capture=IOBuffer()
     command=addenv(
         command,

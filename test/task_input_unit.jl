@@ -371,7 +371,8 @@ end
         table = resolve_task_input(document; base_dir = directory)
         @test table.config.tasks[1].physics.photon_momenta ==
               [(0.0, -q, 0.0) for q in [0.003, 0.002, 0.001, 0.002]]
-        @test table.metadata["photon_momentum_sources"]["response.tasks.shift"]["file"] == file
+        @test table.metadata["photon_momentum_sources"]["response.tasks.shift"]["file"] ==
+              realpath(file)
         @test startswith(
             table.metadata["photon_momentum_sources"]["response.tasks.shift"]["identity"],
             "wanniernlqg.file-state/1:",

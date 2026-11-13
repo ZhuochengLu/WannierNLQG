@@ -38,10 +38,11 @@ jobs:
         env:
           WANNIERNLQG_TEST_MODE: fast
           WANNIERNLQG_TEST_OUTPUT_ROOT: ${{ runner.temp }}/wanniernlqg-tests
-        run: julia --project=. -e 'using Pkg; Pkg.test()'
+        run: julia --project="$WANNIERNLQG_CI_PROJECT" -e 'using Pkg; Pkg.test("WannierNLQG"; julia_args=Cmd(["-L", ENV["WANNIERNLQG_CI_LOAD_PATH_BOOTSTRAP"]]))'
 
   full-shard:
     name: full-shard (${{ matrix.shard }})
+    needs: fast
     strategy:
       fail-fast: false
       matrix:
@@ -66,10 +67,11 @@ jobs:
           WANNIERNLQG_TEST_MODE: full-shard
           WANNIERNLQG_TEST_SHARD: ${{ matrix.shard }}
           WANNIERNLQG_TEST_OUTPUT_ROOT: ${{ runner.temp }}/wanniernlqg-tests
-        run: julia --project=. -e 'using Pkg; Pkg.test()'
+        run: julia --project="$WANNIERNLQG_CI_PROJECT" -e 'using Pkg; Pkg.test("WannierNLQG"; julia_args=Cmd(["-L", ENV["WANNIERNLQG_CI_LOAD_PATH_BOOTSTRAP"]]))'
 
   mpi-only:
     name: mpi-only
+    needs: fast
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -80,12 +82,12 @@ jobs:
       - uses: ./.github/actions/julia-package-environment
       - name: Install MPI launcher
         run: |
-          julia --project=. -e 'using MPI; MPI.install_mpiexecjl()'
+          julia --project="$WANNIERNLQG_CI_PROJECT" -e 'using MPI; MPI.install_mpiexecjl()'
       - name: MPI-only tests
         env:
           WANNIERNLQG_TEST_MODE: mpi-only
           WANNIERNLQG_TEST_OUTPUT_ROOT: ${{ runner.temp }}/wanniernlqg-tests
-        run: julia --project=. -e 'using Pkg; Pkg.test()'
+        run: julia --project="$WANNIERNLQG_CI_PROJECT" -e 'using Pkg; Pkg.test("WannierNLQG"; julia_args=Cmd(["-L", ENV["WANNIERNLQG_CI_LOAD_PATH_BOOTSTRAP"]]))'
 
   ci-required:
     name: ci-required
