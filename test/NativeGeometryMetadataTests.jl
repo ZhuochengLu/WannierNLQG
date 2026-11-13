@@ -37,7 +37,13 @@ using Test, WannierNLQG
         @test data.original_kpoint_indices == [1, 2]
         @test data.mesh_dimensions == (2, 1, 1)
         @test data.lattice_angstrom[1, 1] == 3 * 0.529177210903
-        @test data.loaded_files == [xml]
+        @test data.loaded_files == [realpath(xml)]
+        if Sys.isunix()
+            alias_xml = joinpath(directory, "geometry-alias.xml")
+            symlink(xml, alias_xml)
+            @test WannierNLQG.IO.read_qe_geometry_metadata(alias_xml).loaded_files ==
+                  [realpath(xml)]
+        end
         @test !data.wavefunctions_loaded &&
               !data.physical_metric_loaded &&
               !data.chemical_elements_resolved
@@ -55,7 +61,7 @@ using Test, WannierNLQG
         result = R.run_task_input(input; record_directory = joinpath(directory, "records"))
         @test result["grid_provenance"] == "ACTUAL_COMPLETE_POINT_SET"
         @test result["actual_point_inventory"]["slots_in_original_order"] == [2, 1]
-        @test result["loaded_geometry_files"] == [xml]
+        @test result["loaded_geometry_files"] == [realpath(xml)]
         @test !result["wavefunctions_loaded"] && !result["physical_metric_loaded"]
         bad = deepcopy(document);
         bad["kmesh"] = Dict("dimensions"=>[3, 1, 1])

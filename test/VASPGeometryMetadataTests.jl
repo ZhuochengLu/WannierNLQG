@@ -18,6 +18,12 @@ using Test, WannierNLQG
 """
         write(outcar, text)
         data=readmeta(outcar)
+        @test data.loaded_files == [realpath(outcar)]
+        if Sys.isunix()
+            alias_outcar = joinpath(dir, "outcar-alias")
+            symlink(outcar, alias_outcar)
+            @test readmeta(alias_outcar).loaded_files == [realpath(outcar)]
+        end
         @test data.kpoints_fractional == [0.5 0.0; 0.0 0.0; 0.0 0.0]
         @test data.original_kpoint_indices == [1, 2]
         @test data.kpoint_weights == [0.5, 0.5]
@@ -38,7 +44,7 @@ using Test, WannierNLQG
         report=R.run_task_input(input; record_directory = joinpath(dir, "records"))
         @test report["actual_point_inventory"]["slots_in_original_order"] == [2, 1]
         @test report["grid_provenance"] == "ACTUAL_COMPLETE_POINT_SET"
-        @test report["loaded_geometry_files"] == [poscar, outcar]
+        @test report["loaded_geometry_files"] == [poscar, realpath(outcar)]
         @test !report["wavefunctions_loaded"] && !report["physical_metric_loaded"]
         for bad in (
             replace(text, "NKPTS = 2"=>"NKPTS = 3"),
