@@ -16,7 +16,7 @@ runs:
           project_bytes = read(joinpath(root, "Project.toml"))
           locked_version = VersionNumber(TOML.parse(String(copy(locked_bytes)))["julia_version"])
           project = TOML.parse(String(copy(project_bytes)))
-          consumer = mktempdir(ENV["RUNNER_TEMP"]; prefix = "wanniernlqg-ci-")
+          consumer = mktempdir(ENV["RUNNER_TEMP"]; prefix = "wanniernlqg-ci-", cleanup = false)
           open(joinpath(consumer, "Project.toml"), "w") do stream
               TOML.print(stream, Dict("deps" => project["deps"], "compat" => project["compat"]))
           end
