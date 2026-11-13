@@ -1,0 +1,35 @@
+name: Julia package environment
+description: Resolve a Julia-version-compatible CI environment without rewriting the released lock
+runs:
+  using: composite
+  steps:
+    - name: Instantiate and precompile
+      shell: bash
+      env:
+        JULIA_PKG_PRECOMPILE_AUTO: '0'
+      run: |
+        julia --project=. -e '
+          using Pkg, TOML
+          root = pwd()
+          locked_path = joinpath(root, "Manifest.toml")
+          locked_bytes = read(locked_path)
+          locked_version = VersionNumber(TOML.parse(String(copy(locked_bytes)))["julia_version"])
+          if (VERSION.major, VERSION.minor) != (locked_version.major, locked_version.minor)
+              VERSION >= v"1.10.8" || error("CI requires version-specific manifest support")
+              project = TOML.parsefile(joinpath(root, "Project.toml"))
+              target = joinpath(root, "Manifest-v$(VERSION.major).$(VERSION.minor).toml")
+              ispath(target) && error("Unexpected existing CI version-specific manifest")
+              mktempdir() do directory
+                  open(joinpath(directory, "Project.toml"), "w") do stream
+                      TOML.print(stream, Dict("deps" => project["deps"], "compat" => project["compat"]))
+                  end
+                  Pkg.activate(directory)
+                  Pkg.instantiate(; allow_autoprecomp = false)
+                  cp(joinpath(directory, "Manifest.toml"), target)
+                  Pkg.activate(root)
+              end
+          end
+          Pkg.instantiate(; allow_autoprecomp = false)
+          Pkg.precompile(; strict = true)
+          read(locked_path) == locked_bytes || error("Released dependency lock changed in CI")
+        '

@@ -15,6 +15,7 @@
         ".JuliaFormatter.toml",
         ".github/ISSUE_TEMPLATE/bug_report.yml",
         ".github/RELEASE_NOTE_TEMPLATE.md",
+        ".github/actions/julia-package-environment/action.yml",
         ".github/actions/publication-environment/action.yml",
         ".github/pull_request_template.md",
         ".github/workflows/ci.yml",

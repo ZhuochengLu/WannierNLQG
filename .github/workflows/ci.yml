@@ -33,8 +33,7 @@ jobs:
         with:
           version: ${{ matrix.julia.version }}
       - uses: julia-actions/cache@v2
-      - name: Instantiate
-        run: julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - uses: ./.github/actions/julia-package-environment
       - name: Fast tests
         env:
           WANNIERNLQG_TEST_MODE: fast
@@ -61,8 +60,7 @@ jobs:
         with:
           version: '1.10'
       - uses: julia-actions/cache@v2
-      - name: Instantiate
-        run: julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - uses: ./.github/actions/julia-package-environment
       - name: Full-only shard
         env:
           WANNIERNLQG_TEST_MODE: full-shard
@@ -79,9 +77,10 @@ jobs:
         with:
           version: '1.10'
       - uses: julia-actions/cache@v2
-      - name: Instantiate and install MPI launcher
+      - uses: ./.github/actions/julia-package-environment
+      - name: Install MPI launcher
         run: |
-          julia --project=. -e 'using Pkg; Pkg.instantiate(); using MPI; MPI.install_mpiexecjl()'
+          julia --project=. -e 'using MPI; MPI.install_mpiexecjl()'
       - name: MPI-only tests
         env:
           WANNIERNLQG_TEST_MODE: mpi-only
