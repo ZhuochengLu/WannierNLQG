@@ -11,7 +11,7 @@ isdefined(@__MODULE__, :FullMPIRankProfile) ||
         Base.println("[mpi-profile:start] case=wannierization_raw_z ranks=$(ranks)")
         Base.flush(Base.stdout)
         command = addenv(
-            `$(launcher) -n $(ranks) $(Base.julia_cmd()) --compiled-modules=no --startup-file=no --threads=1 --project=$(dirname(@__DIR__)) $(probe)`,
+            `$(launcher) -n $(ranks) $(Base.julia_cmd()) --heap-size-hint=512M --compiled-modules=no --startup-file=no --threads=1 --project=$(dirname(@__DIR__)) $(probe)`,
             "OMP_NUM_THREADS" => "1",
             "MKL_NUM_THREADS" => "1",
             "OPENBLAS_NUM_THREADS" => "1",
