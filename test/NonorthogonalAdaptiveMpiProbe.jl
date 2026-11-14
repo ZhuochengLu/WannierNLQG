@@ -324,6 +324,103 @@ RANK == 0 && println("ADAPTIVE_FINISH_FAILURE_RECOVERY_COMPLETED")
     RANK == 0 && println("ADAPTIVE_RULE_FAILURE_RECOVERY_COMPLETED")
 end
 
+# This fixture consumes the unchanged bounded-packet integrator. It observes
+# evaluator ownership, not the private per-rank shape reference or whole-rule idleness.
+packet_fixture_receipt = Ref{Any}(nothing)
+if FullMPIRankProfile.adaptive_packet_fixture()
+    @testset "Short scalar/tensor packets retain idle owners and recover collectively" begin
+        domain = RUNTIME.IntegrationDomain{3}()
+        algorithm = HAdaptiveCubature(max_evaluations = 33)
+        serial_nodes = Vector{Vector{Float64}}()
+        scalar_value = node -> exp(sum(node)) + im * cos(node[1])
+        scalar_serial = RUNTIME.integrate_response(
+            node -> (push!(serial_nodes, collect(node)); scalar_value(node)),
+            domain,
+            algorithm,
+        )
+        @test length(serial_nodes) == 33
+        ordinals = Dict(Tuple(node) => ordinal for (ordinal, node) in enumerate(serial_nodes))
+        @test length(ordinals) == 33
+        prefix_nodes = min(3, max(1, RANKS - 1))
+        scalar_trace = Int[]
+        for tensor in (false, true)
+            value_at =
+                tensor ? (node -> ComplexF64[scalar_value(node) 0; 0 1e-9 * sin(sum(node))]) :
+                scalar_value
+            sample = value_at(first(serial_nodes))
+            bytes_per_value = 4 * Base.summarysize(sample)
+            limit = tensor ? 2 * bytes_per_value : 128
+            capacity = CORE.ESKernel.WorkspacePlanning.batch_capacity(33, bytes_per_value, 0, limit)
+            @test capacity == 2
+            # Only this rank's nodes have usable values. Looking up an unowned
+            # value is poison; the production ownership branch must skip it.
+            owned_values = Dict(
+                ordinal => value_at(node) for
+                (ordinal, node) in enumerate(serial_nodes) if mod(ordinal - 1, RANKS) == RANK
+            )
+            trace = Int[]
+            evaluator =
+                node -> begin
+                    ordinal = ordinals[Tuple(node)]
+                    haskey(owned_values, ordinal) ||
+                        error("unowned packet evaluator was called")
+                    push!(trace, ordinal)
+                    owned_values[ordinal]
+                end
+            reference =
+                tensor ? RUNTIME.integrate_response(value_at, domain, algorithm) : scalar_serial
+            actual = RUNTIME.integrate_response_mpi(
+                evaluator,
+                domain,
+                algorithm;
+                pending_memory_limit_bytes = limit,
+            )
+            @test trace == collect((RANK + 1):RANKS:33)
+            @test isempty(filter(ordinal -> ordinal <= prefix_nodes, trace)) ==
+                  (RANK >= prefix_nodes)
+            for field in fieldnames(typeof(reference))
+                @test getfield(actual, field) == getfield(reference, field)
+            end
+            tensor || append!(scalar_trace, trace)
+        end
+        # Failure after the root-only first packet reaches the existing terminal
+        # broadcast. Every rank must return and reuse this same communicator.
+        failure_sequence = min(3, RANKS)
+        @test_throws ErrorException RUNTIME.integrate_response_mpi(
+            node -> begin
+                ordinal = ordinals[Tuple(node)]
+                mod(ordinal - 1, RANKS) == RANK ||
+                    error("unowned failure evaluator was called")
+                ordinal == failure_sequence && error("controlled short-packet owner failure")
+                scalar_value(node)
+            end,
+            domain,
+            algorithm;
+            pending_memory_limit_bytes = 128,
+        )
+        recovered = RUNTIME.integrate_response_mpi(
+            scalar_value,
+            domain,
+            algorithm;
+            pending_memory_limit_bytes = 128,
+        )
+        for field in fieldnames(typeof(scalar_serial))
+            @test getfield(recovered, field) == getfield(scalar_serial, field)
+        end
+        packet_fixture_receipt[] = Dict(
+            "capacity" => 2,
+            "rule_nodes" => 33,
+            "local_ordinals" => scalar_trace,
+            "prefix_nodes" => prefix_nodes,
+            "empty_prefix_owner" => (RANK >= prefix_nodes),
+            "scalar_tensor_exact" => true,
+            "failure_recovery" => true,
+            "internal_shape_state_observed" => false,
+        )
+        RANK == 0 && println("ADAPTIVE_SHORT_PACKET_EMPTY_OWNERS_PASS ranks=", RANKS)
+    end
+end
+
 @testset "Round-robin owner distribution and collective error recovery" begin
     domain = RUNTIME.IntegrationDomain(lower = [0.0], upper = [1.0], coordinates = :cartesian)
     algorithm = HAdaptiveCubature(atol = 1e-12, rtol = 1e-6, max_evaluations = 2000)
@@ -372,6 +469,7 @@ write(
             "normal_empty_owner_boundary_exercised" => RANKS > 15,
             "mpi_profile" => get(ENV, "WANNIERNLQG_TEST_MPI_PROFILE", "legacy16"),
             "mpi_library_version" => MPI.Get_library_version(),
+            "short_packet_fixture" => packet_fixture_receipt[],
         ),
     ),
 )

@@ -88,6 +88,7 @@ jobs:
       - name: MPI-only tests
         env:
           WANNIERNLQG_TEST_MODE: mpi-only
+          WANNIERNLQG_TEST_MPI_PROFILE: ci8
           WANNIERNLQG_TEST_OUTPUT_ROOT: ${{ runner.temp }}/wanniernlqg-tests
         run: |
           mpi_observer_owner_pid=$$

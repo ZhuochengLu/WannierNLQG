@@ -15,5 +15,8 @@ native_definition_ranks() = Tuple(Int.(selected_profile().rank_plan.native_defin
 checkpoint_definition_ranks() = Tuple(Int.(selected_profile().rank_plan.checkpoint_definition))
 is_air_profile() = get(ENV, "WANNIERNLQG_TEST_MPI_PROFILE", "legacy16") == "air3"
 affine_ranks() = is_air_profile() ? (1, 2, 3) : (1, 2)
-u_fixture_variants() = is_air_profile() ? ("original", "empty-owner-1d") : ("original",)
+u_fixture_variants() =
+    haskey(selected_profile().rank_plan, :u_empty_owner_fixture) ?
+    ("original", String(selected_profile().rank_plan.u_empty_owner_fixture)) : ("original",)
+adaptive_packet_fixture() = haskey(selected_profile().rank_plan, :adaptive_packet_fixture)
 end

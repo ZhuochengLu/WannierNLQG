@@ -122,6 +122,18 @@ The final engineering inventory includes `nonorthogonal_adaptive_mpi_unit.jl` in
 
 Full keeps the seven-task inventory and defaults to `legacy16`: raw-Z and U localization use 1/2/4/8/16 ranks, adaptive uses 1/16, and MPI-only requires 17 slots including its driver. An explicitly approved bounded run may select `--mpi-profile bounded11 --cpu-budget 12 --jobs 2`: raw-Z/U use 1/2/4/8/11, adaptive uses 1/11, and all other MPI cases remain unchanged. Numerical cases, tolerances, exact serial comparisons and collective failure recovery are retained.
 
+
+GitHub CI selects `ci8`: raw-Z/U use 1/2/4/8 ranks and adaptive uses 1/2/8.
+The original U fixture is retained alongside the two-edge empty-owner fixture,
+whose idle ranks receive poisoned frames that must never be read. Adaptive keeps
+the original rules and 21 public numerical records; small bounded scalar/tensor
+packets check idle packet owners, canonical value replay and collective failure
+recovery. Packet-level idle owners do not establish the original 15-node rule's
+whole-rule idle-owner boundary at 16 ranks. Scales above 8 and both original
+16-rank empty-owner endpoints remain explicitly untested by `ci8`. `legacy16`
+remains available for larger environments; software MPI rank support is unchanged.
+The contributor scheduler charges 9 slots for `ci8`, including its driver.
+
 The canonical profile file is `scripts/test_support/full_rank_profiles.json`. The scheduler, Julia MPI test wrappers, literal ownership catalog and typed qualification use that same declared profile. Requests and summaries record the rank plan and untested scope. Lowering the budget without changing the selected profile is rejected. MPI-only remains exclusive; all rank processes plus the driver count against the profile budget. RSS/swap/disk/ownership guards are unchanged.
 
 A bounded11 result does **not** test the 16-rank scale. It also does not exercise the original U-localization 12-edge or adaptive 15-node *normal empty-owner* endpoints at 16 ranks. Raw-Z's two-k-point empty owners and adaptive's root-first failure with empty peers plus collective recovery remain tested. Do not relabel these remaining boundaries as covered or transfer old source PASS evidence.

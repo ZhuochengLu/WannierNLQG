@@ -213,6 +213,23 @@ class SchedulerTests(unittest.TestCase):
             runner.run_suite([tasks[0], runner.Task('wannier-core', 'full-shard', 'wannier-core')],
                              str(self.julia), self.directory / 'mixed-profile', 2, 12)
         self.assertEqual(runner.task_cpu_slots(runner.Task('mpi-only', 'mpi-only'), 2), 17)
+    def test_ci8_profile_is_explicit_and_keeps_small_empty_owner_fixtures(self):
+        contract = runner.mpi_contract('ci8')
+        plan = contract['mpi_rank_plan']
+        self.assertEqual(plan['wannierization'], [1, 2, 4, 8])
+        self.assertEqual(plan['adaptive'], [1, 2, 8])
+        self.assertEqual(plan['u_empty_owner_fixture'], 'empty-owner-1d')
+        self.assertEqual(plan['adaptive_packet_fixture'], 'short-packet')
+        self.assertEqual(runner.task_cpu_slots(runner.Task('mpi-only', 'mpi-only', mpi_profile='ci8'), 1), 9)
+        self.assertIn(16, contract['mpi_untested_scope']['rank_scales'])
+        self.assertEqual(len(contract['mpi_untested_scope']['normal_empty_owner_boundaries']), 2)
+        self.assertEqual(runner.mpi_contract()['mpi_rank_plan']['wannierization'], [1, 2, 4, 8, 16])
+        self.assertEqual(runner.mpi_contract()['mpi_rank_plan']['adaptive'], [1, 16])
+        plan['adaptive'].append(16)
+        self.assertEqual(runner.mpi_contract('ci8')['mpi_rank_plan']['adaptive'], [1, 2, 8])
+        with self.assertRaises(ValueError):
+            runner.run_suite(runner.suite_tasks('mpi-only', 'ci8'), str(self.julia), self.directory / 'ci8-low', 1, 8)
+
     def test_failure_and_missing_receipts_are_not_pass(self):
         with patch.dict(os.environ, {"FAKE_FAIL": "fast", "FAKE_MISSING": "wannier-core", "FAKE_WRAPPER_MISSING": "scientific-contracts"}):
             result = self.execute()

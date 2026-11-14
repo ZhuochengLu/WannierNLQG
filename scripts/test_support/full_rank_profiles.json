@@ -109,6 +109,50 @@
           "adaptive original15-node rule at16ranks"
         ]
       }
+    },
+    "ci8": {
+      "rank_plan": {
+        "wannierization": [
+          1,
+          2,
+          4,
+          8
+        ],
+        "adaptive": [
+          1,
+          2,
+          8
+        ],
+        "other_maximum_ranks": 3,
+        "native_definition": [
+          1,
+          2,
+          3
+        ],
+        "checkpoint_definition": [
+          1,
+          2,
+          3
+        ],
+        "u_empty_owner_fixture": "empty-owner-1d",
+        "adaptive_packet_fixture": "short-packet"
+      },
+      "untested_scope": {
+        "rank_scales": [
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16
+        ],
+        "normal_empty_owner_boundaries": [
+          "U-localization original 12-edge fixture at16ranks",
+          "adaptive original15-node rule at16ranks"
+        ]
+      }
     }
   }
 }

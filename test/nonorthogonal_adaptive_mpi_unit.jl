@@ -76,6 +76,20 @@ end
                 @test receipt.rank == rank
                 @test receipt.ranks == ranks
                 @test receipt.normal_constant_local_nodes == length((rank + 1):ranks:15)
+                @test receipt.normal_empty_owner_boundary_exercised == (ranks > 15)
+                if FullMPIRankProfile.adaptive_packet_fixture()
+                    packet = receipt.short_packet_fixture
+                    @test packet.capacity == 2
+                    @test packet.rule_nodes == 33
+                    @test packet.local_ordinals == collect((rank + 1):ranks:33)
+                    @test packet.prefix_nodes == min(3, max(1, ranks - 1))
+                    @test packet.empty_prefix_owner == (rank >= packet.prefix_nodes)
+                    @test packet.scalar_tensor_exact
+                    @test packet.failure_recovery
+                    @test !packet.internal_shape_state_observed
+                else
+                    @test receipt.short_packet_fixture === nothing
+                end
             end
         end
         for ranks in rank_plan
