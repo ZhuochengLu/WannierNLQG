@@ -8,6 +8,8 @@ isdefined(@__MODULE__, :FullMPIRankProfile) ||
     launcher = MPI.mpiexec()
     digests = String[]
     for ranks in FullMPIRankProfile.wannierization_ranks()
+        Base.println("[mpi-profile:start] case=wannierization_raw_z ranks=$(ranks)")
+        Base.flush(Base.stdout)
         command = addenv(
             `$(launcher) -n $(ranks) $(Base.julia_cmd()) --compiled-modules=no --startup-file=no --threads=1 --project=$(dirname(@__DIR__)) $(probe)`,
             "OMP_NUM_THREADS" => "1",
@@ -16,6 +18,8 @@ isdefined(@__MODULE__, :FullMPIRankProfile) ||
             "VECLIB_MAXIMUM_THREADS" => "1",
         )
         output = read(command, String)
+        Base.println("[mpi-profile:process-complete] case=wannierization_raw_z ranks=$(ranks)")
+        Base.flush(Base.stdout)
         matched = match(r"WANNIERIZATION_RAW_Z_MPI_DIGEST=([0-9a-f]{64})", output)
         @test matched !== nothing
         matched === nothing || push!(digests, matched.captures[1])

@@ -83,11 +83,16 @@ jobs:
       - name: Install MPI launcher
         run: |
           julia --project="$WANNIERNLQG_CI_PROJECT" -e 'using MPI; MPI.install_mpiexecjl()'
+      - name: Check read-only MPI resource observer
+        run: python3 -B -m unittest discover -s test -p 'mpi_runner_resources_unit.py'
       - name: MPI-only tests
         env:
           WANNIERNLQG_TEST_MODE: mpi-only
           WANNIERNLQG_TEST_OUTPUT_ROOT: ${{ runner.temp }}/wanniernlqg-tests
-        run: julia --project="$WANNIERNLQG_CI_PROJECT" -e 'using Pkg; Pkg.test("WannierNLQG"; julia_args=Cmd(["-L", ENV["WANNIERNLQG_CI_LOAD_PATH_BOOTSTRAP"]]))'
+        run: |
+          mpi_observer_owner_pid=$$
+          python3 -B .github/scripts/mpi_runner_resources.py --owner-pid "$mpi_observer_owner_pid" --interval 30 --max-seconds 7200 &
+          julia --project="$WANNIERNLQG_CI_PROJECT" -e 'using Pkg; Pkg.test("WannierNLQG"; julia_args=Cmd(["-L", ENV["WANNIERNLQG_CI_LOAD_PATH_BOOTSTRAP"]]))'
 
   ci-required:
     name: ci-required
