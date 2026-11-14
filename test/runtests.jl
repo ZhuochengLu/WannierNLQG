@@ -4,6 +4,32 @@ const TEST_SUITE_STARTED_NS = time_ns()
 using JuliaFormatter
 using WannierNLQG
 
+# Establish native BLAS state in this actual test process, including cached loads.
+import LinearAlgebra
+const TEST_BLAS_THREADS_BEFORE = LinearAlgebra.BLAS.get_num_threads()
+LinearAlgebra.BLAS.set_num_threads(1)
+
+# Record only declared runtime fields and reject an unexpected BLAS thread state.
+function record_test_linear_algebra_state(context)
+    blas_threads = LinearAlgebra.BLAS.get_num_threads()
+    blas_threads == 1 || error("Package tests require one native BLAS thread")
+    println(
+        "WANNIERNLQG_TEST_LINEAR_ALGEBRA ",
+        (;
+            context,
+            initial_blas_threads = TEST_BLAS_THREADS_BEFORE,
+            blas_threads,
+            blas_config = string(LinearAlgebra.BLAS.get_config()),
+            julia_version = string(VERSION),
+            kernel = string(Sys.KERNEL),
+            architecture = string(Sys.ARCH),
+            julia_threads = Threads.nthreads(),
+        ),
+    )
+    return nothing
+end
+record_test_linear_algebra_state("suite-start")
+
 # Python analysis helpers must not leave bytecode in the release tree while the
 # release-whitelist gate runs.
 ENV["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -104,6 +130,8 @@ end
 function include_test_file(name::AbstractString)
     path = joinpath(@__DIR__, name)
     isfile(path) || error("registered test file is missing: $(path)")
+    name == "photon_drag_blas_unit.jl" &&
+        record_test_linear_algebra_state("before-photon-drag-strict-panels")
     started_ns = time_ns()
     println("[test-file:start] name=$(name)")
     flush(stdout)
