@@ -1401,7 +1401,7 @@ function response_symmetry_runtime_probe(mode::AbstractString, arguments = Strin
             "VECLIB_MAXIMUM_THREADS" => "1",
         )
         output = IOBuffer()
-        process = run(pipeline(ignorestatus(command); stdout = output, stderr = stderr))
+        process = Base.run(pipeline(ignorestatus(command); stdout = output, stderr = stderr))
         success(process) ||
             error("response-symmetry probe failed: mode=$(mode) exit=$(process.exitcode)")
         return String(take!(output))

@@ -62,7 +62,7 @@ function run_extension_lifecycle_probe(mode::AbstractString; threads::Int = 1, a
             "VECLIB_MAXIMUM_THREADS" => "1",
         )
         output = IOBuffer()
-        process = run(pipeline(ignorestatus(command); stdout = output, stderr = stderr))
+        process = Base.run(pipeline(ignorestatus(command); stdout = output, stderr = stderr))
         success(process) || error("lifecycle probe failed: mode=$(mode) exit=$(process.exitcode)")
         return String(take!(output))
     end
