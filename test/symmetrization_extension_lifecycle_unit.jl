@@ -30,6 +30,8 @@ end
 # Run one extension lifecycle case in an isolated Julia process.
 function run_extension_lifecycle_probe(mode::AbstractString; threads::Int = 1, arguments = String[])
     loading_options = endswith(mode, "_function_entry") ? ["--compiled-modules=no"] : String[]
+    project = dirname(something(Base.active_project(), joinpath(ROOT, "Project.toml")))
+    isfile(joinpath(project, "Project.toml")) || error("lifecycle probe project is missing")
     return with_extension_lifecycle_depot() do temporary_depot
         actual_arguments = copy(arguments)
         if mode in ("operator_bundle_function_entry", "operator_bundle_cached_entry")
@@ -45,12 +47,12 @@ function run_extension_lifecycle_probe(mode::AbstractString; threads::Int = 1, a
             push!(actual_arguments, fixture)
         end
         command =
-            `$(Base.julia_cmd()) --startup-file=no $(loading_options) --threads=$(threads) --project=$(ROOT) $(EXTENSION_LIFECYCLE_PROBE) $(mode) $(actual_arguments)`
+            `$(Base.julia_cmd()) --startup-file=no $(loading_options) --threads=$(threads) --project=$(project) $(EXTENSION_LIFECYCLE_PROBE) $(mode) $(actual_arguments)`
         depot_separator = Sys.iswindows() ? ';' : ':'
         isolated_depot = join((temporary_depot, Base.DEPOT_PATH...), depot_separator)
         command = addenv(
             command,
-            "JULIA_PROJECT" => ROOT,
+            "JULIA_PROJECT" => project,
             "JULIA_LOAD_PATH" => "@:@stdlib",
             "JULIA_DEPOT_PATH" => isolated_depot,
             "JULIA_NUM_THREADS" => string(threads),
@@ -59,7 +61,10 @@ function run_extension_lifecycle_probe(mode::AbstractString; threads::Int = 1, a
             "OPENBLAS_NUM_THREADS" => "1",
             "VECLIB_MAXIMUM_THREADS" => "1",
         )
-        return read(command, String)
+        output = IOBuffer()
+        process = run(pipeline(ignorestatus(command); stdout = output, stderr = stderr))
+        success(process) || error("lifecycle probe failed: mode=$(mode) exit=$(process.exitcode)")
+        return String(take!(output))
     end
 end
 

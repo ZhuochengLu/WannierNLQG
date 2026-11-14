@@ -1382,14 +1382,16 @@ end
 end
 
 function response_symmetry_runtime_probe(mode::AbstractString, arguments = String[])
+    project = dirname(something(Base.active_project(), joinpath(ROOT, "Project.toml")))
+    isfile(joinpath(project, "Project.toml")) || error("response-symmetry probe project is missing")
     return mktempdir() do depot
         depot_separator = Sys.iswindows() ? ';' : ':'
         isolated_depot = join((depot, Base.DEPOT_PATH...), depot_separator)
         command =
-            `$(Base.julia_cmd()) --startup-file=no --compiled-modules=no --project=$(ROOT) $(RESPONSE_SYMMETRY_RUNTIME_PROBE) $(mode) $(arguments)`
+            `$(Base.julia_cmd()) --startup-file=no --compiled-modules=no --project=$(project) $(RESPONSE_SYMMETRY_RUNTIME_PROBE) $(mode) $(arguments)`
         command = addenv(
             command,
-            "JULIA_PROJECT" => ROOT,
+            "JULIA_PROJECT" => project,
             "JULIA_LOAD_PATH" => "@:@stdlib",
             "JULIA_DEPOT_PATH" => isolated_depot,
             "JULIA_PKG_PRECOMPILE_AUTO" => "0",
@@ -1398,7 +1400,11 @@ function response_symmetry_runtime_probe(mode::AbstractString, arguments = Strin
             "OPENBLAS_NUM_THREADS" => "1",
             "VECLIB_MAXIMUM_THREADS" => "1",
         )
-        return read(command, String)
+        output = IOBuffer()
+        process = run(pipeline(ignorestatus(command); stdout = output, stderr = stderr))
+        success(process) ||
+            error("response-symmetry probe failed: mode=$(mode) exit=$(process.exitcode)")
+        return String(take!(output))
     end
 end
 

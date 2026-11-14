@@ -1,5 +1,8 @@
 using WannierNLQG
 
+realpath(Base.pkgdir(WannierNLQG)) == realpath(joinpath(@__DIR__, "..")) ||
+    error("response-symmetry probe loaded a different source tree")
+
 loaded(name::AbstractString) = any(package -> package.name == name, keys(Base.loaded_modules))
 
 mode = only(ARGS[1:1])

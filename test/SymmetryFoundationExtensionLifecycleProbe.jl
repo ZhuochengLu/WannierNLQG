@@ -1,6 +1,9 @@
 using LinearAlgebra
 using WannierNLQG
 
+realpath(Base.pkgdir(WannierNLQG)) == realpath(joinpath(@__DIR__, "..")) ||
+    error("lifecycle probe loaded a different source tree")
+
 const FOUNDATION_EXTENSION_NAME = :WannierNLQGSymmetryFoundationExt
 const SYMMETRIZATION_EXTENSION_NAME = :WannierNLQGSymmetrizationExt
 const WANNIERIZATION_EXTENSION_NAME = :WannierNLQGWannierizationExt
