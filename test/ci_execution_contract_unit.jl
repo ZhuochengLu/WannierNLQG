@@ -144,6 +144,18 @@ end
     )
 end
 
+# Match the complete removed YAML environment key, including quoted/flow mappings.
+ci_has_legacy_mpi_environment(source) = occursin(r"\bWANNIERNLQG_TEST_MPI[\"']?\s*:", source)
+
+@testset "MPI profile names cannot enable the removed MPI switch" begin
+    @test !ci_has_legacy_mpi_environment("WANNIERNLQG_TEST_MPI_PROFILE: ci8")
+    @test !ci_has_legacy_mpi_environment("WANNIERNLQG_TEST_MPI_OTHER: 1")
+    @test ci_has_legacy_mpi_environment("  WANNIERNLQG_TEST_MPI: '1'")
+    @test ci_has_legacy_mpi_environment("  'WANNIERNLQG_TEST_MPI': '1'")
+    @test ci_has_legacy_mpi_environment("  \"WANNIERNLQG_TEST_MPI\": '1'")
+    @test ci_has_legacy_mpi_environment("env: {WANNIERNLQG_TEST_MPI: '1'}")
+end
+
 @testset "branch, PR, manual, and tag workflows have distinct contracts" begin
     ci = read(CI_WORKFLOW, String)
     tag = read(TAG_GATE_WORKFLOW, String)
@@ -156,7 +168,10 @@ end
     @test occursin("WANNIERNLQG_TEST_MODE: full-shard", ci)
     @test occursin("WANNIERNLQG_TEST_MODE: mpi-only", ci)
     @test !occursin("WANNIERNLQG_TEST_LEVEL", ci)
-    @test !occursin("WANNIERNLQG_TEST_MPI", ci)
+    @test !ci_has_legacy_mpi_environment(ci)
+    @test count("WANNIERNLQG_TEST_MPI_PROFILE:", ci) == 1
+    mpi_job = split(split(ci, "\n  mpi-only:\n"; limit = 2)[2], "\n  ci-required:\n"; limit = 2)[1]
+    @test occursin("WANNIERNLQG_TEST_MPI_PROFILE: ci8", mpi_job)
     for shard in CITestPlan.full_shard_names()
         @test occursin("- $(shard)", ci)
     end
