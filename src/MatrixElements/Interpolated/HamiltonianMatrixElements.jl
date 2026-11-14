@@ -64,23 +64,7 @@ function transform_to_hamiltonian_gauge!(
     input::AbstractMatrix{ComplexF64},
     temporary::AbstractMatrix{ComplexF64},
 )
-    # Exact zero input in a finite, unit-scale frame has two zero products.
-    # Bound both frames conservatively: nonfinite/huge expert frames retain BLAS
-    # semantics (including possible intermediate overflow), as do small matrices.
-    # Generic strided multiplication can retain negative zeros; keep that path.
-    unit_scale(value) = abs(real(value)) <= 1.0 && abs(imag(value)) <= 1.0
-    blas_layout(matrix) = matrix isa StridedMatrix{ComplexF64} && stride(matrix, 1) == 1
-    if size(output, 1) >= 64 &&
-       blas_layout(output) &&
-       blas_layout(temporary) &&
-       blas_layout(input) &&
-       all(iszero, input) &&
-       all(unit_scale, spectrum.eigenvectors_adjoint) &&
-       all(unit_scale, spectrum.eigenvectors)
-        fill!(temporary, COMPLEX_ZERO)
-        fill!(output, COMPLEX_ZERO)
-        return output
-    end
+    # Keep the backend's signed-zero, nonfinite, and strided multiplication semantics.
     mul!(temporary, spectrum.eigenvectors_adjoint, input)
     mul!(output, temporary, spectrum.eigenvectors)
     return output
