@@ -14,18 +14,40 @@ runs:
           locked_path = joinpath(root, "Manifest.toml")
           locked_bytes = read(locked_path)
           project_bytes = read(joinpath(root, "Project.toml"))
-          locked_version = VersionNumber(TOML.parse(String(copy(locked_bytes)))["julia_version"])
+          locked = TOML.parse(String(copy(locked_bytes)))
+          locked_version = VersionNumber(locked["julia_version"])
           project = TOML.parse(String(copy(project_bytes)))
+          consumer_deps = copy(project["deps"])
+          consumer_compat = copy(project["compat"])
+          # Catalog replay verifies the frozen generator package and C artifact.
+          # Keep that closure on its released identities when resolving older Julia.
+          generation_packages = ("Spglib", "spglib_jll")
+          for name in generation_packages
+              record = only(locked["deps"][name])
+              version = VersionNumber(record["version"])
+              consumer_deps[name] = record["uuid"]
+              consumer_compat[name] = "=$(version.major).$(version.minor).$(version.patch)"
+          end
           consumer = mktempdir(ENV["RUNNER_TEMP"]; prefix = "wanniernlqg-ci-", cleanup = false)
           open(joinpath(consumer, "Project.toml"), "w") do stream
-              TOML.print(stream, Dict("deps" => project["deps"], "compat" => project["compat"]))
+              TOML.print(stream, Dict("deps" => consumer_deps, "compat" => consumer_compat))
           end
           if (VERSION.major, VERSION.minor) == (locked_version.major, locked_version.minor)
               cp(locked_path, joinpath(consumer, "Manifest.toml"))
           end
           Pkg.activate(consumer)
           Pkg.develop(Pkg.PackageSpec(path = root); preserve = Pkg.PRESERVE_ALL)
+          Pkg.pin([Pkg.PackageSpec(name = name, version = VersionNumber(only(locked["deps"][name])["version"])) for name in generation_packages])
           Pkg.instantiate(; allow_autoprecomp = false)
+          resolved = TOML.parsefile(joinpath(consumer, "Manifest.toml"))
+          for name in generation_packages
+              actual = only(resolved["deps"][name])
+              expected = only(locked["deps"][name])
+              for key in ("uuid", "version", "git-tree-sha1")
+                  actual[key] == expected[key] || error("Catalog generation dependency changed: $(name) $(key)")
+              end
+              actual["pinned"] === true || error("Catalog generation dependency is not pinned: $(name)")
+          end
           Pkg.precompile(; strict = true)
           read(locked_path) == locked_bytes || error("Released dependency lock changed in CI")
           read(joinpath(root, "Project.toml")) == project_bytes || error("Released project changed in CI")

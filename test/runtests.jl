@@ -331,6 +331,11 @@ if RUN_FAST_TESTS
         records =
             ReadinessGateRunner.run_readiness_gates(entries; jobs = READINESS_JOBS, output_root)
         for record in records
+            if record.exit_code != 0
+                println("[gate:failure-log] name=$(record.name) log=$(record.log_path)")
+                print(read(record.log_path, String))
+                flush(stdout)
+            end
             @testset "$(record.name)" begin
                 @test record.exit_code == 0
             end
