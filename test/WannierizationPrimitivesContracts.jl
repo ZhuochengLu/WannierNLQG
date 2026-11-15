@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 if !isdefined(@__MODULE__, :WANNIERIZATION_FIXTURE_SUPPORT_LOADED)
     include(joinpath(@__DIR__, "WannierizationFixtureSupport.jl"))
 end
@@ -430,7 +432,7 @@ end
             projection_basis = fixture.basis,
             num_wannier = 1,
         ),
-        solver = WANNIERIZATION.WannierizationSolverConfig(z_mix_ratio = 1.1),
+        solver = InternalSolverFixture.solver_config(z_mix_ratio = 1.1),
         checkpoint = WANNIERIZATION.WannierizationCheckpointConfig(),
         runtime = WANNIERIZATION.WannierizationRuntimeConfig(),
         output = WANNIERIZATION.WannierizationOutputConfig(),
@@ -445,7 +447,7 @@ end
             projection_basis = fixture.basis,
             num_wannier = 1,
         ),
-        solver = WANNIERIZATION.WannierizationSolverConfig(),
+        solver = InternalSolverFixture.solver_config(),
         checkpoint = WANNIERIZATION.WannierizationCheckpointConfig(),
         runtime = WANNIERIZATION.WannierizationRuntimeConfig(),
         output = WANNIERIZATION.WannierizationOutputConfig(

@@ -44,9 +44,9 @@ function HAdaptiveCubature(;
     all(x->x isa Real && isfinite(x) && x>=0, (atol, rtol)) && (atol>0 || rtol>0) || throw(
         ArgumentError("finite nonnegative atol/rtol with at least one positive value required"),
     )
-    initial_divisions isa Integer && initial_divisions>0 ||
+    initial_divisions isa Integer && !(initial_divisions isa Bool) && initial_divisions>0 ||
         throw(ArgumentError("initial_divisions must be positive"))
-    max_evaluations isa Integer && max_evaluations>0 ||
+    max_evaluations isa Integer && !(max_evaluations isa Bool) && max_evaluations>0 ||
         throw(ArgumentError("max_evaluations must be positive"))
     converted=(Float64(atol), Float64(rtol))
     all(x->isfinite(x)&&x>=0, converted) && any(>(0), converted) ||

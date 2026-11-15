@@ -100,7 +100,7 @@ omitted defaults from user-supplied values.
 
 ## Local conductivity slices
 
-`BCDCK` and `BCQCK` select the conductivity slices; `BCDK` and `BCQK` continue to select local geometric derivatives. Use the existing `BerryMultipoleParameters` and `KSliceSelection(component=TensorComponent(...), bands=AllBands())`. Components keep the field-first/current-last order. Direct Fourier evaluation and the existing orthogonal model, isolation and derivative-backend requirements apply. Multiple chemical potentials remain explicit in the output rows.
+`BCDCK` and `BCQCK` select the conductivity slices; `BCDK` and `BCQK` continue to select local geometric derivatives. Use the existing `BerryMultipoleParameters` and `KSliceSelection(component=TensorComponent(...), bands=BandSelection())`. Components keep the field-first/current-last order. Direct Fourier evaluation and the existing orthogonal model, isolation and derivative-backend requirements apply. Multiple chemical potentials remain explicit in the output rows.
 
 The slice reuses the selected Fermi-surface or Fermi-sea expression, occupations, lifetime and component contraction. It includes no mesh weight, cell division, plane area or `(2pi)^(-d)` factor. Local moment units are `Angstrom^3` for BCD and `Angstrom^4` for BCQ. Conductivity densities are `A*m^3/V^2` and `A*m^4/V^3`. Integrating with `d^d k_SI/(2pi)^d` gives the corresponding bulk/sheet units. For a complete periodic grid, use the weighted mean divided by the physical cell volume or sheet area in SI. The plane's two sample counts alone do not define that physical measure.
 

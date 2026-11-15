@@ -1,10 +1,16 @@
 """Occupied-space Matrix curvature, retaining ambient and opposite-occupation links."""
-function intrinsic_hall_matrix_curvature(geometry, occupied::Integer, connection)
+function intrinsic_hall_matrix_curvature(
+    geometry,
+    occupied::Integer,
+    connection;
+    band_mask = nothing,
+)
     n = length(geometry.energies)
     result = zeros(Float64, 3, 3)
     for a in 1:3, b in 1:3
         value = 0.0
         for l in 1:occupied
+            band_mask === nothing || band_mask[l] || continue
             value += real(geometry.ambient_curvature[l, l, a, b])
             for m in (occupied + 1):n
                 # Both ordered products retain the admitted connection convention.
@@ -23,13 +29,19 @@ function intrinsic_hall_matrix_curvature(geometry, occupied::Integer, connection
 end
 
 """Orthogonal occupied projector tr(PF)+i tr(P[∇P,∇P]), using the same bare links."""
-function intrinsic_hall_projector_curvature(geometry, occupied::Integer, connection)
+function intrinsic_hall_projector_curvature(
+    geometry,
+    occupied::Integer,
+    connection;
+    band_mask = nothing,
+)
     geometry.orthonormal_basis ||
         throw(ArgumentError("NONORTHOGONAL_PROJECTOR_RESPONSE_UNSUPPORTED"))
     vectors = geometry.eigenvectors
     n = length(geometry.energies)
     frame = @view vectors[:, 1:occupied]
     projector = frame * frame'
+    selected_projector = occupied_group_projector(vectors, occupied, band_mask, projector)
     derivative = zeros(ComplexF64, n, n, 3)
     for a in 1:3
         band_derivative = zeros(ComplexF64, n, n)
@@ -49,7 +61,7 @@ function intrinsic_hall_projector_curvature(geometry, occupied::Integer, connect
         ab, ba = da * db, db * da
         all(isfinite, ab) && all(isfinite, ba) && all(isfinite, ab-ba) ||
             error("INTRINSIC_HALL_NONFINITE_PROJECTOR_COMMUTATOR")
-        pf, pc = projector * ambient, projector * (ab-ba)
+        pf, pc = selected_projector * ambient, selected_projector * (ab-ba)
         all(isfinite, pf) && all(isfinite, pc) ||
             error("INTRINSIC_HALL_NONFINITE_PROJECTOR_PRODUCT")
         value = tr(pf) + im * tr(pc)

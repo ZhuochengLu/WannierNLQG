@@ -369,8 +369,6 @@ end
                 fixture.model.lattice,
                 fixture.model.r_degeneracies,
                 incomplete;
-                profile = nothing,
-                operator_tasks = fixture.tasks,
                 geometry = fixture.geometry,
                 provenance = fixture.provenance,
             )

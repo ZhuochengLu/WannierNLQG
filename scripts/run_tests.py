@@ -95,6 +95,9 @@ def task_environment(task: Task, directory: Path, temporary_directory: Path, rea
     env = dict(os.environ)
     for key in (
         "WANNIERNLQG_TEST_LEVEL",
+        "WANNIERNLQG_SELECTION_TEST_PHASE",
+        "WANNIERNLQG_PARAMETER_TEST_PHASE",
+        "WANNIERNLQG_JERK_TEST_PHASE",
         "WANNIERNLQG_TEST_MPI",
         "WANNIERNLQG_TEST_SHARD",
         "WANNIERNLQG_USE_MPI",
@@ -311,6 +314,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mpi-profile", choices=PROFILES, default="legacy16")
     parser.add_argument("--owned-group", action="store_true", help="inherit the caller process group instead of creating a test-driver group")
     args = parser.parse_args(argv)
+    for key in (
+        "WANNIERNLQG_SELECTION_TEST_PHASE",
+        "WANNIERNLQG_PARAMETER_TEST_PHASE",
+        "WANNIERNLQG_JERK_TEST_PHASE",
+    ):
+        if os.environ.get(key, "all") not in ("", "all"):
+            parser.error(f"{key} selects targeted unit phases; use the registered targeted adapter instead of a complete suite")
     if os.environ.get(NESTED_ENV):
         parser.error("Nested test scheduling is prohibited")
     try:

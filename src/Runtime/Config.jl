@@ -84,7 +84,7 @@ struct EffectiveTaskConfig
     response_symmetry_kmesh_mode::String
     response_symmetry_report_enabled::Bool
 
-    response_output_digits::Int
+    response_output_digits::Union{Nothing, Int}
 
     progress_enabled::Bool
     progress_percent_interval::Union{Nothing, Int}
@@ -132,7 +132,7 @@ Base.@nospecializeinfer function EffectiveTaskConfig(;
     spatial_dimension::Int = 2,
     band_window_size::Int = -1,
     tensor_indices = (1, 1, 1),
-    band_selection = (2, 1),
+    band_selection = -1,
     include_occupied_sum::Bool = true,
     kslice_origin::NTuple{3, Float64} = (0.0, 0.0, 0.0),
     kslice_vector_1::NTuple{3, Float64} = (1.0, 0.0, 0.0),
@@ -167,7 +167,7 @@ Base.@nospecializeinfer function EffectiveTaskConfig(;
     response_symmetry_policy::String = "strict",
     response_symmetry_kmesh_mode::String = "reduced",
     response_symmetry_report_enabled::Bool = false,
-    response_output_digits::Int = 7,
+    response_output_digits::Union{Nothing, Int} = nothing,
     progress_enabled::Bool = true,
     progress_percent_interval::Union{Nothing, Int} = nothing,
     progress_verbosity::String = "normal",
@@ -708,3 +708,17 @@ Identify slice observables whose outputs omit separate real/imaginary files unde
 """
 is_real_only_kslice_quantity(q::Symbol) =
     is_rank2_real_only_kslice_quantity(q) || is_target_group_real_kslice_quantity(q)
+
+"""Resolve explicit output digits exactly; omitted requests retain the writer family's default."""
+resolved_response_output_digits(cfg, family_default::Int = 7) =
+    something(cfg.response_output_digits, family_default)
+
+# Defaults reproduce each existing writer, rather than introducing a new global precision.
+function response_output_family_default(spec)
+    spec.quantity == :second_harmonic_generation && return 12
+    spec.quantity in (:jerk_current, :third_harmonic_generation) && return 16
+    spec.quantity == :linear_optical_response && return 14
+    spec.quantity in (:intrinsic_ahc, :linear_transport, :orbital_magnetization) &&
+        return spec.calculation == :integral ? 16 : 14
+    return 7
+end

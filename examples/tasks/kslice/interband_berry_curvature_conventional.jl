@@ -37,7 +37,7 @@ function build_config(;
                 numerics = Numerics(denominator_regularization = 0.001),
                 observable = KSliceSelection(
                     component = TensorComponent(1, 2),
-                    bands = InterbandGroups(first = [3, 4], second = [1, 2]),
+                    bands = BandSelection(groups = [[3, 4], [1, 2]]),
                 ),
             ),
         ],

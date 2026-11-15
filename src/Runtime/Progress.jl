@@ -2141,7 +2141,14 @@ function progress_run_done!(
             end
             progress_emit_text!(ctx, "")
         end
-        if !isempty(keys(band_summary))
+        if hasproperty(band_summary, :effective_windows)
+            progress_emit_text!(ctx, "BAND SELECTION")
+            for (name, value) in pairs(band_summary)
+                display_value = name === :groups && value === nothing ? "all bands" : value
+                progress_emit_text!(ctx, "  " * progress_kv_line(string(name), display_value))
+            end
+            progress_emit_text!(ctx, "")
+        elseif !isempty(keys(band_summary))
             progress_emit_text!(ctx, "BAND")
             progress_emit_text!(
                 ctx,

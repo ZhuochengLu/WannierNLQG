@@ -586,12 +586,6 @@ function _run_kslice_bundle_owned!(
         (Int[], Int[], Int[])
     qhc_band_start, qhc_band_end =
         need_conv_qhc ? band_selection_window(qhc_band_selection) : (1, 0)
-    conventional_current_pair_selections =
-        need_conv_current ?
-        [
-            _make_conventional_kslice_pair_selection(cfg.band_selection, num_orbitals) for
-            _ in 1:num_workers
-        ] : nothing
     conventional_model = model
 
     transition_screen_workspaces =
@@ -603,6 +597,7 @@ function _run_kslice_bundle_owned!(
                 length(cfg.photon_energies),
                 matrix_elements = shared_matrix_workspaces[worker_id],
                 central_data = shared_central_data[worker_id],
+                band_selection = cfg.band_selection,
             ) for worker_id in 1:num_workers
         ] : TransitionScreenWorkspace[]
     photon_drag_transition_screen_workspaces =
@@ -914,7 +909,14 @@ function _run_kslice_bundle_owned!(
         transition_screen =
             need_transition_screen ? transition_screen_workspaces[worker_id] : nothing
         if transition_screen !== nothing
-            _prepare_transition_screen!(transition_screen, kpoint, cfg, model, num_orbitals)
+            _prepare_transition_screen!(
+                transition_screen,
+                kpoint,
+                cfg,
+                model,
+                num_orbitals;
+                require_complete_groups = need_proj_sc || need_geo_q0 || need_wilson,
+            )
         end
         photon_drag_transition_screen =
             need_photon_drag_transition_screen ?
@@ -952,7 +954,6 @@ function _run_kslice_bundle_owned!(
                 num_orbitals,
                 spatial_dimension,
                 counters["conventional_q0_current"],
-                conventional_current_pair_selections[worker_id],
             )
         end
         if need_conventional_geometry
@@ -1589,6 +1590,8 @@ function _run_kslice_bundle_owned!(
                 debug_lock,
                 "[done] fused k-slice bundle total elapsed=$(format_seconds(time() - total_t0))s",
             )
+            band_selection_summary =
+                _transition_selection_summary(transition_screen_workspaces, cfg, root, rank, comm)
             result = FusedBundleRunResult(
                 outputs,
                 families,
@@ -1599,7 +1602,7 @@ function _run_kslice_bundle_owned!(
                     response_symmetry_plan;
                     calculated_components = calculated_response_components,
                 ),
-                NamedTuple(),
+                band_selection_summary,
                 runtime_replica_summary(loaded_sources.replica_summary),
                 qualification,
                 runtime_model_geometry(model),

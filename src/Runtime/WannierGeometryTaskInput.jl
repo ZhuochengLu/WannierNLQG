@@ -81,6 +81,13 @@ end
 
 # Validate explicit projection lines, spinor choice and orbital count before constructing the normalized basis.
 function _workflow_wannier_basis(geometry, basis_table)
+    haskey(basis_table, "radial_transform") && throw(
+        ArgumentError(
+            "basis.radial_transform is not consumed by normalized Wannier/projection workflows. " *
+            "Existing standalone Julia projection APIs retain their radial configuration; " *
+            "native VASP/QE PAW generators keep their source-specific radial contracts.",
+        ),
+    )
     _task_input_keys(basis_table, ("projections", "spinor", "num_wannier"), "basis")
     lines = get(basis_table, "projections", nothing)
     lines isa AbstractVector && !isempty(lines) && all(x -> x isa AbstractString, lines) ||

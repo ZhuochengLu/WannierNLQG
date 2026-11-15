@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using EzXML
 using HDF5
 using JSON3
@@ -188,7 +190,7 @@ function target_persistence_solver_fixture()
             frozen_min_ev = -2.0,
             frozen_max_ev = 0.0,
         ),
-        solver = TARGET_PERSISTENCE_WANNIERIZATION.WannierizationSolverConfig(
+        solver = InternalSolverFixture.solver_config(
             initialization = :random,
             stage_controls = TARGET_PERSISTENCE_WANNIERIZATION.WannierizationStageControls(
                 dis_num_iter = 2,
@@ -884,7 +886,6 @@ end
             Matrix{Float64}(I, 3, 3),
             [1],
             operators;
-            profile = :hamiltonian_position,
             geometry = target_persistence_geometry(),
             eligibility = target_semantics,
             provenance = Dict("authoritative_hamiltonian"=>"symmetrized_dft_hamiltonian"),

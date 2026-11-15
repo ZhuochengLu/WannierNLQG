@@ -287,6 +287,35 @@ class SchedulerTests(unittest.TestCase):
             self.execute(budget=8)
         self.assertFalse(self.output.exists())
 
+        phase_keys = (
+            "WANNIERNLQG_SELECTION_TEST_PHASE",
+            "WANNIERNLQG_PARAMETER_TEST_PHASE",
+            "WANNIERNLQG_JERK_TEST_PHASE",
+        )
+        arguments = ["fast", "--jobs", "1", "--cpu-budget", "2",
+                     "--mpi-profile", "ci8", "--julia", str(self.julia), "--dry-run"]
+        baseline = {key: "all" for key in phase_keys}
+        baseline[runner.NESTED_ENV] = ""
+        for key, value in zip(phase_keys, ("contract", "readback", "helpers")):
+            with patch.dict(os.environ, {**baseline, key: value}):
+                errors = io.StringIO()
+                with contextlib.redirect_stderr(errors), self.assertRaises(SystemExit) as raised:
+                    runner.main(arguments)
+                self.assertEqual(raised.exception.code, 2)
+                self.assertIn(key, errors.getvalue())
+                self.assertIn("targeted unit phases", errors.getvalue())
+                child = runner.task_environment(runner.Task("fast", "fast"),
+                                                self.directory / "never-run", self.directory / "tmp")
+                for phase_key in phase_keys:
+                    self.assertNotIn(phase_key, child)
+        for value in ("", "all"):
+            with patch.dict(os.environ, {**baseline, **{key: value for key in phase_keys}}):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    self.assertEqual(runner.main(arguments), 0)
+                self.assertEqual([row["task"] for row in json.loads(output.getvalue())["tasks"]], ["fast"])
+        self.assertFalse(self.output.exists())
+
     def test_interrupt_worker_rejects_unregistered_inputs_before_launch(self):
         argv = [str(Path(__file__).resolve())]
         env = {"FAKE_INTERRUPT": "1"}

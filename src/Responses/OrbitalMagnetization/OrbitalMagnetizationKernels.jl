@@ -2,7 +2,7 @@
 const ORBITAL_MAGNETIZATION_TERMS = (:srocc, :cmocc, :total)
 
 """Independent occupied/unoccupied matrix-element traces F,G,K (document W7–W8)."""
-function conventional_magnetization_traces(geometry, completion, occupied)
+function conventional_magnetization_traces(geometry, completion, occupied; band_mask = nothing)
     count=length(geometry.energies)
     f=zeros(ComplexF64, 3, 3);
     g=similar(f);
@@ -10,6 +10,7 @@ function conventional_magnetization_traces(geometry, completion, occupied)
     k=similar(f);
     fill!(k, 0)
     for b in 1:3, a in 1:3, n in 1:occupied
+        band_mask === nothing || band_mask[n] || continue
         overlap=completion.derivative_overlap[n, n, a, b]
         weighted=completion.energy_overlap[n, n, a, b]
         for m in (occupied + 1):count
@@ -30,10 +31,11 @@ function conventional_magnetization_traces(geometry, completion, occupied)
 end
 
 """Independent orbital-frame traces from the prepared regularized tangent Z=-i*q*r_OM*p."""
-function projector_magnetization_traces(geometry, completion, occupied)
+function projector_magnetization_traces(geometry, completion, occupied; band_mask = nothing)
     count=length(geometry.energies);
     u=geometry.eigenvectors
     p=u[:, 1:occupied]*u[:, 1:occupied]';
+    selected_projector = occupied_group_projector(u, occupied, band_mask, p)
     h=u*Diagonal(geometry.energies)*u'
     z=Matrix{ComplexF64}[]
     for a in 1:3
@@ -53,9 +55,9 @@ function projector_magnetization_traces(geometry, completion, occupied)
         bb=u*completion.energy_connection[:, :, b]*u'
         overlap=z[a]'*z[b]+p*external_f*p
         weighted=z[a]'*h*z[b]+im*p*ba'*z[b]-im*z[a]'*bb*p+p*external_c*p
-        f[a, b]=tr(overlap);
-        g[a, b]=tr(weighted);
-        k[a, b]=tr(h*overlap)
+        f[a, b]=band_mask === nothing ? tr(overlap) : tr(selected_projector * overlap);
+        g[a, b]=band_mask === nothing ? tr(weighted) : tr(selected_projector * weighted);
+        k[a, b]=band_mask === nothing ? tr(h*overlap) : tr(selected_projector * (h*overlap))
     end
     return f, g, k
 end
@@ -67,6 +69,7 @@ function orbital_magnetization_kernel(
     projector = false,
     denominator_regularization::Real = geometry isa NonorthogonalSpectralResponseGeometry ?
                                        geometry.denominator_regularization_ev : 0.001,
+    band_mask = nothing,
 )
     if geometry isa NonorthogonalSpectralResponseGeometry
         projector && throw(ArgumentError("NONORTHOGONAL_PROJECTOR_RESPONSE_UNSUPPORTED"))
@@ -83,6 +86,7 @@ function orbital_magnetization_kernel(
     end
 
     geometry = MatrixElements.regularized_orbital_geometry(geometry, denominator_regularization)
+    band_mask = complete_spectral_band_mask(geometry.energies, band_mask)
     energy = geometry.energies
     boundaries = vcat(-Inf, [energy[first(block)] for block in geometry.blocks], Inf)
     traces = Tuple{Matrix{ComplexF64}, Matrix{ComplexF64}, Matrix{ComplexF64}}[]
@@ -90,8 +94,8 @@ function orbital_magnetization_kernel(
     for interval in 1:(length(boundaries) - 1)
         push!(
             traces,
-            projector ? projector_magnetization_traces(geometry, completion, occupied) :
-            conventional_magnetization_traces(geometry, completion, occupied),
+            projector ? projector_magnetization_traces(geometry, completion, occupied; band_mask) :
+            conventional_magnetization_traces(geometry, completion, occupied; band_mask),
         )
         interval <= length(geometry.blocks) && (occupied = last(geometry.blocks[interval]))
     end
@@ -111,11 +115,17 @@ function orbital_magnetization_response(
                                        geometry.denominator_regularization_ev : 0.001,
     fermi_energies::Vector{Float64},
     temperature,
+    band_mask = nothing,
 )
     axis = validate_fermi_energies(fermi_energies)
     result=zeros(Float64, length(axis), 3, 3)
-    kernel =
-        orbital_magnetization_kernel(geometry, completion; projector, denominator_regularization)
+    kernel = orbital_magnetization_kernel(
+        geometry,
+        completion;
+        projector,
+        denominator_regularization,
+        band_mask,
+    )
     energy = kernel.energy
     boundaries = kernel.boundaries
     factor=RESPONSE_CHARGE_C^2*1e-20/(2RESPONSE_HBAR_JS*RESPONSE_BOHR_MAGNETON)
@@ -157,5 +167,9 @@ function orbital_magnetization_response(
 end
 
 """Reject unsupported orthogonal projector traces for a metric spectral payload."""
-projector_magnetization_traces(::NonorthogonalSpectralResponseGeometry, completion, occupied) =
-    throw(ArgumentError("NONORTHOGONAL_PROJECTOR_RESPONSE_UNSUPPORTED"))
+projector_magnetization_traces(
+    ::NonorthogonalSpectralResponseGeometry,
+    completion,
+    occupied;
+    band_mask = nothing,
+) = throw(ArgumentError("NONORTHOGONAL_PROJECTOR_RESPONSE_UNSUPPORTED"))

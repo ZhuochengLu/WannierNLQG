@@ -36,6 +36,11 @@ end
         r["fermi_energies_ev"]=[-0.2, 0.0, 0.2]
         r["relaxation"]=Dict("gamma_intra_ev"=>0.02, "gamma_inter_ev"=>0.03)
         r["tasks"]["lt"] = Dict("kind"=>"LT", "method"=>"Conventional", "temperature_k"=>300.0)
+        # Each layer has one axis. The optical scalar is task-local while the
+        # shared vector supplies the static response.
+        @test_throws ArgumentError resolve_task_input(d)
+        delete!(r, "fermi_energy_ev")
+        r["tasks"]["sc"]["fermi_energy_ev"]=0.0
         x=resolve_task_input(d)
         @test only(task for task in x.config.tasks if task.id=="sc").physics.fermi_energy==0.0
         @test only(task for task in x.config.tasks if task.id=="lt").physics.fermi_energies==[
@@ -48,7 +53,11 @@ end
         @test_throws ArgumentError resolve_task_input(d)
         delete!(r["tasks"]["sc"], "fermi_energies_ev")
         r["tasks"]["lt"]["fermi_energy_ev"]=0.0
+        x=resolve_task_input(d)
+        @test only(task for task in x.config.tasks if task.id=="lt").physics.fermi_energies==[0.0]
+        r["tasks"]["lt"]["fermi_energies_ev"]=[0.1]
         @test_throws ArgumentError resolve_task_input(d)
+        delete!(r["tasks"]["lt"], "fermi_energies_ev")
         delete!(r["tasks"]["lt"], "fermi_energy_ev")
         delete!(r["tasks"], "lt")
         @test_throws ArgumentError resolve_task_input(d)

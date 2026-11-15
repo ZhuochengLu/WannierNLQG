@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using LinearAlgebra
 
 # Build a two-k-point state with a nonempty free complement for actual checkpoint continuation.
@@ -73,7 +75,7 @@ function storage_schema_restart_fixture(; mmn_scale::Float64 = 1.0)
             frozen_min_ev = -2.0,
             frozen_max_ev = -0.5,
         ),
-        solver = w.WannierizationSolverConfig(
+        solver = InternalSolverFixture.solver_config(
             initialization = :random,
             z_mix_ratio = 0.25,
             u_mix_ratio = 0.75,

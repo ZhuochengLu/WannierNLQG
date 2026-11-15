@@ -186,7 +186,6 @@ if rank == 0
         input_model.lattice,
         input_model.r_degeneracies,
         operators;
-        profile = :hamiltonian_position,
         paired_tb_file = model_file,
         geometry = test_operator_bundle_geometry(
             input_model.lattice,

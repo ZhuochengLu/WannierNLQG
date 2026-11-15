@@ -577,6 +577,11 @@ function _legacy_open_wannierization_log(
     _write_report_field(io, "convergence_tolerance", config.solver.stage_controls.conv_tol)
     _write_report_field(io, "z_mix_ratio", config.solver.z_mix_ratio)
     _write_report_field(io, "u_mix_ratio", config.solver.u_mix_ratio)
+    _write_report_field(
+        io,
+        "u_mix_ratio_role",
+        "legacy_restart_identity_only; not an update factor",
+    )
     _write_report_field(io, "u_inner_sweeps", config.solver.acceleration.u_inner_sweeps)
     _write_report_field(io, "optimizer_strategy", config.solver.acceleration.strategy)
     _write_report_field(io, "representation_tolerance", config.input.representation_tolerance)
@@ -677,6 +682,7 @@ function _legacy_write_wannierization_progress(
     println(io, "normalized_residual_merit = $(snapshot_value(:normalized_residual_merit, NaN))")
     println(io, "actual_z_mix_ratio = $(snapshot_value(:z_mix_ratio, config.solver.z_mix_ratio))")
     println(io, "actual_u_mix_ratio = $(snapshot_value(:u_mix_ratio, config.solver.u_mix_ratio))")
+    println(io, "actual_u_mix_ratio_is_update_factor = false")
     println(
         io,
         "u_inner_sweeps = $(snapshot_value(:u_inner_sweeps, config.solver.acceleration.u_inner_sweeps))",
@@ -1862,11 +1868,6 @@ function _export_wannierization_tb(
             export_model.lattice,
             export_model.r_degeneracies,
             profile_operators;
-            # Task-derived selections persist their re-derivable identity instead of a
-            # fixed profile label; fixed selections keep forwarding the profile.
-            profile = IO.operator_selection_mode(operator_selection) == :tasks ? nothing :
-                      config.output.profile,
-            operator_tasks = config.output.operator_tasks,
             overwrite = true,
             content_authentication = false,
             return_receipt = true,
@@ -1889,7 +1890,6 @@ function _export_wannierization_tb(
                 profile_provenance,
             ),
             geometry = bundle_geometry,
-            diagnostics = bundle_status_metadata,
             eligibility = bundle_status_metadata,
         )
         packed_publication_identity = receipt.publication_identity

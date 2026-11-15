@@ -42,7 +42,7 @@ WannierNLQG.IO.write_wannier_tb(model, spectral_test_model())
         observable=slice ?
                    KSliceSelection(
             component = q=="orbital_magnetization" ? TensorComponent(3) : TensorComponent(1, 2),
-            bands = AllBands(),
+            bands = BandSelection(),
         ) : FullTensor()
         id=q*"_"*lowercase(method)*(slice ? "_slice" : "_integral")
         cfg=TaskConfig(

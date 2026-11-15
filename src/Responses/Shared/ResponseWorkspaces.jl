@@ -720,21 +720,32 @@ function make_photon_drag_injection_current_conventional_workspace(
     num_photon_energies::Int64,
     ;
     photon_energies::Union{Nothing, AbstractVector{<:Real}} = nothing,
-    denominator_regularization::Real = 0.001,
+    denominator_regularization::Union{Nothing, Real} = nothing,
     matrix_elements = nothing,
     valence_data = nothing,
     conduction_data = nothing,
 )
-    plan = compile_matrix_plan(
-        MatrixElementRequest(
-            HAMILTONIAN_DERIVATIVES,
-            INTERNAL_CONNECTION;
-            spatial_dimension = spatial_dimension,
-        ),
-    )
-    shared_matrix_elements =
-        matrix_elements === nothing ? MatrixElementWorkspace(num_orbitals, num_r_vectors, plan) :
+    shared_matrix_elements = if matrix_elements === nothing
+        eta = denominator_regularization === nothing ? 0.001 : denominator_regularization
+        plan = compile_matrix_plan(
+            MatrixElementRequest(
+                HAMILTONIAN_DERIVATIVES,
+                INTERNAL_CONNECTION;
+                spatial_dimension = spatial_dimension,
+                denominator_regularization = eta,
+            ),
+        )
+        MatrixElementWorkspace(num_orbitals, num_r_vectors, plan)
+    else
+        denominator_regularization === nothing ||
+            denominator_regularization == matrix_elements.plan.denominator_regularization ||
+            throw(
+                ArgumentError(
+                    "explicit PDIC denominator_regularization conflicts with the supplied matrix plan",
+                ),
+            )
         matrix_elements
+    end
     valence_common =
         valence_data === nothing ?
         KPointMatrixData(num_orbitals, num_r_vectors, shared_matrix_elements.plan) : valence_data

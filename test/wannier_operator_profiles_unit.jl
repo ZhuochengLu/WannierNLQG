@@ -494,7 +494,6 @@ end
                     model.lattice,
                     model.r_degeneracies,
                     operators;
-                    profile,
                     overwrite = true,
                     provenance = merge(
                         Dict(
@@ -505,7 +504,6 @@ end
                         provenance,
                     ),
                     geometry,
-                    diagnostics,
                     eligibility,
                 )
                 loaded = PROFILE_IO.read_real_space_operator_bundle(output)
@@ -567,7 +565,6 @@ end
                         model.lattice,
                         model.r_degeneracies,
                         warning_operators;
-                        profile,
                         provenance = merge(
                             Dict(
                                 "route" => String(route),
@@ -577,7 +574,6 @@ end
                             warning_provenance,
                         ),
                         geometry,
-                        diagnostics = warning_eligibility,
                         eligibility = warning_eligibility,
                     )
                     warning_loaded = PROFILE_IO.read_real_space_operator_bundle(warning_output)
@@ -653,7 +649,6 @@ end
                         model.lattice,
                         model.r_degeneracies,
                         operators;
-                        profile,
                         provenance = absent_provenance,
                         geometry,
                         eligibility,

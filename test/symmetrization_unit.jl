@@ -35,6 +35,7 @@ const EXPECTED_MATRIX_ELEMENTS_INTEGRATION_API = Set((
     :active_velocity_paired_insertions!,
     :spectral_subspace_blocks,
     :mark_wilson_response_groups!,
+    :mark_response_degeneracy_groups!,
     :REAL_SPACE_REPLICA_MAP_REFERENCE_SCHEMA,
     :MatrixElementDirectionRequirements,
     :RealSpaceReplicaMap,
@@ -153,6 +154,8 @@ end
 
 @testset "MatrixElements Symmetrization integration boundary" begin
     matrix_elements = WannierNLQG.MatrixElements
+    @test matrix_elements.mark_response_degeneracy_groups! ===
+          matrix_elements._mark_response_degeneracy_groups!
     @test Set(matrix_elements.MATRIX_ELEMENTS_INTEGRATION_API) ==
           EXPECTED_MATRIX_ELEMENTS_INTEGRATION_API
     for name in matrix_elements.MATRIX_ELEMENTS_INTEGRATION_API
@@ -984,7 +987,6 @@ end
             Matrix{Float64}(I, 3, 3),
             [1, 1],
             operators;
-            profile = :hamiltonian_position,
             geometry = test_operator_bundle_geometry(Matrix{Float64}(I, 3, 3), [1, 1], operators),
         )
         roundtrip = WannierNLQG.IO.read_real_space_operator_bundle(path)
@@ -1014,7 +1016,6 @@ end
             Matrix{Float64}(I, 3, 3),
             [1, 1],
             full_operators;
-            profile = nothing,
             provenance = definition,
             geometry = test_operator_bundle_geometry(Matrix{Float64}(I, 3, 3), [1, 1], operators),
         )
@@ -1107,7 +1108,6 @@ end
             Matrix{Float64}(I, 3, 3),
             [1, 1],
             operators;
-            profile = :hamiltonian_position,
             geometry = test_operator_bundle_geometry(Matrix{Float64}(I, 3, 3), [1, 1], operators),
         )
 

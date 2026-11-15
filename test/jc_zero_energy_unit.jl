@@ -34,7 +34,7 @@ function jc_config(
             observable = slice ?
                          KSliceSelection(;
                 component = TensorComponent(1, 1, 1, 1),
-                bands = AllBands(),
+                bands = BandSelection(),
             ) : FullTensor(),
         ) for q in quantities
     ]
@@ -72,7 +72,7 @@ function jc_document(directory; slice = false)
         "kind" => "jerk_current",
         "numerics" => Dict("broadening" => 0.04, "denominator_regularization" => 0.001),
     )
-    slice && (task["observable"] = Dict("kind" => "all_bands", "component" => [1, 1, 1, 1]))
+    slice && (task["observable"] = Dict("kind" => "kslice", "component" => [1, 1, 1, 1]))
     return Dict{String, Any}(
         "model" => Dict("source" => "wannier", "model_file" => MODEL_FILE),
         "response" => Dict(

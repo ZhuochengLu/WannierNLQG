@@ -438,7 +438,7 @@ ExampleSupport.with_synthetic_operator_bundle() do
                 physics = task.physics,
                 observable = WannierNLQG.KSliceSelection(
                     component = WannierNLQG.TensorComponent(1, 1, 1),
-                    bands = WannierNLQG.Transition(conduction = [3, 4], valence = [1, 2]),
+                    bands = WannierNLQG.BandSelection(),
                 ),
             )
             @test_throws ArgumentError runtime.compile_task_configs(

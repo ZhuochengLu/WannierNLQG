@@ -1,4 +1,6 @@
 module NativeMatrixInputReuseTestSupport
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using WannierNLQG, HDF5, LinearAlgebra, SHA, JSON3
 include("QEPAWMatrixElementsTestSupport.jl")
 const W = WannierNLQG.Wannierization
@@ -66,7 +68,7 @@ function fixture(root)
             frozen_max_ev = 0.5,
             num_wannier = 1,
         ),
-        solver = W.WannierizationSolverConfig(
+        solver = InternalSolverFixture.solver_config(
             initialization = :amn,
             stage_controls = W.WannierizationStageControls(dis_num_iter = 1, num_iter = 2),
             acceleration = W.WannierizationAccelerationConfig(

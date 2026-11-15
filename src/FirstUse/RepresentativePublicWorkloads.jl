@@ -161,7 +161,7 @@ function _first_use_spectral_tasks(; slice = false)
                     observable = slice ?
                                  KSliceSelection(
                         component = quantity == "OM" ? TensorComponent(3) : TensorComponent(1, 2),
-                        bands = AllBands(),
+                        bands = BandSelection(),
                     ) : FullTensor(),
                 ),
             )
@@ -182,8 +182,8 @@ function _first_use_optical_slice_tasks(tasks)
             observable = KSliceSelection(
                 component = task.quantity in ("ISC", "SSC", "JC", "THG") ?
                             TensorComponent(2, 2, 2, 2) : TensorComponent(2, 2, 2),
-                bands = task.quantity in ("SHG", "JC", "THG") ? AllBands() :
-                        Transition(conduction = [3, 4], valence = [1, 2]),
+                bands = task.quantity in ("SHG", "JC", "THG", "PDIC", "PDSC") ? BandSelection() :
+                        BandSelection(groups = [[1, 2], [3, 4]]),
             ),
         ) for task in tasks
     ]
@@ -202,20 +202,20 @@ function _first_use_geometry_tasks()
                 physics = GeometryParameters(),
                 observable = KSliceSelection(
                     component = TensorComponent(1, 1, 1),
-                    bands = Transition(conduction = [3, 4], valence = [1, 2]),
+                    bands = BandSelection(groups = [[3, 4], [1, 2]]),
                 ),
             ),
         )
     end
     # Distinct selector and output ranks; related quantities share these drivers.
     for (quantity, component, bands) in (
-        ("HCTK", (2, 2, 1, 2), InterbandGroups(first = [3, 4], second = [1, 2])),
-        ("IBCK", (1, 2), InterbandGroups(first = [3, 4], second = [1, 2])),
-        ("BCK", (1, 2), Subspace([1, 2])),
-        ("BCDK", (1, 2, 1), Subspace([1, 2])),
-        ("BCQK", (1, 2, 1, 1), Subspace([1, 2])),
-        ("IQMK", (1, 1), InterbandGroups(first = [3, 4], second = [1, 2])),
-        ("TPPK", (1, 1, 1), TripleGroups(first = [3], second = [4], third = [1, 2])),
+        ("HCTK", (2, 2, 1, 2), BandSelection(groups = [[3, 4], [1, 2]])),
+        ("IBCK", (1, 2), BandSelection(groups = [[3, 4], [1, 2]])),
+        ("BCK", (1, 2), BandSelection(groups = [[1, 2]])),
+        ("BCDK", (1, 2, 1), BandSelection(groups = [[1, 2]])),
+        ("BCQK", (1, 2, 1, 1), BandSelection(groups = [[1, 2]])),
+        ("IQMK", (1, 1), BandSelection(groups = [[3, 4], [1, 2]])),
+        ("TPPK", (1, 1, 1), BandSelection(groups = [[3], [4], [1, 2]])),
     )
         push!(
             tasks,
@@ -249,7 +249,7 @@ function _first_use_geometry_tasks()
                 ),
                 observable = KSliceSelection(
                     component = TensorComponent(2, 2, 2),
-                    bands = Transition(conduction = [3, 4], valence = [1, 2]),
+                    bands = BandSelection(groups = [[3, 4], [1, 2]]),
                 ),
             ),
         )
@@ -343,7 +343,7 @@ function _first_use_mixed_slice(root)
                 numerics = Numerics(broadening = 10.0, denominator_regularization = 0.001),
                 observable = KSliceSelection(
                     component = TensorComponent(1, 1, 1),
-                    bands = Transition(conduction = [3, 4], valence = [1, 2]),
+                    bands = BandSelection(groups = [[1, 2], [3, 4]]),
                 ),
             ),
         ],

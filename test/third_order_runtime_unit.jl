@@ -44,7 +44,7 @@ end
                 observation=slice ?
                             KSliceSelection(
                     component = TensorComponent(1, 1, 2, 1),
-                    bands = AllBands(),
+                    bands = BandSelection(),
                 ) : TensorComponents(TensorComponent(1, 1, 2, 1))
                 cfg=TaskConfig(
                     model = ModelInput(model_file = file, wannier_center_convention = convention),

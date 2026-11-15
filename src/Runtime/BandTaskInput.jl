@@ -118,8 +118,17 @@ function _task_input_band_sampling(table, records, pending, base_dir, model)
         all(value -> value isa Integer && !(value isa Bool) && value >= 2, values) ||
             throw(ArgumentError("band point counts must be integers of at least two"))
     end
-    structure, structure_provenance = _task_input_band_structure(table, base_dir)
     manual = haskey(table, "nodes")
+    if manual
+        automatic_keys =
+            intersect(keys(table), ("periodic_axes", "time_reversal", "spglib_symprec_angstrom"))
+        isempty(automatic_keys) || throw(
+            ArgumentError(
+                "manual KPath nodes do not consume automatic-path parameters: $(join(sort!(collect(automatic_keys)), ", "))",
+            ),
+        )
+    end
+    structure, structure_provenance = _task_input_band_structure(table, base_dir)
     sampling = if manual
         raw = table["nodes"]
         raw isa AbstractDict || throw(
@@ -166,7 +175,7 @@ function _task_input_band_sampling(table, records, pending, base_dir, model)
             kpoints_per_segment = counts,
             spatial_dimension = dimension,
             lattice,
-            density,
+            density = haskey(table, "density") ? density : nothing,
             provenance = Dict{String, Any}("path_origin" => "EXPLICIT_MANUAL_PATH"),
         )
     else
@@ -194,7 +203,7 @@ function _task_input_band_sampling(table, records, pending, base_dir, model)
             structure;
             periodic_axes = axes,
             kpoints_per_segment = counts,
-            density,
+            density = haskey(table, "density") ? density : nothing,
             time_reversal,
             spglib_symprec_angstrom = get(table, "spglib_symprec_angstrom", 1.0e-5),
             model_lattice = model === nothing ? structure.lattice : _task_input_band_lattice(model),

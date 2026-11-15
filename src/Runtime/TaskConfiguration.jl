@@ -68,9 +68,15 @@ function KPath(;
     spatial_dimension::Integer = 3,
     branches = nothing,
     lattice = nothing,
-    density::Real = 50.0,
+    density::Union{Nothing, Real} = nothing,
     provenance = Dict{String, Any}(),
 )
+    kpoints_per_segment === nothing ||
+        density === nothing ||
+        throw(ArgumentError("explicit KPath counts and density are alternative sampling controls"))
+    effective_density = density === nothing ? 50.0 : density
+    effective_density isa Bool &&
+        throw(ArgumentError("KPath density must be a positive finite real"))
     normalized = normalize_kpath_input(nodes)
     ranges =
         branches === nothing ? [1:length(normalized)] :
@@ -85,19 +91,19 @@ function KPath(;
     counts = if kpoints_per_segment === nothing
         lattice === nothing &&
             throw(ArgumentError("omitted KPath counts require the actual model lattice"))
-        isfinite(density) && density > 0 ||
+        isfinite(effective_density) && effective_density > 0 ||
             throw(ArgumentError("KPath density must be finite and positive"))
         reference =
             size(lattice) == (3, 3) ? lattice : first(complete_native_reference_lattice(lattice))
         reciprocal = reciprocal_lattice(reference)
         details["sampling_origin"] = "CARTESIAN_DENSITY"
-        details["intervals_per_A_inverse"] = Float64(density)
+        details["intervals_per_A_inverse"] = Float64(effective_density)
         [
             max(
                 2,
                 ceil(
                     Int,
-                    density * norm(
+                    effective_density * norm(
                         transpose(
                             collect(normalized[index + 1][2]) - collect(normalized[index][2]),
                         ) * reciprocal,
@@ -120,7 +126,7 @@ function automatic_kpath(
     structure::CrystalStructure;
     periodic_axes = (1, 2, 3),
     kpoints_per_segment = nothing,
-    density::Real = 50.0,
+    density::Union{Nothing, Real} = nothing,
     time_reversal::Union{Nothing, Bool} = nothing,
     spglib_symprec_angstrom::Real = 1.0e-5,
     model_lattice = structure.lattice,
@@ -185,7 +191,7 @@ end
 Base.@kwdef struct OutputOptions
     output_root::String = ""
     system_name::Union{Nothing, String} = nothing
-    response_output_digits::Int = 7
+    response_output_digits::Union{Nothing, Int} = nothing
     progress_enabled::Bool = true
     progress_percent_interval::Union{Nothing, Int} = nothing
     progress_verbosity::String = "normal"
@@ -874,6 +880,45 @@ end
 """Typed band observation; it never substitutes for the internal calculation band window."""
 abstract type AbstractBandSelection end
 
+"""Ordered band groups shared by response and geometry observations.
+
+`groups=nothing` requests the quantity's complete result. Explicit groups are
+nonempty, disjoint vectors of positive, one-based band indices. The quantity
+defines their number and mathematical role: geometry retains its existing
+per-group reduction; a two-group optical channel orders source before target.
+`occupied_sum` controls the existing geometry-only occupied output (`:none`,
+`:include`, or `:only`); it does not change response occupations or normalize
+by the number of selected bands. Numerical band windows remain independent.
+"""
+struct BandSelection <: AbstractBandSelection
+    groups::Union{Nothing, Vector{Vector{Int}}}
+    occupied_sum::Symbol
+    function BandSelection(; groups = nothing, occupied_sum::Symbol = :none)
+        occupied_sum in (:none, :include, :only) ||
+            throw(ArgumentError("occupied_sum must be :none, :include, or :only."))
+        groups === nothing ||
+            groups isa AbstractVector ||
+            throw(ArgumentError("groups must be an array of band-index arrays."))
+        copied =
+            groups === nothing ? nothing : [_observation_bands(group, "groups") for group in groups]
+        if copied !== nothing
+            isempty(copied) &&
+                throw(ArgumentError("groups must not be empty; omit it for the complete result."))
+            flat = reduce(vcat, copied)
+            length(unique(flat)) == length(flat) ||
+                throw(ArgumentError("groups must be pairwise disjoint."))
+        end
+        occupied_sum === :only &&
+            copied !== nothing &&
+            throw(
+                ArgumentError(
+                    "occupied_sum=:only sums all occupied bands; do not also supply groups.",
+                ),
+            )
+        new(copied, occupied_sum)
+    end
+end
+
 # Copy positive one-based target indices and reject empty or repeated bands.
 function _observation_bands(values, name::AbstractString)
     values isa AbstractVector ||
@@ -885,80 +930,6 @@ function _observation_bands(values, name::AbstractString)
     length(unique(result)) == length(result) ||
         throw(ArgumentError("$(name) must not repeat band indices."))
     return result
-end
-
-"""Observe individual bands; an additional occupied sum must be requested explicitly."""
-struct BandTargets <: AbstractBandSelection
-    bands::Vector{Int}
-    include_occupied_sum::Bool
-    function BandTargets(bands; include_occupied_sum::Bool = false)
-        new(_observation_bands(bands, "BandTargets"), include_occupied_sum)
-    end
-end
-
-"""Observe a single explicit band subspace, including a one-band subspace."""
-struct Subspace <: AbstractBandSelection
-    bands::Vector{Int}
-    Subspace(bands) = new(_observation_bands(bands, "Subspace"))
-end
-
-"""Observe several disjoint explicit subspaces, preserving their supplied order."""
-struct Subspaces <: AbstractBandSelection
-    groups::Vector{Vector{Int}}
-    function Subspaces(groups)
-        result = [_observation_bands(group, "Subspaces") for group in groups]
-        isempty(result) && throw(ArgumentError("Subspaces must contain at least one group."))
-        flat = reduce(vcat, result)
-        length(unique(flat)) == length(flat) || throw(ArgumentError("Subspaces must be disjoint."))
-        new(result)
-    end
-end
-
-"""Observe the occupation-weighted sum over all bands."""
-struct OccupiedBands <: AbstractBandSelection end
-
-"""Observe every individual band, optionally also its occupation-weighted sum."""
-Base.@kwdef struct AllBands <: AbstractBandSelection
-    include_occupied_sum::Bool = false
-end
-
-"""An explicit conduction/valence band-pair channel."""
-struct Transition <: AbstractBandSelection
-    conduction::Vector{Int}
-    valence::Vector{Int}
-    function Transition(; conduction, valence)
-        c = _observation_bands(conduction, "Transition conduction")
-        v = _observation_bands(valence, "Transition valence")
-        isempty(intersect(c, v)) || throw(ArgumentError("Transition band groups must be disjoint."))
-        new(c, v)
-    end
-end
-
-"""Two explicit non-overlapping band groups for interband geometry."""
-struct InterbandGroups <: AbstractBandSelection
-    first::Vector{Int}
-    second::Vector{Int}
-    function InterbandGroups(; first, second)
-        a = _observation_bands(first, "InterbandGroups first")
-        b = _observation_bands(second, "InterbandGroups second")
-        isempty(intersect(a, b)) || throw(ArgumentError("InterbandGroups must be disjoint."))
-        new(a, b)
-    end
-end
-
-"""Three explicit, pairwise-disjoint ordered band groups for a triple-phase product."""
-struct TripleGroups <: AbstractBandSelection
-    first::Vector{Int}
-    second::Vector{Int}
-    third::Vector{Int}
-    function TripleGroups(; first, second, third)
-        a = _observation_bands(first, "TripleGroups first")
-        b = _observation_bands(second, "TripleGroups second")
-        c = _observation_bands(third, "TripleGroups third")
-        length(unique(vcat(a, b, c))) == length(a) + length(b) + length(c) ||
-            throw(ArgumentError("TripleGroups must be pairwise disjoint."))
-        new(a, b, c)
-    end
 end
 
 """A single ordered Cartesian tensor component; rank and axis limits are task-specific."""
@@ -974,7 +945,11 @@ end
 """An ordered, nonempty list of unique Cartesian components; the task checks rank applicability."""
 struct TensorComponents
     components::Tuple{Vararg{Union{NTuple{3, Int}, NTuple{4, Int}}}}
-    function TensorComponents(components::TensorComponent...)
+    bands::BandSelection
+    function TensorComponents(
+        components::TensorComponent...;
+        bands::BandSelection = BandSelection(),
+    )
         isempty(components) && throw(ArgumentError("TensorComponents must be nonempty"))
         rank = length(first(components).indices)
         rank in (3, 4) && all(c->length(c.indices)==rank && all(i->i<=3, c.indices), components) ||
@@ -985,12 +960,15 @@ struct TensorComponents
             )
         tuples=Tuple(c.indices for c in components)
         length(unique(tuples))==length(tuples) || throw(ArgumentError("Duplicate components"))
-        new(tuples)
+        new(tuples, bands)
     end
 end
 
 """Accept a collection of typed selectors or three-/four-axis integer tuples."""
-function TensorComponents(components::Union{AbstractVector, Tuple})
+function TensorComponents(
+    components::Union{AbstractVector, Tuple};
+    bands::BandSelection = BandSelection(),
+)
     converted=map(components) do component
         component isa TensorComponent && return component
         component isa Tuple && length(component) in (3, 4) && all(i->i isa Integer, component) ||
@@ -1001,16 +979,18 @@ function TensorComponents(components::Union{AbstractVector, Tuple})
             )
         return TensorComponent(component...)
     end
-    return TensorComponents(converted...)
+    return TensorComponents(converted...; bands)
 end
 
 """The complete response tensor currently supported for Integral output."""
-struct FullTensor end
+Base.@kwdef struct FullTensor
+    bands::BandSelection = BandSelection()
+end
 
 """An explicit component and band/subspace target for a K-slice task."""
 Base.@kwdef struct KSliceSelection
     component::TensorComponent
-    bands::AbstractBandSelection
+    bands::BandSelection = BandSelection()
 end
 
 """A named response instance with its own physical, numerical, and observation parameters."""
@@ -1133,31 +1113,69 @@ _is_band_structure(definition::TaskDefinition) =
     definition.executor == EXECUTOR_BAND_STRUCTURE &&
     definition.output_policy == OUTPUT_BAND_STRUCTURE
 
-# Explicit band and subspace targets do not request an occupation-weighted sum.
-_occupied_sum_requested(::AbstractBandSelection) = false
-# Recognize the dedicated occupation-weighted-sum observation.
-_occupied_sum_requested(::OccupiedBands) = true
-# Read the explicit optional sum flag on individual-band observations.
-_occupied_sum_requested(selection::Union{BandTargets, AllBands}) = selection.include_occupied_sum
-# Lower individual targets to the ordered singleton tuple expected by the numerical kernel.
-_effective_band_selection(selection::BandTargets) = Tuple(selection.bands)
-# Keep a single subspace grouped even when it contains only one band.
-_effective_band_selection(selection::Subspace) = (copy(selection.bands),)
-# Preserve each disjoint subspace as its own ordered target group.
-_effective_band_selection(selection::Subspaces) = Tuple(copy.(selection.groups))
-# Use the private sum-only sentinel for the explicit occupied observation.
-_effective_band_selection(::OccupiedBands) = 0
-# Use the private all-singletons sentinel while tracking sum output separately.
-_effective_band_selection(::AllBands) = -1
-# Lower the explicit conduction and valence channel without changing its order.
-_effective_band_selection(selection::Transition) =
-    (copy(selection.conduction), copy(selection.valence))
-# Lower two disjoint geometry groups in their specified order.
-_effective_band_selection(selection::InterbandGroups) =
-    (copy(selection.first), copy(selection.second))
-# Lower the three ordered phase-product groups to independent copied vectors.
-_effective_band_selection(selection::TripleGroups) =
-    (copy(selection.first), copy(selection.second), copy(selection.third))
+# Lower common groups only after the task has assigned their physical roles.
+function _task_group_observation(bands::BandSelection, definition::TaskDefinition, id::String)
+    groups = bands.groups
+    count = groups === nothing ? 0 : length(groups)
+    quantity, policy = definition.quantity, definition.band_policy
+    optical_pair = quantity in (
+        QUANTITY_SHIFT_CURRENT,
+        QUANTITY_INJECTION_CURRENT,
+        QUANTITY_SHIFT_SPIN_CURRENT,
+        QUANTITY_INJECTION_SPIN_CURRENT,
+        QUANTITY_JERK_CURRENT,
+    )
+    if optical_pair
+        bands.occupied_sum === :none || throw(
+            ArgumentError("Task $id uses its physical occupations; occupied_sum does not apply."),
+        )
+        count in (0, 2) || throw(
+            ArgumentError(
+                "Task $id requires either omitted groups or two groups ordered source, target.",
+            ),
+        )
+        # Numerical kernels retain their existing (conduction, valence) order.
+        selection = count == 0 ? -1 : (copy(groups[2]), copy(groups[1]))
+        return (; band_selection = selection, include_occupied_sum = false)
+    elseif quantity in (QUANTITY_INTRINSIC_AHC, QUANTITY_ORBITAL_MAGNETIZATION)
+        bands.occupied_sum === :none ||
+            throw(ArgumentError("Task $id already includes physical occupations."))
+        count in (0, 1) ||
+            throw(ArgumentError("Task $id accepts one band group, not an optical band pair."))
+    elseif quantity in (
+        QUANTITY_SECOND_HARMONIC_GENERATION,
+        QUANTITY_THIRD_HARMONIC_GENERATION,
+        QUANTITY_LINEAR_TRANSPORT,
+        QUANTITY_LINEAR_OPTICAL_RESPONSE,
+        QUANTITY_BERRY_CURVATURE_DIPOLE_CONDUCTIVITY,
+        QUANTITY_BERRY_CURVATURE_QUADRUPOLE_CONDUCTIVITY,
+        QUANTITY_PHOTON_DRAG_SHIFT_CURRENT,
+        QUANTITY_PHOTON_DRAG_INJECTION_CURRENT,
+    )
+        count == 0 && bands.occupied_sum === :none || throw(
+            ArgumentError(
+                "Task $id currently defines only the total response; a grouped contribution has not been defined.",
+            ),
+        )
+    elseif quantity == QUANTITY_HERMITIAN_CURVATURE_TENSOR ||
+           policy == BAND_INTERBAND_GROUPS ||
+           policy == BAND_PAIR
+        count == 2 && bands.occupied_sum === :none ||
+            throw(ArgumentError("Task $id requires exactly two explicit groups."))
+    elseif policy == BAND_TRIPLE_GROUPS
+        count == 3 && bands.occupied_sum === :none ||
+            throw(ArgumentError("Task $id requires exactly three explicit groups."))
+    elseif policy == BAND_TARGET_GROUP
+        count > 0 && bands.occupied_sum === :none ||
+            throw(ArgumentError("Task $id requires explicit groups without an occupied sum."))
+    elseif policy != BAND_RESOLVED
+        count == 0 && bands.occupied_sum === :none ||
+            throw(ArgumentError("Groups do not apply to task $id."))
+    end
+    include_occupied_sum = bands.occupied_sum !== :none
+    selection = bands.occupied_sum === :only ? 0 : groups === nothing ? -1 : Tuple(copy.(groups))
+    return (; band_selection = selection, include_occupied_sum)
+end
 
 # Resolve the task selector against the common sampling category and exact registry row.
 function _public_task_identity(task::TaskSpec, sampling::AbstractSampling)
@@ -1179,6 +1197,11 @@ function _task_observation(task::TaskSpec, definition::TaskDefinition, calculati
             throw(ArgumentError("Band tasks do not accept response observables."))
         return (; tensor_indices = (), band_selection = -1, include_occupied_sum = false)
     elseif calculation == :integral
+        bands =
+            task.observable === nothing ? BandSelection() :
+            task.observable isa Union{FullTensor, TensorComponents} ? task.observable.bands :
+            throw(ArgumentError("Integral tasks require FullTensor or TensorComponents."))
+        grouped = _task_group_observation(bands, definition, task.id)
         if task.observable isa TensorComponents
             definition.quantity in (
                 QUANTITY_JERK_CURRENT,
@@ -1196,16 +1219,16 @@ function _task_observation(task::TaskSpec, definition::TaskDefinition, calculati
             )
             return (;
                 tensor_indices = first(task.observable.components),
-                band_selection = -1,
-                include_occupied_sum = false,
+                band_selection = grouped.band_selection,
+                include_occupied_sum = grouped.include_occupied_sum,
             )
         end
         task.observable isa Union{Nothing, FullTensor} ||
             throw(ArgumentError("Integral tasks support only FullTensor()."))
         return (;
             tensor_indices = ntuple(_ -> 1, Int(definition.tensor_rank)),
-            band_selection = -1,
-            include_occupied_sum = false,
+            band_selection = grouped.band_selection,
+            include_occupied_sum = grouped.include_occupied_sum,
         )
     end
     observation = task.observable
@@ -1214,46 +1237,8 @@ function _task_observation(task::TaskSpec, definition::TaskDefinition, calculati
             "K-slice task $(task.id) requires KSliceSelection with an explicit component and band target.",
         ),
     )
-    bands = observation.bands
-    policy = definition.band_policy
-    accepted =
-        if definition.quantity in (
-            QUANTITY_SECOND_HARMONIC_GENERATION,
-            QUANTITY_JERK_CURRENT,
-            QUANTITY_THIRD_HARMONIC_GENERATION,
-            QUANTITY_LINEAR_TRANSPORT,
-            QUANTITY_LINEAR_OPTICAL_RESPONSE,
-            QUANTITY_ORBITAL_MAGNETIZATION,
-            QUANTITY_INTRINSIC_AHC,
-            QUANTITY_BERRY_CURVATURE_DIPOLE_CONDUCTIVITY,
-            QUANTITY_BERRY_CURVATURE_QUADRUPOLE_CONDUCTIVITY,
-        )
-            bands isa AllBands && !bands.include_occupied_sum
-        elseif definition.quantity == QUANTITY_HERMITIAN_CURVATURE_TENSOR
-            bands isa InterbandGroups
-        elseif policy == BAND_PAIR
-            bands isa Transition
-        elseif policy == BAND_RESOLVED
-            bands isa Union{BandTargets, Subspace, Subspaces, AllBands, OccupiedBands}
-        elseif policy == BAND_TARGET_GROUP
-            bands isa Union{BandTargets, Subspace, Subspaces}
-        elseif policy == BAND_INTERBAND_GROUPS
-            bands isa InterbandGroups
-        elseif policy == BAND_TRIPLE_GROUPS
-            bands isa TripleGroups
-        else
-            false
-        end
-    accepted ||
-        throw(ArgumentError("Band observation $(typeof(bands)) does not apply to task $(task.id)."))
-    policy in (BAND_RESOLVED, BAND_ALL) ||
-        !_occupied_sum_requested(bands) ||
-        throw(ArgumentError("Task $(task.id) does not support an occupied sum."))
-    return (;
-        tensor_indices = observation.component.indices,
-        band_selection = _effective_band_selection(bands),
-        include_occupied_sum = _occupied_sum_requested(bands),
-    )
+    grouped = _task_group_observation(observation.bands, definition, task.id)
+    return (; tensor_indices = observation.component.indices, grouped...)
 end
 
 const OPTICAL_TASK_QUANTITIES = (
@@ -1792,39 +1777,18 @@ function _task_observation_summary(task::TaskSpec, definition::TaskDefinition)
     calculation = calculation_symbol(definition.calculation)
     _is_band_structure(definition) && return (; kind = "band_spectrum")
     if calculation == :integral
-        return quantity_symbol(definition.quantity) in BERRY_MULTIPOLE_QUANTITIES &&
-               task.observable isa TensorComponents ?
-               (; kind = "tensor_components", components = task.observable.components) :
-               (; kind = "full_tensor")
+        bands = task.observable === nothing ? BandSelection() : task.observable.bands
+        band_summary = (; groups = deepcopy(bands.groups), occupied_sum = bands.occupied_sum)
+        return task.observable isa TensorComponents ?
+               (;
+            kind = "tensor_components",
+            components = task.observable.components,
+            bands = band_summary,
+        ) : (; kind = "full_tensor", bands = band_summary)
     end
     observation = task.observable::KSliceSelection
     bands = observation.bands
-    band_summary = if bands isa BandTargets
-        (;
-            kind = "individual_bands",
-            bands = copy(bands.bands),
-            include_occupied_sum = bands.include_occupied_sum,
-        )
-    elseif bands isa Subspace
-        (; kind = "subspace", bands = copy(bands.bands))
-    elseif bands isa Subspaces
-        (; kind = "subspaces", groups = deepcopy(bands.groups))
-    elseif bands isa OccupiedBands
-        (; kind = "occupied_sum")
-    elseif bands isa AllBands
-        (; kind = "all_individual_bands", include_occupied_sum = bands.include_occupied_sum)
-    elseif bands isa Transition
-        (; kind = "transition", conduction = copy(bands.conduction), valence = copy(bands.valence))
-    elseif bands isa InterbandGroups
-        (; kind = "interband_groups", first = copy(bands.first), second = copy(bands.second))
-    else
-        (;
-            kind = "triple_groups",
-            first = copy(bands.first),
-            second = copy(bands.second),
-            third = copy(bands.third),
-        )
-    end
+    band_summary = (; groups = deepcopy(bands.groups), occupied_sum = bands.occupied_sum)
     return (; kind = "kslice", component = observation.component.indices, bands = band_summary)
 end
 

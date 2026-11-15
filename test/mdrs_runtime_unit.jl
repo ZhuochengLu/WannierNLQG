@@ -296,7 +296,6 @@ function write_mdrs_materialized_bundle(path, model_file)
         model.lattice,
         prepared.degeneracies,
         operators;
-        profile = :hamiltonian_position,
         paired_tb_file = model_file,
         geometry = geometry,
     )
@@ -339,7 +338,6 @@ function write_mdrs_full_bundle(path, model_file)
         model.lattice,
         model.r_degeneracies,
         operators;
-        profile = :full,
         paired_tb_file = model_file,
         geometry = Dict(
             "wannier_center_policy" => "symmetrize",
@@ -860,6 +858,7 @@ end
                 "direct";
                 wsvec_file,
                 mp_grid = nothing,
+                progress_enabled = true,
                 kpath_nodes = [("Γ", (0.0, 0.0, 0.0)), ("X", (0.5, 0.0, 0.0))],
                 kpoints_per_segment = [2],
             ),
@@ -874,6 +873,10 @@ end
         )
         @test input_band_rows == mdrs_band_rows
         @test read(wsvec_band.outputs[1]) == read(mdrs_band.outputs[1])
+        band_progress = read(wsvec_band.progress_out_path, String)
+        @test occursin("BAND\n", band_progress)
+        @test occursin("k-points=", band_progress)
+        @test !occursin("BAND SELECTION", band_progress)
 
         direct_integral = WannierNLQG.run(
             mdrs_runtime_config(
@@ -1015,6 +1018,11 @@ end
         @test startswith(String(replica.mapping_reference), "wanniernlqg.owned-data/1:")
         @test String(replica.wsvec_identity) == expected_wsvec_identity
         human_progress = read(wsvec_integral.progress_out_path, String)
+        @test occursin("BAND SELECTION", human_progress)
+        @test occursin(r"groups\s*:\s*all bands", human_progress)
+        @test occursin("effective_windows", human_progress)
+        @test only(done_events).band_summary.groups === nothing
+        @test !isempty(only(done_events).band_summary.effective_windows)
         @test occursin("mp_grid=nothing", human_progress)
         @test occursin("mapping scheme=", human_progress)
         @test occursin("wsvec=", human_progress)

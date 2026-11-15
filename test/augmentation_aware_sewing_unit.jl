@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 if !isdefined(Main, :BandPublicSchemaTestSupport)
     include(joinpath(@__DIR__, "BandPublicSchemaTestSupport.jl"))
 end
@@ -96,7 +98,7 @@ strict_sewing_identity() = WannierNLQG.SymmetryFoundation.SymmetryOperation(
     )
     legacy_restart = STRICT_SEWING_W.WannierizationConfig(
         input = input,
-        solver = STRICT_SEWING_W.WannierizationSolverConfig(),
+        solver = InternalSolverFixture.solver_config(),
     )
     strict_restart = STRICT_SEWING_W._replace_wannierization_config(
         legacy_restart;

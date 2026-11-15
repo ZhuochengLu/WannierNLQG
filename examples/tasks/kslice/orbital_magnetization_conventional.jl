@@ -38,7 +38,10 @@ function build_config(;
                     temperature = 300.0,
                     input_semantics = :defined_finite_model,
                 ),
-                observable = KSliceSelection(component = TensorComponent(3), bands = AllBands()),
+                observable = KSliceSelection(
+                    component = TensorComponent(3),
+                    bands = BandSelection(),
+                ),
             ),
         ],
         execution = ExecutionOptions(fourier_backend = "direct"),

@@ -95,7 +95,8 @@ function evaluate_spectral_response(
     completion,
     cfg,
     ::Val{:orbital_magnetization},
-    projector,
+    projector;
+    band_mask = nothing,
 )
     value=orbital_magnetization_response(
         geometry,
@@ -104,8 +105,19 @@ function evaluate_spectral_response(
         denominator_regularization = cfg.denominator_regularization,
         fermi_energies = cfg.fermi_energies,
         temperature = cfg.temperature,
+        band_mask,
     )
     return reshape(ComplexF64.(value), length(cfg.fermi_energies), 3, 1, 3)
+end
+
+# Resolve one state group once; worker callbacks only read the shared mask.
+function _spectral_response_band_mask(cfg, num_orbitals)
+    _validate_single_state_group(cfg.band_selection)
+    cfg.band_selection == -1 && return nothing
+    groups = normalize_berry_band_selection(cfg.band_selection, num_orbitals)
+    mask = falses(num_orbitals)
+    mask[only(groups)] .= true
+    return mask
 end
 
 """Prepare first-order tasks with existing deterministic Fourier/sampling/MPI execution.
@@ -132,6 +144,8 @@ function prepare_spectral_response(
     optical=spec.quantity==:linear_optical_response
     loaded=shared_sources===nothing ? load_runtime_model_and_sources(ctx, cfg) : shared_sources
     model=loaded.model
+    band_mask =
+        intrinsic || orbital ? _spectral_response_band_mask(cfg, model.num_orbitals) : nothing
     qualification=assess_response_qualification(loaded.manifest, ctx, cfg, specs)
     progress_response_qualification!(qualification)
     if orbital && cfg.orbital_input_semantics!=:defined_finite_model
@@ -376,6 +390,7 @@ function prepare_spectral_response(
                 cfg.fermi_energies;
                 method = projector ? :Projector : :Matrix,
                 temperature = cfg.temperature,
+                band_mask,
             )
             reshape(
                 (-Responses.RESPONSE_CHARGE_C^2/Responses.RESPONSE_HBAR_JS*1e-20) .* berry,
@@ -384,6 +399,8 @@ function prepare_spectral_response(
                 3,
                 1,
             )
+        elseif orbital
+            evaluate_spectral_response(geometry, point_completion, cfg, family, projector; band_mask)
         else
             evaluate_spectral_response(geometry, point_completion, cfg, family, projector)
         end
@@ -533,6 +550,14 @@ function prepare_spectral_response(
                 elseif !orbital || cfg.integration_bounds!==nothing
                     result ./= volume
                 end
+            end
+            if orbital
+                # SRocc/CMocc are the independently accumulated physical terms.
+                # Their total is defined by this sum. Assemble it after the same
+                # reduction/normalization to keep cancelling totals consistent
+                # with the serialized terms, without changing either term's
+                # accumulation order or the strict result-reader tolerance.
+                @views result[:, :, :, 3] .= result[:, :, :, 1] .+ result[:, :, :, 2]
             end
             phase_t0 = diagnose ? time_ns() : UInt64(0)
             outputs=write_spectral_task_outputs(

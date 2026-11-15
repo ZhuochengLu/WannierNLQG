@@ -181,7 +181,7 @@ end
         physics = w.GeometryParameters(),
         observable = w.KSliceSelection(
             component = w.TensorComponent(1, 2),
-            bands = w.Subspace([1, 2]),
+            bands = w.BandSelection(groups = [[1, 2]]),
         ),
     )
     b = w.TaskSpec(
@@ -195,7 +195,7 @@ end
         ),
         observable = w.KSliceSelection(
             component = w.TensorComponent(2, 2, 2),
-            bands = w.Transition(conduction = [3, 4], valence = [1, 2]),
+            bands = w.BandSelection(groups = [[1, 2], [3, 4]]),
         ),
     )
     one = w.run(task_instance_config([a]; sampling))

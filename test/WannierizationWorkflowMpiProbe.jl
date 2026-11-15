@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using HDF5
 using LinearAlgebra
 using MPI
@@ -195,7 +197,7 @@ result = W.construct_wannier_functions(
             frozen_max_ev = -0.5,
             num_wannier = 1,
         ),
-        solver = W.WannierizationSolverConfig(
+        solver = InternalSolverFixture.solver_config(
             initialization = :random,
             # Root-only MPI persistence of an explicit Z-only trajectory.
             acceleration = W.WannierizationAccelerationConfig(

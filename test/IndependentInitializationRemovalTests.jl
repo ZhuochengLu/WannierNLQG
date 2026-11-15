@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using Test
 @testset "Independent fixed-subspace entry removed" begin
     w=WannierNLQG.Wannierization
@@ -8,7 +10,7 @@ using Test
     @test !hasfield(w.WannierizationSolverConfig, :algorithm_profile)
     @test !hasfield(w.WannierizationAccelerationConfig, :localization_algorithm)
     @test !hasfield(w.WannierizationAccelerationConfig, :disentanglement_algorithm)
-    @test_throws MethodError w.WannierizationSolverConfig(algorithm_profile = :custom)
+    @test_throws MethodError InternalSolverFixture.solver_config(algorithm_profile = :custom)
     @test_throws ArgumentError w.WannierizationAccelerationConfig(
         localization_algorithm = :riemannian_lbfgs,
     )

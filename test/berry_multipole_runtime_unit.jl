@@ -365,7 +365,7 @@ end
         method = "Conventional",
         physics = GeometryParameters(),
         numerics = Numerics(denominator_regularization = 0.001),
-        observable = KSliceSelection(component = TensorComponent(1, 2), bands = AllBands()),
+        observable = KSliceSelection(component = TensorComponent(1, 2), bands = BandSelection()),
     )
     original=G.configuration("BCDK")
     berry_cfg=TaskConfig(

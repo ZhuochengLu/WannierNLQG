@@ -19,7 +19,7 @@ task = TaskSpec(
 )
 ```
 
-Use this task in the existing `TaskConfig` and `run` API. `BZMesh` integrates; `KSlice` requires one photon energy and `KSliceSelection(component=TensorComponent(2,1,1), bands=AllBands())`. Use `spatial_dimension=3`, including for a two-dimensional sampling plane. All model bands participate, including every intermediate band of the three-band sum. The input model contains explicit electronic states: the normalization uses one electron per state. A spinor model must not receive a further factor of two.
+Use this task in the existing `TaskConfig` and `run` API. `BZMesh` integrates; `KSlice` requires one photon energy and `KSliceSelection(component=TensorComponent(2,1,1), bands=BandSelection())`. Use `spatial_dimension=3`, including for a two-dimensional sampling plane. All model bands participate, including every intermediate band of the three-band sum. The input model contains explicit electronic states: the normalization uses one electron per state. A spinor model must not receive a further factor of two.
 
 ## Numerical controls
 

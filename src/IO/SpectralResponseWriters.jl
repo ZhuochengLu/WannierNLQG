@@ -101,12 +101,40 @@ function spectral_task_definition(headers)
     return "wanniernlqg.spectral-task-definition/1:" * repr(entries)
 end
 
+# Decode the existing physical axis definition without evaluating code. The
+# decimal coordinate column may be a lower-precision display of this exact axis.
+function _recorded_vector_axis(definition, count)
+    prefix = FERMI_ENERGY_AXIS_DOMAIN * ":eV:"
+    startswith(definition, prefix) || error("VECTOR_RESPONSE_AXIS_DEFINITION_MISMATCH")
+    fields = split(definition[(length(prefix) + 1):end], ':'; limit = 2)
+    length(fields) == 2 && tryparse(Int, fields[1]) == count ||
+        error("VECTOR_RESPONSE_AXIS_DEFINITION_MISMATCH")
+    tokens = split(fields[2], ',')
+    length(tokens) == count && all(occursin(r"^[0-9a-f]{16}$", token) for token in tokens) ||
+        error("VECTOR_RESPONSE_AXIS_DEFINITION_MISMATCH")
+    axis = validate_fermi_energies([
+        reinterpret(Float64, parse(UInt64, token; base = 16)) for token in tokens
+    ])
+    fermi_energy_axis_definition(axis) == definition ||
+        error("VECTOR_RESPONSE_AXIS_DEFINITION_MISMATCH")
+    return axis
+end
+
+# Scientific notation never rounds a finite nonzero Float64 to displayed zero.
+# This is the decimal representation's uncertainty, not a physical tolerance.
+function _decimal_rounding_bound(token, value, digits)
+    iszero(value) && return 0.0
+    exponent = parse(Int, last(split(lowercase(token), 'e')))
+    return 0.5 * 10.0^(exponent - digits)
+end
+
 """Read one vector response term and validate its local table contract."""
 function _read_vector_table(path, schema, quantity, term, labels, unit)
     isfile(path) || error("VECTOR_RESPONSE_FILE_MISSING: $(basename(path))")
     headers = Dict{String, String}()
     columns = String[]
     rows = Vector{Vector{Float64}}()
+    lexemes = Vector{Vector{String}}()
     for line in eachline(path)
         stripped = strip(line)
         isempty(stripped) && continue
@@ -119,7 +147,9 @@ function _read_vector_table(path, schema, quantity, term, labels, unit)
                 columns = split(body)
             end
         elseif !startswith(stripped, "#")
-            push!(rows, parse.(Float64, split(stripped)))
+            tokens = String.(split(stripped))
+            push!(lexemes, tokens)
+            push!(rows, parse.(Float64, tokens))
         end
     end
     get(headers, "schema", "") in (schema isa AbstractString ? (schema,) : schema) ||
@@ -135,15 +165,38 @@ function _read_vector_table(path, schema, quantity, term, labels, unit)
         error("VECTOR_RESPONSE_SHAPE_MISMATCH")
     table = reduce(vcat, permutedims.(rows))
     all(isfinite, table) || error("VECTOR_RESPONSE_NONFINITE")
-    axis = table[:, 1]
-    validated = validate_fermi_energies(Vector{Float64}(axis))
-    get(headers, "fermi_energies_definition", "") == fermi_energy_axis_definition(validated) ||
-        error("VECTOR_RESPONSE_AXIS_DEFINITION_MISMATCH")
-    values = zeros(ComplexF64, length(axis), length(labels))
+    serialized_axis = table[:, 1]
+    bounds = zeros(Float64, size(table))
+    validated = if haskey(headers, "response_output_digits")
+        digits = tryparse(Int, headers["response_output_digits"])
+        digits !== nothing && 7 <= digits <= 17 || error("VECTOR_RESPONSE_PRECISION_INVALID")
+        format = Printf.Format("%." * string(digits) * "e")
+        exact_axis =
+            _recorded_vector_axis(get(headers, "fermi_energies_definition", ""), size(table, 1))
+        for row in axes(table, 1), column in axes(table, 2)
+            expected = column == 1 ? exact_axis[row] : table[row, column]
+            Printf.format(format, expected) == lexemes[row][column] || error(
+                column == 1 ? "VECTOR_RESPONSE_AXIS_DEFINITION_MISMATCH" :
+                "VECTOR_RESPONSE_PRECISION_FORMAT_MISMATCH",
+            )
+            bounds[row, column] =
+                _decimal_rounding_bound(lexemes[row][column], table[row, column], digits)
+        end
+        exact_axis
+    else
+        # Files without the new declaration retain the exact legacy checks.
+        axis = validate_fermi_energies(Vector{Float64}(serialized_axis))
+        get(headers, "fermi_energies_definition", "") == fermi_energy_axis_definition(axis) ||
+            error("VECTOR_RESPONSE_AXIS_DEFINITION_MISMATCH")
+        axis
+    end
+    values = zeros(ComplexF64, length(validated), length(labels))
+    rounding_bounds = similar(values)
     for column in eachindex(labels)
         values[:, column] .= table[:, 2column] .+ im .* table[:, 2column + 1]
+        rounding_bounds[:, column] .= bounds[:, 2column] .+ im .* bounds[:, 2column + 1]
     end
-    return (; headers, axis = validated, values)
+    return (; headers, axis = validated, serialized_axis, values, rounding_bounds)
 end
 
 """Validate shared identity and execution metadata across vector response terms."""
@@ -172,6 +225,26 @@ function _validate_vector_result_common(results, directory)
         "operator_model_schema",
         "content_authentication",
     )
+    has_groups = any(haskey(result.headers, "groups") for result in values(results))
+    has_precision =
+        any(haskey(result.headers, "response_output_digits") for result in values(results))
+    has_precision && (common = (common..., "response_output_digits"))
+    if has_groups
+        get(first_result.headers, "quantity", "") in ("intrinsic_ahc", "orbital_magnetization") ||
+            error("VECTOR_RESPONSE_GROUP_QUANTITY_UNSUPPORTED")
+        groups = try
+            TOML.parse("groups = " * get(first_result.headers, "groups", ""))["groups"]
+        catch
+            error("VECTOR_RESPONSE_GROUP_HEADER_INVALID")
+        end
+        groups isa AbstractVector && length(groups) == 1 && only(groups) isa AbstractVector ||
+            error("VECTOR_RESPONSE_GROUP_HEADER_INVALID")
+        group = only(groups)
+        !isempty(group) &&
+        all(i -> i isa Integer && !(i isa Bool) && i > 0, group) &&
+        length(unique(group)) == length(group) || error("VECTOR_RESPONSE_GROUP_HEADER_INVALID")
+        common = (common..., "groups")
+    end
     for result in values(results)
         result.axis == first_result.axis || error("VECTOR_RESPONSE_AXIS_MISMATCH")
         for key in common
@@ -234,6 +307,8 @@ function _validate_vector_result_common(results, directory)
         "denominator_regularization_ev",
         "zero_temperature_boundary",
     )
+    has_precision && push!(ordered_keys, "response_output_digits")
+    has_groups && push!(ordered_keys, "groups")
     if any(haskey(result.headers, key) for result in values(results) for key in orbital_keys)
         get(first_result.headers, "quantity", "") == "orbital_magnetization" ||
             error("ORBITAL_RESPONSE_IDENTITY_WRONG_QUANTITY")
@@ -266,6 +341,23 @@ function _validate_vector_result_common(results, directory)
         found || error("VECTOR_RESPONSE_METADATA_MISMATCH: $key")
     end
     return first_result
+end
+
+"""Check the same physical decomposition after accounting for declared decimal rounding only."""
+function _serialized_decomposition_consistent(results, components; atol, rtol)
+    total = results[:total].values
+    reference = reduce(+, (results[term].values for term in components))
+    all(haskey(result.headers, "response_output_digits") for result in values(results)) ||
+        return isapprox(total, reference; atol, rtol)
+    bounds =
+        results[:total].rounding_bounds +
+        reduce(+, (results[term].rounding_bounds for term in components))
+    difference = total - reference
+    excess = complex.(
+        max.(abs.(real.(difference)) .- real.(bounds), 0.0),
+        max.(abs.(imag.(difference)) .- imag.(bounds), 0.0),
+    )
+    return norm(excess) <= max(atol, rtol * max(norm(total), norm(reference)))
 end
 
 # Preserve exact substring validation while bounding memory by the requested
@@ -336,12 +428,23 @@ function read_linear_transport_result(directory::AbstractString)
     for term in terms, a in 1:3, b in 1:3
         tensors[term][:, a, b] .= results[term].values[:, 3(a - 1) + b]
     end
-    isapprox(
-        tensors[:total],
-        tensors[:drude] + tensors[:quantum_metric] + tensors[:berry_curvature];
-        atol = 1e-8,
-        rtol = 2e-12,
-    ) || error("LINEAR_TRANSPORT_DECOMPOSITION_MISMATCH")
+    consistent =
+        if all(haskey(result.headers, "response_output_digits") for result in values(results))
+            _serialized_decomposition_consistent(
+                results,
+                (:drude, :quantum_metric, :berry_curvature);
+                atol = 1e-8,
+                rtol = 2e-12,
+            )
+        else
+            isapprox(
+                tensors[:total],
+                tensors[:drude] + tensors[:quantum_metric] + tensors[:berry_curvature];
+                atol = 1e-8,
+                rtol = 2e-12,
+            )
+        end
+    consistent || error("LINEAR_TRANSPORT_DECOMPOSITION_MISMATCH")
     return (; fermi_energies = first_result.axis, tensors, metadata = first_result.headers)
 end
 
@@ -379,7 +482,7 @@ function read_orbital_magnetization_result(directory::AbstractString)
             error("ORBITAL_MATERIAL_MODEL_SCHEMA_REQUIRED")
     end
     vectors = Dict(term => results[term].values for term in terms)
-    isapprox(vectors[:total], vectors[:srocc] + vectors[:cmocc]; atol = 1e-20, rtol = 2e-12) ||
+    _serialized_decomposition_consistent(results, (:srocc, :cmocc); atol = 1e-20, rtol = 2e-12) ||
         error("ORBITAL_MAGNETIZATION_DECOMPOSITION_MISMATCH")
     return (; fermi_energies = first_result.axis, vectors, metadata = first_result.headers)
 end

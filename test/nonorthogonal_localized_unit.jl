@@ -1088,7 +1088,7 @@ end
                 vector_2 = (0.0, 1.0, 0.0),
             ) : BZMesh(k_mesh = (2, 2), spatial_dimension = 3)
         observable =
-            slice ? KSliceSelection(component = TensorComponent(1, 2), bands = AllBands()) :
+            slice ? KSliceSelection(component = TensorComponent(1, 2), bands = BandSelection()) :
             FullTensor()
         records = Dict{String, Dict{String, Matrix{Float64}}}()
         for quantity in ("linear_optical_response", "linear_transport")
@@ -1275,7 +1275,7 @@ function metric_optical_test_config(
             relaxation = SeparateRelaxation(gamma_intra_ev = 0.06, gamma_inter_ev = 0.06),
         ),
         numerics = numerics,
-        observable = KSliceSelection(component = TensorComponent(1, 2), bands = AllBands()),
+        observable = KSliceSelection(component = TensorComponent(1, 2), bands = BandSelection()),
     )
     TaskConfig(
         model = NonorthogonalLocalizedInput(model),

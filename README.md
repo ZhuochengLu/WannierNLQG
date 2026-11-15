@@ -39,21 +39,22 @@ WannierNLQG is a Julia package for nonlinear responses and quantum-geometric qua
 
 - **Nonlinear optical responses (Integral and K-slice)**
   - Shift Current — Conventional, Projector, Wilson Loop, and Geometric Loop.
-  - Injection Current — Conventional.
-  - Injection Spin Current — Conventional.
-  - Shift Spin Current — Conventional.
+  - Injection Current.
+  - Injection Spin Current.
+  - Shift Spin Current.
   - Photon Drag Shift Current — Geometric Loop.
-  - Photon Drag Injection Current — Conventional.
-  - Second-Harmonic Generation — Conventional.
-  - Jerk Current — Conventional.
-  - Third-Harmonic Generation — Conventional.
+  - Photon Drag Injection Current.
+  - Second-Harmonic Generation.
+  - Jerk Current.
+  - Third-Harmonic Generation.
 
 - **Linear transport (Integral and K-slice)**
   - Drude, Quantum-Metric, and Berry-Curvature Contributions — Conventional and Projector.
-  - Independent Intrinsic Anomalous Hall Conductivity — Conventional and Projector.
+  - Intrinsic Anomalous Hall Conductivity — Conventional and Projector.
 
-- **BCD/BCQ DC Hall conductivity (Integral and K-slice)**
-  - Berry-Curvature-Dipole and Berry-Curvature-Quadrupole DC Hall Conductivity — Conventional.
+- **Nonlinear transport (Integral and K-slice)**
+  - Berry-Curvature-Dipole DC Hall Conductivity.
+  - Berry-Curvature-Quadrupole DC Hall Conductivity.
 
 - **Modern orbital magnetization (Integral and K-slice)**
   - Orbital Magnetization — Conventional and Projector.
@@ -143,6 +144,10 @@ WannierNLQG has received code contributions from:
 - Yuanyuan Xu
 - Jiacheng Yao
 - Hua Wang
+
+## Contact
+
+If you have any questions or suggestions, please feel free to contact us at [pkuluzc@gmail.com](mailto:pkuluzc@gmail.com).
 
 ## License
 

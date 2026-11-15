@@ -385,9 +385,9 @@ end
         vector_2 = (0.0, 1.0, 0.0),
     )
     for (quantity, bands) in (
-        ("Interband_Quantum_Metric", InterbandGroups(first = [1], second = [2])),
-        ("Interband_Berry_Curvature", InterbandGroups(first = [1], second = [2])),
-        ("Berry_Curvature", AllBands()),
+        ("Interband_Quantum_Metric", BandSelection(groups = [[1], [2]])),
+        ("Interband_Berry_Curvature", BandSelection(groups = [[1], [2]])),
+        ("Berry_Curvature", BandSelection()),
     )
         geometry_task=TaskSpec(
             id = lowercase(quantity),
@@ -415,7 +415,7 @@ end
         physics=quantity=="SHG" ?
                 SHGParameters(photon_energies = [0.73], fermi_energy = 0.0, temperature = 300.0) :
                 OpticalParameters(photon_energies = [0.73], fermi_energy = 0.0, temperature = 0.0)
-        bands=quantity=="SHG" ? AllBands() : Transition(conduction = [2], valence = [1])
+        bands=quantity=="SHG" ? BandSelection() : BandSelection(groups = [[1], [2]])
         task_slice=TaskSpec(
             id = "metric_slice_"*lowercase(quantity),
             quantity = quantity=="SHG" ? "SHG" : quantity*"K",

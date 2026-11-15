@@ -112,37 +112,43 @@ end
             independent_test_config([task]; sampling = sampling),
         ),
     )
-    one = compile_geometry(make_geometry(Subspace([1])))
+    one = compile_geometry(make_geometry(BandSelection(groups = [[1]])))
     @test one.band_selection == ([1],)
     @test !one.include_occupied_sum
     @test isempty(one.photon_energies)
-    individual = compile_geometry(make_geometry(BandTargets([1, 2])))
-    @test individual.band_selection == (1, 2)
+    individual = compile_geometry(make_geometry(BandSelection(groups = [[1], [2]])))
+    @test individual.band_selection == ([1], [2])
     @test !individual.include_occupied_sum
     occupied = compile_geometry(
-        make_geometry(OccupiedBands(), GeometryParameters(fermi_energy = 0, temperature = 0)),
+        make_geometry(
+            BandSelection(occupied_sum = :only),
+            GeometryParameters(fermi_energy = 0, temperature = 0),
+        ),
     )
     @test occupied.band_selection == 0
     @test occupied.include_occupied_sum
     combined = compile_geometry(
         make_geometry(
-            BandTargets([1, 2]; include_occupied_sum = true),
+            BandSelection(groups = [[1], [2]], occupied_sum = :include),
             GeometryParameters(fermi_energy = 0, temperature = 0),
         ),
     )
     @test combined.include_occupied_sum
-    @test_throws ArgumentError compile_geometry(make_geometry(OccupiedBands()))
+    @test_throws ArgumentError compile_geometry(make_geometry(BandSelection(occupied_sum = :only)))
     @test_throws ArgumentError compile_geometry(
-        make_geometry(Subspace([1, 2]), GeometryParameters(fermi_energy = 0, temperature = 0)),
+        make_geometry(
+            BandSelection(groups = [[1, 2]]),
+            GeometryParameters(fermi_energy = 0, temperature = 0),
+        ),
     )
-    @test_throws ArgumentError compile_geometry(
-        make_geometry(Transition(conduction = [3], valence = [1])),
-    )
-    @test_throws ArgumentError Transition(conduction = [1, 2], valence = [2])
-    @test_throws ArgumentError Subspaces([[1, 2], [2, 3]])
-    @test_throws ArgumentError Subspace([0])
-    @test_throws ArgumentError TripleGroups(first = [1], second = [2], third = [1])
-    qmk = make_geometry(Subspace([1, 2]); quantity = "QMK", component = (1, 1))
+    # Two ordinary geometry targets are valid under the common groups structure.
+    @test compile_geometry(make_geometry(BandSelection(groups = [[1], [3]]))).band_selection ==
+          ([1], [3])
+    @test_throws ArgumentError BandSelection(groups = [[2], [1, 2]])
+    @test_throws ArgumentError BandSelection(groups = [[1, 2], [2, 3]])
+    @test_throws ArgumentError BandSelection(groups = [[0]])
+    @test_throws ArgumentError BandSelection(groups = [[1], [2], [1]])
+    qmk = make_geometry(BandSelection(groups = [[1, 2]]); quantity = "QMK", component = (1, 1))
     sc = TaskSpec(
         id = "sc",
         quantity = "SCK",
@@ -150,7 +156,7 @@ end
         physics = OpticalParameters(photon_energies = [0.2], fermi_energy = 0, temperature = 0),
         observable = KSliceSelection(
             component = TensorComponent(2, 2, 2),
-            bands = Transition(conduction = [3, 4], valence = [1, 2]),
+            bands = BandSelection(groups = [[1, 2], [3, 4]]),
         ),
     )
     mixed = TaskConfigurationRuntime.compile_task_configs(
@@ -243,7 +249,10 @@ end
         id = "metric",
         quantity = "QMK",
         physics = GeometryParameters(),
-        observable = KSliceSelection(component = TensorComponent(1, 1), bands = Subspace([1, 2])),
+        observable = KSliceSelection(
+            component = TensorComponent(1, 1),
+            bands = BandSelection(groups = [[1, 2]]),
+        ),
     )
     sampling = KSlice(
         k_mesh = (2, 2),
@@ -256,7 +265,7 @@ end
     geometry_summary = TaskConfigurationRuntime.task_parameter_summary(geometry_cfg, task)
     @test geometry_summary.physics == (include_external = false,)
     @test keys(geometry_summary.numerics) == (:denominator_regularization,)
-    @test geometry_summary.observable.bands.kind == "subspace"
+    @test geometry_summary.observable.bands == (groups = [[1, 2]], occupied_sum = :none)
     @test !haskey(geometry_summary.numerics, :broadening)
     @test_throws ArgumentError TaskConfigurationRuntime.compile_task_configs(
         independent_test_config([

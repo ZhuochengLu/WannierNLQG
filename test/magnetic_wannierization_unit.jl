@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using HDF5
 using EzXML
 using LinearAlgebra
@@ -130,7 +132,7 @@ end
             band_representation = representation,
             num_wannier = 4,
         ),
-        solver = MAGNETIC_WANNIERIZATION_API.WannierizationSolverConfig(
+        solver = InternalSolverFixture.solver_config(
             acceleration = MAGNETIC_WANNIERIZATION_API.WannierizationAccelerationConfig(
                 u_phase_branch_tolerance = 1.0e-6,
                 u_branch_active_set_max_orbits = 4,
@@ -194,7 +196,7 @@ end
             band_representation = representation,
             num_wannier = 4,
         ),
-        solver = MAGNETIC_WANNIERIZATION_API.WannierizationSolverConfig(
+        solver = InternalSolverFixture.solver_config(
             acceleration = MAGNETIC_WANNIERIZATION_API.WannierizationAccelerationConfig(
                 u_phase_branch_tolerance = 1.0e-6,
                 u_branch_active_set_max_orbits = 1,
@@ -931,7 +933,7 @@ end
             band_representation = representation,
             num_wannier = 2,
         ),
-        solver = MAGNETIC_WANNIERIZATION_API.WannierizationSolverConfig(
+        solver = InternalSolverFixture.solver_config(
             acceleration = MAGNETIC_WANNIERIZATION_API.WannierizationAccelerationConfig(
                 u_phase_branch_tolerance = 1.0e-8,
             ),
@@ -1036,7 +1038,7 @@ end
             band_representation = representation,
             num_wannier = 2,
         ),
-        solver = MAGNETIC_WANNIERIZATION_API.WannierizationSolverConfig(
+        solver = InternalSolverFixture.solver_config(
             acceleration = MAGNETIC_WANNIERIZATION_API.WannierizationAccelerationConfig(
                 u_phase_branch_tolerance = 1.0e-6,
             ),

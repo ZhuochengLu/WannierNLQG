@@ -34,6 +34,7 @@ const MATRIX_ELEMENTS_INTEGRATION_API = (
     :active_velocity_paired_insertions!,
     :spectral_subspace_blocks,
     :mark_wilson_response_groups!,
+    :mark_response_degeneracy_groups!,
     :REAL_SPACE_REPLICA_MAP_REFERENCE_SCHEMA,
     :MatrixElementDirectionRequirements,
     :RealSpaceReplicaMap,
@@ -76,6 +77,9 @@ Qualified MatrixElements implementation helpers intentionally exercised by
 white-box tests. These names are not production integration contracts.
 """
 const MATRIX_ELEMENTS_TEST_API = (:_axis_channel,)
+
+"""Shared response grouping port; retain the exact owner callable and workspace contract."""
+const mark_response_degeneracy_groups! = _mark_response_degeneracy_groups!
 
 """Add required one-axis channels to an immutable direction contract."""
 function require_matrix_element_axes(

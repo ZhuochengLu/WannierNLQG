@@ -84,6 +84,15 @@ mutable struct TransitionScreenWorkspace{W, D}
     band_end::Int64
     has_bands::Bool
     active::Bool
+    conduction_mask::BitVector
+    valence_mask::BitVector
+    degeneracy_group_starts::Vector{Int}
+    degeneracy_group_stops::Vector{Int}
+    degeneracy_weights::Vector{Float64}
+    requested_band_start::Int
+    requested_band_end::Int
+    selection_splits_group::Bool
+    window_records::Dict{NTuple{4, Int}, NTuple{2, Int}}
 end
 
 """
@@ -95,12 +104,22 @@ function make_transition_screen_workspace(
     num_photon_energies::Int64;
     matrix_elements = nothing,
     central_data = nothing,
+    band_selection = -1,
 )
     if matrix_elements === nothing
         plan = compile_matrix_plan(MatrixElementRequest(SPECTRUM))
         matrix_elements = MatrixElementWorkspace(num_orbitals, num_r_vectors, plan)
     end
     data = central_data === nothing ? matrix_elements.data : central_data
+    conduction_mask = trues(num_orbitals)
+    valence_mask = trues(num_orbitals)
+    if band_selection != -1
+        conduction, valence = validate_interband_band_selection(band_selection, num_orbitals)
+        fill!(conduction_mask, false)
+        fill!(valence_mask, false)
+        conduction_mask[conduction] .= true
+        valence_mask[valence] .= true
+    end
     return TransitionScreenWorkspace(
         matrix_elements,
         data,
@@ -121,6 +140,66 @@ function make_transition_screen_workspace(
         0,
         false,
         false,
+        conduction_mask,
+        valence_mask,
+        zeros(Int, num_orbitals),
+        zeros(Int, num_orbitals),
+        zeros(Float64, num_orbitals),
+        1,
+        0,
+        false,
+        Dict{NTuple{4, Int}, NTuple{2, Int}}(),
+    )
+end
+
+"""Worker-local external masks and window records without a transition-screen payload.
+
+Jerk uses its existing positive-gap and broadening loop, so it does not allocate
+or consume SC/IC delta arrays, active-pair lists or occupation screening.
+"""
+mutable struct ExternalBandWindowWorkspace
+    conduction_mask::BitVector
+    valence_mask::BitVector
+    degeneracy_group_starts::Vector{Int}
+    degeneracy_group_stops::Vector{Int}
+    degeneracy_weights::Vector{Float64}
+    band_start::Int
+    band_end::Int
+    has_bands::Bool
+    requested_band_start::Int
+    requested_band_end::Int
+    selection_splits_group::Bool
+    window_records::Dict{NTuple{4, Int}, NTuple{2, Int}}
+end
+
+"""Allocate worker-owned external-band masks, group bounds and window counters.
+
+An omitted selection begins with all bands enabled. Explicit external pairs use
+the existing validated ordering; no response accumulator or quadrature weight
+is created by this workspace constructor.
+"""
+function make_external_band_window_workspace(num_orbitals::Int; band_selection = -1)
+    conduction_mask, valence_mask = trues(num_orbitals), trues(num_orbitals)
+    if band_selection != -1
+        conduction, valence = validate_interband_band_selection(band_selection, num_orbitals)
+        fill!(conduction_mask, false)
+        fill!(valence_mask, false)
+        conduction_mask[conduction] .= true
+        valence_mask[valence] .= true
+    end
+    return ExternalBandWindowWorkspace(
+        conduction_mask,
+        valence_mask,
+        zeros(Int, num_orbitals),
+        zeros(Int, num_orbitals),
+        zeros(num_orbitals),
+        1,
+        0,
+        false,
+        1,
+        0,
+        false,
+        Dict{NTuple{4, Int}, NTuple{2, Int}}(),
     )
 end
 

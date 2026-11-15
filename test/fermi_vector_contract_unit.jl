@@ -257,7 +257,7 @@ end
                     observable = KSliceSelection(
                         component = quantity == "orbital_magnetization" ? TensorComponent(3) :
                                     TensorComponent(1, 2),
-                        bands = AllBands(),
+                        bands = BandSelection(),
                     ),
                 ),
             ],
@@ -513,7 +513,6 @@ end
         fixture.model.lattice,
         fixture.model.r_degeneracies,
         operators;
-        profile = nothing,
         provenance = fixture.provenance,
         geometry = fixture.geometry,
     )

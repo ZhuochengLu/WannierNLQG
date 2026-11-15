@@ -350,7 +350,7 @@ end
             ),
             observable = KSliceSelection(
                 component = TensorComponent(component...),
-                bands = Transition(conduction = [2], valence = [1]),
+                bands = BandSelection(),
             ),
         )
         input=TaskConfig(

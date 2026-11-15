@@ -261,19 +261,13 @@ function _prepare_full_uiu_derivative_operator_bundle(
         model.lattice,
         model.r_degeneracies,
         operators;
-        profile = :derivative,
         content_authentication = false,
         return_receipt = true,
         overwrite = config.overwrite,
         paired_tb_file = paths["tb_file"],
         paired_tb_expected_state = paired_tb_observation,
         provenance,
-        symmetry,
         geometry,
-        diagnostics = Dict(
-            "full_uiu_derivative_overlap" => true,
-            "uiu_generation_status" => String(uiu_provenance.status),
-        ),
     )
     return FullUIUDerivativeOperatorBundleResult(
         paths["output_bundle_file"],

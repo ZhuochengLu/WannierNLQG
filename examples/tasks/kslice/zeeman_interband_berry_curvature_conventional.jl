@@ -40,7 +40,7 @@ function build_config(;
                 ),
                 observable = KSliceSelection(
                     component = TensorComponent(2, 2),
-                    bands = InterbandGroups(first = [3, 4], second = [1, 2]),
+                    bands = BandSelection(groups = [[3, 4], [1, 2]]),
                 ),
             ),
         ],

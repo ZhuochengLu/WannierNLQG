@@ -159,7 +159,6 @@ function write_hamiltonian_position_bundle(directory, model_file; content_authen
         model.lattice,
         model.r_degeneracies,
         operators;
-        profile = :hamiltonian_position,
         content_authentication,
         paired_tb_file = model_file,
         geometry = test_operator_bundle_geometry(model.lattice, model.r_degeneracies, operators),
@@ -374,7 +373,6 @@ end
                 model.lattice,
                 model.r_degeneracies,
                 operators;
-                profile = :hamiltonian_position_spin,
                 geometry,
                 provenance = metadata,
                 eligibility = metadata,
@@ -405,7 +403,6 @@ end
             model.lattice,
             model.r_degeneracies,
             broken;
-            profile = :hamiltonian_position_spin,
             geometry,
         )
     end
@@ -448,10 +445,8 @@ end
                 original.lattice,
                 original.degeneracies,
                 original.operators;
-                profile = :full,
                 geometry = current_model_geometry(original.manifest),
                 provenance = current_model_provenance(original.manifest),
-                diagnostics = Dict("raw_metadata"=>raw),
             )
             actual=OperatorBundleIO.read_real_space_operator_bundle(path);
             push!(restored, actual)

@@ -12,7 +12,9 @@ using ..Responses:
     RESPONSE_BOHR_MAGNETON,
     response_occupation,
     response_fermi_derivative,
-    response_thermal_weight
+    response_thermal_weight,
+    complete_spectral_band_mask,
+    occupied_group_projector
 
 include("OrbitalMagnetizationKernels.jl")
 export orbital_magnetization_kernel, orbital_magnetization_response

@@ -1,5 +1,19 @@
 using Test
 
+# Custom unit phases belong to registered targeted probes, never a complete suite.
+let
+    for key in (
+        "WANNIERNLQG_SELECTION_TEST_PHASE",
+        "WANNIERNLQG_PARAMETER_TEST_PHASE",
+        "WANNIERNLQG_JERK_TEST_PHASE",
+    )
+        isempty(get(ENV, key, "all")) && delete!(ENV, key)
+        get(ENV, key, "all") == "all" || error(
+            "$key selects targeted unit phases; use the registered targeted adapter instead of a complete suite",
+        )
+    end
+end
+
 const TEST_SUITE_STARTED_NS = time_ns()
 using JuliaFormatter
 using WannierNLQG

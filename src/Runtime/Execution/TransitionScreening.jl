@@ -35,7 +35,8 @@ function _fill_transition_screen!(
     photon_energies::AbstractVector{<:Real},
     broadening_type::String,
     broadening::Float64,
-    transition_window_factor::Float64,
+    transition_window_factor::Float64;
+    external_selection = nothing,
 )
     fill!(screen.active_pair_mask, false)
     fill!(screen.active_bands, false)
@@ -54,7 +55,10 @@ function _fill_transition_screen!(
             occupation_difference = screen.occupations[n] - screen.occupations[m]
             screen.occupation_differences[n, m] = occupation_difference
             transition_energy = energies[m] - energies[n]
-            occupation_active = screen.has_bands && abs(occupation_difference) > 1.0e-10
+            selected =
+                external_selection === nothing ||
+                (external_selection.valence_mask[n] && external_selection.conduction_mask[m])
+            occupation_active = screen.has_bands && selected && abs(occupation_difference) > 1.0e-10
             in_band_window =
                 screen.band_start <= n <= screen.band_end &&
                 screen.band_start <= m <= screen.band_end
@@ -101,6 +105,7 @@ function _update_active_transition_pairs!(screen::TransitionScreenWorkspace)
     screen.has_bands || return screen
     @inbounds for m in axes(screen.active_pair_mask, 2)
         for n in axes(screen.active_pair_mask, 1)
+            screen.valence_mask[n] && screen.conduction_mask[m] || continue
             abs(screen.occupation_differences[n, m]) <= 1.0e-10 && continue
             active = false
             for energy_index in axes(screen.delta, 1)
@@ -162,12 +167,19 @@ function _prepare_transition_screen!(
     kpoint::Vector{Float64},
     cfg::EffectiveTaskConfig,
     model::AbstractResponseModel,
-    num_orbitals::Int,
+    num_orbitals::Int;
+    require_complete_groups::Bool = false,
 )
     compute_spectrum!(screen.data, screen.matrix_elements, model, kpoint)
     energies = screen.data.spectrum.energies
-    screen.band_start, screen.band_end, screen.has_bands =
-        select_band_window(energies, cfg.fermi_energy, cfg.band_window_size, num_orbitals)
+    _prepare_transition_selection_window!(
+        screen,
+        cfg,
+        screen.data.spectrum,
+        num_orbitals;
+        degeneracy_threshold = cfg.degeneracy_threshold,
+        require_complete_groups,
+    )
     fermi_dirac!(screen.occupations, energies, cfg.fermi_energy, cfg.temperature)
     _fill_transition_screen!(
         screen,
@@ -175,67 +187,148 @@ function _prepare_transition_screen!(
         cfg.photon_energies,
         cfg.broadening_type,
         cfg.broadening,
-        cfg.transition_window_factor,
+        cfg.transition_window_factor;
+        external_selection = screen,
     )
     return screen
 end
 
-"""Allocate private buffers for one conventional slice's named transition.
+"""Resolve the same external-window policy before the consumer's own response loop.
 
-The cold path validates disjoint conduction/valence groups. These buffers do
-not alias the common transition screen used by other task families.
+The caller supplies its existing grouping rule. Jerk passes zero to retain only
+the existing numerical-equality grouping, without adding a response threshold.
 """
-function _make_conventional_kslice_pair_selection(band_selection, num_orbitals::Int)
-    conduction, valence = validate_interband_band_selection(band_selection, num_orbitals)
-    conduction_mask = falses(num_orbitals)
-    valence_mask = falses(num_orbitals)
-    conduction_mask[conduction] .= true
-    valence_mask[valence] .= true
+function _prepare_transition_selection_window!(
+    screen,
+    cfg,
+    spectrum,
+    num_orbitals;
+    degeneracy_threshold,
+    require_complete_groups::Bool,
+)
+    energies = spectrum.energies
+    screen.requested_band_start, screen.requested_band_end, screen.has_bands =
+        select_band_window(energies, cfg.fermi_energy, cfg.band_window_size, num_orbitals)
+    groups = (;
+        spectrum,
+        num_orbitals,
+        degeneracy_group_starts = screen.degeneracy_group_starts,
+        degeneracy_group_stops = screen.degeneracy_group_stops,
+        degeneracy_weights = screen.degeneracy_weights,
+    )
+    if cfg.band_selection == -1 && cfg.band_window_size == -1
+        screen.band_start, screen.band_end = screen.requested_band_start, screen.requested_band_end
+    else
+        MatrixElements.mark_response_degeneracy_groups!(groups, degeneracy_threshold)
+        screen.band_start =
+            screen.has_bands ? screen.degeneracy_group_starts[screen.requested_band_start] : 1
+        screen.band_end =
+            screen.has_bands ? screen.degeneracy_group_stops[screen.requested_band_end] : 0
+    end
+    _validate_transition_selection_window!(screen, cfg; require_complete_groups)
+    record =
+        (screen.requested_band_start, screen.requested_band_end, screen.band_start, screen.band_end)
+    previous = get(screen.window_records, record, (0, 0))
+    screen.window_records[record] =
+        (previous[1] + 1, previous[2] + Int(screen.selection_splits_group))
+    return screen
+end
+
+"""Merge worker-owned effective-window histograms after point execution.
+
+All ranks participate once, including empty owners. Root records actual inclusive
+windows and evaluation counts rather than a single fictitious global window.
+Adaptive repeat evaluations are counted; no point list or spectrum is retained.
+The existing response metadata writer consumes the root summary.
+"""
+function _transition_selection_summary(workspaces, cfg, root, rank, comm)
+    summary = _external_band_selection_summary(workspaces, cfg, root, rank, comm)
+    isempty(summary) && return summary
+    return merge(summary, (; degeneracy_threshold_ev = cfg.degeneracy_threshold))
+end
+
+"""Gather worker-local window histograms and return the existing root metadata.
+
+Requested/effective bounds and basis-dependent counts include repeated adaptive
+point evaluations. This summary neither changes response values nor applies
+integration weights; the caller retains the existing root/communicator contract.
+"""
+function _external_band_selection_summary(workspaces, cfg, root, rank, comm)
+    isempty(workspaces) && return NamedTuple()
+    local_records = Dict{NTuple{4, Int}, NTuple{2, Int}}()
+    for workspace in workspaces, (key, counts) in workspace.window_records
+        previous = get(local_records, key, (0, 0))
+        local_records[key] = (previous[1] + counts[1], previous[2] + counts[2])
+    end
+    packets = bundle_mpi_gather(local_records, root, comm)
+    rank == root || return NamedTuple()
+    global_records = Dict{NTuple{4, Int}, NTuple{2, Int}}()
+    for packet in packets, (key, counts) in packet
+        previous = get(global_records, key, (0, 0))
+        global_records[key] = (previous[1] + counts[1], previous[2] + counts[2])
+    end
+    windows = [
+        (;
+            requested = (key[1], key[2]),
+            effective = (key[3], key[4]),
+            evaluations = global_records[key][1],
+            basis_dependent_evaluations = global_records[key][2],
+        ) for key in sort!(collect(keys(global_records)))
+    ]
     return (;
-        conduction_mask,
-        valence_mask,
-        active_pair_mask = falses(num_orbitals, num_orbitals),
-        active_pairs_nmajor = Vector{Tuple{Int, Int}}(undef, num_orbitals^2),
-        active_pairs_mmajor = Vector{Tuple{Int, Int}}(undef, num_orbitals^2),
-        derivative_required_pairs_nmajor = Vector{Tuple{Int, Int}}(undef, num_orbitals^2),
+        groups = cfg.band_selection == -1 ? nothing :
+                 [copy(cfg.band_selection[2]), copy(cfg.band_selection[1])],
+        group_roles = "source, target; virtual intermediate states use the full model",
+        band_window_size = cfg.band_window_size,
+        effective_windows = windows,
+        effective_window_scope = "central-point evaluations across all ranks; adaptive repeats counted",
     )
 end
 
-"""Filter external valence-to-conduction pairs without changing the shared screen.
+"""Check external groups against the completed numerical window before screening.
 
-Keep stable n-major/m-major orders and both orientations required to form
-generalized derivatives. Intermediate-state sums are not band-filtered.
+Response degeneracy groups reuse the matrix-element grouping rule and its
+unchanged threshold. Explicit source/target groups are never extended. Complete
+group methods reject partial blocks; Conventional retains them with a warning.
+Only window bounds and selection diagnostics are mutated; energies, occupations,
+and all virtual intermediate states retain their full-model meaning.
 """
-function _prepare_conventional_kslice_pairs!(selection, screen::TransitionScreenWorkspace)
-    mask = selection.active_pair_mask
-    fill!(mask, false)
-    active_pair_count = 0
-    @inbounds for n in screen.band_start:screen.band_end
-        selection.valence_mask[n] || continue
-        for m in screen.band_start:screen.band_end
-            selection.conduction_mask[m] && screen.active_pair_mask[n, m] || continue
-            mask[n, m] = true
-            active_pair_count += 1
-            selection.active_pairs_nmajor[active_pair_count] = (n, m)
+function _validate_transition_selection_window!(screen, cfg; require_complete_groups::Bool)
+    screen.selection_splits_group = false
+    cfg.band_selection == -1 && return screen
+    for (role, mask) in (("source", screen.valence_mask), ("target", screen.conduction_mask))
+        if any(i -> mask[i] && !(screen.band_start <= i <= screen.band_end), eachindex(mask))
+            outside = findall(
+                i -> mask[i] && !(screen.band_start <= i <= screen.band_end),
+                eachindex(mask),
+            )
+            throw(
+                ArgumentError(
+                    "Selected $role bands $outside are outside the effective band window " *
+                    "[$(screen.band_start), $(screen.band_end)]. Increase band_window_size or set band_window_size=-1.",
+                ),
+            )
+        end
+        first_band = 1
+        while first_band <= length(mask)
+            last_band = screen.degeneracy_group_stops[first_band]
+            selected = count(@view mask[first_band:last_band])
+            if 0 < selected < last_band - first_band + 1
+                screen.selection_splits_group = true
+                require_complete_groups && throw(
+                    ArgumentError(
+                        "Selected $role group cuts the response degeneracy block " *
+                        "$(collect(first_band:last_band)); select the complete block.",
+                    ),
+                )
+            end
+            first_band = last_band + 1
         end
     end
-    mmajor_count = 0
-    derivative_pair_count = 0
-    @inbounds for m in screen.band_start:screen.band_end
-        for n in screen.band_start:screen.band_end
-            mask[n, m] || continue
-            mmajor_count += 1
-            selection.active_pairs_mmajor[mmajor_count] = (n, m)
-        end
+    if screen.selection_splits_group
+        @warn "Conventional band selection cuts a response degeneracy group; the selected contribution may depend on the basis within that group." maxlog=1
     end
-    @inbounds for n in screen.band_start:screen.band_end
-        for m in screen.band_start:screen.band_end
-            mask[n, m] || mask[m, n] || continue
-            derivative_pair_count += 1
-            selection.derivative_required_pairs_nmajor[derivative_pair_count] = (n, m)
-        end
-    end
-    return (; active_pair_count, derivative_pair_count)
+    return screen
 end
 
 # Rebuild pair activity from nonzero frequency weights and occupation differences, then refresh ordered lists and valid lengths.

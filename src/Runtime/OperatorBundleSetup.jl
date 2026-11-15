@@ -665,7 +665,7 @@ function _legacy_root_components(ctx::RunContext, cfg::EffectiveTaskConfig, rank
     rank != 0 && return nothing, nothing, nothing
     try
         model = read_wannier_tb(ctx.model_file)
-        spin = maybe_load_spin_from_config(model, cfg)
+        spin = maybe_load_spin_from_config(model, cfg; seed_inputs = ctx.seed_inputs)
         spin_velocity = maybe_load_spin_velocity_from_context(model, ctx, cfg)
         components =
             Dict{RealSpaceOperatorKind, Dict{NTuple{2, Int8}, AbstractArray{ComplexF64, 3}}}(

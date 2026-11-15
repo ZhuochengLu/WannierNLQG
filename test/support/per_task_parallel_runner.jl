@@ -46,7 +46,7 @@ function parallel_config(backend, family)
         observable = family == "integral" ? FullTensor() :
                      KSliceSelection(
             component = TensorComponent(2, 2, 2),
-            bands = Transition(conduction = [3, 4], valence = [1, 2]),
+            bands = BandSelection(groups = [[1, 2], [3, 4]]),
         ),
     )
     task_b = if family == "integral"
@@ -71,7 +71,7 @@ function parallel_config(backend, family)
             numerics = Numerics(denominator_regularization = 0.003),
             observable = KSliceSelection(
                 component = TensorComponent(1, 2),
-                bands = Subspace([1, 2]),
+                bands = BandSelection(groups = [[1, 2]]),
             ),
         )
     end
@@ -146,7 +146,10 @@ try
             ),
             numerics = Numerics(),
             observable = family == "integral" ? FullTensor() :
-                         KSliceSelection(component = TensorComponent(1, 2, 2), bands = AllBands()),
+                         KSliceSelection(
+                component = TensorComponent(1, 2, 2),
+                bands = BandSelection(),
+            ),
         )
         execution =
             backend == "direct" ? ExecutionOptions(fourier_backend = "direct") :

@@ -311,14 +311,7 @@ end
     geometry["production_eligible"] = false
     mktempdir() do directory
         path = joinpath(directory, "diagnostic.h5")
-        extension.write_real_space_operator_bundle(
-            path,
-            lattice,
-            [1],
-            operators;
-            profile = :hamiltonian_position,
-            geometry,
-        )
+        extension.write_real_space_operator_bundle(path, lattice, [1], operators; geometry)
         manifest = WannierNLQG.IO.read_real_space_operator_bundle_manifest(path)
         @test manifest.schema_version == WannierNLQG.IO.OPERATOR_BUNDLE_SCHEMA_VERSION
         @test manifest.wannier_center_policy == :keep_input

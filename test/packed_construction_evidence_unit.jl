@@ -44,9 +44,7 @@ const W=WannierNLQG.Wannierization
             lattice,
             [1],
             ops;
-            profile = :hamiltonian_position,
             geometry,
-            diagnostics = Dict("construction_gate_records_json"=>JSON3.write(records)),
             eligibility = Dict(
                 "production_eligible"=>false,
                 "physics_qualification"=>"PHYSICS_HOLD",

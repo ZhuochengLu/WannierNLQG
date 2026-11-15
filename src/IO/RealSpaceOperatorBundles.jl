@@ -620,8 +620,6 @@ function write_real_space_operator_bundle(
     lattice,
     degeneracies,
     operators::AbstractDict;
-    profile = infer_operator_profile(keys(operators)),
-    operator_tasks = (),
     overwrite::Bool = false,
     content_authentication::Bool = false,
     paired_tb_file::Union{Nothing, AbstractString} = nothing,
@@ -629,9 +627,7 @@ function write_real_space_operator_bundle(
     paired_tb_writer = nothing,
     return_receipt::Bool = false,
     provenance = Dict{String, Any}(),
-    symmetry = Dict{String, Any}(),
     geometry,
-    diagnostics = Dict{String, Any}(),
     eligibility = Dict{String, Any}(),
 )
     return _call_operator_bundle_extension(
@@ -640,8 +636,6 @@ function write_real_space_operator_bundle(
         lattice,
         degeneracies,
         operators;
-        profile = profile === nothing ? nothing : Symbol(profile),
-        operator_tasks,
         overwrite,
         content_authentication,
         paired_tb_file,
@@ -649,9 +643,7 @@ function write_real_space_operator_bundle(
         paired_tb_writer,
         return_receipt,
         provenance,
-        symmetry,
         geometry,
-        diagnostics,
         eligibility,
     )
 end

@@ -75,15 +75,8 @@ function audit_guides(definitions)
         "OutputOptions",
         "FullTensor",
         "KSliceSelection",
+        "BandSelection",
         "TensorComponent",
-        "BandTargets",
-        "Subspace",
-        "Subspaces",
-        "AllBands",
-        "OccupiedBands",
-        "Transition",
-        "InterbandGroups",
-        "TripleGroups",
     )
         audit_check(occursin("`$(name)", text), "user guide does not document $(name)")
     end

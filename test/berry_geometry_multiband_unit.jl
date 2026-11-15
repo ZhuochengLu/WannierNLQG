@@ -53,7 +53,7 @@ function configuration(quantity, numerics)
                 observable = KSliceSelection(
                     component = quantity=="BCDK" ? TensorComponent(1, 2, 1) :
                                 TensorComponent(1, 2, 1, 2),
-                    bands = Subspace([1]),
+                    bands = BandSelection(groups = [[1]]),
                 ),
             ),
         ],

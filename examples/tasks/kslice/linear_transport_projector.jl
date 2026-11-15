@@ -38,7 +38,10 @@ function build_config(;
                     temperature = 300.0,
                     relaxation = SeparateRelaxation(gamma_intra_ev = 0.04, gamma_inter_ev = 0.05),
                 ),
-                observable = KSliceSelection(component = TensorComponent(1, 2), bands = AllBands()),
+                observable = KSliceSelection(
+                    component = TensorComponent(1, 2),
+                    bands = BandSelection(),
+                ),
             ),
         ],
         execution = ExecutionOptions(fourier_backend = "direct"),

@@ -131,8 +131,8 @@ function resolve_runtime_model_inputs(cfg::EffectiveTaskConfig, specs)
         SeedInputPaths(
             seed_prefix,
             seed_prefix * "_tb.dat",
-            seed_prefix * ".spn",
-            seed_prefix * ".chk",
+            resolve_path(cfg.spin_file, seed_prefix * ".spn"; base = case_root),
+            resolve_path(cfg.checkpoint_file, seed_prefix * ".chk"; base = case_root),
             seed_prefix * ".eig",
             seed_prefix * ".mmn",
         )
@@ -201,6 +201,12 @@ function runtime_input_source_paths(cfg::EffectiveTaskConfig, specs)
                 result,
                 (seed.spin_file, seed.checkpoint_file, seed.eigenvalue_file, seed.overlap_file),
             )
+        elseif cfg.spin_enabled
+            case_root = resolved.case_root
+            for configured in (cfg.spin_file, cfg.checkpoint_file)
+                isempty(configured) ||
+                    push!(result, resolve_path(configured, configured; base = case_root))
+            end
         end
         result
     else
@@ -442,7 +448,17 @@ function metadata_numerics_entries(cfg::EffectiveTaskConfig, ctx::RunContext)
         "include_external" => string(cfg.include_external),
         "spatial_dimension" => metadata_value(cfg.spatial_dimension),
         "band_window_size" => metadata_value(cfg.band_window_size),
-        "response_output_digits" => metadata_value(cfg.response_output_digits),
+        "response_output_digits" => metadata_value(
+            let
+                values = [
+                    resolved_response_output_digits(cfg, response_output_family_default(spec))
+                    for spec in ctx.specs
+                ]
+                length(unique(values)) == 1 ? first(values) :
+                Dict(spec.label => digits for (spec, digits) in zip(ctx.specs, values))
+            end,
+        ),
+        "response_output_digits_requested" => metadata_value(cfg.response_output_digits),
         "response_symmetry_report_enabled" => metadata_value(cfg.response_symmetry_report_enabled),
         "tensor_indices" => metadata_value(cfg.tensor_indices),
         "band_selection" => metadata_value(cfg.band_selection),

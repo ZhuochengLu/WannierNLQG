@@ -35,7 +35,7 @@ _workflow_path_field(key) =
     endswith(key, "_json") ||
     endswith(key, "_directory") ||
     endswith(key, "_dir") ||
-    key in ("file", "output_root", "smv_fletcher_reeves_two_stage_audit_manifest")
+    key in ("file", "output_root")
 
 # Reject omitted-value strings and invalid numeric/container types before invoking constructors.
 function _workflow_input_value(T, value, path, base_dir)
@@ -118,6 +118,8 @@ end
 
 # Field names and defaults belong to the existing constructor; only explicit leaves are passed.
 function _workflow_input_struct(T, table, path, base_dir; excluded = ())
+    T === Wannierization.WannierizationSolverConfig &&
+        (excluded = (excluded..., "acceleration", "smv_fletcher_reeves_two_stage_audit_manifest"))
     _task_input_keys(table, setdiff(string.(fieldnames(T)), collect(excluded)), path)
     arguments = Dict{Symbol, Any}()
     for (key, value) in table
@@ -356,6 +358,9 @@ function _workflow_input_effective_value(value)
         end
     end
     for field in fieldnames(typeof(value))
+        value isa Wannierization.WannierizationSolverConfig &&
+            field in (:acceleration, :smv_fletcher_reeves_two_stage_audit_manifest) &&
+            continue
         item=_workflow_input_effective_value(getfield(value, field))
         item === nothing || (result[string(field)]=item)
     end
@@ -419,7 +424,7 @@ function _workflow_input_check_paths(config::Wannierization.WannierizationConfig
     end
     for (object, keys) in (
         (config.checkpoint, (:restart_hdf5,)),
-        (config.solver, (:paw_scdm_input_hdf5, :smv_fletcher_reeves_two_stage_audit_manifest)),
+        (config.solver, (:paw_scdm_input_hdf5,)),
         (
             config.output,
             (

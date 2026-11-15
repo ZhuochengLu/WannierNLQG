@@ -194,14 +194,11 @@ function symmetrize_wannier_operators(config::SymmetrizationConfig)
         context.input.lattice,
         tb_roundtrip.r_degeneracies,
         serialized_operators;
-        profile = paths.families.profile,
         overwrite = config.overwrite,
         paired_tb_file = paths.output_tb,
         paired_tb_expected_state = tb_observation,
         provenance = provenance,
-        symmetry = symmetry_metadata,
         geometry = geometry_metadata,
-        diagnostics = Dict("operator_validation" => validation_json),
     )
     roundtrip = read_real_space_operator_bundle(paths.operator_bundle)
     roundtrip.manifest.profile == paths.families.profile ||

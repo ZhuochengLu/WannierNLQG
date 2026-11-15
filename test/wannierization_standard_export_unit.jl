@@ -687,11 +687,11 @@ end
         input = (amn_file = nothing,),
         solver = (
             initialization = :restart,
-            acceleration = reference_acceleration,
             initialization_backend = EXPORT_WANNIERIZATION.AMNExactFrozenInitialization(),
         ),
         checkpoint = (restart_hdf5 = "localization-reference.wannierization.h5",),
     )
+    @test reference_config.solver.acceleration === reference_acceleration
     reference_result = EXPORT_WANNIERIZATION.WannierizationResult(
         fixture.result.status,
         fixture.result.v_matrix,
@@ -1260,7 +1260,6 @@ isdefined(@__MODULE__, :test_operator_bundle_geometry) ||
             model.lattice,
             model.r_degeneracies,
             operators;
-            profile = :hamiltonian_position,
             geometry = test_operator_bundle_geometry(
                 model.lattice,
                 model.r_degeneracies,

@@ -12,6 +12,11 @@ const _OPENMX_TEXT_KEYS = (
     "wannier_center_convention",
     "max_file_bytes",
     "max_model_bytes",
+    "metric_relative_floor",
+    "representation_tolerance",
+    "hamiltonian_representation_tolerance_ev",
+    "overlap_representation_tolerance",
+    "position_translation_tolerance_angstrom",
 )
 
 # Parse explicit OpenMX source settings and record required missing fields without allowing a model override.
@@ -40,6 +45,16 @@ function _task_input_openmx(table, records, pending, base_dir; model = nothing)
             value isa Integer && !(value isa Bool) && value > 0 ||
                 throw(ArgumentError("model.$key must be a positive integer."))
             kwargs[Symbol(key)] = value
+        elseif key in (
+            "metric_relative_floor",
+            "representation_tolerance",
+            "hamiltonian_representation_tolerance_ev",
+            "overlap_representation_tolerance",
+            "position_translation_tolerance_angstrom",
+        )
+            value isa Real && !(value isa Bool) && isfinite(value) ||
+                throw(ArgumentError("model.$key must be a finite real number."))
+            kwargs[Symbol(key)] = value
         else
             kwargs[Symbol(key)] = _task_input_string(value, "model.$key")
         end
@@ -56,6 +71,10 @@ function _task_input_openmx(table, records, pending, base_dir; model = nothing)
         "magnetic_state" => string(p.magnetic_state),
         "spin_orbit_coupling" => p.spin_orbit_coupling,
         "wannier_center_convention" => p.wannier_center_convention,
+        "metric_relative_floor" => input.model.metric_relative_floor,
+        "hamiltonian_representation_tolerance_ev" => p.hamiltonian_representation_tolerance_ev,
+        "overlap_representation_tolerance" => p.overlap_representation_tolerance,
+        "position_translation_tolerance_angstrom" => p.position_translation_tolerance_angstrom,
         "operator_scope" =>
             (p.position_operator_admitted ? "hamiltonian_overlap_position" : "hamiltonian_overlap"),
     )

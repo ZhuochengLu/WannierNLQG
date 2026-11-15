@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using HDF5
 using LinearAlgebra
 using WannierNLQG
@@ -141,7 +143,7 @@ result = W.construct_wannier_functions(
             num_wannier = 1,
             compatibility_policy = :strict,
         ),
-        solver = W.WannierizationSolverConfig(
+        solver = InternalSolverFixture.solver_config(
             # Explicit Z-only persistence trajectory; no removed optimizer profile.
             initialization = :random,
             acceleration = acceleration,
@@ -224,7 +226,7 @@ maximum_result = W.construct_wannier_functions(
             num_wannier = 1,
             compatibility_policy = :strict,
         ),
-        solver = W.WannierizationSolverConfig(
+        solver = InternalSolverFixture.solver_config(
             initialization = :random,
             acceleration = W.WannierizationAccelerationConfig(
                 schedule = :two_stage,

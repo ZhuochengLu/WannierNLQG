@@ -215,8 +215,6 @@ function ots_fixture(directory; nonzero_neighbors = false, neighbor_permutation 
         model.lattice,
         model.r_degeneracies,
         operators;
-        profile = nothing,
-        operator_tasks = tasks,
         provenance = merge(
             Dict(
                 "authoritative_hamiltonian"=>authority.authority,
@@ -245,8 +243,6 @@ function ots_fixture(directory; nonzero_neighbors = false, neighbor_permutation 
         model.lattice,
         model.r_degeneracies,
         geometry_operators;
-        profile = nothing,
-        operator_tasks = geometry_tasks,
         provenance = geometry_provenance,
         geometry,
         eligibility,

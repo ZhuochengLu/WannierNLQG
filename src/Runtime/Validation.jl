@@ -1,3 +1,19 @@
+# Validate one explicit state group before the loaded model supplies its band count.
+function _validate_single_state_group(selection)
+    selection == -1 && return nothing
+    selection isa Tuple &&
+    length(selection) == 1 &&
+    only(selection) isa AbstractVector{<:Integer} || throw(
+        ArgumentError("This response requires omitted groups or exactly one explicit state group."),
+    )
+    group = only(selection)
+    !isempty(group) &&
+    all(i -> !(i isa Bool) && i > 0, group) &&
+    length(unique(group)) == length(group) ||
+        throw(ArgumentError("A state group must contain distinct positive band indices."))
+    return nothing
+end
+
 """
 Validate task combinations, geometry, numerical controls, Fourier settings and output options; return normalized task specifications.
 
@@ -9,7 +25,7 @@ function validate_config(cfg::EffectiveTaskConfig)
         cfg.integration_algorithm isa UniformIntegration ||
             throw(ArgumentError("intrinsic_ahc first version requires uniform integration"))
         iszero(cfg.temperature) || throw(ArgumentError("INTRINSIC_HALL_REQUIRES_ZERO_TEMPERATURE"))
-        cfg.band_selection == -1 || throw(ArgumentError("intrinsic_ahc requires AllBands"))
+        _validate_single_state_group(cfg.band_selection)
         cfg.native_model_input isa NonorthogonalLocalizedInput &&
             any(s->s.quantity==:intrinsic_ahc && s.method==:projector, specs) &&
             throw(ArgumentError("NONORTHOGONAL_PROJECTOR_RESPONSE_UNSUPPORTED"))
@@ -78,12 +94,17 @@ function validate_config(cfg::EffectiveTaskConfig)
             cfg.response_symmetry_file===nothing ||
             cfg.response_symmetry_kmesh_mode=="full" ||
             error("New response tasks require full BZ; reduced mode is unsupported")
-        cfg.band_selection == -1 || error("New response tasks require AllBands")
+        if any(spec -> spec.quantity in (:linear_transport, :linear_optical_response), specs)
+            cfg.band_selection == -1 ||
+                error("This response currently defines only the total response")
+        else
+            _validate_single_state_group(cfg.band_selection)
+        end
     end
     normalize_wannier_center_convention(cfg.wannier_center_convention)
     _response_symmetry_policy(cfg.response_symmetry_policy)
     response_symmetry_kmesh_mode = _response_symmetry_kmesh_mode(cfg.response_symmetry_kmesh_mode)
-    7 <= cfg.response_output_digits <= 17 || error(
+    (cfg.response_output_digits === nothing || 7 <= cfg.response_output_digits <= 17) || error(
         "Invalid response_output_digits=$(cfg.response_output_digits); expected an integer from 7 through 17.",
     )
     using_operator_bundle =

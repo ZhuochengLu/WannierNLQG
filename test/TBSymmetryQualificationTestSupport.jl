@@ -161,7 +161,6 @@ function tbq_fixture(
         lattice,
         degeneracies,
         Dict(TBQ_C.REAL_SPACE_HAMILTONIAN => hamiltonian, TBQ_C.REAL_SPACE_POSITION => position);
-        profile = :hamiltonian_position,
         overwrite = true,
         provenance,
         geometry = tbq_geometry(lattice, position),

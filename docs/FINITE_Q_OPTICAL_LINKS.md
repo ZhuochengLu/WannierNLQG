@@ -32,7 +32,7 @@ The Cartesian photon direction is independent of the sampling/response dimension
 
 ## Current photon-drag k-slice scope and normalization
 
-The current PDSCK and PDICK contractions consume the screened complete finite model. A requested `Transition` can be recorded in configuration metadata, but these two map contractions do not apply it as a single-transition filter. Do not interpret such metadata as evidence of a selected-band-pair map. The full-band integral observable is a separate contract. A future per-transition observable must also specify its behavior at degenerate-group boundaries.
+The current PDSCK and PDICK contractions consume the screened complete finite model. Both Integral and KSlice use total-response selection, `BandSelection()`; explicit groups are rejected. A finite-q per-transition decomposition is not defined by the q=0 source/target selector. Historical inputs carrying an unused `Transition` do not establish a selected-band-pair result.
 
 Their current prefactors include `1/Nk`, and the k-slice writer does not multiply this factor away. These arrays therefore carry that mesh-dependent factor; they are not unweighted local-density maps. Mesh-size comparisons must retain this normalization explicitly. This documents the existing implementation and does not rescale outputs or establish the semantics of a historical source version.
 

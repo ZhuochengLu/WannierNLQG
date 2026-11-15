@@ -21,7 +21,7 @@ function configuration(
     quantity;
     numerics = Numerics(),
     backend = "direct",
-    bands = Subspace([1]),
+    bands = BandSelection(groups = [[1]]),
     bounds = nothing,
     mesh = (2, 2),
 )

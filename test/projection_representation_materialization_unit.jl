@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using LinearAlgebra
 using Test
 using WannierNLQG
@@ -141,7 +143,7 @@ end
             frozen_min_ev = 0.5,
             frozen_max_ev = 1.0,
         ),
-        solver = PROJECTION_MATERIAL_W.WannierizationSolverConfig(),
+        solver = InternalSolverFixture.solver_config(),
         checkpoint = PROJECTION_MATERIAL_W.WannierizationCheckpointConfig(),
         runtime = PROJECTION_MATERIAL_W.WannierizationRuntimeConfig(),
         output = PROJECTION_MATERIAL_W.WannierizationOutputConfig(),

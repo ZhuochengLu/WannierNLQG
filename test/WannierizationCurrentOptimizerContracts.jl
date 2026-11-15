@@ -1,4 +1,4 @@
-@testset "Wannierization opt-in acceleration controls" begin
+@testset "Wannierization retained internal optimizer controls" begin
     fixture = synthetic_wannierization_fixture()
     @test_throws ArgumentError WANNIERIZATION._validate_wannierization_config(
         modified_wannierization_config(

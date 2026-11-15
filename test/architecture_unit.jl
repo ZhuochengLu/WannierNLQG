@@ -62,17 +62,10 @@ const WannierizationModule = WannierNLQG.Wannierization
         :Numerics,
         :Numerics,
         :Numerics,
-        :BandTargets,
-        :Subspace,
-        :Subspaces,
-        :OccupiedBands,
-        :AllBands,
-        :Transition,
-        :InterbandGroups,
-        :TripleGroups,
         :TensorComponent,
         :TensorComponents,
         :FullTensor,
+        :BandSelection,
         :KSliceSelection,
         :read_linear_transport_result,
         :read_orbital_magnetization_result,
@@ -146,7 +139,6 @@ end
             model.lattice,
             model.r_degeneracies,
             operators;
-            profile = :hamiltonian_position,
             paired_tb_file = TEST_MODEL_FILE,
             geometry = test_operator_bundle_geometry(
                 model.lattice,
@@ -220,7 +212,6 @@ end
             model.lattice,
             model.r_degeneracies,
             operators;
-            profile = :hamiltonian_position,
             geometry = test_operator_bundle_geometry(
                 model.lattice,
                 model.r_degeneracies,

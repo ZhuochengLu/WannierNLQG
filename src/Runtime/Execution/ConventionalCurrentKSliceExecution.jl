@@ -20,7 +20,6 @@ function _run_kslice_conventional_current_family!(
     num_orbitals::Int,
     spatial_dimension::Int,
     counter::BundleFamilyCounter,
-    pair_selection,
 )
     sc_state === nothing &&
         ic_state === nothing &&
@@ -34,7 +33,11 @@ function _run_kslice_conventional_current_family!(
         return false
     end
 
-    selected = _prepare_conventional_kslice_pairs!(pair_selection, transition_screen)
+    pair_selection = transition_screen
+    selected = (;
+        active_pair_count = transition_screen.active_pairs_nmajor_length,
+        derivative_pair_count = transition_screen.derivative_required_pairs_nmajor_length,
+    )
     if selected.active_pair_count == 0
         Threads.atomic_add!(counter.skipped, 1)
         return false

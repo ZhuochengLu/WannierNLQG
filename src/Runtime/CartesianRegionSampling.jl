@@ -70,7 +70,8 @@ function KRegion(;
     1<=d<=3 && length(upper)==length(k_mesh)==d || throw(DimensionMismatch("region axes"))
     all(isfinite, lower) && all(isfinite, upper) && all(lower .< upper) ||
         throw(ArgumentError("invalid region bounds"))
-    all(n->n isa Integer && n>0, k_mesh) || throw(ArgumentError("invalid region counts"))
+    all(n->n isa Integer && !(n isa Bool) && n>0, k_mesh) ||
+        throw(ArgumentError("invalid region counts"))
     return KRegion(
         ntuple(i->i<=d ? Float64(lower[i]) : 0.0, 3),
         ntuple(i->i<=d ? Float64(upper[i]) : 0.0, 3),

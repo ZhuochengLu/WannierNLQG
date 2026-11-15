@@ -151,7 +151,7 @@ function configuration(input, quantity, sampling; adaptive = false, backend = "d
         quantity == "OM" ? (3,) : quantity == "BCDC" ? (2, 3, 1) : (2, 3, 3, 1)
     observable =
         sampling isa KSlice ?
-        KSliceSelection(component = TensorComponent(component...), bands = AllBands()) :
+        KSliceSelection(component = TensorComponent(component...), bands = BandSelection()) :
         quantity in ("BCDC", "BCQC") ? TensorComponents(TensorComponent(component...)) :
         quantity == "THG" ? TensorComponents(TensorComponent(1, 1, 1, 1)) : FullTensor()
     d = sampling isa KRegion ? sampling.spatial_dimension : length(sampling.k_mesh)

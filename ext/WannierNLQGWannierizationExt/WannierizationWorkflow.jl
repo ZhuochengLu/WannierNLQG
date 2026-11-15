@@ -3430,19 +3430,28 @@ function _construct_wannierization_workflow(
                 end
             end
             begin
-                local need_native, native, amn, paw_scdm_input, upstream_diagnostics
+                local scdm_only, need_native, native, amn, paw_scdm_input, upstream_diagnostics
                 local durable_observer, observer
                 native_initializer_error = nothing
                 try
+                    # A pure SCDM input already supplies its initial frames. Keep
+                    # the previous AMN reference path whenever AMN/source exists.
+                    scdm_only =
+                        config.solver.initialization_backend isa
+                        Wannierization.PAWSCDMInitialization &&
+                        resolved_matrices.amn === nothing &&
+                        config.input.source === nothing
                     need_native =
-                        config.solver.initialization == :amn && resolved_matrices.amn === nothing
+                        config.solver.initialization == :amn &&
+                        !scdm_only &&
+                        resolved_matrices.amn === nothing
                     native =
                         need_native ?
                         read_native_source(
                             something(config.input.source);
                             purpose = :physical_overlap,
                         ) : nothing
-                    amn = if config.solver.initialization == :amn
+                    amn = if config.solver.initialization == :amn && !scdm_only
                         resolved_matrices.amn === nothing ? generate_amn(native, basis) :
                         resolved_matrices.amn
                     elseif config.solver.initialization == :restart

@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using HDF5
 using LinearAlgebra
 using SHA
@@ -78,7 +80,7 @@ function standard_export_fixture(;
             num_wannier = 1,
             frozen_states = [(1, 1), (2, 1)],
         ),
-        solver = EXPORT_WANNIERIZATION.WannierizationSolverConfig(initialization = :amn),
+        solver = InternalSolverFixture.solver_config(initialization = :amn),
         checkpoint = EXPORT_WANNIERIZATION.WannierizationCheckpointConfig(),
         runtime = EXPORT_WANNIERIZATION.WannierizationRuntimeConfig(),
         output = EXPORT_WANNIERIZATION.WannierizationOutputConfig(

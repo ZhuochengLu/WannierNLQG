@@ -172,7 +172,7 @@ for (index, t) in enumerate(R.TASK_DEFINITIONS)
                         observable = calculation == :kslice ?
                                      KSliceSelection(
                             component = TensorComponent(1, 2),
-                            bands = AllBands(),
+                            bands = BandSelection(),
                         ) : FullTensor(),
                     ),
                 ],

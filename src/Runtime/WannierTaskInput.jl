@@ -1,8 +1,10 @@
 # Normalize independent stage settings through their single typed authority.
 function _workflow_stage_solver(table; base_dir = pwd())
     stage_keys = string.(fieldnames(Wannierization.WannierizationStageControls))
-    solver_keys =
-        setdiff(string.(fieldnames(Wannierization.WannierizationSolverConfig)), ["stage_controls"])
+    solver_keys = setdiff(
+        string.(fieldnames(Wannierization.WannierizationSolverConfig)),
+        ["stage_controls", "acceleration", "smv_fletcher_reeves_two_stage_audit_manifest"],
+    )
     _task_input_keys(table, (solver_keys..., stage_keys...), "solver")
     initialization =
         _task_input_symbol(get(table, "initialization", "amn"), "solver.initialization")
@@ -21,16 +23,6 @@ function _workflow_stage_solver(table; base_dir = pwd())
             base_dir,
         ) for (k, v) in table if !(k in stage_keys) && k != "initialization"
     )
-    if !haskey(extra, :acceleration)
-        extra[:acceleration] = Wannierization.WannierizationAccelerationConfig(
-            schedule = :two_stage,
-            strategy = :fixed,
-            disentanglement_max_steps = controls.dis_num_iter,
-            disentanglement_objective_tolerance = controls.dis_conv_tol,
-            z_stability_window = controls.dis_conv_window,
-            localization_max_steps = controls.num_iter,
-        )
-    end
     return Wannierization.WannierizationSolverConfig(;
         initialization,
         stage_controls = controls,

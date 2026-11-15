@@ -10,6 +10,7 @@ function intrinsic_hall_fermi_sea(
     fermi_energies;
     method::Symbol = :Matrix,
     temperature::Real = 0.0,
+    band_mask = nothing,
 )
     isfinite(temperature) && iszero(temperature) ||
         throw(ArgumentError("INTRINSIC_HALL_REQUIRES_ZERO_TEMPERATURE"))
@@ -21,6 +22,7 @@ function intrinsic_hall_fermi_sea(
     method === :Projector &&
         !geometry.orthonormal_basis &&
         throw(ArgumentError("NONORTHOGONAL_PROJECTOR_RESPONSE_UNSUPPORTED"))
+    band_mask = complete_spectral_band_mask(geometry.energies, band_mask)
     result = zeros(Float64, length(mu), 3, 3)
     previous_occupied = -1
     curvature = zeros(Float64, 3, 3)
@@ -31,8 +33,8 @@ function intrinsic_hall_fermi_sea(
                 MatrixElements.intrinsic_hall_position_between_occupations(geometry, occupied)
             curvature =
                 method === :Matrix ?
-                intrinsic_hall_matrix_curvature(geometry, occupied, connection) :
-                intrinsic_hall_projector_curvature(geometry, occupied, connection)
+                intrinsic_hall_matrix_curvature(geometry, occupied, connection; band_mask) :
+                intrinsic_hall_projector_curvature(geometry, occupied, connection; band_mask)
             previous_occupied = occupied
         end
         result[i, :, :] = curvature

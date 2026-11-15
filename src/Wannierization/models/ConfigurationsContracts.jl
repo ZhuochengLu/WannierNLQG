@@ -452,7 +452,11 @@ _discrete_hamiltonian_correction_key(
 ) = "far_band_covariance_correction"
 
 """
-Frozen numerical gates for a star-covariant PAW wavefunction preparation.
+Numerical gates and retained identity fields for a star-covariant PAW preparation.
+
+`final_s_reconstruction` is a historical identity field, not a live gate. Its
+stored value and representation remain unchanged for strict artifact/restart
+compatibility; adjusting it does not tune the current numerical algorithm.
 
 The target-leakage gate is a dimensionless PAW-S probability weight shared by
 the state, reconstruction, and two directed target/complement quantities.

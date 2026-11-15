@@ -50,7 +50,8 @@ function configuration(model; quantity = "QMK", eta = nothing, external = false)
                 numerics,
                 observable = KSliceSelection(
                     component = TensorComponent(ntuple(_->1, rank)...),
-                    bands = quantity == "QMK" ? BandTargets([1]) : Subspace([1]),
+                    bands = quantity == "QMK" ? BandSelection(groups = [[1]]) :
+                            BandSelection(groups = [[1]]),
                 ),
             ),
         ],
@@ -251,7 +252,7 @@ end
             "tasks"=>Dict(
                 "metric"=>Dict{String, Any}(
                     "kind"=>"QMK",
-                    "observable"=>Dict("kind"=>"band_targets", "component"=>[1, 1], "bands"=>[1]),
+                    "observable"=>Dict("kind"=>"kslice", "component"=>[1, 1], "groups"=>[[1]]),
                 ),
             ),
         ),
@@ -468,7 +469,10 @@ include("FrozenGramOperatorTestSupport.jl")
         quantity = "berry_curvature",
         physics = GeometryParameters(),
         numerics = Numerics(denominator_regularization = 0.001),
-        observable = KSliceSelection(component = TensorComponent(1, 2), bands = BandTargets([1])),
+        observable = KSliceSelection(
+            component = TensorComponent(1, 2),
+            bands = BandSelection(groups = [[1]]),
+        ),
     )
     make_run(
         input,
@@ -503,7 +507,7 @@ include("FrozenGramOperatorTestSupport.jl")
                 input_semantics = :direct_energy_overlap,
             ),
             numerics = Numerics(denominator_regularization = 0.001),
-            observable = KSliceSelection(component = TensorComponent(3), bands = AllBands()),
+            observable = KSliceSelection(component = TensorComponent(3), bands = BandSelection()),
         )
         metric_only=make_run(packed, [metric])
         orbital_only=make_run(packed, [orbital])

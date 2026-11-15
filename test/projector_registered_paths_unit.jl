@@ -99,7 +99,6 @@ function write_exact_projector_test_bundle(directory, model_file)
         model.lattice,
         model.r_degeneracies,
         operators;
-        profile = :derivative,
         paired_tb_file = model_file,
         provenance = Dict(
             "derivative_overlap_source" => "neighbor_pair_overlap",

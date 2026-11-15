@@ -1582,7 +1582,7 @@ end
             observable = selected ?
                          KSliceSelection(
                 component = TensorComponent(1, 1, 3),
-                bands = Transition(conduction = [2], valence = [1]),
+                bands = BandSelection(groups = [[1], [2]]),
             ) : FullTensor(),
         )
         sampling=selected ?

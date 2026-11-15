@@ -668,9 +668,8 @@ function _validate_wannierization_config(config::WannierizationConfig)
     acceleration.u_initial_step > 0.0 && isfinite(acceleration.u_initial_step) ||
         throw(ArgumentError("u_initial_step must be positive and finite"))
     0.0 < acceleration.u_armijo_c1 < 1.0 || throw(ArgumentError("u_armijo_c1 must be in (0, 1)"))
-    (isinf(acceleration.u_max_geodesic_step) || acceleration.u_max_geodesic_step > 0.0) &&
-    !isnan(acceleration.u_max_geodesic_step) ||
-        throw(ArgumentError("u_max_geodesic_step must be positive or Inf"))
+    acceleration.u_max_geodesic_step > 0.0 ||
+        throw(ArgumentError("u_max_geodesic_step must be positive or +Inf"))
     0.0 < acceleration.u_backtracking_factor < 1.0 ||
         throw(ArgumentError("u_backtracking_factor must be in (0, 1)"))
     acceleration.u_backtracking_max_steps >= 0 ||
@@ -776,6 +775,7 @@ function _validate_wannierization_config(config::WannierizationConfig)
         )
     end
     config.solver.initialization == :amn &&
+        !(config.solver.initialization_backend isa PAWSCDMInitialization) &&
         config.input.amn_file === nothing &&
         config.input.source === nothing &&
         throw(

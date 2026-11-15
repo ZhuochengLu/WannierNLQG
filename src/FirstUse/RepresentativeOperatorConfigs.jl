@@ -43,7 +43,7 @@ function _first_use_operator_configs(root; operator_bundle_files = nothing)
             physics = W.GeometryParameters(),
             observable = W.KSliceSelection(
                 component = W.TensorComponent(component...),
-                bands = W.Subspace([1, 2]),
+                bands = W.BandSelection(groups = [[1, 2]]),
             ),
         ) for (q, component) in
         (("QMK", (1, 1)), ("QMDK", (1, 1, 1)), ("QMQK", (1, 1, 1, 1)), ("QCSK", (1, 1, 1)))
@@ -57,7 +57,7 @@ function _first_use_operator_configs(root; operator_bundle_files = nothing)
             physics = W.GeometryParameters(),
             observable = W.KSliceSelection(
                 component = W.TensorComponent(1, 1, 1),
-                bands = W.Transition(conduction = [3, 4], valence = [1, 2]),
+                bands = W.BandSelection(groups = [[3, 4], [1, 2]]),
             ),
         ),
     )
@@ -70,7 +70,7 @@ function _first_use_operator_configs(root; operator_bundle_files = nothing)
             numerics = W.Numerics(denominator_regularization = 0.001, degeneracy_threshold = 0.002),
             observable = W.KSliceSelection(
                 component = W.TensorComponent(component...),
-                bands = W.InterbandGroups(first = [3, 4], second = [1, 2]),
+                bands = W.BandSelection(groups = [[3, 4], [1, 2]]),
             ),
         ) for (q, component) in (("ZIBCK", (1, 3)), ("ZIQMK", (1, 2)))
     ]

@@ -249,7 +249,7 @@ function prepare_second_harmonic(
                 SECOND_HARMONIC_TERMS;
                 output = cfg.shg_output,
                 response = cfg.shg_response,
-                digits = max(12, cfg.response_output_digits),
+                digits = resolved_response_output_digits(cfg, 12),
                 slice,
                 integration_dimension = integration_output_dimension(cfg),
                 region = cfg.integration_bounds !== nothing,

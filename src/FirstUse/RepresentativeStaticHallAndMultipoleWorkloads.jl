@@ -59,7 +59,7 @@
                     ),
                     observable = KSliceSelection(
                         component = TensorComponent(1, 2),
-                        bands = AllBands(),
+                        bands = BandSelection(),
                     ),
                 )
                 result = run(
@@ -82,7 +82,7 @@
                         relaxation_time_fs = 7.0,
                         integral_form = :fermi_surface,
                     ),
-                    observable = KSliceSelection(component = component, bands = AllBands()),
+                    observable = KSliceSelection(component = component, bands = BandSelection()),
                 )
                 result = run(
                     _first_use_config(model, slice_sampling, [task], joinpath(directory, task.id)),

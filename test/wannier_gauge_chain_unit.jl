@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using EzXML
 using HDF5
 using JSON3
@@ -140,7 +142,7 @@ end
                 eig_file = "x.eig",
                 mmn_file = "x.mmn",
             ),
-            solver = GAUGE_W.WannierizationSolverConfig(
+            solver = InternalSolverFixture.solver_config(
                 acceleration = GAUGE_W.WannierizationAccelerationConfig(
                     constraint_operation_scope = :identity,
                 ),

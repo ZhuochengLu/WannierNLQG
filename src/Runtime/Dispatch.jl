@@ -473,6 +473,7 @@ function run_validated_tasks(config, configs, identities)
                         family_counts = value.family_counts,
                         fourier_summary = value.fourier_summary,
                         response_symmetry_summary = value.response_symmetry_summary,
+                        band_summary = value.band_summary,
                         replica_summary = value.replica_summary,
                         qualification_summary = response_qualification_summary(value.qualification),
                         model_geometry = value.model_geometry,

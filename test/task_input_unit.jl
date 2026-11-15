@@ -241,23 +241,12 @@ function task_input_example_document(config)
             (row["numerics"] = Files.task_input_toml_value(task.numerics.values))
         if task.observable isa KSliceSelection
             bands = task.observable.bands
-            kinds = Dict(
-                BandTargets => "band_targets",
-                Subspace => "subspace",
-                Subspaces => "subspaces",
-                OccupiedBands => "occupied_bands",
-                AllBands => "all_bands",
-                Transition => "transition",
-                InterbandGroups => "interband_groups",
-                TripleGroups => "triple_groups",
-            )
             observation = Dict{String, Any}(
-                "kind" => kinds[typeof(bands)],
+                "kind" => "kslice",
                 "component" => collect(task.observable.component.indices),
+                "occupied_sum" => String(bands.occupied_sum),
             )
-            for field in fieldnames(typeof(bands))
-                observation[string(field)] = Files.task_input_toml_value(getfield(bands, field))
-            end
+            bands.groups === nothing || (observation["groups"] = deepcopy(bands.groups))
             row["observable"] = observation
         end
         rows[task.id] = row
@@ -477,7 +466,7 @@ end
         row["method"] = "Conventional"
         row["kind"] = "quantum_metric"
         delete!(row, "numerics")
-        row["observable"] = Dict("kind" => "subspace", "component" => [2, 3], "bands" => [1])
+        row["observable"] = Dict("kind" => "kslice", "component" => [2, 3], "groups" => [[1]])
         document["response"]["sampling"] = Dict(
             "kind" => "k_slice",
             "k_mesh" => [1, 1],
@@ -495,7 +484,7 @@ end
         document["model"] = Dict("source" => "julia", "identity" => "explicit native payload")
         @test_throws ArgumentError resolve_task_input(document; model = native)
         row["kind"] = "berry_curvature"
-        row["observable"]["kind"] = "band_targets"
+        row["observable"]["kind"] = "kslice"
         @test_throws ArgumentError resolve_task_input(document; model = native)
         for key in ("photon_energies_ev", "fermi_energy_ev", "temperature_k")
             delete!(document["response"], key)
@@ -507,7 +496,7 @@ end
         auto = resolve_task_input(document; model = native)
         @test auto.config.execution.fourier_backend == "auto"
         for value in (1.5, true, 0)
-            row["observable"]["bands"] = [value]
+            row["observable"]["groups"] = [[value]]
             @test_throws ArgumentError resolve_task_input(document; model = native)
         end
     end
@@ -760,9 +749,9 @@ end
                         "kind" => "berry_curvature",
                         "method" => "Conventional",
                         "observable" => Dict(
-                            "kind" => "band_targets",
+                            "kind" => "kslice",
                             "component" => [1, 2],
-                            "bands" => [1],
+                            "groups" => [[1]],
                         ),
                     ),
                 )
@@ -788,7 +777,7 @@ end
                             physics = GeometryParameters(),
                             observable = KSliceSelection(;
                                 component = TensorComponent(1, 2),
-                                bands = BandTargets([1]),
+                                bands = BandSelection(groups = [[1]]),
                             ),
                         ),
                     ],

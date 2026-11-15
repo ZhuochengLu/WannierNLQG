@@ -5,6 +5,7 @@ using ..Core
 using ..MatrixElements
 
 include("Shared/ResponseOccupations.jl")
+include("Shared/ResponseBandGroups.jl")
 include("Shared/PhotonDragTransitionWeights.jl")
 include("Shared/PhotonDragDegenerateCurrentKernels.jl")
 export complete_photon_drag_injection_degenerate_blocks!

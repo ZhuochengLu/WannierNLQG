@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 if !isdefined(@__MODULE__, :CurrentScientificValues)
     include(joinpath(@__DIR__, "support/CurrentScientificValues.jl"))
 end
@@ -2225,7 +2227,7 @@ end
                     num_wannier = 1,
                     compatibility_policy = :off,
                 ),
-                solver = STAR_GAUGE_W.WannierizationSolverConfig(
+                solver = InternalSolverFixture.solver_config(
                     acceleration = STAR_GAUGE_W.WannierizationAccelerationConfig(
                         disentanglement_max_steps = 1,
                         localization_max_steps = 1,
@@ -2876,7 +2878,7 @@ end
                 num_wannier = 1,
                 compatibility_policy = :off,
             ),
-            solver = STAR_GAUGE_W.WannierizationSolverConfig(
+            solver = InternalSolverFixture.solver_config(
                 stage_controls = STAR_GAUGE_W.WannierizationStageControls(num_iter = 0),
             ),
             checkpoint = STAR_GAUGE_W.WannierizationCheckpointConfig(),

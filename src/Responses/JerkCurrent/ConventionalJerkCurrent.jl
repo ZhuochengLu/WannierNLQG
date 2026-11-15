@@ -8,6 +8,8 @@ Output axes are (energy,component). The optical product is r_nm^b r_mn^c,
 with b:+omega, c:-omega and d:0. The Hessian always uses all retained model bands;
 band windows affect only absorption pairs. No lifetime or conjugate-order factor
 is inserted. The gap regularization is shared by dipoles and Hessians.
+An optional external selection restricts only source m and target n; all geometry
+and virtual-state contributions are still prepared from the full model.
 """
 function jerk_current_response!(
     output,
@@ -24,13 +26,20 @@ function jerk_current_response!(
     transition_window_factor,
     band_window_size,
     projection = :ordered,
+    external_selection = nothing,
+    band_window = nothing,
 )
     fill!(output, 0)
     prepare_jerk_current_geometry!(geometry, data; regularization)
     bands=data.spectrum.energies
     fermi_dirac!(occupations, bands, fermi_energy, temperature)
-    lo, hi=select_band_window(bands, fermi_energy, band_window_size, length(bands))
+    lo,
+    hi=band_window === nothing ?
+       select_band_window(bands, fermi_energy, band_window_size, length(bands)) : band_window
     for m in lo:hi, n in lo:hi
+        external_selection === nothing ||
+            (external_selection.valence_mask[m] && external_selection.conduction_mask[n]) ||
+            continue
         gap=bands[n]-bands[m]
         gap>0 || continue
         occupation=occupations[m]-occupations[n]

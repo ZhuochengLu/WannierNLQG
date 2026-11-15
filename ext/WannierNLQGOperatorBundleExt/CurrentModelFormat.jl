@@ -94,8 +94,6 @@ function write_real_space_operator_bundle(
     lattice,
     degeneracies,
     operators::AbstractDict;
-    profile::Union{Nothing, Symbol},
-    operator_tasks = (),
     overwrite::Bool = false,
     paired_tb_file = nothing,
     paired_tb_expected_state = nothing,
@@ -103,9 +101,7 @@ function write_real_space_operator_bundle(
     return_receipt::Bool = false,
     content_authentication::Bool = false,
     provenance = Dict{String, Any}(),
-    symmetry = Dict{String, Any}(),
     geometry,
-    diagnostics = Dict{String, Any}(),
     eligibility = Dict{String, Any}(),
 )
     content_authentication &&

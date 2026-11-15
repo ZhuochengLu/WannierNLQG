@@ -1,14 +1,16 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using Test, TOML
 @testset "Canonical grouped controls and four workflow examples" begin
     w=WannierNLQG.Wannierization
     controls=w.WannierizationStageControls()
-    cfg=w.WannierizationSolverConfig()
+    cfg=InternalSolverFixture.solver_config()
     @test cfg.stage_controls==controls
     @test cfg.acceleration.disentanglement_max_steps==200
     @test cfg.acceleration.localization_max_steps==500
     for removed in (:max_iterations, :convergence_tolerance, :convergence_window, :localize)
         @test removed ∉ fieldnames(w.WannierizationSolverConfig)
-        @test_throws MethodError w.WannierizationSolverConfig(; removed=>1)
+        @test_throws MethodError InternalSolverFixture.solver_config(; removed=>1)
     end
     @test w.WannierizationCheckpointConfig().num_dump_cycles==100
     @test w.WannierizationRuntimeConfig().num_print_cycles==1

@@ -118,7 +118,7 @@ function _task_input_required_fields(quantity, observation, paired)
     quantity in (:photon_drag_shift_current, :photon_drag_injection_current) &&
         return paired ? TASK_INPUT_PAIRED_Q_FIELDS : TASK_INPUT_FINITE_Q_FIELDS
     quantity in OPTICAL_TASK_QUANTITIES && return TASK_INPUT_PHYSICS_FIELDS
-    return observation isa KSliceSelection && _occupied_sum_requested(observation.bands) ?
+    return observation isa KSliceSelection && observation.bands.occupied_sum !== :none ?
            TASK_INPUT_PHYSICS_FIELDS[2:3] : ()
 end
 

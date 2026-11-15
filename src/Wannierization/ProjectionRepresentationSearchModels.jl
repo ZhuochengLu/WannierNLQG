@@ -20,15 +20,20 @@ struct ProjectionRepresentationSearchThresholds
     position::Float64
     representation::Float64
     group_law::Float64
-    integer::Float64
+    integer::Float64 # Legacy carrier; not a public tuning input or an active gate.
 
     function ProjectionRepresentationSearchThresholds(;
         position::Real = 1.0e-8,
         representation::Real = 1.0e-8,
         group_law::Real = 1.0e-8,
-        integer::Real = 1.0e-6,
+        kwargs...,
     )
-        values = Float64[position, representation, group_law, integer]
+        isempty(kwargs) || throw(
+            ArgumentError(
+                "Unsupported projection-representation threshold(s): $(join(string.(keys(kwargs)), ", ")); integer is not a numerical control.",
+            ),
+        )
+        values = Float64[position, representation, group_law, 1.0e-6]
         all(value -> isfinite(value) && value > 0.0, values) ||
             throw(ArgumentError("projection-representation thresholds must be positive and finite"))
         return new(values...)

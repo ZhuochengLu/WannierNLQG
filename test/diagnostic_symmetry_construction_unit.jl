@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using Test
 using LinearAlgebra
 using HDF5
@@ -281,7 +283,7 @@ using .QEPAWMatrixElementsTestSupport
         )
         authority_config = W.WannierizationConfig(
             input = authority_input,
-            solver = W.WannierizationSolverConfig(
+            solver = InternalSolverFixture.solver_config(
                 stage_controls = W.WannierizationStageControls(dis_num_iter = 2, num_iter = 2),
             ),
             checkpoint = W.WannierizationCheckpointConfig(

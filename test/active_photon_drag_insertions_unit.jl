@@ -481,7 +481,7 @@
             numerics = numerics,
             observable = KSliceSelection(
                 component = dimension == 3 ? TensorComponent(3, 2, 3) : TensorComponent(2, 1, 2),
-                bands = Transition(conduction = [33, 34], valence = [31, 32]),
+                bands = BandSelection(),
             ),
         )
         slice_results=Any[]

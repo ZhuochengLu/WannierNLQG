@@ -67,19 +67,26 @@ end
 """
 Load legacy spin input only when spin is enabled; otherwise return nothing without reading files.
 """
-function maybe_load_spin_from_config(model::AbstractResponseModel, config::EffectiveTaskConfig)
+function maybe_load_spin_from_config(
+    model::AbstractResponseModel,
+    config::EffectiveTaskConfig;
+    seed_inputs::Union{Nothing, SeedInputPaths} = nothing,
+)
     config.spin_enabled || return nothing
-    isempty(config.spin_file) && error("spin_enabled=true requires EffectiveTaskConfig.spin_file.")
-    isempty(config.checkpoint_file) &&
-        error("spin_enabled=true requires EffectiveTaskConfig.checkpoint_file.")
-
+    if seed_inputs === nothing
+        isempty(config.spin_file) &&
+            error("spin_enabled=true requires EffectiveTaskConfig.spin_file.")
+        isempty(config.checkpoint_file) &&
+            error("spin_enabled=true requires EffectiveTaskConfig.checkpoint_file.")
+    end
     case_root = resolve_case_root(config.case_root)
     spin_file =
-        isabspath(config.spin_file) ? normpath(config.spin_file) :
-        normpath(joinpath(case_root, config.spin_file))
+        seed_inputs === nothing ?
+        resolve_path(config.spin_file, config.spin_file; base = case_root) : seed_inputs.spin_file
     checkpoint_file =
-        isabspath(config.checkpoint_file) ? normpath(config.checkpoint_file) :
-        normpath(joinpath(case_root, config.checkpoint_file))
+        seed_inputs === nothing ?
+        resolve_path(config.checkpoint_file, config.checkpoint_file; base = case_root) :
+        seed_inputs.checkpoint_file
     return load_spin_real_space(
         model,
         spin_file,
@@ -135,7 +142,7 @@ function maybe_load_spin_velocity_from_context(
         seed.checkpoint_file,
         seed.eigenvalue_file,
         seed.overlap_file;
-        spin_file_formatted = false,
+        spin_file_formatted = config.spin_file_formatted,
     )
     return real_space
 end

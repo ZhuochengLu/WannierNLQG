@@ -84,6 +84,12 @@ function prepare_third_order(
             jerk ? [JerkCurrentGeometry(count) for _ in 1:workers] :
             [ThirdHarmonicWorkspace(count) for _ in 1:workers]
         occupations = [zeros(count) for _ in 1:workers]
+        selection_windows =
+            jerk ?
+            [
+                make_external_band_window_workspace(count; band_selection = cfg.band_selection) for
+                _ in 1:workers
+            ] : ExternalBandWindowWorkspace[]
         for workspace in workspaces
             fourier_timing_enabled() && enable_fourier_timing!(workspace)
             prepare_real_space!(workspace, model)
@@ -172,6 +178,15 @@ function prepare_third_order(
             data = compute_kpoint!(workspace, model, point)
             values = scratch[worker]
             if jerk
+                selection = selection_windows[worker]
+                _prepare_transition_selection_window!(
+                    selection,
+                    cfg,
+                    data.spectrum,
+                    count;
+                    degeneracy_threshold = 0.0,
+                    require_complete_groups = false,
+                )
                 jerk_current_response!(
                     view(values,:,:,1,1,1),
                     response_workspaces[worker],
@@ -187,6 +202,8 @@ function prepare_third_order(
                     transition_window_factor = cfg.transition_window_factor,
                     band_window_size = cfg.band_window_size,
                     projection = options.projection,
+                    external_selection = selection,
+                    band_window = (selection.band_start, selection.band_end),
                 )
             else
                 try
@@ -317,6 +334,9 @@ function prepare_third_order(
                 rank==0 && (gap_diagnostics .= max.(gap_diagnostics, reduced))
             end
             outputs = String[]
+            selection_summary =
+                jerk ? _external_band_selection_summary(selection_windows, cfg, 0, rank, comm) :
+                NamedTuple()
             if rank == 0
                 if adaptive
                     result .= adaptive_result[].value
@@ -342,6 +362,8 @@ function prepare_third_order(
                         (;
                             occupation_derivative_mode = "NOT_APPLICABLE",
                             occupation_policy = "core-fermi-dirac/1",
+                            band_selection = selection_summary,
+                            selection_grouping_rule = "existing numerical equality only; no response degeneracy threshold",
                         ),
                     )
                 end
@@ -355,7 +377,7 @@ function prepare_third_order(
                     formulation = options.formulation,
                     response = options.response,
                     output = options.output,
-                    digits = max(16, cfg.response_output_digits),
+                    digits = resolved_response_output_digits(cfg, 16),
                     slice,
                     domain_metadata = integration_domain_metadata(cfg),
                     effective_dimension = integration_output_dimension(cfg),

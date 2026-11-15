@@ -302,7 +302,6 @@ end
                         a.lattice,
                         a.degeneracies,
                         copied;
-                        profile = :hamiltonian_position,
                         geometry,
                         # Preserve actual source policy/frame definitions while
                         # perturbing only the selected H/r matrix element.

@@ -156,7 +156,7 @@ end
                 observable = sampling isa KSlice ?
                              KSliceSelection(
                     component = TensorComponent(1, 1, 1),
-                    bands = AllBands(),
+                    bands = BandSelection(),
                 ) : FullTensor(),
             )
             return TaskConfig(

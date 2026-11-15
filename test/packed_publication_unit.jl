@@ -28,7 +28,6 @@ include("OperatorBundleTestSupport.jl")
             model.lattice,
             model.r_degeneracies,
             ops;
-            profile = :hamiltonian_position,
             geometry,
         )
         @test !isfile(path*".commit.toml")
@@ -42,7 +41,6 @@ include("OperatorBundleTestSupport.jl")
             model.lattice,
             model.r_degeneracies,
             ops;
-            profile = :hamiltonian_position,
             geometry,
         )
         source_values=read(tb)
@@ -51,7 +49,6 @@ include("OperatorBundleTestSupport.jl")
             model.lattice,
             model.r_degeneracies,
             ops;
-            profile = :hamiltonian_position,
             geometry,
             paired_tb_file = tb,
             overwrite = true,

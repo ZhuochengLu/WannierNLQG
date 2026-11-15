@@ -1307,6 +1307,14 @@ function _initial_frames_with_diagnostics(
     spectrum_audit::Union{Nothing, HermitianSpectrumAudit} = nothing,
     paw_scdm_input::Union{Nothing, PAWSCDMInputArtifact} = nothing,
 )
+    config.solver.initialization == :random &&
+        config.solver.initialization_backend isa PAWSCDMInitialization &&
+        restart === nothing &&
+        throw(
+            ArgumentError(
+                "INITIALIZATION_SELECTOR_CONFLICT: fresh initialization cannot request both random and PAW-SCDM; select one initializer.",
+            ),
+        )
     apply_symmetry = symmetry_constraints_applied(config, representation)
     if config.solver.initialization_backend isa PAWSCDMInitialization
         paw_scdm_input === nothing &&

@@ -128,7 +128,7 @@ end
                         physics = physics,
                         observable = KSliceSelection(
                             component = TensorComponent(1, 1, 1, 1),
-                            bands = AllBands(),
+                            bands = BandSelection(),
                         ),
                     ),
                 ],

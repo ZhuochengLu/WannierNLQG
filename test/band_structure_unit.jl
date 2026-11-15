@@ -72,7 +72,6 @@ function write_band_test_bundle(
         model.lattice,
         model.r_degeneracies,
         operators;
-        profile = :hamiltonian_position,
         paired_tb_file = model_file,
         geometry = something(geometry, band_test_bundle_geometry(model)),
     )

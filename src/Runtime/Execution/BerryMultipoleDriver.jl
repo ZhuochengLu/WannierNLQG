@@ -416,7 +416,7 @@ function prepare_berry_multipole(
                             conductivity_unit = tensor_rank == 3 ? "A*m^3/V^2 k_integrand" :
                                                 "A*m^4/V^3 k_integrand",
                             metadata,
-                            digits = cfg.response_output_digits,
+                            digits = resolved_response_output_digits(cfg),
                         ),
                     )
                 else
@@ -435,7 +435,7 @@ function prepare_berry_multipole(
                             moment_unit,
                             conductivity_unit,
                             metadata,
-                            digits = cfg.response_output_digits,
+                            digits = resolved_response_output_digits(cfg),
                         ),
                     )
                 end

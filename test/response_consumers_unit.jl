@@ -39,7 +39,7 @@ function configuration(
                 numerics = numerics,
                 observable = KSliceSelection(
                     component = TensorComponent(component...),
-                    bands = AllBands(),
+                    bands = BandSelection(),
                 ),
             ),
         ],

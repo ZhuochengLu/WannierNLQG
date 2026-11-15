@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using LinearAlgebra
 using SHA
 using WannierNLQG
@@ -83,7 +85,7 @@ config = W.WannierizationConfig(
         frozen_min_ev = -2.0,
         frozen_max_ev = -0.5,
     ),
-    solver = W.WannierizationSolverConfig(
+    solver = InternalSolverFixture.solver_config(
         initialization = :random,
         acceleration = acceleration,
         parallel = :threads,

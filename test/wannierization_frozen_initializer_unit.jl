@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using LinearAlgebra
 using Random
 using Test
@@ -51,7 +53,7 @@ function frozen_initializer_fixture(; num_bands::Int = 22, num_wannier::Int = 18
             num_wannier = num_wannier,
             representation_tolerance = 1.0e-8,
         ),
-        solver = FROZEN_WANNIERIZATION.WannierizationSolverConfig(initialization = :amn),
+        solver = InternalSolverFixture.solver_config(initialization = :amn),
         checkpoint = FROZEN_WANNIERIZATION.WannierizationCheckpointConfig(),
         runtime = FROZEN_WANNIERIZATION.WannierizationRuntimeConfig(),
         output = FROZEN_WANNIERIZATION.WannierizationOutputConfig(),

@@ -278,7 +278,8 @@ end
         fixture.config;
         initialization_backend = PAW_SCDM_W.PAWSCDMInitialization(),
         paw_scdm_input_hdf5 = "synthetic-paw-scdm.h5",
-        initialization = :random,
+        # The explicit PAW backend supplies the SCDM seed; random is a conflicting selector.
+        initialization = :amn,
     )
     result = PAW_SCDM_W._solve_symmetry_adapted_wannierization(
         config,
@@ -288,6 +289,7 @@ end
         fixture.plan;
         paw_scdm_input = artifact,
     )
+    @test PAW_SCDM_W._validate_wannierization_config(config) === nothing
     @test result.status != PAW_SCDM_W.INVALID_INPUT
     @test result.input_summary["paw_scdm_input_precondition"] == "PASS"
     @test result.input_summary["paw_scdm_minimum_rank"] == "1"
@@ -314,6 +316,65 @@ end
     @test ordinary_result.input_summary["paw_scdm_authority_usage"] == "input_provenance_only"
     @test ordinary_result.input_summary["covariance_qualification"] == "STANDARD"
     @test ordinary_result.input_summary["symmetry_constraints_applied"] == "false"
+
+    # PAW-only high-level execution must not invent/read an unused AMN source.
+    @test_throws ArgumentError PAW_SCDM_W._validate_wannierization_config(
+        modified_wannierization_config(fixture.config; initialization = :amn),
+    )
+    if !isdefined(@__MODULE__, :tiny_wannier_workflow)
+        include(
+            joinpath(
+                @__DIR__,
+                "..",
+                "ext",
+                "WannierNLQGWannierizationExt",
+                "PrecompileSupport",
+                "TinyWannierWorkflowInputs.jl",
+            ),
+        )
+    end
+    mktempdir() do directory
+        inputs = Base.invokelatest(tiny_wannier_workflow, directory)
+        write(
+            inputs.solve.input.win_file,
+            """
+num_wann = 1
+mp_grid = 2 1 1
+begin unit_cell_cart
+angstrom
+1.0 0.0 0.0
+0.0 1.0 0.0
+0.0 0.0 1.0
+end unit_cell_cart
+begin kpoints
+0.0 0.0 0.0
+0.5 0.0 0.0
+end kpoints
+""",
+        )
+        scdm_file = joinpath(directory, "seed.scdm.h5")
+        Base.invokelatest(extension._paw_scdm_write, scdm_file, artifact)
+        high_config = modified_wannierization_config(
+            ordinary_config;
+            win_file = inputs.solve.input.win_file,
+            eig_file = inputs.eig,
+            mmn_file = inputs.mmn,
+            paw_scdm_input_hdf5 = scdm_file,
+            checkpoint_hdf5 = joinpath(directory, "paw.wannierization.h5"),
+            model_file = joinpath(directory, "paw.model.h5"),
+            num_print_cycles = 0,
+        )
+        @test high_config.input.amn_file === nothing
+        @test high_config.input.source === nothing
+        solved = PAW_SCDM_W.construct_wannier_functions(high_config)
+        accepted = solved.status in
+        (PAW_SCDM_W.COMPLETED, PAW_SCDM_W.COMPLETED_WITH_WARNINGS, PAW_SCDM_W.MAX_ITERATIONS)
+        @test accepted
+        accepted || error("PAW-only public workflow failed: $(solved.diagnostics)")
+        @test solved.input_summary["paw_scdm_input_precondition"] == "PASS"
+        @test solved.input_summary["localization_reference"] == "initializer_fallback"
+        @test !isfile(joinpath(directory, "tiny.amn"))
+    end
 
     for definition_key in ("AUTHORITATIVE_HAMILTONIAN_SHA256", "authoritative_hamiltonian_sha256")
         @test Base.invokelatest(

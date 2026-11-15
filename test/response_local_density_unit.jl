@@ -41,7 +41,8 @@ function config(model, quantity, sampling; method = "Conventional", backend = "d
         quantity == "OM" ? (3,) : quantity == "BCDC" ? (2, 3, 1) : (2, 3, 3, 1)
     slice = sampling isa KSlice
     observable =
-        slice ? KSliceSelection(component = TensorComponent(component...), bands = AllBands()) :
+        slice ?
+        KSliceSelection(component = TensorComponent(component...), bands = BandSelection()) :
         quantity in ("BCDC", "BCQC") ? TensorComponents(TensorComponent(component...)) :
         FullTensor()
     TaskConfig(

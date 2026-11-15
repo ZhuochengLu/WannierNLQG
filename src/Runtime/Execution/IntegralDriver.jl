@@ -304,6 +304,7 @@ function _run_integral_bundle_owned!(
                 num_photon_energies,
                 matrix_elements = shared_matrix_workspaces[worker_id],
                 central_data = shared_central_data[worker_id],
+                band_selection = cfg.band_selection,
             ) for worker_id in 1:num_workers
         ] : TransitionScreenWorkspace[]
     photon_drag_transition_screen_workspaces =
@@ -605,7 +606,14 @@ function _run_integral_bundle_owned!(
             need_photon_drag_transition_screen ?
             photon_drag_transition_screen_workspaces[worker_id] : nothing
         if need_transition_screen
-            _prepare_transition_screen!(transition_screen, kpoint, cfg, model, num_orbitals)
+            _prepare_transition_screen!(
+                transition_screen,
+                kpoint,
+                cfg,
+                model,
+                num_orbitals;
+                require_complete_groups = need_proj || need_geo_q0 || need_wilson,
+            )
         end
         if need_photon_drag_transition_screen && paired_blocks === nothing
             _prepare_photon_drag_transition_screen!(
@@ -1037,6 +1045,8 @@ function _run_integral_bundle_owned!(
                 length(specs) == 1 &&
                 only(specs).quantity in (:shift_current, :injection_current) &&
                 only(specs).method == :conventional
+            band_selection_summary =
+                _transition_selection_summary(transition_screen_workspaces, cfg, root, rank, comm)
             result = FusedBundleRunResult(
                 outputs,
                 legacy_adaptive_current ?
@@ -1044,7 +1054,7 @@ function _run_integral_bundle_owned!(
                 legacy_adaptive_current ? NamedTuple[] : _family_counts(counters, families),
                 fourier_summary,
                 response_symmetry_summary,
-                NamedTuple(),
+                band_selection_summary,
                 runtime_replica_summary(loaded_sources.replica_summary),
                 qualification,
                 runtime_model_geometry(model),

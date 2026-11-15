@@ -215,8 +215,6 @@ function frozen_gram_operator_fixture(
         model.lattice,
         model.r_degeneracies,
         operators;
-        profile = nothing,
-        operator_tasks = tasks,
         provenance = provenance,
         geometry = geometry,
     )
@@ -226,8 +224,6 @@ function frozen_gram_operator_fixture(
         model.lattice,
         model.r_degeneracies,
         Base.invokelatest(extension._tb_operators, model);
-        profile = nothing,
-        operator_tasks = (FG_C.OperatorTask(quantity = :berry_curvature),),
         provenance = provenance,
         geometry = geometry,
     )

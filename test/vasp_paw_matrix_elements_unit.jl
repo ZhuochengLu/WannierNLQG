@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using HDF5
 using LinearAlgebra
 using SHA
@@ -33,7 +35,7 @@ if !isdefined(Main, :synthetic_vasp_wannierization_fixture)
                 frozen_min_ev = -2.0,
                 frozen_max_ev = -0.5,
             ),
-            solver = PAW_WANNIERIZATION.WannierizationSolverConfig(initialization = :random),
+            solver = InternalSolverFixture.solver_config(initialization = :random),
             checkpoint = PAW_WANNIERIZATION.WannierizationCheckpointConfig(),
             runtime = PAW_WANNIERIZATION.WannierizationRuntimeConfig(),
             output = PAW_WANNIERIZATION.WannierizationOutputConfig(),

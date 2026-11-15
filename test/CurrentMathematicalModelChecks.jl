@@ -32,15 +32,7 @@ geometry=Dict(
 )
 @testset "Current necessary-only HDF5 and exact matrix round trip" begin
     file=joinpath(root, "model.h5")
-    IOModel.write_real_space_operator_bundle(
-        file,
-        lat,
-        [1],
-        ops;
-        profile = :hamiltonian_position,
-        geometry,
-        overwrite = true,
-    )
+    IOModel.write_real_space_operator_bundle(file, lat, [1], ops; geometry, overwrite = true)
     @test !isfile(file*".commit.toml")
     h5open(file, "r") do f
         @test Set(
@@ -60,7 +52,6 @@ geometry=Dict(
         lat,
         [1],
         ops;
-        profile = :hamiltonian_position,
         geometry,
     )
     wrong=joinpath(root, "legacy.h5")
@@ -82,7 +73,6 @@ geometry=Dict(
         lat,
         [1],
         broken;
-        profile = :hamiltonian_position,
         geometry,
     )
 end

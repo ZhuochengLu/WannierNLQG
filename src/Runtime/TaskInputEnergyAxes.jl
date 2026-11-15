@@ -1,6 +1,35 @@
 """Bound user-generated axes before allocation; explicit arrays retain their existing semantics."""
 const TASK_INPUT_MAX_GENERATED_AXIS_POINTS = 1_000_000
 
+"""Normalize static scalar/vector axes per layer; local axes replace the complete shared axis."""
+function _task_input_static_fermi_axes(table, response, quantity, prefix)
+    static =
+        quantity in (:intrinsic_ahc, :linear_transport, :orbital_magnetization) ||
+        quantity in BERRY_MULTIPOLE_QUANTITIES
+    static || return table, response, nothing
+    local_table, shared_table = copy(table), copy(response)
+    local_scalar = haskey(local_table, "fermi_energy_ev")
+    shared_scalar = haskey(shared_table, "fermi_energy_ev")
+    for (layer, path) in ((local_table, prefix), (shared_table, "response"))
+        haskey(layer, "fermi_energy_ev") &&
+            haskey(layer, "fermi_energies_ev") &&
+            throw(
+                ArgumentError(
+                    "$path supplies both scalar and vector Fermi energies; choose one axis.",
+                ),
+            )
+        if haskey(layer, "fermi_energy_ev")
+            layer["fermi_energies_ev"] = [layer["fermi_energy_ev"]]
+            delete!(layer, "fermi_energy_ev")
+        end
+    end
+    origin =
+        local_scalar ? "$prefix.fermi_energy_ev" :
+        !haskey(local_table, "fermi_energies_ev") && shared_scalar ? "response.fermi_energy_ev" :
+        nothing
+    return local_table, shared_table, origin
+end
+
 # Generate a Float64 range by index, with exact binary-rational count arithmetic and a bounded endpoint tolerance.
 function _task_input_energy_range(lower, upper, step, count, path)
     for value in (lower, upper)

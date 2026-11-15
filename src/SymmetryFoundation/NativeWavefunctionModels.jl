@@ -222,7 +222,13 @@ with_verified_file_digests(f::F, paths; kwargs...) where {F} =
 Infer a complete Monkhorst-Pack grid from fractional coordinates modulo one.
 """
 function infer_mp_grid(kpoints::Matrix{Float64}; tolerance::Float64 = 1.0e-8)
+    size(kpoints, 2) == 3 && size(kpoints, 1) > 0 && all(isfinite, kpoints) || throw(
+        ArgumentError("MP grid inference requires nonempty finite N×3 fractional coordinates"),
+    )
+    isfinite(tolerance) && 0 < tolerance < 0.5 ||
+        throw(ArgumentError("MP grid inference tolerance must lie in (0, 0.5)"))
     counts = Int[]
+    offsets = Float64[]
     for direction in 1:3
         values = mod.(kpoints[:, direction], 1.0)
         values[abs.(values .- 1.0) .<= tolerance] .= 0.0
@@ -233,7 +239,16 @@ function infer_mp_grid(kpoints::Matrix{Float64}; tolerance::Float64 = 1.0e-8)
             isempty(unique_values) || abs(value - last(unique_values)) > tolerance || continue
             push!(unique_values, value)
         end
-        push!(counts, length(unique_values))
+        count = length(unique_values)
+        offset = first(unique_values)
+        all(
+            index -> abs(unique_values[index] - offset - (index-1)/count) <= tolerance,
+            eachindex(unique_values),
+        ) || throw(
+            ArgumentError("k-points are not uniformly spaced modulo one along axis $direction"),
+        )
+        push!(counts, count)
+        push!(offsets, offset)
     end
     prod(counts) == size(kpoints, 1) || throw(
         ArgumentError(
@@ -241,7 +256,14 @@ function infer_mp_grid(kpoints::Matrix{Float64}; tolerance::Float64 = 1.0e-8)
             "for $(size(kpoints, 1)) points",
         ),
     )
-    return (counts[1], counts[2], counts[3])
+    dimensions = (counts[1], counts[2], counts[3])
+    classified = classify_diagonal_mesh_points(
+        DiagonalKMesh(dimensions, Tuple(offsets)),
+        permutedims(kpoints);
+        tolerance = tolerance * maximum(counts),
+    )
+    classified.complete || throw(ArgumentError("k-points do not fill the inferred MP grid"))
+    return dimensions
 end
 
 """

@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using HDF5
 using JSON3
 using LinearAlgebra
@@ -80,7 +82,7 @@ function synthetic_wannierization_fixture(; mmn_scale::Float64 = 1.0)
             frozen_min_ev = -2.0,
             frozen_max_ev = -0.5,
         ),
-        solver = WANNIERIZATION.WannierizationSolverConfig(
+        solver = InternalSolverFixture.solver_config(
             initialization = :random,
             z_mix_ratio = 0.25,
             u_mix_ratio = 0.75,
@@ -110,13 +112,27 @@ function modified_wannierization_config(config; keywords...)
         selected = Tuple(name for name in keys(replacements) if name in fields)
         NamedTuple{selected}(Tuple(getfield(replacements, name) for name in selected))
     end
-    return WANNIERIZATION._replace_wannierization_config(
-        config;
-        input = select(WANNIERIZATION.WANNIERIZATION_INPUT_CONFIG_FIELDS),
-        solver = select(WANNIERIZATION.WANNIERIZATION_SOLVER_CONFIG_FIELDS),
-        checkpoint = select(WANNIERIZATION.WANNIERIZATION_CHECKPOINT_CONFIG_FIELDS),
-        runtime = select(WANNIERIZATION.WANNIERIZATION_RUNTIME_CONFIG_FIELDS),
-        output = select(WANNIERIZATION.WANNIERIZATION_OUTPUT_CONFIG_FIELDS),
+    return WANNIERIZATION.WannierizationConfig(
+        input = InternalSolverFixture.replace_group(
+            config.input,
+            select(WANNIERIZATION.WANNIERIZATION_INPUT_CONFIG_FIELDS),
+        ),
+        solver = InternalSolverFixture.replace_group(
+            config.solver,
+            select(WANNIERIZATION.WANNIERIZATION_SOLVER_CONFIG_FIELDS),
+        ),
+        checkpoint = InternalSolverFixture.replace_group(
+            config.checkpoint,
+            select(WANNIERIZATION.WANNIERIZATION_CHECKPOINT_CONFIG_FIELDS),
+        ),
+        runtime = InternalSolverFixture.replace_group(
+            config.runtime,
+            select(WANNIERIZATION.WANNIERIZATION_RUNTIME_CONFIG_FIELDS),
+        ),
+        output = InternalSolverFixture.replace_group(
+            config.output,
+            select(WANNIERIZATION.WANNIERIZATION_OUTPUT_CONFIG_FIELDS),
+        ),
     )
 end
 

@@ -107,13 +107,6 @@ function tiny_wannier_workflow(directory; localize = false)
                 conv_tol = 1e-8,
                 conv_window = 1,
             ),
-            acceleration = w.WannierizationAccelerationConfig(
-                schedule = :two_stage,
-                u_acceptance = :armijo,
-                z_stability_window = 1,
-                disentanglement_objective_tolerance = 1e-8,
-                z_projector_tolerance = 1e-8,
-            ),
             random_seed = 0x1234,
         ),
         checkpoint = w.WannierizationCheckpointConfig(

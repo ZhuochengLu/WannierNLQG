@@ -37,7 +37,10 @@ function build_config(;
                     fermi_energies = Float64[0.13],
                     temperature = 0.0,
                 ),
-                observable = KSliceSelection(component = TensorComponent(1, 2), bands = AllBands()),
+                observable = KSliceSelection(
+                    component = TensorComponent(1, 2),
+                    bands = BandSelection(),
+                ),
             ),
         ],
         execution = ExecutionOptions(fourier_backend = "direct"),

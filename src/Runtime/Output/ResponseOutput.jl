@@ -21,7 +21,7 @@ function _write_integral_states!(
             spatial_dimension,
             ctx.run_dir,
             filename,
-            digits = cfg.response_output_digits,
+            digits = resolved_response_output_digits(cfg),
             region_metadata = cfg.integration_bounds === nothing ? nothing :
                               merge(
                 (
@@ -50,7 +50,7 @@ function _write_integral_states!(
                 output_path,
                 photon_energies,
                 cfg.photon_momentum_path.photon_momenta,
-                digits = cfg.response_output_digits,
+                digits = resolved_response_output_digits(cfg),
             )
         end
         bundle_debug_log(

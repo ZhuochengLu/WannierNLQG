@@ -39,7 +39,10 @@ function build_config(;
                     relaxation = SeparateRelaxation(gamma_intra_ev = 0.04, gamma_inter_ev = 0.05),
                     photon_energies = [0.0, 0.2, 0.43],
                 ),
-                observable = KSliceSelection(component = TensorComponent(1, 2), bands = AllBands()),
+                observable = KSliceSelection(
+                    component = TensorComponent(1, 2),
+                    bands = BandSelection(),
+                ),
             ),
         ],
         execution = ExecutionOptions(fourier_backend = "direct"),

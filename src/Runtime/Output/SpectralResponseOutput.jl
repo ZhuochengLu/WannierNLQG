@@ -22,6 +22,7 @@ function write_spectral_task_outputs(
     outputs=String[]
     vector_axis = !optical
     vector_integral = vector_axis && !slice
+    actual_digits = resolved_response_output_digits(cfg, vector_integral ? 16 : 14)
     labels=[join("xyz"[a] for a in component) for component in components]
     coordinates=slice ? zeros(length(grid), 3) :
                 optical ? reshape(copy(cfg.photon_energies), :, 1) :
@@ -70,7 +71,11 @@ function write_spectral_task_outputs(
                                 join(real_space_operator_name.(manifest.inventory), ","),
         "operator_model_schema" => operator_model_schema,
         "content_authentication" => "NOT_PERFORMED",
+        "response_output_digits" => string(actual_digits),
     ]
+    if (intrinsic || orbital) && cfg.band_selection != -1
+        push!(common_headers, "groups" => repr(collect(cfg.band_selection)))
+    end
     if orbital
         append!(
             common_headers,
@@ -135,7 +140,9 @@ function write_spectral_task_outputs(
                         "mu_eV" => string(cfg.fermi_energies[energy]),
                         "sampling_measure" => "unweighted local density; no slice area or cell divisor",
                     ],
-                ) : Pair{String, String}[]
+                ) :
+                slice && orbital && cfg.band_selection != -1 ?
+                ["groups" => repr(collect(cfg.band_selection))] : Pair{String, String}[]
             push!(
                 outputs,
                 write_spectral_response_table(
@@ -145,8 +152,7 @@ function write_spectral_task_outputs(
                     values,
                     labels;
                     units = unit,
-                    digits = vector_integral ? max(16, cfg.response_output_digits) :
-                             max(14, cfg.response_output_digits),
+                    digits = actual_digits,
                     headers,
                 ),
             )
@@ -178,7 +184,7 @@ function write_spectral_task_outputs(
                         labels;
                         units = slice ? "m^3" :
                                 dimension==3 ? "dimensionless" : string("m^", 3-dimension),
-                        digits = max(14, cfg.response_output_digits),
+                        digits = resolved_response_output_digits(cfg, 14),
                     ),
                 )
             end
@@ -194,8 +200,11 @@ function write_spectral_task_outputs(
         method = string(spec.method),
         scope = slice ? "k_integrand" : region ? "Cartesian_region_integral" : "BZ_integral",
         terms = string.(terms),
-        contribution_contract = intrinsic ? "complete-Wannier-curvature-T0-total/1.0" :
-                                orbital ? "NOT_APPLICABLE" :
+        contribution_contract = intrinsic ?
+                                (
+            cfg.band_selection == -1 ? "complete-Wannier-curvature-T0-total/1.0" :
+            "complete-Wannier-curvature-T0-selected-group/1.0"
+        ) : orbital ? "NOT_APPLICABLE" :
                                 "drude-quantum_metric-berry_curvature/2.0",
         schema = vector_axis ? schema : "legacy-spectral-response-table",
         fermi_energies_ev = vector_axis ? cfg.fermi_energies : Float64[],
@@ -251,6 +260,7 @@ function write_spectral_task_outputs(
                              join(real_space_operator_name.(manifest.inventory), ","),
         operator_model_schema = operator_model_schema,
         content_authentication = "NOT_PERFORMED",
+        response_output_digits = string(actual_digits),
     )
     if region
         entries = merge(
@@ -282,6 +292,9 @@ function write_spectral_task_outputs(
             input_qualification = qualification.input_qualification,
         ),
     )
+    if (intrinsic || orbital) && cfg.band_selection != -1
+        entries = merge(entries, (; groups = repr(collect(cfg.band_selection))))
+    end
     push!(
         outputs,
         write_spectral_response_metadata(

@@ -364,7 +364,14 @@ function _task_input_physics(task, response, inherited, keys, prefix, records, p
 end
 
 # Build existing public sampling types from explicit geometry and mesh counts.
-function _task_input_sampling(table, records, pending; base_dir = pwd(), model = nothing)
+function _task_input_sampling(
+    table,
+    records,
+    pending;
+    base_dir = pwd(),
+    model = nothing,
+    integration_algorithm = UniformIntegration(),
+)
     get(table, "kind", "") == "k_path" &&
         return _task_input_band_sampling(table, records, pending, base_dir, model)
     _task_input_keys(
@@ -503,10 +510,25 @@ function _task_input_sampling(table, records, pending; base_dir = pwd(), model =
                 "",
             ),
             ("coordinates", "Cartesian; unfolded", "A^-1"),
-            ("grid", "uniform midpoint; no duplicated boundary", ""),
-            ("nsamples", prod(sampling.k_mesh), ""),
+            (
+                "grid",
+                integration_algorithm isa UniformIntegration ?
+                "uniform $(integration_algorithm.region_quadrature); no duplicated boundary" :
+                "adaptive cubature; k_mesh is a reference mesh",
+                "",
+            ),
+            (
+                integration_algorithm isa UniformIntegration ? "nsamples" : "reference_nsamples",
+                prod(sampling.k_mesh),
+                "",
+            ),
             ("domain_measure", area, "A^-$dimension"),
-            ("point_weight", area/prod(sampling.k_mesh), "A^-$dimension"),
+            (
+                "point_weight",
+                integration_algorithm isa UniformIntegration ? area/prod(sampling.k_mesh) :
+                "adaptive rule weights; no fixed point weight",
+                "A^-$dimension",
+            ),
         )
             _task_input_record!(
                 records,
@@ -523,45 +545,52 @@ function _task_input_sampling(table, records, pending; base_dir = pwd(), model =
     return sampling, deepcopy(table)
 end
 
-# Map the text selector to the existing public tensor and band-selection types.
+# Normalize the common text band-group structure before assigning task-specific roles.
+function _task_input_band_selection(table)
+    occupied_sum = get(table, "occupied_sum", "none")
+    occupied_sum isa AbstractString && occupied_sum in ("none", "include", "only") ||
+        throw(ArgumentError("observable.occupied_sum must be none, include, or only."))
+    return BandSelection(;
+        groups = get(table, "groups", nothing),
+        occupied_sum = Symbol(occupied_sum),
+    )
+end
+
+# Sampling chooses tensor output; every task uses the same explicit groups structure.
 function _task_input_observable(table, sampling, quantity = nothing)
-    sampling isa Union{BZMesh, KRegion} && begin
+    if sampling isa Union{BZMesh, KRegion}
         kind = get(table, "kind", "full_tensor")
         if kind == "tensor_components"
-            _task_input_keys(table, ("kind", "components"), "observable")
+            _task_input_keys(table, ("kind", "components", "groups", "occupied_sum"), "observable")
             components = get(table, "components", [])
             components isa AbstractVector ||
                 throw(ArgumentError("observable.components must be an array."))
             definition =
                 quantity === nothing ? nothing : task_definition(quantity, :conventional, :integral)
             rank = definition === nothing ? 4 : Int(definition.tensor_rank)
-            return TensorComponents([
-                _task_input_tuple(c, "observable.components"; integers = true, lengths = (rank,)) for c in components
-            ])
+            return TensorComponents(
+                [
+                    _task_input_tuple(
+                        c,
+                        "observable.components";
+                        integers = true,
+                        lengths = (rank,),
+                    ) for c in components
+                ];
+                bands = _task_input_band_selection(table),
+            )
         end
-        kind == "full_tensor" || throw(
-            ArgumentError("Integral observable requires full_tensor or tensor_components."),
-        )
-        _task_input_keys(table, ("kind",), "observable")
-        return FullTensor()
+        kind == "full_tensor" ||
+            throw(ArgumentError("Integral observable requires full_tensor or tensor_components."))
+        _task_input_keys(table, ("kind", "groups", "occupied_sum"), "observable")
+        return FullTensor(; bands = _task_input_band_selection(table))
     end
-    _task_input_keys(
-        table,
-        (
-            "kind",
-            "component",
-            "bands",
-            "groups",
-            "include_occupied_sum",
-            "conduction",
-            "valence",
-            "first",
-            "second",
-            "third",
+    _task_input_keys(table, ("kind", "component", "groups", "occupied_sum"), "observable")
+    get(table, "kind", "kslice") == "kslice" || throw(
+        ArgumentError(
+            "KSlice uses observable.kind=kslice and observable.groups; old band-specific observable kinds are unsupported.",
         ),
-        "observable",
     )
-    kind = get(table, "kind", "")
     haskey(table, "component") || throw(ArgumentError("KSlice requires observable.component."))
     component = TensorComponent(
         _task_input_tuple(
@@ -571,64 +600,7 @@ function _task_input_observable(table, sampling, quantity = nothing)
             lengths = (1, 2, 3, 4),
         )...,
     )
-    for key in ("bands", "conduction", "valence", "first", "second", "third")
-        haskey(table, key) || continue
-        value = table[key]
-        value isa AbstractVector && all(x -> x isa Integer && !(x isa Bool) && x > 0, value) ||
-            throw(ArgumentError("observable.$key requires positive integer band indices."))
-    end
-    if haskey(table, "groups")
-        groups = table["groups"]
-        groups isa AbstractVector && all(
-            group ->
-                group isa AbstractVector &&
-                all(x -> x isa Integer && !(x isa Bool) && x > 0, group),
-            groups,
-        ) || throw(ArgumentError("observable.groups requires arrays of positive integer bands."))
-    end
-    haskey(table, "include_occupied_sum") &&
-        !(table["include_occupied_sum"] isa Bool) &&
-        throw(ArgumentError("observable.include_occupied_sum must be Bool."))
-    selection = if kind == "band_targets"
-        BandTargets(
-            get(table, "bands", Int[]);
-            include_occupied_sum = get(table, "include_occupied_sum", false),
-        )
-    elseif kind == "subspace"
-        Subspace(get(table, "bands", Int[]))
-    elseif kind == "subspaces"
-        Subspaces(get(table, "groups", []))
-    elseif kind == "occupied_bands"
-        OccupiedBands()
-    elseif kind == "all_bands"
-        AllBands(; include_occupied_sum = get(table, "include_occupied_sum", false))
-    elseif kind == "transition"
-        Transition(;
-            conduction = get(table, "conduction", Int[]),
-            valence = get(table, "valence", Int[]),
-        )
-    elseif kind == "interband_groups"
-        InterbandGroups(; first = get(table, "first", Int[]), second = get(table, "second", Int[]))
-    elseif kind == "triple_groups"
-        TripleGroups(;
-            first = get(table, "first", Int[]),
-            second = get(table, "second", Int[]),
-            third = get(table, "third", Int[]),
-        )
-    else
-        throw(ArgumentError("Unsupported text band observation $kind."))
-    end
-    allowed =
-        kind == "band_targets" ? ("kind", "component", "bands", "include_occupied_sum") :
-        kind == "subspace" ? ("kind", "component", "bands") :
-        kind == "subspaces" ? ("kind", "component", "groups") :
-        kind == "all_bands" ? ("kind", "component", "include_occupied_sum") :
-        kind == "transition" ? ("kind", "component", "conduction", "valence") :
-        kind == "interband_groups" ? ("kind", "component", "first", "second") :
-        kind == "triple_groups" ? ("kind", "component", "first", "second", "third") :
-        ("kind", "component")
-    _task_input_keys(table, allowed, "observable.$kind")
-    return KSliceSelection(; component, bands = selection)
+    return KSliceSelection(; component, bands = _task_input_band_selection(table))
 end
 
 """Resolve TOML values through existing constructors and registry; perform no integration or MPI init.
@@ -1043,8 +1015,14 @@ function resolve_task_input(
         sampling_table =
             merge(Dict{String, Any}(sampling_table), Dict("spatial_dimension" => dimension))
     end
-    sampling, sampling_effective =
-        _task_input_sampling(sampling_table, records, pending; base_dir, model = model_input)
+    sampling, sampling_effective = _task_input_sampling(
+        sampling_table,
+        records,
+        pending;
+        base_dir,
+        model = model_input,
+        integration_algorithm = integration,
+    )
     declared_sampling = _task_input_table(response, "sampling")
     for key in ("kind", "spatial_dimension")
         if haskey(sampling_effective, key) && !haskey(declared_sampling, key)
@@ -1099,20 +1077,8 @@ function resolve_task_input(
             _task_input_string(table[key], "$prefix.$key")
         end
         quantity = normalize_quantity(table["kind"])
-        if quantity == :intrinsic_ahc && haskey(table, "fermi_energy_ev")
-            haskey(table, "fermi_energies_ev") &&
-                throw(ArgumentError("$prefix supplies both scalar and vector Fermi energies"))
-            table["fermi_energies_ev"]=[table["fermi_energy_ev"]]
-            delete!(table, "fermi_energy_ev")
-            _task_input_record!(
-                records,
-                "$prefix.fermi_energies_ev",
-                table["fermi_energies_ev"],
-                "DERIVED",
-                "$prefix.fermi_energy_ev",
-                "Static AHC single-energy axis.",
-            )
-        end
+        table, physical_response, scalar_fermi_origin =
+            _task_input_static_fermi_axes(table, response, quantity, prefix)
         method = get(table, "method", nothing)
         if method !== nothing
             _task_input_string(method, "$prefix.method")
@@ -1189,6 +1155,9 @@ function resolve_task_input(
             )...,
         )
         union!(applicable_shared, first.(physical_keys))
+        physical_response !== response &&
+            haskey(response, "fermi_energy_ev") &&
+            push!(applicable_shared, "fermi_energy_ev")
         resolution_fields = derived_q ? TASK_INPUT_PHYSICS_FIELDS : physical_keys
         for key in physics_keys
             haskey(table, key) &&
@@ -1197,13 +1166,19 @@ function resolve_task_input(
         end
         physical, physical_effective = _task_input_physics(
             table,
-            response,
+            physical_response,
             inherited,
             resolution_fields,
             prefix,
             records,
             pending,
         )
+        if scalar_fermi_origin !== nothing && haskey(physical_effective, "fermi_energies_ev")
+            record = records["$prefix.fermi_energies_ev"]
+            record["source"] = "DERIVED"
+            record["origin"] = scalar_fermi_origin
+            record["reason"] = "Explicit static scalar converted to a one-element Fermi axis."
+        end
         if derived_q && haskey(physical, :photon_energies)
             physical[:photon_momenta] = _task_input_derived_momenta(
                 momentum_values,
@@ -1220,7 +1195,7 @@ function resolve_task_input(
         parameter_type, controls, control_effective, controls_ready =
             _task_input_parameter_controls(
                 table,
-                response,
+                physical_response,
                 quantity,
                 physical,
                 prefix,
@@ -1231,7 +1206,7 @@ function resolve_task_input(
         # Validate applicable shared controls even when the local task overrides them.
         _, _, shared_control_effective, _ = _task_input_parameter_controls(
             Dict{String, Any}(),
-            response,
+            physical_response,
             quantity,
             physical,
             prefix,

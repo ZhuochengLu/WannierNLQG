@@ -152,7 +152,6 @@ function write_bundle(path::AbstractString, tb_path::AbstractString)
         model.lattice,
         model.r_degeneracies,
         operators;
-        profile = :full,
         overwrite = true,
         paired_tb_file = tb_path,
         geometry = Dict(

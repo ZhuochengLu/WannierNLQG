@@ -14,7 +14,7 @@ function cleanup_probe_config(output_root; family = :kslice, invalid_second = fa
         observable = family == :integral ? FullTensor() :
                      KSliceSelection(
             component = TensorComponent(2, 2, 2),
-            bands = Transition(conduction = [3, 4], valence = [1, 2]),
+            bands = BandSelection(groups = [[1, 2], [3, 4]]),
         ),
     )
     tasks = [optical]
@@ -29,7 +29,7 @@ function cleanup_probe_config(output_root; family = :kslice, invalid_second = fa
                 numerics = Numerics(),
                 observable = KSliceSelection(
                     component = TensorComponent(1, 2),
-                    bands = Subspace([99]),
+                    bands = BandSelection(groups = [[99]]),
                 ),
             ),
         )

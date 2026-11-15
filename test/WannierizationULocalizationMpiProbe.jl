@@ -1,3 +1,5 @@
+isdefined(@__MODULE__, :InternalSolverFixture) ||
+    include(joinpath(@__DIR__, "support", "InternalSolverFixture.jl"))
 using LinearAlgebra
 using MPI
 using SHA
@@ -125,7 +127,7 @@ function make_config(parallel)
             frozen_min_ev = 1.0,
             frozen_max_ev = -1.0,
         ),
-        solver = W.WannierizationSolverConfig(
+        solver = InternalSolverFixture.solver_config(
             initialization = :random,
             acceleration = acceleration,
             parallel = parallel,

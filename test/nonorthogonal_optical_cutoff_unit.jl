@@ -285,7 +285,7 @@ end
             intermediate_regularization = 0.017,
             eta_correction = false,
         ),
-        observable = KSliceSelection(component = TensorComponent(1, 1, 1), bands = AllBands()),
+        observable = KSliceSelection(component = TensorComponent(1, 1, 1), bands = BandSelection()),
     )
     cfg=TaskConfig(
         model = base.model,

@@ -914,8 +914,12 @@ struct SymmetryCompletedQEPAWMatrices <: AbstractWannierMatrixElementSource
         isempty(strip(nnkp_file)) && throw(ArgumentError("NNKP path must not be empty"))
         isempty(strip(gauge_hdf5)) && throw(ArgumentError("gauge_hdf5 path must not be empty"))
         isempty(strip(artifact_dir)) && throw(ArgumentError("artifact_dir must not be empty"))
-        qualification_mode in (:strict, :standard) ||
-            throw(ArgumentError("qualification_mode must be :strict or :standard"))
+        qualification_mode == :standard || throw(
+            ArgumentError(
+                "SymmetryCompletedQEPAWMatrices supports only qualification_mode=:standard; " *
+                "use the independent low-level generator for its explicit strict contract.",
+            ),
+        )
         return new(
             String(nnkp_file),
             String(gauge_hdf5),
@@ -972,15 +976,50 @@ WannierizationInputConfig(args::Vararg{Any, 27}) =
     WannierizationInputConfig(args..., WavefunctionPreparationExecutionConfig(), nothing)
 
 """Immutable numerical solver, initialization, and deterministic execution controls."""
-Base.@kwdef struct WannierizationSolverConfig
-    smv_fletcher_reeves_two_stage_audit_thresholds::SMVFletcherReevesTwoStageAuditThresholds =
-        SMVFletcherReevesTwoStageAuditThresholds()
-    smv_fletcher_reeves_two_stage_audit_manifest::Union{Nothing, String} = nothing
-    initialization::Symbol = :amn
-    z_mix_ratio::Float64 = 0.5
-    u_mix_ratio::Float64 = 1.0
-    stage_controls::WannierizationStageControls = WannierizationStageControls()
-    acceleration::WannierizationAccelerationConfig = WannierizationAccelerationConfig(
+struct WannierizationSolverConfig
+    smv_fletcher_reeves_two_stage_audit_thresholds::SMVFletcherReevesTwoStageAuditThresholds
+    smv_fletcher_reeves_two_stage_audit_manifest::Union{Nothing, String}
+    initialization::Symbol
+    z_mix_ratio::Float64
+    u_mix_ratio::Float64
+    stage_controls::WannierizationStageControls
+    acceleration::WannierizationAccelerationConfig
+    numerical_thresholds::WannierizationNumericalThresholds
+    initialization_backend::AbstractWannierInitializationBackend
+    paw_scdm_input_hdf5::Union{Nothing, String}
+    multi_start::WannierizationMultiStartConfig
+    little_group_tolerance::Float64
+    little_group_max_iterations::Int
+    symmetrize_z::Bool
+    parallel::Symbol
+    random_seed::UInt64
+end
+
+"""Construct the supported solver; algorithm constants are internal, stage controls own budgets."""
+function WannierizationSolverConfig(;
+    smv_fletcher_reeves_two_stage_audit_thresholds = SMVFletcherReevesTwoStageAuditThresholds(),
+    initialization = :amn,
+    z_mix_ratio = 0.5,
+    u_mix_ratio = 1.0,
+    stage_controls = WannierizationStageControls(),
+    numerical_thresholds = WannierizationNumericalThresholds(),
+    initialization_backend = AMNExactFrozenInitialization(),
+    paw_scdm_input_hdf5 = nothing,
+    multi_start = WannierizationMultiStartConfig(),
+    little_group_tolerance = 1.0e-6,
+    little_group_max_iterations = 10,
+    symmetrize_z = true,
+    parallel = :serial,
+    random_seed = 0x6e6c716773617766,
+    kwargs...,
+)
+    isempty(kwargs) || throw(
+        ArgumentError(
+            "Unsupported solver settings $(join(string.(keys(kwargs)), ", ")); acceleration is internal. " *
+            "Set dis_num_iter and num_iter through stage_controls for the two iteration budgets.",
+        ),
+    )
+    acceleration = WannierizationAccelerationConfig(
         schedule = :two_stage,
         strategy = :fixed,
         disentanglement_max_steps = stage_controls.dis_num_iter,
@@ -988,15 +1027,24 @@ Base.@kwdef struct WannierizationSolverConfig
         z_stability_window = stage_controls.dis_conv_window,
         localization_max_steps = stage_controls.num_iter,
     )
-    numerical_thresholds::WannierizationNumericalThresholds = WannierizationNumericalThresholds()
-    initialization_backend::AbstractWannierInitializationBackend = AMNExactFrozenInitialization()
-    paw_scdm_input_hdf5::Union{Nothing, String} = nothing
-    multi_start::WannierizationMultiStartConfig = WannierizationMultiStartConfig()
-    little_group_tolerance::Float64 = 1.0e-6
-    little_group_max_iterations::Int = 10
-    symmetrize_z::Bool = true
-    parallel::Symbol = :serial
-    random_seed::UInt64 = 0x6e6c716773617766
+    return WannierizationSolverConfig(
+        smv_fletcher_reeves_two_stage_audit_thresholds,
+        nothing, # Historical storage field; no solver-side audit-manifest input.
+        initialization,
+        z_mix_ratio,
+        u_mix_ratio,
+        stage_controls,
+        acceleration,
+        numerical_thresholds,
+        initialization_backend,
+        paw_scdm_input_hdf5,
+        multi_start,
+        little_group_tolerance,
+        little_group_max_iterations,
+        symmetrize_z,
+        parallel,
+        random_seed,
+    )
 end
 
 """Immutable restart and periodic-checkpoint controls."""
@@ -1081,6 +1129,44 @@ function _replace_wannierization_group(group::T, replacements::NamedTuple) where
     names = fieldnames(T)
     values = NamedTuple{names}(Tuple(getfield(group, name) for name in names))
     return T(; merge(values, replacements)...)
+end
+
+# Transient output/restart wrappers must retain resolved internal algorithms.
+# An explicit public acceleration replacement is rejected just like construction.
+function _replace_wannierization_group(group::WannierizationSolverConfig, replacements::NamedTuple)
+    names = fieldnames(WannierizationSolverConfig)
+    unknown = setdiff(keys(replacements), names)
+    isempty(unknown) || throw(ArgumentError("Unknown solver settings: $unknown"))
+    haskey(replacements, :acceleration) && throw(
+        ArgumentError(
+            "solver.acceleration is internal; use dis_num_iter and num_iter stage budgets.",
+        ),
+    )
+    haskey(replacements, :smv_fletcher_reeves_two_stage_audit_manifest) && throw(
+        ArgumentError(
+            "solver.smv_fletcher_reeves_two_stage_audit_manifest is unsupported; use the independent explicit audit API.",
+        ),
+    )
+    values = merge(NamedTuple{names}(Tuple(getfield(group, name) for name in names)), replacements)
+    if haskey(replacements, :stage_controls)
+        controls = values.stage_controls
+        updated = (;
+            disentanglement_max_steps = controls.dis_num_iter,
+            localization_max_steps = controls.num_iter,
+            disentanglement_objective_tolerance = controls.dis_conv_tol,
+            z_stability_window = controls.dis_conv_window,
+        )
+        algorithm = values.acceleration
+        resolved = typeof(algorithm)(;
+            (
+                name => (
+                    haskey(updated, name) ? getproperty(updated, name) : getfield(algorithm, name)
+                ) for name in fieldnames(typeof(algorithm))
+            )...,
+        )
+        values = merge(values, (; acceleration = resolved))
+    end
+    return WannierizationSolverConfig((getfield(values, name) for name in names)...)
 end
 
 """Copy a grouped configuration while replacing only declared group leaves."""
