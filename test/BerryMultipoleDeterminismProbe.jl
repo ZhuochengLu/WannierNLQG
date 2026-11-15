@@ -1,4 +1,5 @@
 using WannierNLQG, LinearAlgebra, MPI, JSON3, Test
+include(joinpath(@__DIR__, "TestCountCompatibilitySupport.jl"))
 BLAS.set_num_threads(1)
 output, case=ARGS
 MPI.Initialized() || MPI.Init()
@@ -95,7 +96,7 @@ probe_tests=@testset "actual rank lifecycle and complete four-task execution" be
     end
 end
 MPI.Barrier(MPI.COMM_WORLD)
-counts=Test.get_test_counts(probe_tests)
+counts=test_result_totals(probe_tests)
 MPI.Barrier(MPI.COMM_WORLD)
 MPI.Finalize()
 open(joinpath(output, "rank_$(rank).json"), "w") do io
@@ -108,10 +109,10 @@ open(joinpath(output, "rank_$(rank).json"), "w") do io
             case,
             completed = true,
             mpi_finalized = MPI.Finalized(),
-            passed = counts.passes+counts.cumulative_passes,
-            failed = counts.fails+counts.cumulative_fails,
-            errored = counts.errors+counts.cumulative_errors,
-            broken = counts.broken+counts.cumulative_broken,
+            passed = counts.passed,
+            failed = counts.failed,
+            errored = counts.errored,
+            broken = counts.broken,
         )),
     )
 end

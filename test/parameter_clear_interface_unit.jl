@@ -4,6 +4,7 @@ const R = WannierNLQG.Runtime
 const F = WannierNLQG.IO
 const W = WannierNLQG.Wannierization
 const RESULTS = NamedTuple[]
+include(joinpath(@__DIR__, "TestCountCompatibilitySupport.jl"))
 # Reuse only the existing binary fixture writer, without executing its test suite.
 const LOCALIZED_FIXTURE_SOURCE = joinpath(@__DIR__, "nonorthogonal_io_runtime_unit.jl")
 const LOCALIZED_FIXTURE_PREFIX = first(
@@ -19,15 +20,10 @@ function case!(f, label)
     result = @testset "$label" begin
         f()
     end
-    counts = Test.get_test_counts(result)
+    counts = test_result_totals(result)
     push!(
         RESULTS,
-        (;
-            label,
-            passed = counts.passes + counts.cumulative_passes,
-            failed = counts.fails + counts.cumulative_fails,
-            errored = counts.errors + counts.cumulative_errors,
-        ),
+        (; label, passed = counts.passed, failed = counts.failed, errored = counts.errored),
     )
 end
 

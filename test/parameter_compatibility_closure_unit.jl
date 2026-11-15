@@ -6,22 +6,15 @@ const F = WannierNLQG.IO
 const W = WannierNLQG.Wannierization
 const WP = WannierNLQG.WannierProjection
 const RESULTS = NamedTuple[]
+include(joinpath(@__DIR__, "TestCountCompatibilitySupport.jl"))
 include(joinpath(@__DIR__, "WannierizationFixtureSupport.jl"))
 include(joinpath(@__DIR__, "OperatorBundleTestSupport.jl"))
 function case!(f, label)
     result = @testset "$label" begin
         f()
     end
-    c = Test.get_test_counts(result)
-    push!(
-        RESULTS,
-        (;
-            label,
-            passed = c.passes+c.cumulative_passes,
-            failed = c.fails+c.cumulative_fails,
-            errored = c.errors+c.cumulative_errors,
-        ),
-    )
+    c = test_result_totals(result)
+    push!(RESULTS, (; label, passed = c.passed, failed = c.failed, errored = c.errored))
 end
 
 case!("radial_actual_capability_boundary") do

@@ -774,6 +774,7 @@
         "test/SymmetrizedDFTHamiltonianFreshReadProbe.jl",
         "test/SymmetryFoundationExtensionLifecycleProbe.jl",
         "test/TBSymmetryQualificationTestSupport.jl",
+        "test/TestCountCompatibilitySupport.jl",
         "test/ThirdOrderDeterminismProbe.jl",
         "test/UnifiedTextInputChecks.jl",
         "test/VASPGeometryMetadataTests.jl",

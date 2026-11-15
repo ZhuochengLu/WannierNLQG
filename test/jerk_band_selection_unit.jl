@@ -4,6 +4,7 @@ const R = WannierNLQG.Runtime
 const M = WannierNLQG.MatrixElements
 const P = WannierNLQG.Responses
 const RESULTS = NamedTuple[]
+include(joinpath(@__DIR__, "TestCountCompatibilitySupport.jl"))
 withenv("WANNIERNLQG_SELECTION_TEST_PHASE" => "helpers") do
     include("response_band_selection_unit.jl")
 end
@@ -13,15 +14,10 @@ function case!(f, label)
     result = @testset "$label" begin
         f()
     end
-    counts = Test.get_test_counts(result)
+    counts = test_result_totals(result)
     push!(
         RESULTS,
-        (;
-            label,
-            passed = counts.passes + counts.cumulative_passes,
-            failed = counts.fails + counts.cumulative_fails,
-            errored = counts.errors + counts.cumulative_errors,
-        ),
+        (; label, passed = counts.passed, failed = counts.failed, errored = counts.errored),
     )
     flush(stdout)
 end

@@ -4,6 +4,7 @@ const R = WannierNLQG.Runtime
 const F = WannierNLQG.IO
 const W = WannierNLQG.Wannierization
 const RESULTS = NamedTuple[]
+include(joinpath(@__DIR__, "TestCountCompatibilitySupport.jl"))
 function case!(f, label)
     get(ENV, "WANNIERNLQG_PARAMETER_TEST_PHASE", "all") == "readback" &&
         label ∉ ("static_axis_public_output_and_precision", "declared_text_precision_readback") &&
@@ -11,15 +12,10 @@ function case!(f, label)
     result = @testset "$label" begin
         f()
     end
-    counts = Test.get_test_counts(result)
+    counts = test_result_totals(result)
     push!(
         RESULTS,
-        (;
-            label,
-            passed = counts.passes + counts.cumulative_passes,
-            failed = counts.fails + counts.cumulative_fails,
-            errored = counts.errors + counts.cumulative_errors,
-        ),
+        (; label, passed = counts.passed, failed = counts.failed, errored = counts.errored),
     )
 end
 

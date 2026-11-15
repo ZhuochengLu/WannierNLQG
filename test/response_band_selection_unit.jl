@@ -4,6 +4,7 @@ using Test, LinearAlgebra, Random, WannierNLQG
 const R = WannierNLQG.Runtime
 const C = WannierNLQG.Core
 const RESULTS = NamedTuple[]
+include(joinpath(@__DIR__, "TestCountCompatibilitySupport.jl"))
 const PHASE = get(ENV, "WANNIERNLQG_SELECTION_TEST_PHASE", "all")
 PHASE in ("contract", "public", "boundaries", "helpers", "all") ||
     error("Unknown band-selection test phase")
@@ -13,15 +14,10 @@ function case!(f, label)
     result = @testset "$label" begin
         f()
     end
-    counts = Test.get_test_counts(result)
+    counts = test_result_totals(result)
     push!(
         RESULTS,
-        (;
-            label,
-            passed = counts.passes + counts.cumulative_passes,
-            failed = counts.fails + counts.cumulative_fails,
-            errored = counts.errors + counts.cumulative_errors,
-        ),
+        (; label, passed = counts.passed, failed = counts.failed, errored = counts.errored),
     )
     flush(stdout)
 end

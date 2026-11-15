@@ -7,20 +7,16 @@ const F = WannierNLQG.IO
 const S = WannierNLQG.SymmetryFoundation
 const W = WannierNLQG.Wannierization
 const RESULTS = NamedTuple[]
+include(joinpath(@__DIR__, "TestCountCompatibilitySupport.jl"))
 # Record only the six affected small fixture families, without a regression suite.
 function case!(f, label)
     result = @testset "$label" begin
         f()
     end
-    counts = Test.get_test_counts(result)
+    counts = test_result_totals(result)
     push!(
         RESULTS,
-        (;
-            label,
-            passed = counts.passes + counts.cumulative_passes,
-            failed = counts.fails + counts.cumulative_fails,
-            errored = counts.errors + counts.cumulative_errors,
-        ),
+        (; label, passed = counts.passed, failed = counts.failed, errored = counts.errored),
     )
 end
 
