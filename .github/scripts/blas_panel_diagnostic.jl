@@ -127,6 +127,12 @@ function shape_observations()
     return rows
 end
 observations=shape_observations()
+# Keep completed measurements even if a following diagnostic-consistency assertion fails.
+partial=(; source=realpath(Base.pkgdir(WannierNLQG)),base_manifest_sha256=runtime.base_source_manifest_sha256,
+    phase=contract["phase"],units=copy(PANEL_ROWS),threads=Threads.nthreads(),blas_threads=BLAS.get_num_threads(),
+    active_project=Base.active_project(),mpi_before=false,mpi_after=MPI.Initialized(),runtime,observations,
+    scope="PARTIAL_OBSERVATIONS_RETAINED_BEFORE_CONSISTENCY_ASSERTIONS_NOT_A_PASS")
+write(joinpath(destination,"observations.partial.json"),JSON3.write(partial))
 panel_case!("gemm_shape_observations") do
     @test length(observations)==22
     @test all(x->x.full_repeat.bit_differences==0,observations)

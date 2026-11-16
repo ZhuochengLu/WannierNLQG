@@ -139,6 +139,10 @@ jobs:
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1.10.13'
+      - name: Validate exact Julia diagnostic startup flags
+        run: >-
+          julia --startup-file=no --compiled-modules=yes --threads=1 --gcthreads=1
+          -e 'VERSION == v"1.10.13" || error("wrong Julia version"); println("PANEL_JULIA_CLI_READY ", VERSION)'
       - uses: julia-actions/cache@v2
       - uses: ./.github/actions/julia-package-environment
       - name: Observe only default and supported Haswell GEMM shapes

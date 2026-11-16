@@ -52,7 +52,7 @@ def profile(label,core=None):
  env.update(WANNIERNLQG_USE_MPI='0',JULIA_PKG_PRECOMPILE_AUTO='0',JULIA_PKG_OFFLINE='true',WANNIERNLQG_DIAG_PROFILE=label)
  if core is None:env.pop('OPENBLAS_CORETYPE',None)
  else:env['OPENBLAS_CORETYPE']=core
- argv=['julia','--startup-file=no','--compiled-modules=existing','--threads=1','--gcthreads=1','--project='+os.environ['WANNIERNLQG_CI_PROJECT'],str(ROOT/'.github/scripts/blas_panel_diagnostic.jl'),str(ROOT),str(dest),str(contract)]
+ argv=['julia','--startup-file=no','--compiled-modules=yes','--threads=1','--gcthreads=1','--project='+os.environ['WANNIERNLQG_CI_PROJECT'],str(ROOT/'.github/scripts/blas_panel_diagnostic.jl'),str(ROOT),str(dest),str(contract)]
  peak=0;peak_count=0;reason=None;begin=time.monotonic()
  with (dest/'stdout.log').open('w')as stdout,(dest/'stderr.log').open('w')as stderr:
   p=subprocess.Popen(argv,stdout=stdout,stderr=stderr,env=env,start_new_session=True)
@@ -69,17 +69,23 @@ def profile(label,core=None):
  print('PANEL_PROFILE_PROCESS',json.dumps(dict(profile=label,exit_code=code,stop_reason=reason,seconds=time.monotonic()-begin,sampled_peak_rss_kib=peak,peak_owned_process_count=peak_count,original=original)),flush=True)
  for name in ('stdout.log','stderr.log'):
   text=(dest/name).read_text(errors='replace');print('PANEL_PROFILE_LOG',label,name,flush=True);print(text,flush=True)
- assert code==0 and reason is None
- d=json.loads((dest/'selection.json').read_text());assert len(d['observations'])==22
+ assert reason is None
+ result_path=dest/'selection.json'
+ if not result_path.exists():result_path=dest/'observations.partial.json'
+ d=json.loads(result_path.read_text());assert len(d['observations'])==22
+ d['_process']=dict(exit_code=code,complete_report=(result_path.name=='selection.json'),sampled_peak_rss_kib=peak,seconds=time.monotonic()-begin)
  print('PANEL_DIAGNOSTIC_REPORT',json.dumps(d,separators=(',',':')),flush=True)
  reports.append(d)
  return d
 first=profile('default')
 cores=[x['values']['core'].lower()for x in first['runtime']['openblas']]
 flags=set(info.get('flags','').split())
-if 'haswell'not in cores and {'avx2','fma'}<=flags:
- second=profile('haswell','Haswell')
+control=('haswell','Haswell') if 'haswell'not in cores and {'avx2','fma'}<=flags else ('sandybridge','Sandybridge') if 'haswell'in cores and 'avx'in flags else None
+if control is not None:
+ second=profile(*control)
  assert [(x['n'],x['mode'],x['columns'],x['operand_sha256'])for x in first['observations']]==[(x['n'],x['mode'],x['columns'],x['operand_sha256'])for x in second['observations']]
  print('PANEL_CONTROL_ACTUAL_CORES',json.dumps([x['values']['core']for x in second['runtime']['openblas']]),flush=True)
-else:print('PANEL_CONTROL_SKIPPED',json.dumps(dict(reason='Default already Haswell or CPU lacks AVX2/FMA',actual_cores=cores)),flush=True)
+else:print('PANEL_CONTROL_SKIPPED',json.dumps(dict(reason='No supported distinct control kernel for captured CPU flags',actual_cores=cores)),flush=True)
 print('PANEL_DIAGNOSIS_COMPLETE',json.dumps(dict(profiles=len(reports),seconds=time.monotonic()-started,new_full_runs=0,new_mpi_runs=0,new_material_runs=0,meaning='Observation completion only, not scientific or required main CI success')),flush=True)
+
+raise SystemExit(1 if any(x['_process']['exit_code']!=0 for x in reports)else 0)
