@@ -22,6 +22,7 @@ env:
 
 jobs:
   fast:
+    if: github.ref != 'refs/heads/diagnostics/blas-tail-20261116'
     name: fast (${{ matrix.os }}, Julia ${{ matrix.julia.label }})
     strategy:
       fail-fast: false
@@ -47,6 +48,7 @@ jobs:
         run: julia --project="$WANNIERNLQG_CI_PROJECT" -e 'using Pkg; Pkg.test("WannierNLQG"; julia_args=Cmd(["-L", ENV["WANNIERNLQG_CI_LOAD_PATH_BOOTSTRAP"]]))'
 
   full-shard:
+    if: github.ref != 'refs/heads/diagnostics/blas-tail-20261116'
     name: full-shard (${{ matrix.shard }})
     needs: fast
     strategy:
@@ -76,6 +78,7 @@ jobs:
         run: julia --project="$WANNIERNLQG_CI_PROJECT" -e 'using Pkg; Pkg.test("WannierNLQG"; julia_args=Cmd(["-L", ENV["WANNIERNLQG_CI_LOAD_PATH_BOOTSTRAP"]]))'
 
   mpi-only:
+    if: github.ref != 'refs/heads/diagnostics/blas-tail-20261116'
     name: mpi-only
     needs: fast
     runs-on: ubuntu-latest
@@ -103,7 +106,7 @@ jobs:
 
   ci-required:
     name: ci-required
-    if: ${{ always() }}
+    if: ${{ always() && github.ref != 'refs/heads/diagnostics/blas-tail-20261116' }}
     needs: [fast, full-shard, mpi-only]
     runs-on: ubuntu-latest
     steps:
@@ -116,3 +119,22 @@ jobs:
           test "$FAST_RESULT" = success
           test "$FULL_SHARD_RESULT" = success
           test "$MPI_ONLY_RESULT" = success
+
+  blas-panel-diagnostic:
+    name: bounded BLAS panel diagnostic
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/diagnostics/blas-tail-20261116'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      JULIA_NUM_THREADS: '1'
+      JULIA_NUM_PRECOMPILE_TASKS: '1'
+      JULIA_PKG_PRECOMPILE_AUTO: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.10.13'
+      - uses: julia-actions/cache@v2
+      - uses: ./.github/actions/julia-package-environment
+      - name: Observe only default and supported Haswell GEMM shapes
+        run: python3 -B .github/scripts/blas_panel_diagnostic.py
