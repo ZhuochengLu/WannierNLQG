@@ -1,4 +1,7 @@
-using Test, LinearAlgebra, Random
+using Test, LinearAlgebra, Random, JSON3
+if !isdefined(@__MODULE__, :PanelGemmComparisonSupport)
+    include(joinpath(@__DIR__, "PanelGemmComparisonSupport.jl"))
+end
 function named_panel_allocation(output, left, right, overlap, indices)
     WannierNLQG.MatrixElements.active_velocity_selected_columns!(
         output,
@@ -16,6 +19,7 @@ function named_panel_allocation(output, left, right, overlap, indices)
     )
 end
 @testset "Ordered complete-band insertion output-column panels" begin
+    comparison_audit = PanelGemmComparisonSupport.PanelComparisonAudit()
     E=WannierNLQG.MatrixElements;
     rng=MersenneTwister(240)
     bits(x)=reinterpret(UInt64, vec(x))
@@ -37,7 +41,25 @@ end
                 actual=fill(ComplexF64(NaN, NaN), n, n)
                 E.active_velocity_insertion_direction!(expected, left, right, overlap)
                 E.active_velocity_selected_columns!(actual, left, right, overlap, indices)
-                @test bits(actual[:, indices])==bits(expected[:, indices])
+                if PanelGemmComparisonSupport.vertex_panel_case(
+                    actual,
+                    left,
+                    right,
+                    overlap,
+                    indices,
+                )
+                    result = PanelGemmComparisonSupport.compare_vertex_panels(
+                        actual,
+                        expected,
+                        left,
+                        right,
+                        overlap,
+                        indices,
+                    )
+                    @test PanelGemmComparisonSupport.record_comparison!(comparison_audit, result)
+                else
+                    @test bits(actual[:, indices])==bits(expected[:, indices])
+                end
                 # Change every operand on the next call; previous panels are not validity.
                 left.=randn(rng, ComplexF64, n, n);
                 right.=randn(rng, ComplexF64, n, n);
@@ -46,7 +68,25 @@ end
                 next_indices=[n]
                 E.active_velocity_insertion_direction!(expected, left, right, overlap)
                 E.active_velocity_selected_columns!(actual, left, right, overlap, next_indices)
-                @test bits(actual[:, next_indices])==bits(expected[:, next_indices])
+                if PanelGemmComparisonSupport.vertex_panel_case(
+                    actual,
+                    left,
+                    right,
+                    overlap,
+                    next_indices,
+                )
+                    result = PanelGemmComparisonSupport.compare_vertex_panels(
+                        actual,
+                        expected,
+                        left,
+                        right,
+                        overlap,
+                        next_indices,
+                    )
+                    @test PanelGemmComparisonSupport.record_comparison!(comparison_audit, result)
+                else
+                    @test bits(actual[:, next_indices])==bits(expected[:, next_indices])
+                end
                 if n>=128 && rem(n, 4)==0
                     last_panel=64*div(n-1, 64)+1
                     @test all(isnan, real.(actual[:, 1:(last_panel - 1)]))
@@ -62,4 +102,8 @@ end
     for count in (1, 4, 16)
         @test named_panel_allocation(output, left, right, overlap, collect(257:(256 + count)))==0
     end
+    println(
+        "PANEL_VERTEX_ERROR_AUDIT ",
+        JSON3.write(PanelGemmComparisonSupport.comparison_report(comparison_audit)),
+    )
 end

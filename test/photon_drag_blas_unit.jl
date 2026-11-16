@@ -536,3 +536,5 @@ end
     me.active_velocity_selected_columns!(actual, left, right, overlap, indices)
     @test reinterpret(UInt64, vec(actual)) == reinterpret(UInt64, vec(expected))
 end
+
+include("panel_gemm_comparison_unit.jl")

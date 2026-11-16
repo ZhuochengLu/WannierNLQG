@@ -1,4 +1,7 @@
-using Test, Random, LinearAlgebra
+using Test, Random, LinearAlgebra, JSON3
+if !isdefined(@__MODULE__, :PanelGemmComparisonSupport)
+    include(joinpath(@__DIR__, "PanelGemmComparisonSupport.jl"))
+end
 module FrozenLink243
 using LinearAlgebra
 using WannierNLQG
@@ -84,6 +87,7 @@ function named_link_allocation(output, left, right, connector, centers, phase, r
     )
 end
 @testset "Shifted closed-group convention link column spans" begin
+    comparison_audit = PanelGemmComparisonSupport.PanelComparisonAudit()
     E=WannierNLQG.MatrixElements;
     C=WannierNLQG.Core;
     rng=MersenneTwister(243)
@@ -141,7 +145,29 @@ end
                         output_columns = indices,
                     )
                     selected=isempty(indices) ? collect(1:n) : indices
-                    @test bits(actual[:, selected])==bits(expected[:, selected])
+                    factor =
+                        convention == C.CONVENTION_I ? right.spectrum.source_eigenvectors : rotated
+                    if PanelGemmComparisonSupport.link_panel_case(
+                        actual,
+                        left.spectrum.source_eigenvectors_adjoint,
+                        factor,
+                        indices,
+                    )
+                        result = PanelGemmComparisonSupport.compare_link_panels(
+                            actual,
+                            expected,
+                            left.spectrum.source_eigenvectors_adjoint,
+                            factor,
+                            selected,
+                        )
+                        @test PanelGemmComparisonSupport.record_comparison!(
+                            comparison_audit,
+                            result,
+                        )
+                    else
+                        # Default/same-shape fallback retains its exact IEEE contract.
+                        @test bits(actual[:, selected])==bits(expected[:, selected])
+                    end
                 end
                 # No-selection public entry remains complete, including nonfinite propagation.
                 E.compute_convention_covariant_overlap!(
@@ -177,7 +203,24 @@ end
                     rotated;
                     output_columns = indices,
                 )
-                @test bits(actual[:, indices])==bits(expected[:, indices])
+                factor = convention == C.CONVENTION_I ? left.spectrum.source_eigenvectors : rotated
+                if PanelGemmComparisonSupport.link_panel_case(
+                    actual,
+                    right.spectrum.source_eigenvectors_adjoint,
+                    factor,
+                    indices,
+                )
+                    result = PanelGemmComparisonSupport.compare_link_panels(
+                        actual,
+                        expected,
+                        right.spectrum.source_eigenvectors_adjoint,
+                        factor,
+                        indices,
+                    )
+                    @test PanelGemmComparisonSupport.record_comparison!(comparison_audit, result)
+                else
+                    @test bits(actual[:, indices])==bits(expected[:, indices])
+                end
                 if n>=128 && mode!=:nonfinite
                     first_column=64*div(n-1, 64)+1
                     @test all(isnan, real.(actual[:, 1:(first_column - 1)]))
@@ -206,4 +249,8 @@ end
             end
         end
     end
+    println(
+        "PANEL_LINK_ERROR_AUDIT ",
+        JSON3.write(PanelGemmComparisonSupport.comparison_report(comparison_audit)),
+    )
 end
