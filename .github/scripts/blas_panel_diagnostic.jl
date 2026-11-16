@@ -179,14 +179,14 @@ function shape_observations()
     rng=MersenneTwister(774)
     E=WannierNLQG.MatrixElements
     rows=NamedTuple[]
-    cases=[(n,Int[2,63])for n in (128,132,256,516)]
-    append!(cases,[(516,collect(257:(256+count)))for count in (1,4,16)])
+    cases=[(n,Int[2,63]) for n in (128,132,256,516)]
+    append!(cases,[(516,collect(257:(256+count))) for count in (1,4,16)])
     push!(cases,(256,Int[2,130]))
     for (n,indices) in cases
         left=randn(rng,ComplexF64,n,n)
         right=randn(rng,ComplexF64,n,n)
         overlap=randn(rng,ComplexF64,n,n)
-        operand_sha256=[bytes2hex(sha256(reinterpret(UInt8,vec(x))))for x in (left,right,overlap)]
+        operand_sha256=[bytes2hex(sha256(reinterpret(UInt8,vec(x)))) for x in (left,right,overlap)]
         sentinel=ComplexF64(-7.0,13.0)
         full_link=zeros(ComplexF64,n,n); full_vertex=similar(full_link)
         mul!(full_link,left,right)
@@ -219,9 +219,9 @@ function shape_observations()
             (old_link,left,right,indices),(new_link,left,right,indices,scratch))
         vertex_cost=measure_pair!(E.active_velocity_selected_columns!,reference_vertex_copy!,
             (old_vertex,left,right,overlap,indices),(new_vertex,left,right,overlap,indices,scratch))
-        post_sha256=[bytes2hex(sha256(reinterpret(UInt8,vec(x))))for x in (left,right,overlap)]
+        post_sha256=[bytes2hex(sha256(reinterpret(UInt8,vec(x)))) for x in (left,right,overlap)]
         push!(rows,(;n,mode="selected_"*join(indices,"_"),columns=[first(indices),last(indices)],indices,
-            operand_alignment_mod64=[Int(UInt(pointer(x))%64)for x in (left,right,overlap)],operand_sha256,
+            operand_alignment_mod64=[Int(UInt(pointer(x))%64) for x in (left,right,overlap)],operand_sha256,
             input_unchanged=(post_sha256==operand_sha256),scratch_bytes=16*n*n,
             link_written_columns=count(link_columns),vertex_written_columns=count(vertex_columns),
             link=selected_link,vertex=selected_vertex,
