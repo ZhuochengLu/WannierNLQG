@@ -20,7 +20,7 @@ $$
 \mathcal K_{ab}=\sum_{n\in p}E_n\left[\widetilde F_{nn,ab}+\sum_{m\notin p}r^a_{nm}r^b_{mn}\right].
 $$
 
-For axial component $i\leftrightarrow(a,b)=(y,z),(z,x),(x,y)$, define $\mathscr A_{ab}[X]=\operatorname{Im}(X_{ab}-X_{ba})$ and $g=e^2 10^{-20}/(2\hbar\mu_{\rm B})$ in the implementation's eV–Å units. At zero temperature the point moment in $\mu_{\rm B}$ is
+For axial component $i\leftrightarrow(a,b)=(y,z),(z,x),(x,y)$, define $\mathscr A_{ab}[X]=\mathrm{Im}(X_{ab}-X_{ba})$ and $g=e^2 10^{-20}/(2\hbar\mu_{\rm B})$ in the implementation's eV–Å units. At zero temperature the point moment in $\mu_{\rm B}$ is
 
 $$
 M^{i}_{\rm SRocc}=g\,\mathscr A_{ab}[\mathcal G-\mathcal K],\qquad
@@ -37,9 +37,9 @@ occupied-projector objects, using their $P$, $Q=1-P$, and Bloch Hamiltonian
 $\widehat H$, as
 
 $$
-F^{\rm Lopez}_{ab}=\operatorname{Tr}[(\partial_aP)Q(\partial_bP)],\quad
-G^{\rm Lopez}_{ab}=\operatorname{Tr}[(\partial_aP)Q\widehat H Q(\partial_bP)],\quad
-H^{\rm Lopez}_{ab}=\operatorname{Tr}[\widehat H(\partial_aP)Q(\partial_bP)].
+F^{\rm Lopez}_{ab}=\mathrm{Tr}[(\partial_aP)Q(\partial_bP)],\quad
+G^{\rm Lopez}_{ab}=\mathrm{Tr}[(\partial_aP)Q\widehat H Q(\partial_bP)],\quad
+H^{\rm Lopez}_{ab}=\mathrm{Tr}[\widehat H(\partial_aP)Q(\partial_bP)].
 $$
 
 Those are published projector identities. Their Eqs. (4)–(5) combine them
@@ -57,7 +57,7 @@ $$
 \widetilde C_{ab}=C_{ab}-A_aB_b-B_a^\dagger A_b+A_aHA_b.
 $$
 
-After rotating all operators to the common orbital frame, form $p=U_{\rm occ}U_{\rm occ}^\dagger$, $q=1-p$, $h=U\operatorname{diag}(E)U^\dagger$, and $Z_a=q(D_ap)p$. The exact zero-width reference has cross-block matrix elements:
+After rotating all operators to the common orbital frame, form $p=U_{\rm occ}U_{\rm occ}^\dagger$, $q=1-p$, $h=U\mathrm{diag}(E)U^\dagger$, and $Z_a=q(D_ap)p$. The exact zero-width reference has cross-block matrix elements:
 
 $$
 (U^\dagger Z_aU)_{mn}=\frac{V^a_{mn}}{E_n-E_m},\quad m\notin p,\ n\in p;
@@ -68,11 +68,11 @@ The independently implemented **Projector traces**, rather than a call to the Co
 
 $$
 \begin{aligned}
-\mathcal F^{P}_{ab}&=\operatorname{Tr}\!\left[Z_a^\dagger Z_b+p\widetilde F_{ab}p\right],\\
-\mathcal G^{P}_{ab}&=\operatorname{Tr}\!\left[Z_a^\dagger hZ_b
+\mathcal F^{P}_{ab}&=\mathrm{Tr}\!\left[Z_a^\dagger Z_b+p\widetilde F_{ab}p\right],\\
+\mathcal G^{P}_{ab}&=\mathrm{Tr}\!\left[Z_a^\dagger hZ_b
  +ip\widetilde B_a^\dagger Z_b-iZ_a^\dagger\widetilde B_b p
  +p\widetilde C_{ab}p\right],\\
-\mathcal K^{P}_{ab}&=\operatorname{Tr}\!\left[h\left(Z_a^\dagger Z_b+p\widetilde F_{ab}p\right)\right].
+\mathcal K^{P}_{ab}&=\mathrm{Tr}\!\left[h\left(Z_a^\dagger Z_b+p\widetilde F_{ab}p\right)\right].
 \end{aligned}
 $$
 

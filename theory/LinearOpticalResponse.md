@@ -27,20 +27,20 @@ frame $|u_i^{\rm orb}\rangle$ and its position connection. For file-based
 inputs this is the retained Wannier frame; for native point-orbital inputs
 the specified centers define the connection in the fixed orbital basis:
 $A^{\rm orb}_{a,ij}=i\langle u_i^{\rm orb}|\partial_{k_a}u_j^{\rm orb}\rangle$.
-If $U^\dagger H^{\rm orb}U=\operatorname{diag}(E_n)$, then
+If $U^\dagger H^{\rm orb}U=\mathrm{diag}(E_n)$, then
 
 $$
 \mathcal F_{ab}^{\rm orb}
 =\partial_{k_a}A_b^{\rm orb}-\partial_{k_b}A_a^{\rm orb}
 -i[A_a^{\rm orb},A_b^{\rm orb}],\qquad
 \mathcal F_{ab}^{\rm H}=U^\dagger\mathcal F_{ab}^{\rm orb}U,\qquad
-B_n^{ab}=\operatorname{Re}(\mathcal F_{ab}^{\rm H})_{nn}.
+B_n^{ab}=\mathrm{Re}(\mathcal F_{ab}^{\rm H})_{nn}.
 $$
 
 Here $[X,Y]=XY-YX$, and the same position-operator and orbital-embedding
 convention is used throughout. $B_n^{ab}$ is only the ambient contribution;
 the full **static** band Berry curvature is
-$\Omega_n^{ab}=B_n^{ab}-2\sum_{m\ne n}\operatorname{Im}Q_{nm}^{ab}$,
+$\Omega_n^{ab}=B_n^{ab}-2\sum_{m\ne n}\mathrm{Im}\,Q_{nm}^{ab}$,
 with the same $(a,b)$ and sign convention as the dc note.
 The independent optical kernel retains resonant and antiresonant poles:
 
@@ -48,16 +48,16 @@ $$
 \begin{aligned}
 \sigma^{ab}_{\rm Drude}(x)
  &=c\sum_n\frac{-f'_n}{\Gamma_{\rm intra}-ix}
-   \operatorname{Re}[V^a_{nn}V^b_{nn}],\\
+   \mathrm{Re}[V^a_{nn}V^b_{nn}],\\
 \sigma^{ab}_{\rm QM}(x)
  &=-2ic\sum_{E_n<E_m}f_{nm}
    \frac{\Delta_{nm}z}{\Delta_{nm}^2-z^2}
-   \operatorname{Re}Q^{ab}_{nm},\\
+   \mathrm{Re}\,Q^{ab}_{nm},\\
 \sigma^{ab}_{\rm BC}(x)
  &=-c\sum_n f_n B_n^{ab}
    +2c\sum_{E_n<E_m}f_{nm}
    \frac{\Delta_{nm}^2}{\Delta_{nm}^2-z^2}
-   \operatorname{Im}Q^{ab}_{nm},\\
+   \mathrm{Im}\,Q^{ab}_{nm},\\
 \sigma^{ab}_{\rm total}(x)
  &=\sigma^{ab}_{\rm Drude}(x)+\sigma^{ab}_{\rm QM}(x)
    +\sigma^{ab}_{\rm BC}(x).
@@ -72,7 +72,7 @@ $$
 \widetilde\Omega_n^{ab}(x,\Gamma_{\rm inter})
 =B_n^{ab}-2\sum_{m\ne n}
 \frac{\Delta_{nm}^2}{\Delta_{nm}^2-(x+i\Gamma_{\rm inter})^2}
-\operatorname{Im}Q_{nm}^{ab},\qquad
+\mathrm{Im}\,Q_{nm}^{ab},\qquad
 \sigma_{\rm BC}^{ab}(x)=-c\sum_n f_n\widetilde\Omega_n^{ab}(x,\Gamma_{\rm inter}).
 $$
 
@@ -105,7 +105,7 @@ $$
 =-c\sum_I f(E_I)B_I^{ab}
  +2c\sum_{I<J}[f(E_I)-f(E_J)]
  \frac{\Delta_{IJ}^2}{\Delta_{IJ}^2-z^2}
- \operatorname{Im}Q_{IJ}^{ab}.
+ \mathrm{Im}\,Q_{IJ}^{ab}.
 $$
 
 Drude and quantum-metric equations use the identical replacements. The

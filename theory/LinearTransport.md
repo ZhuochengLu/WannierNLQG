@@ -41,7 +41,7 @@ frame, and let $U(\mathbf k)$ diagonalize its Hamiltonian. For file-based
 inputs this is the retained Wannier frame; for native point-orbital inputs
 the specified centers define the position connection in the fixed orbital
 basis. In either case,
-$U^\dagger H^{\rm orb}U=\operatorname{diag}(E_n)$. With
+$U^\dagger H^{\rm orb}U=\mathrm{diag}(E_n)$. With
 $A^{\rm orb}_{a,ij}=i\langle u_i^{\rm orb}|\partial_{k_a}u_j^{\rm orb}\rangle$,
 the $A^a_{nm}$ in the vertex above is
 $(U^\dagger A_a^{\rm orb}U)_{nm}$. Define the supplied **ambient covariant
@@ -60,8 +60,8 @@ $\mathcal F_{ab}^{\rm H}$ as `geometry.curvature`. It is **not** the full
 band Berry curvature. For a nondegenerate band in that same model,
 
 $$
-B_n^{ab}=\operatorname{Re}(\mathcal F_{ab}^{\rm H})_{nn},\qquad
-\Omega_n^{ab}=B_n^{ab}-2\sum_{m\ne n}\operatorname{Im}Q_{nm}^{ab}.
+B_n^{ab}=\mathrm{Re}(\mathcal F_{ab}^{\rm H})_{nn},\qquad
+\Omega_n^{ab}=B_n^{ab}-2\sum_{m\ne n}\mathrm{Im}\,Q_{nm}^{ab}.
 $$
 
 Thus $B_n^{ab}$ alone is not $\Omega_n^{ab}$. The two terms on the right
@@ -75,17 +75,17 @@ $$
 \begin{aligned}
 \sigma^{ab}_{\rm Drude}
  &=c\sum_n\frac{-f'_n}{\Gamma_{\rm intra}}
-    \operatorname{Re}[V^a_{nn}V^b_{nn}],\\
+    \mathrm{Re}[V^a_{nn}V^b_{nn}],\\
 \sigma^{ab}_{\rm QM}
  &=2c\sum_{E_n<E_m}f_{nm}
    \frac{\Delta_{nm}\Gamma_{\rm inter}}
         {\Delta_{nm}^2+\Gamma_{\rm inter}^2}
-   \operatorname{Re}Q^{ab}_{nm},\\
+   \mathrm{Re}\,Q^{ab}_{nm},\\
 \sigma^{ab}_{\rm BC}
  &=-c\sum_n f_n B_n^{ab}
    +2c\sum_{E_n<E_m}f_{nm}
    \frac{\Delta_{nm}^2}{\Delta_{nm}^2+\Gamma_{\rm inter}^2}
-   \operatorname{Im}Q^{ab}_{nm},\\
+   \mathrm{Im}\,Q^{ab}_{nm},\\
 \sigma^{ab}_{\rm total}
  &=\sigma^{ab}_{\rm Drude}+\sigma^{ab}_{\rm QM}
    +\sigma^{ab}_{\rm BC}.
@@ -101,7 +101,7 @@ $$
 \widetilde\Omega_n^{ab}(\Gamma_{\rm inter})
 =B_n^{ab}-2\sum_{m\ne n}
 \frac{\Delta_{nm}^2}{\Delta_{nm}^2+\Gamma_{\rm inter}^2}
-\operatorname{Im}Q_{nm}^{ab},\qquad
+\mathrm{Im}\,Q_{nm}^{ab},\qquad
 \sigma_{\rm BC}^{ab}=-c\sum_n f_n\widetilde\Omega_n^{ab}.
 $$
 
@@ -125,7 +125,7 @@ separate dimension-aware normalization and is not this bulk-BZ limit.
 
 For an exact degenerate block $I$, Conventional counts each explicit state
 $n\in I$ once in the Drude sum, including the block-internal product
-$\sum_{m\in I}\operatorname{Re}(V^a_{nm}V^b_{mn})$. Cross-block sums count
+$\sum_{m\in I}\mathrm{Re}(V^a_{nm}V^b_{mn})$. Cross-block sums count
 each ordered pair $I<J$ once. Close but distinct bands are not averaged.
 
 ## 3. Equivalent and Projector formulation
@@ -138,17 +138,17 @@ orbital frame and embedding. For $I\ne J$ define $Q_{IJ}^{ab}$; define
 $W_I^{ab}$ and $B_I^{ab}$ for each block:
 
 $$
-Q^{ab}_{IJ}=\operatorname{Tr}[P_I(D_aP_I)P_J(D_bP_I)],\quad
-W^{ab}_I=\operatorname{Re}\operatorname{Tr}(P_IV_aP_IV_b),\quad
-B^{ab}_I=\operatorname{Re}\operatorname{Tr}(P_I\mathcal F_{ab}^{\rm orb}).
+Q^{ab}_{IJ}=\mathrm{Tr}[P_I(D_aP_I)P_J(D_bP_I)],\quad
+W^{ab}_I=\mathrm{Re}\,\mathrm{Tr}(P_IV_aP_IV_b),\quad
+B^{ab}_I=\mathrm{Re}\,\mathrm{Tr}(P_I\mathcal F_{ab}^{\rm orb}).
 $$
 
 The Projector equations are the four Conventional equations above with
 $(n,m)$ replaced by $(I,J)$, $Q_{nm}\mapsto Q_{IJ}$,
-$\operatorname{Re}(V^a_{nn}V^b_{nn})\mapsto W_I^{ab}$, and
+$\mathrm{Re}(V^a_{nn}V^b_{nn})\mapsto W_I^{ab}$, and
 $B_n^{ab}\mapsto B_I^{ab}$, summing each pair only once for $I<J$.
 The block-traced static curvature is
-$\Omega_I^{ab}=B_I^{ab}-2\sum_{J\ne I}\operatorname{Im}Q_{IJ}^{ab}$;
+$\Omega_I^{ab}=B_I^{ab}-2\sum_{J\ne I}\mathrm{Im}\,Q_{IJ}^{ab}$;
 the finite-width response replaces each interblock summand by the same
 $\Delta_{IJ}^2/(\Delta_{IJ}^2+\Gamma_{\rm inter}^2)$ factor. Occupations and widths
 remain functions of exact block energies. Traces are invariant under a basis
@@ -221,7 +221,7 @@ q_e Tr[delta v rho^(0)]. The latter gives
 
 $$
 \boxed{\sigma_{contact}^{ab}=-\frac{q_e^2}{\hbar}\int_{BZ}[dk]
-\operatorname{Tr}[f(H_W)\mathcal F_W^{ab}].}
+\mathrm{Tr}[f(H_W)\mathcal F_W^{ab}].}
 $$
 
 It carries no density-matrix relaxation denominator. This is the origin of

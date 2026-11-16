@@ -32,7 +32,7 @@ Let bars mean `C'*X*C` and `B_a=r_a+i*S_a=r_a'`. The scalar metric prescription 
 
 ```math
 D^{a,eta}_{nm}=-G^a_{nm}/2+N^a_{nm}\frac{\Delta_{nm}}{\Delta_{nm}^2+eta^2},\quad n\ne m;
-\qquad D^{a,eta}_{nn}=-G^a_{nn}/2+i\operatorname{Re}\bar B^a_{nn},
+\qquad D^{a,eta}_{nn}=-G^a_{nn}/2+i\mathrm{Re}\,\bar B^a_{nn},
 \qquad A^{a,eta}=iD^{a,eta}+\bar B^a.
 ```
 

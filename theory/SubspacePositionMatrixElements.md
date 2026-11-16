@@ -38,7 +38,7 @@ $$
 H^{(W)}U=U\varepsilon,
 \qquad
 H^{(H)}=U^\dagger H^{(W)}U
-=\varepsilon=\operatorname{diag}(E_1,\ldots,E_N),
+=\varepsilon=\mathrm{diag}(E_1,\ldots,E_N),
 \qquad
 \bar A^{a,(H)}=U^\dagger A^{a,(W)}U.
 $$

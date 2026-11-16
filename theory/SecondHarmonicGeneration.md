@@ -327,7 +327,7 @@ $$
 The full Hamiltonian-gauge curvature used by this release is
 
 $$
-F^n_{ac}=\operatorname{Re}\left[
+F^n_{ac}=\mathrm{Re}\,\left[
 (\partial_aA_c-\partial_cA_a)_{nn}
 +[A_c,D_a]_{nn}-[A_a,D_c]_{nn}
 -i[D_a,D_c]_{nn}

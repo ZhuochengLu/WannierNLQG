@@ -71,8 +71,8 @@ $$
 Here $r$ is in Angstrom, $h^{ad}_{n,\eta}$ is the regularized band Hessian in eV Angstrom squared, and $\delta_\gamma$ has units of inverse eV. The chosen optical band window and transition-screening rule apply to the pair sum; the Hessian retains all model bands. With band-frame first and second source derivatives $B,C$, its numerical prescription is
 
 $$
- h^{ad}_{n,\eta}=\operatorname{Re}C^{ad}_{nn}
- +2\operatorname{Re}\sum_{l\ne n}B^a_{nl}B^d_{ln}
+ h^{ad}_{n,\eta}=\mathrm{Re}\,C^{ad}_{nn}
+ +2\mathrm{Re}\,\sum_{l\ne n}B^a_{nl}B^d_{ln}
  \frac{\epsilon_n-\epsilon_l}{(\epsilon_n-\epsilon_l)^2+\eta^2},
  \qquad \eta>0.
 $$

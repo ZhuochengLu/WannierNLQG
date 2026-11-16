@@ -24,8 +24,8 @@ fits the floating-point representation.
 For the admitted ambient curvature $F^{ab}$, the Matrix contraction is
 
 $$
-\Omega^{ab}_O=\sum_{n\in O}\operatorname{Re}F^{ab}_{nn}
--\operatorname{Im}\sum_{n\in O,m\notin O}
+\Omega^{ab}_O=\sum_{n\in O}\mathrm{Re}\,F^{ab}_{nn}
+-\mathrm{Im}\,\sum_{n\in O,m\notin O}
 \left(r^a_{nm}r^b_{mn}-r^b_{nm}r^a_{mn}\right).
 $$
 
@@ -45,7 +45,7 @@ $S$ nor its derivatives or basis-connection terms may be dropped.
 For an orthogonal orbital frame, the Projector route independently evaluates
 
 $$
-\operatorname{Re}\{\operatorname{tr}(PF^{ab})+i\operatorname{tr}(P[\nabla_aP,\nabla_bP])\}.
+\mathrm{Re}\{\mathrm{tr}(PF^{ab})+i\mathrm{tr}(P[\nabla_aP,\nabla_bP])\}.
 $$
 
 with the complete occupied

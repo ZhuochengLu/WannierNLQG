@@ -33,14 +33,14 @@ Q_n^{ab}
 (1-|u_n\rangle\langle u_n|)
 |\partial_bu_n\rangle,
 \qquad
-g_n^{ab}=\operatorname{Re}Q_n^{ab}.
+g_n^{ab}=\mathrm{Re}\,Q_n^{ab}.
 $$
 
 In a complete Hilbert-space basis, this can be written as
 
 $$
 g_n^{ab}
-=\operatorname{Re}\sum_{m\ne n}
+=\mathrm{Re}\,\sum_{m\ne n}
 r_{nm}^{a,(H)}r_{mn}^{b,(H)},
 \qquad
 ds^2=g_n^{ab}dk_a dk_b.
@@ -59,8 +59,8 @@ The internal term resolves transitions to $T$:
 
 $$
 g_{S,\mathrm{internal}}^{ab}
-=\operatorname{Re}\operatorname{Tr}_S(X_a^\dagger X_b)
-=\operatorname{Re}\sum_{I\in S,\,J\in T}
+=\mathrm{Re}\,\mathrm{Tr}_S(X_a^\dagger X_b)
+=\mathrm{Re}\,\sum_{I\in S,\,J\in T}
 r_{IJ}^{a,(H)}r_{JI}^{b,(H)},
 \qquad
 X_a=(D_a^{(H)}R^{(H)})_{TS}.
@@ -104,7 +104,7 @@ The missing term in a finite-window interband sum is thus
 
 $$
 g_{S,\mathrm{external}}^{ab}
-=\operatorname{Re}\operatorname{Tr}
+=\mathrm{Re}\,\mathrm{Tr}
 \bigl[R^{(W)}K^{ab,(W)}\bigr].
 $$
 

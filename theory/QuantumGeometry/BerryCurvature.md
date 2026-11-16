@@ -34,7 +34,7 @@ Q_n^{ab}
 (1-|u_n\rangle\langle u_n|)
 |\partial_bu_n\rangle,
 \qquad
-\Omega_n^{ab}=-2\operatorname{Im}Q_n^{ab}.
+\Omega_n^{ab}=-2\mathrm{Im}\,Q_n^{ab}.
 $$
 
 ## 2. Wannier-frame derivative overlap and ambient curvature
@@ -90,7 +90,7 @@ interband part and an ambient part:
 
 $$
 \Omega_n^{ab}
-=-2\operatorname{Im}\sum_{m\ne n}^{\text{Wannier window}}
+=-2\mathrm{Im}\,\sum_{m\ne n}^{\text{Wannier window}}
 r_{nm}^{a,(H)}r_{mn}^{b,(H)}
 +[\mathcal F^{ab,(H)}]_{nn}.
 $$
@@ -110,8 +110,8 @@ where
 
 $$
 \Omega_{S,\mathrm{internal}}^{ab}
-=-2\operatorname{Im}\operatorname{Tr}_S(X_a^\dagger X_b)
-=-2\operatorname{Im}\sum_{I\in S,\,J\in T}
+=-2\mathrm{Im}\,\mathrm{Tr}_S(X_a^\dagger X_b)
+=-2\mathrm{Im}\,\sum_{I\in S,\,J\in T}
 r_{IJ}^{a,(H)}r_{JI}^{b,(H)},
 \qquad
 X_a=(D_a^{(H)}R^{(H)})_{TS},
@@ -121,13 +121,13 @@ and
 
 $$
 \Omega_{S,\mathrm{external}}^{ab}
-=\operatorname{Tr}[R^{(W)}\mathcal F^{ab,(W)}]
-=i\operatorname{Tr}
+=\mathrm{Tr}[R^{(W)}\mathcal F^{ab,(W)}]
+=i\mathrm{Tr}
 \bigl[R^{(W)}(K^{ab,(W)}-K^{ba,(W)})\bigr].
 $$
 
 Because $K^{ba,(W)}=(K^{ab,(W)})^\dagger$, this ambient contribution
-is real and equals $-2\operatorname{Im}\operatorname{Tr}[R^{(W)}K^{ab,(W)}]$.
+is real and equals $-2\mathrm{Im}\,\mathrm{Tr}[R^{(W)}K^{ab,(W)}]$.
 The symmetric real contraction of the same $K$ supplies the external
 [quantum metric](QuantumMetric.md). The target trace has no division
 by its rank. Intra-subspace transitions are excluded, making the trace
@@ -146,7 +146,7 @@ $$
 \mathcal F_S^{ab}
 =\partial_aA_S^b-\partial_bA_S^a-i[A_S^a,A_S^b],
 \qquad
-\Omega_S^{ab}=\operatorname{Tr}_S\mathcal F_S^{ab}.
+\Omega_S^{ab}=\mathrm{Tr}_S\mathcal F_S^{ab}.
 $$
 
 Its matrix changes by conjugation under a unitary change of subspace
