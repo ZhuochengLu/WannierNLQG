@@ -145,5 +145,5 @@ jobs:
           -e 'VERSION == v"1.10.13" || error("wrong Julia version"); println("PANEL_JULIA_CLI_READY ", VERSION)'
       - uses: julia-actions/cache@v2
       - uses: ./.github/actions/julia-package-environment
-      - name: Observe only default and supported Haswell GEMM shapes
+      - name: Measure exact contract witness and reference-copy cost only
         run: python3 -B .github/scripts/blas_panel_diagnostic.py

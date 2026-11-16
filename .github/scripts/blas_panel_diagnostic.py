@@ -46,7 +46,7 @@ def stop_owned(p,original):
   current=identity(p.pid);assert current['birth']==original['birth'] and current['pgid']==p.pid
   os.killpg(p.pid,signal.SIGKILL);p.wait(timeout=10)
 def profile(label,core=None):
- dest=OUT/label;dest.mkdir();contract=dest/'contract.json';contract.write_text(json.dumps(dict(phase='remote_panel_observation')))
+ dest=OUT/label;dest.mkdir();contract=dest/'contract.json';contract.write_text(json.dumps(dict(phase='contract_witness_and_cost')))
  env=os.environ.copy()
  for key in ('JULIA_NUM_THREADS','OPENBLAS_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS','VECLIB_MAXIMUM_THREADS'):env[key]='1'
  env.update(WANNIERNLQG_USE_MPI='0',JULIA_PKG_PRECOMPILE_AUTO='0',JULIA_PKG_OFFLINE='true',WANNIERNLQG_DIAG_PROFILE=label)
@@ -72,7 +72,7 @@ def profile(label,core=None):
  assert reason is None
  result_path=dest/'selection.json'
  if not result_path.exists():result_path=dest/'observations.partial.json'
- d=json.loads(result_path.read_text());assert len(d['observations'])==22
+ d=json.loads(result_path.read_text());assert len(d['observations'])==8
  d['_process']=dict(exit_code=code,complete_report=(result_path.name=='selection.json'),sampled_peak_rss_kib=peak,seconds=time.monotonic()-begin)
  print('PANEL_DIAGNOSTIC_REPORT',json.dumps(d,separators=(',',':')),flush=True)
  reports.append(d)
@@ -86,6 +86,6 @@ if control is not None:
  assert [(x['n'],x['mode'],x['columns'],x['operand_sha256'])for x in first['observations']]==[(x['n'],x['mode'],x['columns'],x['operand_sha256'])for x in second['observations']]
  print('PANEL_CONTROL_ACTUAL_CORES',json.dumps([x['values']['core']for x in second['runtime']['openblas']]),flush=True)
 else:print('PANEL_CONTROL_SKIPPED',json.dumps(dict(reason='No supported distinct control kernel for captured CPU flags',actual_cores=cores)),flush=True)
-print('PANEL_DIAGNOSIS_COMPLETE',json.dumps(dict(profiles=len(reports),seconds=time.monotonic()-started,new_full_runs=0,new_mpi_runs=0,new_material_runs=0,meaning='Observation completion only, not scientific or required main CI success')),flush=True)
+print('PANEL_DIAGNOSIS_COMPLETE',json.dumps(dict(profiles=len(reports),seconds=time.monotonic()-started,new_full_runs=0,new_mpi_runs=0,new_material_runs=0,meaning='Contract/cost observation only, not production integration or required main CI success')),flush=True)
 
 raise SystemExit(1 if any(x['_process']['exit_code']!=0 for x in reports)else 0)
