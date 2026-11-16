@@ -8,7 +8,6 @@ PINS={'src/MatrixElements/ConventionCovariantTransport.jl': '68d7910741bb713ffa6
 assert os.environ['GITHUB_REF']==BRANCH and os.environ['GITHUB_EVENT_NAME']=='workflow_dispatch'
 assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['GITHUB_SHA']
 for rel,digest in PINS.items():assert hashlib.sha256((ROOT/rel).read_bytes()).hexdigest()==digest
-assert not subprocess.check_output(['git','diff',BASE,'HEAD','--','src','ext','test','Project.toml','Manifest.toml'])
 info={}
 for line in Path('/proc/cpuinfo').read_text().splitlines():
  if ':' in line:
@@ -16,6 +15,9 @@ for line in Path('/proc/cpuinfo').read_text().splitlines():
   if key in ('model name','vendor_id','flags') and key not in info:info[key]=value
 mem={line.split(':')[0]:line.split(':',1)[1].strip()for line in Path('/proc/meminfo').read_text().splitlines()if line.split(':')[0]in ('MemTotal','MemAvailable','SwapTotal','SwapFree')}
 print('PANEL_DIAGNOSTIC_HOST',json.dumps(dict(cpu=info,memory=mem,logical_cpus=os.cpu_count(),source_base=BASE,diagnostic_commit=os.environ['GITHUB_SHA'],scope='NO_REQUIRED_MAIN_CI_OR_RELEASE_QUALIFICATION',rss_limit_kib=12*1024**2,wall_limit_seconds=900)),flush=True)
+if sys.argv[1:]==['--host-only']:raise SystemExit(0)
+assert not sys.argv[1:]
+assert not subprocess.check_output(['git','diff',BASE,'HEAD','--','src','ext','test','Project.toml','Manifest.toml'])
 assert int(mem['MemAvailable'].split()[0])>=4*1024**2
 assert shutil.disk_usage(ROOT).free>=11*1024**3
 OUT=Path(os.environ['RUNNER_TEMP'])/'blas-panel-diagnostic';assert not OUT.exists();OUT.mkdir()
@@ -47,7 +49,7 @@ def profile(label,core=None):
  dest=OUT/label;dest.mkdir();contract=dest/'contract.json';contract.write_text(json.dumps(dict(phase='remote_panel_observation')))
  env=os.environ.copy()
  for key in ('JULIA_NUM_THREADS','OPENBLAS_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS','VECLIB_MAXIMUM_THREADS'):env[key]='1'
- env.update(JULIA_PKG_PRECOMPILE_AUTO='0',JULIA_PKG_OFFLINE='true',WANNIERNLQG_DIAG_PROFILE=label)
+ env.update(WANNIERNLQG_USE_MPI='0',JULIA_PKG_PRECOMPILE_AUTO='0',JULIA_PKG_OFFLINE='true',WANNIERNLQG_DIAG_PROFILE=label)
  if core is None:env.pop('OPENBLAS_CORETYPE',None)
  else:env['OPENBLAS_CORETYPE']=core
  argv=['julia','--startup-file=no','--compiled-modules=existing','--threads=1','--gcthreads=1','--project='+os.environ['WANNIERNLQG_CI_PROJECT'],str(ROOT/'.github/scripts/blas_panel_diagnostic.jl'),str(ROOT),str(dest),str(contract)]

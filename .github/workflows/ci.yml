@@ -127,10 +127,15 @@ jobs:
     timeout-minutes: 25
     env:
       JULIA_NUM_THREADS: '1'
+      WANNIERNLQG_USE_MPI: '0'
       JULIA_NUM_PRECOMPILE_TASKS: '1'
       JULIA_PKG_PRECOMPILE_AUTO: '0'
     steps:
       - uses: actions/checkout@v4
+      - name: Record bounded diagnostic CPU identity
+        run: python3 -B .github/scripts/blas_panel_diagnostic.py --host-only
+      - name: Fetch the exact pinned source baseline
+        run: git fetch --no-tags --depth=1 origin b4036fd4f04c5b7fd02716c5854531c81117391b
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1.10.13'
