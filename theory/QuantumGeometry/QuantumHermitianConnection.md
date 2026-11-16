@@ -8,22 +8,22 @@ The quantum Hermitian connection (QHC) is a complex third-rank geometric quantit
 
 Define
 
-$$
+```math
 D_a r_{mn}^{b}
 =\partial_{k_a}r_{mn}^{b}
 -i(r_{mm}^{a}-r_{nn}^{a})r_{mn}^{b}.
-$$
+```
 
-For two band groups $C,V$, the Conventional K-slice quantity in the release is
+For two band groups $`C,V`$, the Conventional K-slice quantity in the release is
 
-$$
+```math
 \mathcal C_{CV}^{a;bc}
 =\frac{1}{N_CN_V}
 \sum_{n\in C,m\in V}
 (D_a r_{mn}^{b})r_{nm}^{c}.
-$$
+```
 
-This quantity is complex, is not symmetrized in $b,c$, and contains no occupation factor, resonant delta function, or Brillouin-zone integral.
+This quantity is complex, is not symmetrized in $`b,c`$, and contains no occupation factor, resonant delta function, or Brillouin-zone integral.
 
 ## 3. Projector and Wilson Loop formulations; unsupported method boundary
 
@@ -31,72 +31,72 @@ This quantity is complex, is not symmetrized in $b,c$, and contains no occupatio
 
 The projector block in the source literature is defined as
 
-$$
+```math
 C_{nm}^{a;bc}=\mathrm{Tr}\!\left[
 P_m(\partial_bP_n)
 \left(\partial_a\partial_cP_m
 +(\partial_aP_n)(\partial_cP_m)\right)
 \right].
-$$
+```
 
 For isolated bands,
 
-$$
+```math
 C_{nm}^{a;bc}=i r_{mn}^{b}r_{nm}^{c}R_{nm}^{c;a},
 \qquad
 \mathcal C_{nm}^{a;bc}=-C_{mn}^{a;cb}.
-$$
+```
 
-Thus, the native Projector quantity $C_{CV}^{a;bc}$ corresponds to the Conventional quantity $\mathcal C_{CV}^{a;bc}$ only after the band groups and the pair $(b,c)$ are exchanged together. This orientation must be standardized before different methods are compared. For degenerate bands, $P_n$ is replaced by a band-group projector, and the trace automatically removes the gauge freedom within that group.
+Thus, the native Projector quantity $`C_{CV}^{a;bc}`$ corresponds to the Conventional quantity $`\mathcal C_{CV}^{a;bc}`$ only after the band groups and the pair $`(b,c)`$ are exchanged together. This orientation must be standardized before different methods are compared. For degenerate bands, $`P_n`$ is replaced by a band-group projector, and the trace automatically removes the gauge freedom within that group.
 
-### $q=0$ Wilson Loop
+### $`q=0`$ Wilson Loop
 
-Let $\widetilde r_{mn}^{b}(\pm p)$ denote matrix elements parallel transported back to the central point using Wilson links. Then
+Let $`\widetilde r_{mn}^{b}(\pm p)`$ denote matrix elements parallel transported back to the central point using Wilson links. Then
 
-$$
+```math
 \mathcal C_{nm}^{a;bc}
 =\lim_{p\to0}
 \frac{\widetilde r_{mn}^{b}(p)-\widetilde r_{mn}^{b}(-p)}{2p}
 r_{nm}^{c}.
-$$
+```
 
 For band groups, scalar links are replaced by subspace-overlap blocks. This expression is a covariant finite difference in the length gauge, and its continuum limit is the Conventional QHC.
 
-### $q=0$ Geometric Loop: unsupported in 1.2
+### $`q=0`$ Geometric Loop: unsupported in 1.2
 
 WN 1.2 does not support Geometric Loop QHC. Ordinary requests and retained expert entry points reject it explicitly, without a fallback. The velocity-loop expression below is a conceptual construction, not a supported release QHC prescription.
 
-A closed loop $\mathcal L_{nm}^{abc}(p)$ is formed from two optical velocity vertices and two displaced overlaps, and
+A closed loop $`\mathcal L_{nm}^{abc}(p)`$ is formed from two optical velocity vertices and two displaced overlaps, and
 
-$$
+```math
 \mathcal C_{nm,\mathrm{vel}}^{a;bc}
 =\left.D_p\mathcal L_{nm}^{abc}(p)\right|_{p=0},
 \qquad D_p=i\partial_p.
-$$
+```
 
-The release supplies no conversion of this velocity-loop expression into a supported length-gauge $\mathcal C$. Gauge invariance of a closed loop alone does not establish a release QHC contract. Supported Geometric Loop [Shift Current](../ShiftCurrent.md), [Photon Drag Shift Current](../PhotonDragShiftCurrent.md), and [Shift Vector](ShiftVector.md) are unaffected.
+The release supplies no conversion of this velocity-loop expression into a supported length-gauge $`\mathcal C`$. Gauge invariance of a closed loop alone does not establish a release QHC contract. Supported Geometric Loop [Shift Current](../ShiftCurrent.md), [Photon Drag Shift Current](../PhotonDragShiftCurrent.md), and [Shift Vector](ShiftVector.md) are unaffected.
 
 ## 4. Symbols, tensor indices, and subspace normalization
 
-The index $a$ denotes the covariant-derivative direction, while $b,c$ denote the two ordered optical legs. The two band groups must be disjoint, and the result is divided by $N_CN_V$. This normalization differs from the ordinary trace used for the HCT. Although the native band/field orientations of the Projector and Conventional quantities differ, they give the same exchanged difference when inserted into shift current.
+The index $`a`$ denotes the covariant-derivative direction, while $`b,c`$ denote the two ordered optical legs. The two band groups must be disjoint, and the result is divided by $`N_CN_V`$. This normalization differs from the ordinary trace used for the HCT. Although the native band/field orientations of the Projector and Conventional quantities differ, they give the same exchanged difference when inserted into shift current.
 
 ## 5. Key relations and symmetries
 
-$$
+```math
 \sigma_{\mathrm{SC}}^{abc}
 \propto -i\left(\mathcal C_{nm}^{a;bc}-\mathcal C_{mn}^{a;cb}\right).
-$$
+```
 
-An individual QHC is generally neither real nor independently measurable as a conductivity. Its gauge-invariant exchanged combination enters shift current. Time reversal, inversion, and mirror symmetries impose different $\mathbf k\leftrightarrow-\mathbf k$ relations on the real and imaginary parts of the QHC.
+An individual QHC is generally neither real nor independently measurable as a conductivity. Its gauge-invariant exchanged combination enters shift current. Time reversal, inversion, and mirror symmetries impose different $`\mathbf k\leftrightarrow-\mathbf k`$ relations on the real and imaginary parts of the QHC.
 
 ## 6. Formula provenance
 
 | Formula in this document | Original source and location | Convention conversion |
 | --- | --- | --- |
-| $(D_ar^b)r^c$ QHC | Sipe–Shkrebtii (2000), generalized-derivative shift-current structure | Remove the resonance, occupation, and BZ integral and retain only the local complex geometric block |
+| $`(D_ar^b)r^c`$ QHC | Sipe–Shkrebtii (2000), generalized-derivative shift-current structure | Remove the resonance, occupation, and BZ integral and retain only the local complex geometric block |
 | Generalized Wilson QHC | Wang et al. (2022), generalized Wilson-loop definitions | Express the continuum limit as a covariant derivative and use block links for band groups |
-| Projector QHC | Guo–Lu–Wang (2025), QHC/projector equations | Explicitly retain the source-native $C_{nm}^{a;bc}$ and give its exchanged mapping to $\mathcal C$ |
-| Multistate/subspace extension | Avdoshkin–Mitscherling–Moore (2025), multistate geometry sections | Promote single-band projectors to subspace projectors and average the QHC over $N_CN_V$ |
+| Projector QHC | Guo–Lu–Wang (2025), QHC/projector equations | Explicitly retain the source-native $`C_{nm}^{a;bc}`$ and give its exchanged mapping to $`\mathcal C`$ |
+| Multistate/subspace extension | Avdoshkin–Mitscherling–Moore (2025), multistate geometry sections | Promote single-band projectors to subspace projectors and average the QHC over $`N_CN_V`$ |
 
 ## 7. References
 

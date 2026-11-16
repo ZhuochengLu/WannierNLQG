@@ -8,49 +8,49 @@ In this release, the quantum metric quadrupole (QMQ) is the local second momentu
 
 The K-slice quantity in the release is defined as
 
-$$
+```math
 Q_{g,S}^{ab;cd}(\mathbf k)
 =\partial_{k_c}\partial_{k_d}g_S^{ab}(\mathbf k),
-$$
+```
 
 and the corresponding Fermi-sea moment can be written as
 
-$$
+```math
 \mathcal Q_{g,S}^{ab;cd}
 =\int_{\mathrm{BZ}}[d\mathbf k]\,
 f_S(\mathbf k)
 \partial_{k_c}\partial_{k_d}g_S^{ab}(\mathbf k),
-$$
+```
 
 but the release reports only the local quantity in the first expression.
 
 ## 3. Distinction from QMQ in response literature
 
-Third-order nonlinear-transport studies often call the second derivative of an energy-denominator-weighted quantum-metric polarizability $G^{ab}$ a QMQ, for example $\int f\,\partial_c\partial_dG^{ab}$. The object in this release is instead the second derivative of the unweighted Bloch quantum metric $g^{ab}$. The two objects have similar symmetries and geometric interpretations, but their numerical values, dimensions, and response prefactors differ and they cannot be interchanged.
+Third-order nonlinear-transport studies often call the second derivative of an energy-denominator-weighted quantum-metric polarizability $`G^{ab}`$ a QMQ, for example $`\int f\,\partial_c\partial_dG^{ab}`$. The object in this release is instead the second derivative of the unweighted Bloch quantum metric $`g^{ab}`$. The two objects have similar symmetries and geometric interpretations, but their numerical values, dimensions, and response prefactors differ and they cannot be interchanged.
 
 ## 4. Symbols, tensor indices, and normalization
 
-The labels $a,b$ are metric indices, while $c,d$ are quadrupole directions. In a smooth region,
+The labels $`a,b`$ are metric indices, while $`c,d`$ are quadrupole directions. In a smooth region,
 
-$$
+```math
 Q_g^{ab;cd}=Q_g^{ba;cd}=Q_g^{ab;dc}.
-$$
+```
 
-The target subspace excludes intra-subspace transitions and uses an ordinary sum without division by $N_S$. The internal contribution is the default; the full-overlap external contribution is added only with explicit `include_external=true`.
+The target subspace excludes intra-subspace transitions and uses an ordinary sum without division by $`N_S`$. The internal contribution is the default; the full-overlap external contribution is added only with explicit `include_external=true`.
 
 ## 5. Key symmetries and relations
 
-- If $g(\mathbf k)=g(-\mathbf k)$, its second derivative is also even, so the QMQ can be locally nonzero in an inversion- or time-reversal-symmetric system.
-- QMQ is the second-order member of the hierarchy $g\to\partial g\to\partial\partial g$.
+- If $`g(\mathbf k)=g(-\mathbf k)`$, its second derivative is also even, so the QMQ can be locally nonzero in an inversion- or time-reversal-symmetric system.
+- QMQ is the second-order member of the hierarchy $`g\to\partial g\to\partial\partial g`$.
 - Whether a QMQ contributes to a response also depends on Fermi weights, energy denominators, scattering mechanisms, and tensor symmetries. The K-slice geometric texture alone does not determine a complete conductivity.
 
 ## 6. Formula provenance
 
 | Formula in this document | Original source and location | Convention conversion |
 | --- | --- | --- |
-| Basic definition of $g^{ab}$ | Provost–Vallée (1980), Riemannian metric | Take two ordinary derivatives with respect to Bloch momentum to obtain the precise definition used in the release |
-| Quantum-geometric quadrupole response | Fang–Cano–Ghorashi (2024), main text and Supplemental Eqs. (80)–(82) | The reference uses the energy-weighted $G^{ab}$; only the multipole hierarchy is adopted here, and $G$ is not identified with $g$ |
-| QMQ in an experimental context | Liu et al. (2025), arXiv:2501.12641 | Identify this source as an application preprint, not as the original definition of the local unweighted $\partial\partial g$ used here |
+| Basic definition of $`g^{ab}`$ | Provost–Vallée (1980), Riemannian metric | Take two ordinary derivatives with respect to Bloch momentum to obtain the precise definition used in the release |
+| Quantum-geometric quadrupole response | Fang–Cano–Ghorashi (2024), main text and Supplemental Eqs. (80)–(82) | The reference uses the energy-weighted $`G^{ab}`$; only the multipole hierarchy is adopted here, and $`G`$ is not identified with $`g`$ |
+| QMQ in an experimental context | Liu et al. (2025), arXiv:2501.12641 | Identify this source as an application preprint, not as the original definition of the local unweighted $`\partial\partial g`$ used here |
 
 ## 7. References
 

@@ -57,7 +57,7 @@ Comparison mode requires identical ordered paths, distances, nodes, and energy r
 
 A native VASP dataset uses `EIGENVAL` as the authority for ordered k-points and eigenvalues. `KPOINTS` must be explicit line mode and supplies only segment endpoints, labels, and point counts. Both endpoints of every segment are retained, including repeated endpoints between neighboring segments. The parser checks `NKPTS`, `NBANDS`, consecutive band indices, `ISPIN`, selected spin channel, finite values, trailing data, and ordered-k parity.
 
-`POSCAR` supplies row-lattice vectors. Distances use $B=2\pi A^{-T}$. Reciprocal line mode uses fractional crystal coordinates. Cartesian line mode follows the VASP $2\pi/a$ convention and therefore accepts only one positive scale; negative-volume and three-component scales are rejected because they do not define a unique $a$.
+`POSCAR` supplies row-lattice vectors. Distances use $`B=2\pi A^{-T}`$. Reciprocal line mode uses fractional crystal coordinates. Cartesian line mode follows the VASP $`2\pi/a`$ convention and therefore accepts only one positive scale; negative-volume and three-component scales are rejected because they do not define a unique $`a`$.
 
 ### Complete reference/model display sets
 
@@ -136,9 +136,9 @@ Each panel may select `part`, `norm`, `vmin`, `vmax`, `linthresh`, `percentile`,
 
 Fractional mode does not alter the matrix. Centered mode requires the explicit periodic-centered option and then applies `fftshift` and transpose, recording both operations. Supported normalization modes are `linear`, `diverging`, `positive-log`, `signed-log`, `phase`, and `auto`.
 
-Cartesian mode reads `case_root`, `model_file`, `model_identity`, and `model_input_mode` from metadata. Legacy TB supplies a row lattice; Packed HDF5 is inspected read-only for schema, scientific digest, and `/model/lattice`. The outer reader also verifies the full-file hash stored in metadata. A model override must still match that hash. The fixed convention is row-lattice $A$ in angstrom, $B=2\pi A^{-T}$, and $k_{\mathrm{cart}}=B^T k_{\mathrm{frac}}$.
+Cartesian mode reads `case_root`, `model_file`, `model_identity`, and `model_input_mode` from metadata. Legacy TB supplies a row lattice; Packed HDF5 is inspected read-only for schema, scientific digest, and `/model/lattice`. The outer reader also verifies the full-file hash stored in metadata. A model override must still match that hash. The fixed convention is row-lattice $`A`$ in angstrom, $`B=2\pi A^{-T}`$, and $`k_{\mathrm{cart}}=B^T k_{\mathrm{frac}}`$.
 
-Projection modes are `intrinsic-plane`, `kx-ky`, `kx-kz`, `ky-kz`, and `explicit`. The explicit route requires two orthogonal Cartesian directions. Skew lattices use the actual cell-edge grid with `pcolormesh`; they are not presented as a rectangular extent. Matrix storage is `matrix[u_index,v_index]`, corresponding to runtime samples $u=i/n_u$ and $v=j/n_v$. Each colorbar uses an explicit axes whose vertical bounds are audited against the corresponding main axes at final output DPI.
+Projection modes are `intrinsic-plane`, `kx-ky`, `kx-kz`, `ky-kz`, and `explicit`. The explicit route requires two orthogonal Cartesian directions. Skew lattices use the actual cell-edge grid with `pcolormesh`; they are not presented as a rectangular extent. Matrix storage is `matrix[u_index,v_index]`, corresponding to runtime samples $`u=i/n_u`$ and $`v=j/n_v`$. Each colorbar uses an explicit axes whose vertical bounds are audited against the corresponding main axes at final output DPI.
 
 ## Sidecar audit contract
 

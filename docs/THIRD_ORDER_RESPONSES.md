@@ -48,44 +48,44 @@ Periodic Wannier files, real-space TB and analytic inputs support their existing
 
 Use the complex field amplitude, without a factor of one half,
 
-$$
+```math
  E^b(\mathbf r,t)=E^b(\omega)e^{i\mathbf q\cdot\mathbf r-i\omega t}
                  +E^b(-\omega)e^{-i\mathbf q\cdot\mathbf r+i\omega t},
  \qquad E^b(-\omega)=E^b(\omega)^*.
-$$
+```
 
-This is the field convention of the [WannierNLQG paper](https://arxiv.org/html/2609.10411v1) and the [photon-drag paper](https://arxiv.org/html/2511.16987v2). The third-order tasks here use spatially uniform fields. The papers' factor collecting the two conjugate second-order frequency orders does not fix a third-order permutation factor. Cartesian tensor indices below are ordered; repeated Cartesian indices denote contraction with the indicated field slots. Each explicit model state is counted once, without an extra spin multiplier. Let $e>0$, $x=\hbar\omega$ in eV and $\sum_{\mathbf k}w_{\mathbf k}=1$ for a full uniform Brillouin-zone average. A restricted domain retains its actual integration weights rather than being renormalized to the full zone.
+This is the field convention of the [WannierNLQG paper](https://arxiv.org/html/2609.10411v1) and the [photon-drag paper](https://arxiv.org/html/2511.16987v2). The third-order tasks here use spatially uniform fields. The papers' factor collecting the two conjugate second-order frequency orders does not fix a third-order permutation factor. Cartesian tensor indices below are ordered; repeated Cartesian indices denote contraction with the indicated field slots. Each explicit model state is counted once, without an extra spin multiplier. Let $`e>0`$, $`x=\hbar\omega`$ in eV and $`\sum_{\mathbf k}w_{\mathbf k}=1`$ for a full uniform Brillouin-zone average. A restricted domain retains its actual integration weights rather than being renormalized to the full zone.
 
 ### Implemented Jerk acceleration channel
 
-For the ordered slots $(a;b\omega,c{-\omega},d0)$, the raw coefficient is
+For the ordered slots $`(a;b\omega,c{-\omega},d0)`$, the raw coefficient is
 
-$$
+```math
  \widetilde G^{abcd}(x)=\sum_{\mathbf k}w_{\mathbf k}
  \sum_{\substack{m,n\ \epsilon_n>\epsilon_m}}
  (f_m-f_n)\,r^b_{nm,\eta}r^c_{mn,\eta}
  (h^{ad}_{n,\eta}-h^{ad}_{m,\eta})
  \delta_\gamma(\epsilon_n-\epsilon_m-x).
-$$
+```
 
-Here $r$ is in Angstrom, $h^{ad}_{n,\eta}$ is the regularized band Hessian in eV Angstrom squared, and $\delta_\gamma$ has units of inverse eV. The chosen optical band window and transition-screening rule apply to the pair sum; the Hessian retains all model bands. With band-frame first and second source derivatives $B,C$, its numerical prescription is
+Here $`r`$ is in Angstrom, $`h^{ad}_{n,\eta}`$ is the regularized band Hessian in eV Angstrom squared, and $`\delta_\gamma`$ has units of inverse eV. The chosen optical band window and transition-screening rule apply to the pair sum; the Hessian retains all model bands. With band-frame first and second source derivatives $`B,C`$, its numerical prescription is
 
-$$
+```math
  h^{ad}_{n,\eta}=\mathrm{Re}\,C^{ad}_{nn}
  +2\mathrm{Re}\,\sum_{l\ne n}B^a_{nl}B^d_{ln}
  \frac{\epsilon_n-\epsilon_l}{(\epsilon_n-\epsilon_l)^2+\eta^2},
  \qquad \eta>0.
-$$
+```
 
-For the bulk cell volume $V_{\!A}$ in Angstrom cubed, the output is
+For the bulk cell volume $`V_{\!A}`$ in Angstrom cubed, the output is
 
-$$
+```math
  G^{abcd}_{\mathrm{ordered}}=
  \frac{2\pi e^4}{\hbar^3}\frac{10^{-10}}{V_{\!A}}
  \widetilde G^{abcd}.
-$$
+```
 
-It is the lifetime-free coefficient, in A m V$^{-3}$ s$^{-2}$. The selected steady-state constant-rate interpretation is $j^a=\tau_N\tau_JG^{abcd}_{\mathrm{ordered}}E^b(\omega)E^c(-\omega)E^d(0)$. No additional conjugate-order factor, six-permutation factor or lifetime is applied by the task. Symmetric/antisymmetric output replaces the optical product by its half-sum/half-difference under $b\leftrightarrow c$.
+It is the lifetime-free coefficient, in A m V$`^{-3}`$ s$`^{-2}`$. The selected steady-state constant-rate interpretation is $`j^a=\tau_N\tau_JG^{abcd}_{\mathrm{ordered}}E^b(\omega)E^c(-\omega)E^d(0)`$. No additional conjugate-order factor, six-permutation factor or lifetime is applied by the task. Symmetric/antisymmetric output replaces the optical product by its half-sum/half-difference under $`b\leftrightarrow c`$.
 
 [Fregoso, Muniz and Sipe, *Jerk current: A novel bulk photovoltaic effect*, arXiv:1804.03970v2, Eq. (5)](https://arxiv.org/html/1804.03970) contains both acceleration and a velocity-difference times the momentum derivative of the optical-product contribution. The present task evaluates only the acceleration channel displayed above. It must not be identified with the general two-term expression. The paper's Eq. (3) uses a symmetrized tensor and a factor of six; that convention is not an extra multiplier for this ordered output. No missing channel is supplied by the SI conversion or permutation code.
 
@@ -93,48 +93,48 @@ It is the lifetime-free coefficient, in A m V$^{-3}$ s$^{-2}$. The selected stea
 
 The macroscopic definitions, with the output direction fixed, are
 
-$$
+```math
  j^a(3\omega)=\sigma^{abcd}(3\omega;\omega,\omega,\omega)
  E^b(\omega)E^c(\omega)E^d(\omega),\qquad
  P^a(3\omega)=\epsilon_0\chi^{abcd}(3\omega;\omega,\omega,\omega)
  E^b(\omega)E^c(\omega)E^d(\omega).
-$$
+```
 
 Only the three input indices are averaged over six permutations, including repeated-index multiplicities. The length-gauge interband/intraband organization is described by [Aversa and Sipe, *Nonlinear optical susceptibilities of semiconductors: Results with a length-gauge analysis*, Phys. Rev. B **52**, 14636 (1995)](https://doi.org/10.1103/PhysRevB.52.14636). This reference supplies the framework, not an assertion that its clean-limit formulas specify every finite-width rule of this implementation.
 
-To state the actual numerical conclusion compactly, let $C^{a\pi(bcd)}_{\alpha p}(x,\mathbf k)$ denote the kernel's raw band-sum coefficient for term $\alpha$ and pole degree $p=0,1,2,3$, before input permutation averaging and SI conversion. The unregrouped term labels are `eee`, `iee_group`, `iie_group`, `iii`; the regrouped labels are `regular`, `linear_pole`, `quadratic_pole`, `cubic_pole`. The two formulations retain their own coefficients and totals. Their implemented contraction and observable conversion are
+To state the actual numerical conclusion compactly, let $`C^{a\pi(bcd)}_{\alpha p}(x,\mathbf k)`$ denote the kernel's raw band-sum coefficient for term $`\alpha`$ and pole degree $`p=0,1,2,3`$, before input permutation averaging and SI conversion. The unregrouped term labels are `eee`, `iee_group`, `iie_group`, `iii`; the regrouped labels are `regular`, `linear_pole`, `quadratic_pole`, `cubic_pole`. The two formulations retain their own coefficients and totals. Their implemented contraction and observable conversion are
 
-$$
+```math
  \sigma^{abcd}=\frac{e^2}{\hbar}\frac{10^{-10}}{V_{\!A}}
  \sum_{\mathbf k}w_{\mathbf k}\frac{1}{6}
  \sum_{\pi\in S_3}\sum_{\alpha,p}C^{a\pi(bcd)}_{\alpha p}L_p(x),
-$$
-$$
+```
+```math
  \chi^{abcd}=\frac{e}{\epsilon_0}\frac{10^{-10}}{V_{\!A}}
  \sum_{\mathbf k}w_{\mathbf k}\frac{1}{6}
  \sum_{\pi\in S_3}\sum_{\alpha,p}
  \frac{i}{3}C^{a\pi(bcd)}_{\alpha p}L_{p+1}(x).
-$$
+```
 
-These are conductivity in A m/V cubed and susceptibility in m squared/V squared. The coefficients already contain the kernel's factor eight; no further factor eight or spin factor is inserted. For the selected Gaussian or Lorentzian $\delta_\lambda$, the pure-frequency pole rule is
+These are conductivity in A m/V cubed and susceptibility in m squared/V squared. The coefficients already contain the kernel's factor eight; no further factor eight or spin factor is inserted. For the selected Gaussian or Lorentzian $`\delta_\lambda`$, the pure-frequency pole rule is
 
-$$
+```math
  L_0(x)=1,\quad P_\lambda(x)=\frac{x}{x^2+\lambda^2},\quad
  L_p(x)=[P_\lambda(x)-i\delta_\lambda(x)]P_\lambda(x)^{p-1}\quad(p\ge1).
-$$
+```
 
-Resonant band factors use, for $y=\Delta-sx$,
+Resonant band factors use, for $`y=\Delta-sx`$,
 
-$$
+```math
  R_s(x,\Delta)=-\frac{y}{y^2+\gamma^2}-i\pi\delta_\gamma(y),\qquad
  \partial_\Delta R_s=\frac{y^2-\gamma^2}{(y^2+\gamma^2)^2}
                     -i\pi\delta'_\gamma(y),
-$$
-$$
+```
+```math
  \delta_\gamma^{\mathrm{Gaussian}}(y)=\frac{e^{-(y/\gamma)^2}}{\sqrt\pi\gamma},
  \qquad
  \delta_\gamma^{\mathrm{Lorentzian}}(y)=\frac{\gamma}{\pi(y^2+\gamma^2)}.
-$$
+```
 
 Thus `distribution_broadening` lowers susceptibility degree by degree. It does not divide an already broadened conductivity by the real frequency, nor replace Gaussian resolvent derivatives by a squared resolvent. The finite matrix width, resonant width and low-frequency width remain distinct. The positive-width and outer-vertex cutoff prescriptions above are numerical approximations, without a claim of exact degenerate-subspace dynamics or finite-width equality between the two formulations. These formulas describe the current implementation; no derivation or additional independent validation is introduced here.
 
@@ -142,53 +142,53 @@ Thus `distribution_broadening` lowers susceptibility degree by degree. It does n
 
 The direct band-sum reference is [Hipolito, Taghizadeh and Pedersen, *Nonlinear optical response of doped monolayer and bilayer graphene: Length gauge tight-binding model*, Phys. Rev. B **98**, 205420 (2018), Appendix A4a–d](https://doi.org/10.1103/PhysRevB.98.205420) ([arXiv:1802.01430v3](https://arxiv.org/abs/1802.01430v3)). The reference's causal frequency rule is not the `distribution_broadening` rule below. Its citation does not establish absolute-normalization or finite-width equivalence.
 
-For one ordered kernel component $(\phi,c,b,a)$, the following gives the actual unregrouped coefficients without a derivation. Write $d_{mn}=\epsilon_m-\epsilon_n$, $F_{mn}=f_n-f_m$, $F^a_{mn}=\partial_a f_n-\partial_a f_m$, and similarly $F^{ab}_{mn}$. Let $t^a_{mn}=i r^a_{0,mn}$ off diagonal and zero on diagonal; $v^\phi$ and $\partial_c v^\phi$ are the prepared velocity and its derivative, $g_n^a=\partial_a\epsilon_n$, and $h_n^{ab}$ is the prepared Hessian. The following primes on $R_s$ mean its actual signed-gap derivative.
+For one ordered kernel component $`(\phi,c,b,a)`$, the following gives the actual unregrouped coefficients without a derivation. Write $`d_{mn}=\epsilon_m-\epsilon_n`$, $`F_{mn}=f_n-f_m`$, $`F^a_{mn}=\partial_a f_n-\partial_a f_m`$, and similarly $`F^{ab}_{mn}`$. Let $`t^a_{mn}=i r^a_{0,mn}`$ off diagonal and zero on diagonal; $`v^\phi`$ and $`\partial_c v^\phi`$ are the prepared velocity and its derivative, $`g_n^a=\partial_a\epsilon_n`$, and $`h_n^{ab}`$ is the prepared Hessian. The following primes on $`R_s`$ mean its actual signed-gap derivative.
 
-$$
+```math
  Y_{mn}=t^a_{mn}F_{mn}R_1(x,d_{mn}),
-$$
-$$
+```
+```math
  D_{mn}=\big[iF_{mn}G^{ab}_{{\mathrm{cut}},mn}+t^a_{mn}F^b_{mn}\big]R_1
        +t^a_{mn}F_{mn}(g_m^b-g_n^b)R'_1,\quad
  Z_{mn}=R_2D_{mn},\quad J_{mn}=R_2t^b_{mn}F^a_{mn}.
-$$
+```
 
-Here multiplication by $F$ uses the finite-numerator construction of $G_{\mathrm{cut}}=R+I_0Q$ specified above; no extra singular division is implied. Define $B=[t^b,Y]$, with ordinary matrix commutators, and
+Here multiplication by $`F`$ uses the finite-numerator construction of $`G_{\mathrm{cut}}=R+I_0Q`$ specified above; no extra singular division is implied. Define $`B=[t^b,Y]`$, with ordinary matrix commutators, and
 
-$$
+```math
  (C_0)_{mn}=(1-\delta_{mn})R_2B_{mn},\qquad
  (C_1)_{mn}=\delta_{mn}B_{mn}/2,
-$$
-$$
+```
+```math
  (W_0)_{mn}=(1-\delta_{mn})v^\phi_{nm}R_3,\qquad
  (W_1)_{mn}=\delta_{mn}v^\phi_{nm}/3,
-$$
-$$
+```
+```math
  (U_0)_{mn}=(1-\delta_{mn})
  \big[(\partial_c v^\phi)_{nm}R_3+v^\phi_{nm}(g_m^c-g_n^c)R'_3\big],\qquad
  (U_1)_{mn}=\delta_{mn}(\partial_c v^\phi)_{nm}/3.
-$$
+```
 
-Every $R_s$ here has arguments $(x,d_{mn})$. For the nonconjugating contraction $\langle A,B\rangle_0=\sum_{mn}A_{mn}B_{mn}$, introduce a formal variable $z$, $W(z)=W_0+zW_1$, $U(z)=U_0+zU_1$ and $C(z)=C_0+zC_1$. The four conclusion polynomials $\mathcal C_\alpha(z)=\sum_{p=0}^3C_{\alpha p}z^p$ are
+Every $`R_s`$ here has arguments $`(x,d_{mn})`$. For the nonconjugating contraction $`\langle A,B\rangle_0=\sum_{mn}A_{mn}B_{mn}`$, introduce a formal variable $`z`$, $`W(z)=W_0+zW_1`$, $`U(z)=U_0+zU_1`$ and $`C(z)=C_0+zC_1`$. The four conclusion polynomials $`\mathcal C_\alpha(z)=\sum_{p=0}^3C_{\alpha p}z^p`$ are
 
-$$
+```math
  \mathcal C_{eee}(z)=-i\langle W(z),[t^c,C(z)]\rangle_0,
-$$
-$$
+```
+```math
  \mathcal C_{iee}(z)=-i\langle U(z),C(z)\rangle_0
                     +i\langle W(z),[t^c,Z+zJ]\rangle_0,
-$$
-$$
+```
+```math
  \mathcal C_{iie}(z)=i\sum_{m\ne n}
  \left[(U_0)_{mn}R_2D_{mn}
  +z(U_0)_{mn}R_2t^b_{mn}F^a_{mn}
  -\frac{z^2}{2}(W_0)_{mn}t^c_{mn}F^{ab}_{mn}\right],
-$$
-$$
+```
+```math
  \mathcal C_{iii}(z)=-\frac{iz^3}{6}\sum_n h_n^{\phi c}\partial_a\partial_b f_n.
-$$
+```
 
-Extract each coefficient in $z$ and use the $L_p$, six-permutation and SI formulas above; $z$ is a formal collection variable, not a frequency value. The exact implementations are the [vertex definitions](../src/Responses/ThirdHarmonicGeneration/ThirdHarmonicWorkspace.jl), [unregrouped coefficient contractions](../src/Responses/ThirdHarmonicGeneration/ThirdHarmonicUnregrouped.jl), [regrouped contractions](../src/Responses/ThirdHarmonicGeneration/ThirdHarmonicRegrouped.jl), and [permutation and observable conversion](../src/Responses/ThirdHarmonicGeneration/ThirdHarmonicKernels.jl). The [test-only literal band sums](../test/support/ThirdHarmonicLiteralReference.jl) retain the direct A4 labels and the explicitly declared numerical frequency rule. The displayed polynomials specify the unregrouped output; finite-width regrouped outputs keep their own contractions rather than being asserted identical.
+Extract each coefficient in $`z`$ and use the $`L_p`$, six-permutation and SI formulas above; $`z`$ is a formal collection variable, not a frequency value. The exact implementations are the [vertex definitions](../src/Responses/ThirdHarmonicGeneration/ThirdHarmonicWorkspace.jl), [unregrouped coefficient contractions](../src/Responses/ThirdHarmonicGeneration/ThirdHarmonicUnregrouped.jl), [regrouped contractions](../src/Responses/ThirdHarmonicGeneration/ThirdHarmonicRegrouped.jl), and [permutation and observable conversion](../src/Responses/ThirdHarmonicGeneration/ThirdHarmonicKernels.jl). The [test-only literal band sums](../test/support/ThirdHarmonicLiteralReference.jl) retain the direct A4 labels and the explicitly declared numerical frequency rule. The displayed polynomials specify the unregrouped output; finite-width regrouped outputs keep their own contractions rather than being asserted identical.
 
 ## THG worker numerator storage
 

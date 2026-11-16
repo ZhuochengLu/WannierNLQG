@@ -28,7 +28,7 @@ This directory documents the theoretical definitions, physical pictures, and for
 | 20 | `Quantum_Christoffel_Symbol` | [QuantumChristoffelSymbol](QuantumGeometry/QuantumChristoffelSymbol.md) | `Conventional` | `K-slice` |
 | 21 | `Triple_Phase_Product` | [TriplePhaseProduct](QuantumGeometry/TriplePhaseProduct.md) | `Conventional` | `K-slice` |
 
-The first six quantities have Brillouin-zone integral responses and therefore reside at the root of this directory. The fifteen quantities in `QuantumGeometry/` are defined in this release only as local K-slice geometric quantities at each $\mathbf k$ and have no corresponding `Integral` path. This directory split describes the public task boundary of v1.0.0; it does not imply that these geometric quantities cannot be integrated in other theoretical settings.
+The first six quantities have Brillouin-zone integral responses and therefore reside at the root of this directory. The fifteen quantities in `QuantumGeometry/` are defined in this release only as local K-slice geometric quantities at each $`\mathbf k`$ and have no corresponding `Integral` path. This directory split describes the public task boundary of v1.0.0; it does not imply that these geometric quantities cannot be integrated in other theoretical settings.
 
 ## Global conventions
 
@@ -36,13 +36,13 @@ The first six quantities have Brillouin-zone integral responses and therefore re
 
 The electron charge is
 
-$$
+```math
 e=-|e|<0,
-$$
+```
 
 and
 
-$$
+```math
 f_{nm}=f_n-f_m,
 \qquad
 \omega_{mn}=\frac{\epsilon_m-\epsilon_n}{\hbar},
@@ -50,57 +50,57 @@ f_{nm}=f_n-f_m,
 \int_{\mathrm{BZ}}[d\mathbf k]
 \equiv
 \int_{\mathrm{BZ}}\frac{d^d\mathbf k}{(2\pi)^d}.
-$$
+```
 
 The Hamiltonian-gauge Berry connection, or interband position matrix element, is
 
-$$
+```math
 r_{nm}^{a}=i\langle u_{n\mathbf k}|\partial_{k_a}u_{m\mathbf k}\rangle,
 \qquad
 v_{nm}^{a}=\frac{i}{\hbar}(\epsilon_n-\epsilon_m)r_{nm}^{a}\quad(n\ne m),
-$$
+```
 
-with $v_{nn}^{a}=\hbar^{-1}\partial_{k_a}\epsilon_n$. The labels $a,b,c,d$ are Cartesian indices; $n,m,p$ are band indices; and $A,B,C,M,N,S$ label band subspaces.
+with $`v_{nn}^{a}=\hbar^{-1}\partial_{k_a}\epsilon_n`$. The labels $`a,b,c,d`$ are Cartesian indices; $`n,m,p`$ are band indices; and $`A,B,C,M,N,S`$ label band subspaces.
 
 ### Optical fields, ordered contributions, and effect-specific prefactors
 
-At $q=0$, the field convention is
+At $`q=0`$, the field convention is
 
-$$
+```math
 \mathbf E(t)=\mathbf E(\omega)e^{-i\omega t}
 +\mathbf E(-\omega)e^{i\omega t},
 \qquad
 j_{\mathrm{dc}}^a
 =2\sum_{bc}\sigma^{abc}(\omega)E^b(\omega)E^c(-\omega).
-$$
+```
 
-At finite $\mathbf q$, the convention is
+At finite $`\mathbf q`$, the convention is
 
-$$
+```math
 \mathbf E(\mathbf r,t)=
 \mathbf E(\mathbf q,\omega)e^{i\mathbf q\cdot\mathbf r-i\omega t}+\mathrm{c.c.},
 \qquad
 j_{\mathrm{dc}}^a(\mathbf q)
 =2\sum_{bc}\sigma^{abc}(\mathbf q,\omega)
 E^b(\mathbf q,\omega)E^c(-\mathbf q,-\omega),
-$$
+```
 
-and the two endpoints connected by the photon momentum are denoted by $\mathbf k_\alpha=\mathbf k-\mathbf q/2$ and $\mathbf k_\beta=\mathbf k+\mathbf q/2$.
+and the two endpoints connected by the photon momentum are denoted by $`\mathbf k_\alpha=\mathbf k-\mathbf q/2`$ and $`\mathbf k_\beta=\mathbf k+\mathbf q/2`$.
 
-Each $\sigma^{abc}$ above is one ordered-field contribution. The outer factor $2$ combines $(\omega,-\omega)$ with $(-\omega,\omega)$; at finite momentum these are paired with $(\mathbf q,-\mathbf q)$ and $(-\mathbf q,\mathbf q)$. The sum over $(b,c)$ remains an ordered Cartesian-index sum, so the outer factor is neither a $b\leftrightarrow c$ symmetrization nor an odd-$q$ postprocessing factor.
+Each $`\sigma^{abc}`$ above is one ordered-field contribution. The outer factor $`2`$ combines $`(\omega,-\omega)`$ with $`(-\omega,\omega)`$; at finite momentum these are paired with $`(\mathbf q,-\mathbf q)`$ and $`(-\mathbf q,\mathbf q)`$. The sum over $`(b,c)`$ remains an ordered Cartesian-index sum, so the outer factor is neither a $`b\leftrightarrow c`$ symmetrization nor an odd-$`q`$ postprocessing factor.
 
-The release also retains the complete ordered band-pair sum. Prefactors are effect-specific: the IC and PDIC injection-rate tensors have the $\pi e^3/\hbar^2$ and $\pi e^3/(\hbar^2\omega^2)$ normalizations documented in their chapters, whereas charge SC and PDSC retain their documented factor $1/2$. The Pauli-normalized ISC and SSC tensors use $\pi |e|^2/\hbar^2$ and $i\pi |e|^2/(2\hbar^2\omega^2)$, respectively. Multiplying the formal identity channel by the signed output charge $-|e|$ therefore gives the same ordered Cartesian component $(a,b,c)$ of the corresponding charge-current tensor, without output-level band or Cartesian index exchange; the SSC equality additionally requires the nondegenerate resonant $\eta\to0$ limit. For IC, PDIC, and ISC, the release reports the $\tau$-free rate $\eta$ and the steady-state conversion is $\sigma=\tau\eta$. Prefactors can be compared only after the band-pair domain, field ordering, spin normalization, and inclusion or exclusion of $\tau$ have all been aligned.
+The release also retains the complete ordered band-pair sum. Prefactors are effect-specific: the IC and PDIC injection-rate tensors have the $`\pi e^3/\hbar^2`$ and $`\pi e^3/(\hbar^2\omega^2)`$ normalizations documented in their chapters, whereas charge SC and PDSC retain their documented factor $`1/2`$. The Pauli-normalized ISC and SSC tensors use $`\pi |e|^2/\hbar^2`$ and $`i\pi |e|^2/(2\hbar^2\omega^2)`$, respectively. Multiplying the formal identity channel by the signed output charge $`-|e|`$ therefore gives the same ordered Cartesian component $`(a,b,c)`$ of the corresponding charge-current tensor, without output-level band or Cartesian index exchange; the SSC equality additionally requires the nondegenerate resonant $`\eta\to0`$ limit. For IC, PDIC, and ISC, the release reports the $`\tau`$-free rate $`\eta`$ and the steady-state conversion is $`\sigma=\tau\eta`$. Prefactors can be compared only after the band-pair domain, field ordering, spin normalization, and inclusion or exclusion of $`\tau`$ have all been aligned.
 
 ### Subspace normalization
 
-- The QHC, ordinary interband QGT, and Zeeman interband QGT use the Cartesian-product average over $A\times B$, namely division by $N_A N_B$.
+- The QHC, ordinary interband QGT, and Zeeman interband QGT use the Cartesian-product average over $`A\times B`$, namely division by $`N_A N_B`$.
 - Berry curvature and quantum metric for a target subspace retain only transitions from that subspace to its complement and exclude intra-subspace transitions. This makes the result invariant under basis rotations within the subspace.
-- The HCT uses an ordinary trace, with no division by $N_M$ or $N_N$.
+- The HCT uses an ordinary trace, with no division by $`N_M`$ or $`N_N`$.
 - Supported Projector/Wilson-loop formulations and Geometric Loop Shift Current, Photon Drag Shift Current, and Shift Vector use closed block contractions. Geometric Loop QHC is unsupported. Supported QHC diagnostics use the Cartesian-product average over band groups, whereas response quantities retain the complete physical trace or band-pair normalization of their respective references.
-- Spin quantities use the dimensionless Pauli matrix $\sigma^s$, whose eigenvalues are $\pm1$, rather than $S^s=\hbar\sigma^s/2$. Multiply the final result by $\hbar/2$ to obtain a physical spin current in angular-momentum units.
+- Spin quantities use the dimensionless Pauli matrix $`\sigma^s`$, whose eigenvalues are $`\pm1`$, rather than $`S^s=\hbar\sigma^s/2`$. Multiply the final result by $`\hbar/2`$ to obtain a physical spin current in angular-momentum units.
 
 ## Scope
 
-The K-slice formulas in this directory define local geometric textures. They do not automatically include Fermi occupations, an energy shell, or a Brillouin-zone integral. The Berry-curvature family includes the external non-Abelian curvature terms available within the finite window of the release. Ordinary Quantum Metric and its dipole, quadrupole, and Christoffel tasks default to the internal contribution of that finite window. With explicit `include_external=true`, orthogonal input adds the symmetric external contribution requiring qualified full $uIu/FF_R$-type information; nonorthogonal external completion is unsupported. Interband-pair and Zeeman-interband metrics retain their separate definitions and do not acquire this option. Each document states this physical boundary without discussing how the quantity is computed.
+The K-slice formulas in this directory define local geometric textures. They do not automatically include Fermi occupations, an energy shell, or a Brillouin-zone integral. The Berry-curvature family includes the external non-Abelian curvature terms available within the finite window of the release. Ordinary Quantum Metric and its dipole, quadrupole, and Christoffel tasks default to the internal contribution of that finite window. With explicit `include_external=true`, orthogonal input adds the symmetric external contribution requiring qualified full $`uIu/FF_R`$-type information; nonorthogonal external completion is unsupported. Interband-pair and Zeeman-interband metrics retain their separate definitions and do not acquire this option. Each document states this physical boundary without discussing how the quantity is computed.
 
 - [Second-harmonic generation](SecondHarmonicGeneration.md): distinct numerical kernels, corrected BCD contraction, and normalization.

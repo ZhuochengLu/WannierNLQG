@@ -6,53 +6,53 @@ The triple phase product (TPP) is a closed triangular loop formed by three inter
 
 ## 2. Core theoretical formulas
 
-For three pairwise disjoint subspaces $A,B,C$, the release defines
+For three pairwise disjoint subspaces $`A,B,C`$, the release defines
 
-$$
+```math
 T_{A,B,C}^{abc}
 =\frac{1}{N_AN_BN_C}
 \sum_{I\in A,J\in B,L\in C}
 r_{JI}^{a}r_{LJ}^{b}r_{IL}^{c}.
-$$
+```
 
-For an isolated-band triangle, the gauge transformation $|u_n\rangle\to e^{i\phi_n}|u_n\rangle$ gives
+For an isolated-band triangle, the gauge transformation $`|u_n\rangle\to e^{i\phi_n}|u_n\rangle`$ gives
 
-$$
+```math
 r_{JI}^{a}r_{LJ}^{b}r_{IL}^{c}
 \to
 e^{i(\phi_I-\phi_J+\phi_J-\phi_L+\phi_L-\phi_I)}
 r_{JI}^{a}r_{LJ}^{b}r_{IL}^{c},
-$$
+```
 
 so the product is invariant.
 
 ## 3. Magnitude and phase representation
 
-$$
+```math
 T^{abc}=|T^{abc}|e^{i\Phi^{abc}},
 \qquad
 \Phi^{abc}=\arg T^{abc}.
-$$
+```
 
-The magnitude $|T|$ controls the joint oscillator strength of the three-state closed loop, while $\Phi$ encodes a loop geometry that cannot be determined from the phase of any individual transition. For multiband subspaces, the complete block contraction must be performed before the phase is taken. Averaging phases obtained from individual band triangles is not equivalent.
+The magnitude $`|T|`$ controls the joint oscillator strength of the three-state closed loop, while $`\Phi`$ encodes a loop geometry that cannot be determined from the phase of any individual transition. For multiband subspaces, the complete block contraction must be performed before the phase is taken. Averaging phases obtained from individual band triangles is not equivalent.
 
 ## 4. Symbols, tensor indices, and subspace normalization
 
-The indices $a,b,c$ correspond to the three oriented edges $A\to B$, $B\to C$, and $C\to A$, respectively. The result is divided by $N_AN_BN_C$. A cyclic permutation $(A,a)\to(B,b)\to(C,c)$ preserves the loop orientation. Exchanging two vertices generally produces the complex conjugate together with an index rearrangement.
+The indices $`a,b,c`$ correspond to the three oriented edges $`A\to B`$, $`B\to C`$, and $`C\to A`$, respectively. The result is divided by $`N_AN_BN_C`$. A cyclic permutation $`(A,a)\to(B,b)\to(C,c)`$ preserves the loop orientation. Exchanging two vertices generally produces the complex conjugate together with an index rearrangement.
 
 ## 5. Key limits, symmetries, and relations
 
 - If the optical matrix element on any edge vanishes, the corresponding triangular channel vanishes.
-- Under time reversal or mirror symmetry, $T(\mathbf k)$ and $T(-\mathbf k)^*$ are related by a sign determined by the parities of the indices.
+- Under time reversal or mirror symmetry, $`T(\mathbf k)`$ and $`T(-\mathbf k)^*`$ are related by a sign determined by the parities of the indices.
 - The TPP enters gauge-invariant semiconductor Bloch equations, strong-field high-harmonic generation, and multistate geometric current driven by bicircular light. The K-slice output itself contains neither time evolution nor optical-field weights.
 
 ## 6. Formula provenance
 
 | Formula in this document | Original source and location | Convention conversion |
 | --- | --- | --- |
-| Closed triple-dipole product | Liebscher et al. (2021), Sec. III discussion of gauge-invariant triple products | Standardize the dipole notation as $r_{JI}^{a}r_{LJ}^{b}r_{IL}^{c}$ |
+| Closed triple-dipole product | Liebscher et al. (2021), Sec. III discussion of gauge-invariant triple products | Standardize the dipole notation as $`r_{JI}^{a}r_{LJ}^{b}r_{IL}^{c}`$ |
 | TPP in gauge-invariant SBEs | Parks–Moloney–Brabec (2023), principal gauge-invariant variables and equations | Retain only the static local triangle, without time evolution |
-| Multistate geometric current | Guo et al. (2025), multistate TPP response sections | Generalize to three subspaces and divide by $N_AN_BN_C$ |
+| Multistate geometric current | Guo et al. (2025), multistate TPP response sections | Generalize to three subspaces and divide by $`N_AN_BN_C`$ |
 
 ## 7. References
 

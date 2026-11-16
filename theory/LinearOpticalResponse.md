@@ -7,7 +7,7 @@ The optical calculation exports complex `drude`, `quantum_metric`,
 channel is the frequency-dependent **anomalous-Hall-effect mechanism** of this
 length-gauge model: ambient-curvature contact plus interband Hall response.
 At nonzero frequency or relaxation width it is not a static Berry-curvature
-field. Conventions, position operator, and SI prefactor $c$ are defined in
+field. Conventions, position operator, and SI prefactor $`c`$ are defined in
 [linear transport](LinearTransport.md).
 
 The Drude-like channel describes intraband current relaxation; the
@@ -19,32 +19,32 @@ mechanism, not a pointwise static curvature field.
 
 ## 2. Core theoretical formula: Conventional bands
 
-Write photon energy as $x=\hbar\omega$ in eV and
-$z=x+i\Gamma_{\rm inter}$. For each ordered pair $E_n<E_m$, use
-$f_{nm}$, $\Delta_{nm}$, and $Q^{ab}_{nm}=r^a_{nm}r^b_{mn}$ from the dc note.
+Write photon energy as $`x=\hbar\omega`$ in eV and
+$`z=x+i\Gamma_{\rm inter}`$. For each ordered pair $`E_n<E_m`$, use
+$`f_{nm}`$, $`\Delta_{nm}`$, and $`Q^{ab}_{nm}=r^a_{nm}r^b_{mn}`$ from the dc note.
 For clarity, the ambient curvature is defined in the supplied orbital
-frame $|u_i^{\rm orb}\rangle$ and its position connection. For file-based
+frame $`|u_i^{\rm orb}\rangle`$ and its position connection. For file-based
 inputs this is the retained Wannier frame; for native point-orbital inputs
 the specified centers define the connection in the fixed orbital basis:
-$A^{\rm orb}_{a,ij}=i\langle u_i^{\rm orb}|\partial_{k_a}u_j^{\rm orb}\rangle$.
-If $U^\dagger H^{\rm orb}U=\mathrm{diag}(E_n)$, then
+$`A^{\rm orb}_{a,ij}=i\langle u_i^{\rm orb}|\partial_{k_a}u_j^{\rm orb}\rangle`$.
+If $`U^\dagger H^{\rm orb}U=\mathrm{diag}(E_n)`$, then
 
-$$
+```math
 \mathcal F_{ab}^{\rm orb}
 =\partial_{k_a}A_b^{\rm orb}-\partial_{k_b}A_a^{\rm orb}
 -i[A_a^{\rm orb},A_b^{\rm orb}],\qquad
 \mathcal F_{ab}^{\rm H}=U^\dagger\mathcal F_{ab}^{\rm orb}U,\qquad
 B_n^{ab}=\mathrm{Re}(\mathcal F_{ab}^{\rm H})_{nn}.
-$$
+```
 
-Here $[X,Y]=XY-YX$, and the same position-operator and orbital-embedding
-convention is used throughout. $B_n^{ab}$ is only the ambient contribution;
+Here $`[X,Y]=XY-YX`$, and the same position-operator and orbital-embedding
+convention is used throughout. $`B_n^{ab}`$ is only the ambient contribution;
 the full **static** band Berry curvature is
-$\Omega_n^{ab}=B_n^{ab}-2\sum_{m\ne n}\mathrm{Im}\,Q_{nm}^{ab}$,
-with the same $(a,b)$ and sign convention as the dc note.
+$`\Omega_n^{ab}=B_n^{ab}-2\sum_{m\ne n}\mathrm{Im}\,Q_{nm}^{ab}`$,
+with the same $`(a,b)`$ and sign convention as the dc note.
 The independent optical kernel retains resonant and antiresonant poles:
 
-$$
+```math
 \begin{aligned}
 \sigma^{ab}_{\rm Drude}(x)
  &=c\sum_n\frac{-f'_n}{\Gamma_{\rm intra}-ix}
@@ -62,51 +62,51 @@ $$
  &=\sigma^{ab}_{\rm Drude}(x)+\sigma^{ab}_{\rm QM}(x)
    +\sigma^{ab}_{\rm BC}(x).
 \end{aligned}
-$$
+```
 
-The first summand of $\sigma_{\rm BC}$ is the frequency-independent ambient
+The first summand of $`\sigma_{\rm BC}`$ is the frequency-independent ambient
 contact term. The second is the complex, frequency-dependent interband Hall
-term. Equivalently, with $\Delta_{nm}=|E_m-E_n|$ for $m\ne n$,
+term. Equivalently, with $`\Delta_{nm}=|E_m-E_n|`$ for $`m\ne n`$,
 
-$$
+```math
 \widetilde\Omega_n^{ab}(x,\Gamma_{\rm inter})
 =B_n^{ab}-2\sum_{m\ne n}
 \frac{\Delta_{nm}^2}{\Delta_{nm}^2-(x+i\Gamma_{\rm inter})^2}
 \mathrm{Im}\,Q_{nm}^{ab},\qquad
 \sigma_{\rm BC}^{ab}(x)=-c\sum_n f_n\widetilde\Omega_n^{ab}(x,\Gamma_{\rm inter}).
-$$
+```
 
 Pairing the two directions of each interband pair recovers the preceding
 implemented formula. Only this combined channel is exported as
-`berry_curvature`. At $x=0$ it is the broadened dc response; only when
-$x\to0$ and $\Gamma_{\rm inter}\to0^+$ for resolved gaps does
-$\widetilde\Omega_n^{ab}\to\Omega_n^{ab}$ and the integrated conductivity
+`berry_curvature`. At $`x=0`$ it is the broadened dc response; only when
+$`x\to0`$ and $`\Gamma_{\rm inter}\to0^+`$ for resolved gaps does
+$`\widetilde\Omega_n^{ab}\to\Omega_n^{ab}`$ and the integrated conductivity
 take the [usual intrinsic-AHE form](LinearTransport.md) for a periodic
 full-BZ model. At finite frequency
-or width, $\widetilde\Omega_n$ is a possibly complex **AHE response kernel**,
+or width, $`\widetilde\Omega_n`$ is a possibly complex **AHE response kernel**,
 not the static geometric Berry curvature. No resonance-only transition
 window is imposed; a different
 absorptive smearing prescription need not reproduce the same finite-width
 complex spectrum. Exact degenerate blocks retain every intrablock velocity
 product and every ordered cross-block pair; close distinct energies are not
-averaged. With the same inputs, $x=0$ reduces to the
+averaged. With the same inputs, $`x=0`$ reduces to the
 [strict dc expressions](LinearTransport.md) term by term.
 
 ## 3. Equivalent and Projector formulation
 
-For each exact-energy spectral projector $P_I$, use block velocity trace
-$W_I^{ab}$, ambient-curvature trace $B_I^{ab}$, and cross-block geometry
-$Q_{IJ}^{ab}$ defined in the dc note. Replace the band sums above by
-$\sum_I$ and $\sum_{I<J}$, with $E_I$, $f(E_I)$, and
-$\Delta_{IJ}=E_J-E_I$. In particular,
+For each exact-energy spectral projector $`P_I`$, use block velocity trace
+$`W_I^{ab}`$, ambient-curvature trace $`B_I^{ab}`$, and cross-block geometry
+$`Q_{IJ}^{ab}`$ defined in the dc note. Replace the band sums above by
+$`\sum_I`$ and $`\sum_{I<J}`$, with $`E_I`$, $`f(E_I)`$, and
+$`\Delta_{IJ}=E_J-E_I`$. In particular,
 
-$$
+```math
 \sigma^{ab}_{\rm BC,Projector}(x)
 =-c\sum_I f(E_I)B_I^{ab}
  +2c\sum_{I<J}[f(E_I)-f(E_J)]
  \frac{\Delta_{IJ}^2}{\Delta_{IJ}^2-z^2}
  \mathrm{Im}\,Q_{IJ}^{ab}.
-$$
+```
 
 Drude and quantum-metric equations use the identical replacements. The
 full-projector trace removes arbitrary rotations within an exact degenerate
@@ -118,20 +118,20 @@ missing position-operator or embedding information.
 For positive photon energy, the unique fully integrated model dielectric
 tensor is
 
-$$
+```math
 \epsilon^{ab}(x)=\delta_{ab}+
 \frac{i\sigma^{ab}_{\rm total}(x)}{\epsilon_0\omega},\qquad
 \omega=x/\hbar_{\rm eV\,s}.
-$$
+```
 
 Each mechanism produces only its increment
-$\Delta\epsilon_t=i\sigma_t/(\epsilon_0\omega)$; the unit background is
+$`\Delta\epsilon_t=i\sigma_t/(\epsilon_0\omega)`$; the unit background is
 added **once**, to the integrated total. K-slice increments have units m³ and
-no background. At $x=0$ conductivity is defined and compared with dc, but
+no background. At $`x=0`$ conductivity is defined and compared with dc, but
 dielectric files are omitted and metadata records `UNDEFINED_ZERO_FREQUENCY`.
 Conductivity is in S/m after full-BZ integration and S m² as a K-slice
-integrand. $a,b$ are current and applied-field Cartesian directions;
-the photon argument $x=\hbar\omega$ and the two widths are in eV.
+integrand. $`a,b`$ are current and applied-field Cartesian directions;
+the photon argument $`x=\hbar\omega`$ and the two widths are in eV.
 Bounded Cartesian-region integration uses its own dimension-aware units
 and does not produce a bulk dielectric tensor.
 The optical table reports complex conductivity in a fixed column order
@@ -158,7 +158,7 @@ and has no additional spin factor for a spinor model.
 | --- | --- | --- |
 | Length-gauge optical response with intraband/interband structures | Aversa–Sipe (1995) for length-gauge context; LinearOpticalResponseKernels.jl, linear_optical_response for the exact complex expressions | **IMPLEMENTATION_FORMULA**: the present two-width, finite-model decomposition is release-specific, not quoted verbatim from the paper. |
 | Velocity and exact cross-block geometry | SpectralResponseGeometry.jl, spectral_response_geometry, conventional_spectral_pair | Energy denominators are not artificially regularized in the geometric vertex. |
-| Ambient $\mathcal F^{\rm orb}$, its Hamiltonian-frame transform, and $B_n$ | PositionMatrixElements.jl, compute_position_capabilities!; SpectralResponseGeometry.jl, spectral_response_geometry | The contact input is the covariant curvature of the supplied position connection, not the full static band $\Omega_n$. |
+| Ambient $`\mathcal F^{\rm orb}`$, its Hamiltonian-frame transform, and $`B_n`$ | PositionMatrixElements.jl, compute_position_capabilities!; SpectralResponseGeometry.jl, spectral_response_geometry | The contact input is the covariant curvature of the supplied position connection, not the full static band $`\Omega_n`$. |
 | Exact-block Projector optical generalization | SpectralResponseGeometry.jl, projector_spectral_pair, projector_block_velocity, projector_block_curvature | **Project-specific generalization**; it does not assert near-degenerate averaging. |
 | Berry-curvature/AHE interpretation | Xiao–Chang–Niu (2010) and Wang *et al.* (2006) for the intrinsic AHE connection; linear_optical_response for contact-plus-interband optical implementation | These references do not derive this precise broadened optical output label or assert static-map equality. |
 | Dielectric increments and unit background | LinearOpticalResponseKernels.jl, model_dielectric_response | The unit background is included once, in integrated total; it is a release output contract. |
